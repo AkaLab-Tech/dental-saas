@@ -46,6 +46,20 @@ export interface DoctorPerformanceStats {
   completionRate: number
 }
 
+export interface UpcomingAppointment {
+  id: string
+  patientName: string
+  startTime: string
+  endTime: string
+  type: string | null
+  status: string
+}
+
+export interface AppointmentTypeCount {
+  type: string
+  count: number
+}
+
 interface ApiResponse<T> {
   success: boolean
   data: T
@@ -59,8 +73,10 @@ interface ApiResponse<T> {
 /**
  * Get dashboard overview statistics
  */
-export async function getOverviewStats(): Promise<OverviewStats> {
-  const response = await apiClient.get<ApiResponse<OverviewStats>>('/stats/overview')
+export async function getOverviewStats(doctorId?: string): Promise<OverviewStats> {
+  const response = doctorId
+    ? await apiClient.get<ApiResponse<OverviewStats>>('/stats/overview', { params: { doctorId } })
+    : await apiClient.get<ApiResponse<OverviewStats>>('/stats/overview')
   return response.data.data
 }
 
@@ -69,11 +85,13 @@ export async function getOverviewStats(): Promise<OverviewStats> {
  */
 export async function getAppointmentStats(
   startDate?: string,
-  endDate?: string
+  endDate?: string,
+  doctorId?: string
 ): Promise<AppointmentStats> {
   const params: Record<string, string> = {}
   if (startDate) params.startDate = startDate
   if (endDate) params.endDate = endDate
+  if (doctorId) params.doctorId = doctorId
 
   const response = await apiClient.get<ApiResponse<AppointmentStats>>('/stats/appointments', { params })
   return response.data.data
@@ -82,9 +100,10 @@ export async function getAppointmentStats(
 /**
  * Get revenue statistics
  */
-export async function getRevenueStats(months?: number): Promise<RevenueStats> {
+export async function getRevenueStats(months?: number, doctorId?: string): Promise<RevenueStats> {
   const params: Record<string, string> = {}
   if (months) params.months = String(months)
+  if (doctorId) params.doctorId = doctorId
 
   const response = await apiClient.get<ApiResponse<RevenueStats>>('/stats/revenue', { params })
   return response.data.data
@@ -106,6 +125,35 @@ export async function getPatientsGrowthStats(months?: number): Promise<PatientsG
  */
 export async function getDoctorPerformanceStats(): Promise<DoctorPerformanceStats[]> {
   const response = await apiClient.get<ApiResponse<DoctorPerformanceStats[]>>('/stats/doctors-performance')
+  return response.data.data
+}
+
+/**
+ * Resolve the current user's linked doctorId
+ */
+export async function getMyDoctorId(): Promise<string | null> {
+  const response = await apiClient.get<ApiResponse<{ doctorId: string | null }>>('/stats/my-doctor-id')
+  return response.data.data.doctorId
+}
+
+/**
+ * Get upcoming appointments for a doctor
+ */
+export async function getUpcomingAppointments(doctorId: string, limit?: number): Promise<UpcomingAppointment[]> {
+  const params: Record<string, string> = { doctorId }
+  if (limit) params.limit = String(limit)
+
+  const response = await apiClient.get<ApiResponse<UpcomingAppointment[]>>('/stats/upcoming', { params })
+  return response.data.data
+}
+
+/**
+ * Get appointment type distribution for a doctor
+ */
+export async function getAppointmentTypeStats(doctorId: string): Promise<AppointmentTypeCount[]> {
+  const response = await apiClient.get<ApiResponse<AppointmentTypeCount[]>>('/stats/appointment-types', {
+    params: { doctorId },
+  })
   return response.data.data
 }
 
