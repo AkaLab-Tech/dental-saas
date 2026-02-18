@@ -24,6 +24,7 @@ const PATIENT_SELECT = {
   teeth: true,
   showPrimaryTeeth: true,
   isActive: true,
+  createdBy: true,
   createdAt: true,
   updatedAt: true,
 } as const
@@ -42,6 +43,7 @@ export type SafePatient = {
   teeth: Prisma.JsonValue
   showPrimaryTeeth: boolean
   isActive: boolean
+  createdBy: string | null
   createdAt: Date
   updatedAt: Date
 }
