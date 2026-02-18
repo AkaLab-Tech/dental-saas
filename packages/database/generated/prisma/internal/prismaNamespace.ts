@@ -396,9 +396,6 @@ export const ModelName = {
   Labwork: 'Labwork',
   Expense: 'Expense',
   PatientPayment: 'PatientPayment',
-  Budget: 'Budget',
-  BudgetItem: 'BudgetItem',
-  BudgetItemAppointment: 'BudgetItemAppointment',
   RefreshToken: 'RefreshToken',
   PasswordResetToken: 'PasswordResetToken',
   Attachment: 'Attachment'
@@ -417,7 +414,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "plan" | "subscription" | "payment" | "tenant" | "tenantSettings" | "user" | "patient" | "doctor" | "appointment" | "labwork" | "expense" | "patientPayment" | "budget" | "budgetItem" | "budgetItemAppointment" | "refreshToken" | "passwordResetToken" | "attachment"
+    modelProps: "plan" | "subscription" | "payment" | "tenant" | "tenantSettings" | "user" | "patient" | "doctor" | "appointment" | "labwork" | "expense" | "patientPayment" | "refreshToken" | "passwordResetToken" | "attachment"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1309,228 +1306,6 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
-    Budget: {
-      payload: Prisma.$BudgetPayload<ExtArgs>
-      fields: Prisma.BudgetFieldRefs
-      operations: {
-        findUnique: {
-          args: Prisma.BudgetFindUniqueArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetPayload> | null
-        }
-        findUniqueOrThrow: {
-          args: Prisma.BudgetFindUniqueOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetPayload>
-        }
-        findFirst: {
-          args: Prisma.BudgetFindFirstArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetPayload> | null
-        }
-        findFirstOrThrow: {
-          args: Prisma.BudgetFindFirstOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetPayload>
-        }
-        findMany: {
-          args: Prisma.BudgetFindManyArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetPayload>[]
-        }
-        create: {
-          args: Prisma.BudgetCreateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetPayload>
-        }
-        createMany: {
-          args: Prisma.BudgetCreateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        createManyAndReturn: {
-          args: Prisma.BudgetCreateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetPayload>[]
-        }
-        delete: {
-          args: Prisma.BudgetDeleteArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetPayload>
-        }
-        update: {
-          args: Prisma.BudgetUpdateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetPayload>
-        }
-        deleteMany: {
-          args: Prisma.BudgetDeleteManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateMany: {
-          args: Prisma.BudgetUpdateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateManyAndReturn: {
-          args: Prisma.BudgetUpdateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetPayload>[]
-        }
-        upsert: {
-          args: Prisma.BudgetUpsertArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetPayload>
-        }
-        aggregate: {
-          args: Prisma.BudgetAggregateArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.AggregateBudget>
-        }
-        groupBy: {
-          args: Prisma.BudgetGroupByArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.BudgetGroupByOutputType>[]
-        }
-        count: {
-          args: Prisma.BudgetCountArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.BudgetCountAggregateOutputType> | number
-        }
-      }
-    }
-    BudgetItem: {
-      payload: Prisma.$BudgetItemPayload<ExtArgs>
-      fields: Prisma.BudgetItemFieldRefs
-      operations: {
-        findUnique: {
-          args: Prisma.BudgetItemFindUniqueArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemPayload> | null
-        }
-        findUniqueOrThrow: {
-          args: Prisma.BudgetItemFindUniqueOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemPayload>
-        }
-        findFirst: {
-          args: Prisma.BudgetItemFindFirstArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemPayload> | null
-        }
-        findFirstOrThrow: {
-          args: Prisma.BudgetItemFindFirstOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemPayload>
-        }
-        findMany: {
-          args: Prisma.BudgetItemFindManyArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemPayload>[]
-        }
-        create: {
-          args: Prisma.BudgetItemCreateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemPayload>
-        }
-        createMany: {
-          args: Prisma.BudgetItemCreateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        createManyAndReturn: {
-          args: Prisma.BudgetItemCreateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemPayload>[]
-        }
-        delete: {
-          args: Prisma.BudgetItemDeleteArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemPayload>
-        }
-        update: {
-          args: Prisma.BudgetItemUpdateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemPayload>
-        }
-        deleteMany: {
-          args: Prisma.BudgetItemDeleteManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateMany: {
-          args: Prisma.BudgetItemUpdateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateManyAndReturn: {
-          args: Prisma.BudgetItemUpdateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemPayload>[]
-        }
-        upsert: {
-          args: Prisma.BudgetItemUpsertArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemPayload>
-        }
-        aggregate: {
-          args: Prisma.BudgetItemAggregateArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.AggregateBudgetItem>
-        }
-        groupBy: {
-          args: Prisma.BudgetItemGroupByArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.BudgetItemGroupByOutputType>[]
-        }
-        count: {
-          args: Prisma.BudgetItemCountArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.BudgetItemCountAggregateOutputType> | number
-        }
-      }
-    }
-    BudgetItemAppointment: {
-      payload: Prisma.$BudgetItemAppointmentPayload<ExtArgs>
-      fields: Prisma.BudgetItemAppointmentFieldRefs
-      operations: {
-        findUnique: {
-          args: Prisma.BudgetItemAppointmentFindUniqueArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemAppointmentPayload> | null
-        }
-        findUniqueOrThrow: {
-          args: Prisma.BudgetItemAppointmentFindUniqueOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemAppointmentPayload>
-        }
-        findFirst: {
-          args: Prisma.BudgetItemAppointmentFindFirstArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemAppointmentPayload> | null
-        }
-        findFirstOrThrow: {
-          args: Prisma.BudgetItemAppointmentFindFirstOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemAppointmentPayload>
-        }
-        findMany: {
-          args: Prisma.BudgetItemAppointmentFindManyArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemAppointmentPayload>[]
-        }
-        create: {
-          args: Prisma.BudgetItemAppointmentCreateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemAppointmentPayload>
-        }
-        createMany: {
-          args: Prisma.BudgetItemAppointmentCreateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        createManyAndReturn: {
-          args: Prisma.BudgetItemAppointmentCreateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemAppointmentPayload>[]
-        }
-        delete: {
-          args: Prisma.BudgetItemAppointmentDeleteArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemAppointmentPayload>
-        }
-        update: {
-          args: Prisma.BudgetItemAppointmentUpdateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemAppointmentPayload>
-        }
-        deleteMany: {
-          args: Prisma.BudgetItemAppointmentDeleteManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateMany: {
-          args: Prisma.BudgetItemAppointmentUpdateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateManyAndReturn: {
-          args: Prisma.BudgetItemAppointmentUpdateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemAppointmentPayload>[]
-        }
-        upsert: {
-          args: Prisma.BudgetItemAppointmentUpsertArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$BudgetItemAppointmentPayload>
-        }
-        aggregate: {
-          args: Prisma.BudgetItemAppointmentAggregateArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.AggregateBudgetItemAppointment>
-        }
-        groupBy: {
-          args: Prisma.BudgetItemAppointmentGroupByArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.BudgetItemAppointmentGroupByOutputType>[]
-        }
-        count: {
-          args: Prisma.BudgetItemAppointmentCountArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.BudgetItemAppointmentCountAggregateOutputType> | number
-        }
-      }
-    }
     RefreshToken: {
       payload: Prisma.$RefreshTokenPayload<ExtArgs>
       fields: Prisma.RefreshTokenFieldRefs
@@ -1920,7 +1695,7 @@ export const PatientScalarFieldEnum = {
   address: 'address',
   notes: 'notes',
   teeth: 'teeth',
-  showPrimaryTeeth: 'showPrimaryTeeth',
+  createdBy: 'createdBy',
   isActive: 'isActive',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -1944,6 +1719,7 @@ export const DoctorScalarFieldEnum = {
   avatar: 'avatar',
   bio: 'bio',
   hourlyRate: 'hourlyRate',
+  userId: 'userId',
   isActive: 'isActive',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -1966,6 +1742,7 @@ export const AppointmentScalarFieldEnum = {
   privateNotes: 'privateNotes',
   cost: 'cost',
   isPaid: 'isPaid',
+  createdBy: 'createdBy',
   isActive: 'isActive',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -1978,8 +1755,6 @@ export const LabworkScalarFieldEnum = {
   id: 'id',
   tenantId: 'tenantId',
   patientId: 'patientId',
-  appointmentId: 'appointmentId',
-  priceIncludedInAppointment: 'priceIncludedInAppointment',
   lab: 'lab',
   phoneNumber: 'phoneNumber',
   date: 'date',
@@ -1988,6 +1763,7 @@ export const LabworkScalarFieldEnum = {
   isPaid: 'isPaid',
   isDelivered: 'isDelivered',
   doctorIds: 'doctorIds',
+  createdBy: 'createdBy',
   isActive: 'isActive',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -2030,57 +1806,6 @@ export const PatientPaymentScalarFieldEnum = {
 } as const
 
 export type PatientPaymentScalarFieldEnum = (typeof PatientPaymentScalarFieldEnum)[keyof typeof PatientPaymentScalarFieldEnum]
-
-
-export const BudgetScalarFieldEnum = {
-  id: 'id',
-  tenantId: 'tenantId',
-  patientId: 'patientId',
-  createdById: 'createdById',
-  status: 'status',
-  notes: 'notes',
-  validUntil: 'validUntil',
-  totalAmount: 'totalAmount',
-  publicToken: 'publicToken',
-  publicTokenExpiresAt: 'publicTokenExpiresAt',
-  isActive: 'isActive',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-} as const
-
-export type BudgetScalarFieldEnum = (typeof BudgetScalarFieldEnum)[keyof typeof BudgetScalarFieldEnum]
-
-
-export const BudgetItemScalarFieldEnum = {
-  id: 'id',
-  budgetId: 'budgetId',
-  description: 'description',
-  toothNumber: 'toothNumber',
-  quantity: 'quantity',
-  unitPrice: 'unitPrice',
-  totalPrice: 'totalPrice',
-  plannedAppointmentType: 'plannedAppointmentType',
-  status: 'status',
-  notes: 'notes',
-  order: 'order',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-} as const
-
-export type BudgetItemScalarFieldEnum = (typeof BudgetItemScalarFieldEnum)[keyof typeof BudgetItemScalarFieldEnum]
-
-
-export const BudgetItemAppointmentScalarFieldEnum = {
-  id: 'id',
-  budgetItemId: 'budgetItemId',
-  appointmentId: 'appointmentId',
-  role: 'role',
-  notes: 'notes',
-  createdById: 'createdById',
-  createdAt: 'createdAt'
-} as const
-
-export type BudgetItemAppointmentScalarFieldEnum = (typeof BudgetItemAppointmentScalarFieldEnum)[keyof typeof BudgetItemAppointmentScalarFieldEnum]
 
 
 export const RefreshTokenScalarFieldEnum = {
@@ -2326,48 +2051,6 @@ export type ListEnumAppointmentStatusFieldRefInput<$PrismaModel> = FieldRefInput
 
 
 /**
- * Reference to a field of type 'BudgetStatus'
- */
-export type EnumBudgetStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BudgetStatus'>
-    
-
-
-/**
- * Reference to a field of type 'BudgetStatus[]'
- */
-export type ListEnumBudgetStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BudgetStatus[]'>
-    
-
-
-/**
- * Reference to a field of type 'BudgetItemStatus'
- */
-export type EnumBudgetItemStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BudgetItemStatus'>
-    
-
-
-/**
- * Reference to a field of type 'BudgetItemStatus[]'
- */
-export type ListEnumBudgetItemStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BudgetItemStatus[]'>
-    
-
-
-/**
- * Reference to a field of type 'BudgetItemAppointmentRole'
- */
-export type EnumBudgetItemAppointmentRoleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BudgetItemAppointmentRole'>
-    
-
-
-/**
- * Reference to a field of type 'BudgetItemAppointmentRole[]'
- */
-export type ListEnumBudgetItemAppointmentRoleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BudgetItemAppointmentRole[]'>
-    
-
-
-/**
  * Reference to a field of type 'AttachmentModule'
  */
 export type EnumAttachmentModuleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AttachmentModule'>
@@ -2501,9 +2184,6 @@ export type GlobalOmitConfig = {
   labwork?: Prisma.LabworkOmit
   expense?: Prisma.ExpenseOmit
   patientPayment?: Prisma.PatientPaymentOmit
-  budget?: Prisma.BudgetOmit
-  budgetItem?: Prisma.BudgetItemOmit
-  budgetItemAppointment?: Prisma.BudgetItemAppointmentOmit
   refreshToken?: Prisma.RefreshTokenOmit
   passwordResetToken?: Prisma.PasswordResetTokenOmit
   attachment?: Prisma.AttachmentOmit

@@ -108,6 +108,7 @@ export interface CreateAppointmentInput {
   privateNotes?: string
   cost?: number
   isPaid?: boolean
+  createdBy?: string
 }
 
 export interface UpdateAppointmentInput {
@@ -422,6 +423,7 @@ export async function createAppointment(
       privateNotes: data.privateNotes,
       cost: data.cost,
       isPaid: false, // Always false; FIFO payment system is the source of truth
+      createdBy: data.createdBy,
     },
     select: {
       ...APPOINTMENT_SELECT,

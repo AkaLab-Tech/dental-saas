@@ -21,6 +21,7 @@ const DOCTOR_SELECT = {
   avatar: true,
   bio: true,
   hourlyRate: true,
+  userId: true,
   isActive: true,
   createdAt: true,
   updatedAt: true,
@@ -41,6 +42,7 @@ export type SafeDoctor = {
   avatar: string | null
   bio: string | null
   hourlyRate: Prisma.Decimal | null
+  userId: string | null
   isActive: boolean
   createdAt: Date
   updatedAt: Date
@@ -141,6 +143,7 @@ export async function createDoctor(
     avatar?: string
     bio?: string
     hourlyRate?: number
+    userId?: string
   }
 ): Promise<SafeDoctor> {
   const {
@@ -156,6 +159,7 @@ export async function createDoctor(
     avatar,
     bio,
     hourlyRate,
+    userId,
   } = data
 
   const doctor = await prisma.doctor.create({
@@ -173,6 +177,7 @@ export async function createDoctor(
       avatar,
       bio,
       hourlyRate,
+      userId,
     },
     select: DOCTOR_SELECT,
   })
@@ -202,6 +207,7 @@ export async function updateDoctor(
     bio?: string | null
     hourlyRate?: number | null
     isActive?: boolean
+    userId?: string | null
   }
 ): Promise<SafeDoctor | null> {
   // Verify doctor belongs to tenant
@@ -304,6 +310,17 @@ export async function restoreDoctor(
   logger.info({ doctorId, tenantId }, 'Doctor restored')
 
   return { success: true, doctor }
+}
+
+/**
+ * Get the doctor ID linked to a user account
+ */
+export async function getLinkedDoctorId(userId: string, tenantId: string): Promise<string | null> {
+  const doctor = await prisma.doctor.findFirst({
+    where: { userId, tenantId, isActive: true },
+    select: { id: true },
+  })
+  return doctor?.id ?? null
 }
 
 /**
