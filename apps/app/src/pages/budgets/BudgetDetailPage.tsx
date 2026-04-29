@@ -42,11 +42,12 @@ const ITEM_STATUS_OPTIONS: BudgetItemStatus[] = [
   'CANCELLED',
 ]
 
-const BUDGET_STATUS_OPTIONS: BudgetStatus[] = [
+// `PARTIAL` and `COMPLETED` are derived by the backend from item states
+// (see `deriveBudgetStatus` in `budget.service.ts`) and are normalized on
+// every write, so they must not appear as user-selectable options.
+const USER_SETTABLE_BUDGET_STATUSES: BudgetStatus[] = [
   'DRAFT',
   'APPROVED',
-  'PARTIAL',
-  'COMPLETED',
   'CANCELLED',
 ]
 
@@ -324,7 +325,12 @@ export default function BudgetDetailPage() {
               }
               className="w-full sm:w-auto rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-500"
             >
-              {BUDGET_STATUS_OPTIONS.map((s) => (
+              {!USER_SETTABLE_BUDGET_STATUSES.includes(currentBudget.status) && (
+                <option value={currentBudget.status} disabled>
+                  {t(`budgets.status.${currentBudget.status}`)}
+                </option>
+              )}
+              {USER_SETTABLE_BUDGET_STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {t(`budgets.status.${s}`)}
                 </option>
