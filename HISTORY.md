@@ -8,6 +8,17 @@ Newest first. Each entry references the PR(s) that delivered the work.
 
 ## 2026-04
 
+### Patient Budgets — post-PR B polish (status dropdown) — 2026-04-29
+**PR:** [#181](https://github.com/Miguelslo27/dental-saas/pull/181)
+
+Closes the only follow-up from PR #177 before starting PR C (PDF + public share link).
+
+- `BudgetDetailPage` status dropdown now exposes only the user-settable values (`DRAFT`, `APPROVED`, `CANCELLED`). `PARTIAL` and `COMPLETED` are auto-derived by `deriveBudgetStatus` in `budget.service.ts` and normalized on every write, so picking them was a silent no-op.
+- When the current budget is already in an auto-derived state, that value is rendered as a `disabled` option so the `<select>` still reflects the real status.
+- No backend changes; no new tests (component had none — the change is a small render-only filter).
+
+---
+
 ### Hotfix: Appointment "Paid" checkbox + FIFO breakdown — 2026-04-27
 **PR:** [#179](https://github.com/Miguelslo27/dental-saas/pull/179)
 
