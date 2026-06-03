@@ -229,9 +229,44 @@ describe('Admin Stats Routes', () => {
         .set('Authorization', `Bearer ${superAdminToken}`)
 
       expect(response.status).toBe(200)
-      // Our test tenant is active, so it should be included
-      const found = response.body.tenants.some((t: { id: string }) => t.id === testTenantId)
-      expect(found).toBe(true)
+
+      // The endpoint must never surface inactive tenants. Assert this against
+      // whatever it returns rather than expecting our low-activity test tenant
+      // to rank in the top 10 (that assertion is non-deterministic: it depends
+      // on how much data other tenants in the database already have).
+      const returnedIds = response.body.tenants.map((t: { id: string }) => t.id)
+      if (returnedIds.length > 0) {
+        const inactiveReturned = await prisma.tenant.count({
+          where: { id: { in: returnedIds }, isActive: false },
+        })
+        expect(inactiveReturned).toBe(0)
+      }
+    })
+
+    it('should exclude an inactive tenant even with high activity', async () => {
+      // Deterministic check of the isActive filter: an inactive tenant must be
+      // absent from the results regardless of its activity / ranking.
+      const inactiveTenant = await prisma.tenant.create({
+        data: {
+          name: 'Inactive Stats Clinic',
+          slug: `inactive-stats-clinic-${Date.now()}`,
+          isActive: false,
+        },
+      })
+
+      try {
+        const response = await request(app)
+          .get('/api/admin/stats/top-tenants')
+          .set('Authorization', `Bearer ${superAdminToken}`)
+
+        expect(response.status).toBe(200)
+        const found = response.body.tenants.some(
+          (t: { id: string }) => t.id === inactiveTenant.id
+        )
+        expect(found).toBe(false)
+      } finally {
+        await prisma.tenant.delete({ where: { id: inactiveTenant.id } })
+      }
     })
   })
 
