@@ -11,6 +11,13 @@
 
 ### Bugs
 
+#### Dashboard stats `401` race on a fresh login
+
+On a freshly authenticated session (right after register or login), `DashboardPage` fires its `/api/stats/*` requests (`overview`, `revenue`, `patients-growth`, `appointments`) before the access token is attached to the API client, so the first render logs four `401 Unauthorized` errors in the console and the cards briefly show empty/zero data. The dashboard recovers on the next render/navigation, so it is cosmetic — but it pollutes the console and is a poor first impression. Observed end-to-end with the Playwright MCP on 2026-06-03; pre-existing, unrelated to the i18n work.
+
+- [ ] Gate the stats requests on the auth-ready state (token attached) before firing, or retry once after the token is set
+- [ ] Verify a fresh login shows no `401`s in the console and the cards populate on first paint
+
 > **Resolved:** "Patient payment edits do not persist / payments stay stuck" — this was the original report behind [#179](https://github.com/Miguelslo27/dental-saas/pull/179) (FIFO paid flow). Reproduced end-to-end with the Playwright MCP and **verified fixed on production** on 2026-06-03 (see HISTORY). No further action.
 
 > **Resolved (2026-06-03):** two i18n bugs — (1) the appointment-card `⋮` menu rendered the raw key `common.options` (the key was missing in all locales; added to es / en / ar), and (2) the sidebar nav labels in `AppLayout.tsx` were hardcoded Spanish instead of using the existing `nav.*` keys (now wired through `t()`). The earlier "mixed ES/EN on the patient detail page" report was a mis-diagnosis: those section components already use `t()` with complete `es` / `ar` translations — they render English only when the active language resolves to `en`, which is the language-detection issue tracked under **Medium Priority → Language & Regional Settings** ("Fix `i18next-browser-languagedetector` priority"), not a hardcoded-string bug.
