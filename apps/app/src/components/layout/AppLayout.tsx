@@ -14,18 +14,20 @@ import {
   X,
 } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 const navItems = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/doctors', label: 'Doctores', icon: Stethoscope },
-  { path: '/patients', label: 'Pacientes', icon: Users },
-  { path: '/appointments', label: 'Citas', icon: Calendar },
-  { path: '/labworks', label: 'Laboratorio', icon: FlaskConical },
-  { path: '/expenses', label: 'Gastos', icon: Receipt },
-  { path: '/settings', label: 'Configuración', icon: Settings },
+  { path: '/', labelKey: 'nav.dashboard', icon: LayoutDashboard },
+  { path: '/doctors', labelKey: 'nav.doctors', icon: Stethoscope },
+  { path: '/patients', labelKey: 'nav.patients', icon: Users },
+  { path: '/appointments', labelKey: 'nav.appointments', icon: Calendar },
+  { path: '/labworks', labelKey: 'nav.labworks', icon: FlaskConical },
+  { path: '/expenses', labelKey: 'nav.expenses', icon: Receipt },
+  { path: '/settings', labelKey: 'nav.settings', icon: Settings },
 ]
 
 export function AppLayout() {
+  const { t } = useTranslation()
   const { isAuthenticated, user, logout, refreshToken } = useAuthStore()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -105,7 +107,7 @@ export function AppLayout() {
                       }`}
                   >
                     <item.icon className={`h-5 w-5 ${isActive ? 'text-blue-600' : ''}`} />
-                    {item.label}
+                    {t(item.labelKey)}
                   </Link>
                 </li>
               )
@@ -134,7 +136,7 @@ export function AppLayout() {
             className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition-colors"
           >
             <LogOut className="h-4 w-4" />
-            Cerrar Sesión
+            {t('nav.logout')}
           </button>
         </div>
       </aside>

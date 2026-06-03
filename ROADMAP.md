@@ -11,20 +11,9 @@
 
 ### Bugs
 
-#### Untranslated i18n key on the appointment card menu
-
-The options menu (the `⋮` button) on each appointment card in the patient detail page renders the raw i18n key `common.options` instead of a translated label. Reproduced on both local and production (`app.alveodent.com`) on 2026-06-03.
-
-- [ ] Add the missing `common.options` key to es / en / ar translation files (or point the trigger at an existing key)
-- [ ] Audit nearby appointment-card actions for other raw keys
-
-#### Mixed ES/EN labels on the patient detail page
-
-The patient detail page mixes languages: section headings "Appointments", "Budgets", "Payments", "Images" and actions like "New Appointment" / "New Budget" render in English while the surrounding app (nav, "Citas", "Pacientes") is in Spanish. These strings need i18n keys wired to the active locale.
-
-- [ ] Replace the hardcoded English strings on `PatientDetailPage` and its sections with i18n keys (es / en / ar)
-
 > **Resolved:** "Patient payment edits do not persist / payments stay stuck" — this was the original report behind [#179](https://github.com/Miguelslo27/dental-saas/pull/179) (FIFO paid flow). Reproduced end-to-end with the Playwright MCP and **verified fixed on production** on 2026-06-03 (see HISTORY). No further action.
+
+> **Resolved (2026-06-03):** two i18n bugs — (1) the appointment-card `⋮` menu rendered the raw key `common.options` (the key was missing in all locales; added to es / en / ar), and (2) the sidebar nav labels in `AppLayout.tsx` were hardcoded Spanish instead of using the existing `nav.*` keys (now wired through `t()`). The earlier "mixed ES/EN on the patient detail page" report was a mis-diagnosis: those section components already use `t()` with complete `es` / `ar` translations — they render English only when the active language resolves to `en`, which is the language-detection issue tracked under **Medium Priority → Language & Regional Settings** ("Fix `i18next-browser-languagedetector` priority"), not a hardcoded-string bug.
 
 ### UX Improvements
 
