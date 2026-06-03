@@ -24,6 +24,8 @@ Newest first. Each entry references the PR(s) that delivered the work.
 
 **Tests:** 70 appointment route tests + 22 payment route tests + 11 labwork route tests pass; frontend 978/978; lint clean. Two pre-existing failures in `admin/stats.test.ts` also fail on `main` (unrelated).
 
+**Production verification (2026-06-03):** Re-confirmed with the Playwright MCP on `app.alveodent.com` that this fix is live. Editing an unpaid appointment to tick "Paid" persists and creates the FIFO entrega; a paid appointment's edit form shows the disabled checkbox + revert hint; deleting the entrega reverts the card to pending and refreshes the ficha. The lingering ROADMAP "payment edits don't persist" bug entry (a pre-#179 report) was retired as resolved.
+
 **Follow-ups:**
 - Extend `paidAmount` / `outstanding` to other appointment endpoints (global list, calendar, by-doctor).
 - Apply the same FIFO breakdown to labworks. The shared helpers (`computeFifoAllocation`, `listBillableItems`, `getTotalPaid`) are already exported from `payment.service` for that purpose.

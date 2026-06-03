@@ -9,6 +9,23 @@
 ### Production Hardening
 - [ ] Harden API startup: eager Prisma init, DB-verified health check, graceful shutdown, connection timeout — see [docs/GATEWAY-TIMEOUT-FIX.md](docs/GATEWAY-TIMEOUT-FIX.md)
 
+### Bugs
+
+#### Untranslated i18n key on the appointment card menu
+
+The options menu (the `⋮` button) on each appointment card in the patient detail page renders the raw i18n key `common.options` instead of a translated label. Reproduced on both local and production (`app.alveodent.com`) on 2026-06-03.
+
+- [ ] Add the missing `common.options` key to es / en / ar translation files (or point the trigger at an existing key)
+- [ ] Audit nearby appointment-card actions for other raw keys
+
+#### Mixed ES/EN labels on the patient detail page
+
+The patient detail page mixes languages: section headings "Appointments", "Budgets", "Payments", "Images" and actions like "New Appointment" / "New Budget" render in English while the surrounding app (nav, "Citas", "Pacientes") is in Spanish. These strings need i18n keys wired to the active locale.
+
+- [ ] Replace the hardcoded English strings on `PatientDetailPage` and its sections with i18n keys (es / en / ar)
+
+> **Resolved:** "Patient payment edits do not persist / payments stay stuck" — this was the original report behind [#179](https://github.com/Miguelslo27/dental-saas/pull/179) (FIFO paid flow). Reproduced end-to-end with the Playwright MCP and **verified fixed on production** on 2026-06-03 (see HISTORY). No further action.
+
 ### UX Improvements
 
 #### Spike: Patient & Doctor list view alternatives
