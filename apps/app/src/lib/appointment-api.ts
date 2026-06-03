@@ -440,12 +440,12 @@ const APPOINTMENT_ERROR_KEY_MAP: Record<string, string> = {
   PAYMENT_FAILED: 'appointments.errors.paymentFailed',
 }
 
+// Use the language i18next actually resolved (saved preference in
+// localStorage, otherwise the browser language), so error messages produced
+// by this non-React module match what the rest of the UI is showing instead
+// of reading localStorage directly and defaulting to Spanish.
 function getUserLanguage(): string {
-  try {
-    return localStorage.getItem('language') || 'es'
-  } catch {
-    return 'es'
-  }
+  return i18n.resolvedLanguage || i18n.language || 'es'
 }
 
 export function getAppointmentApiErrorMessage(error: unknown): string {

@@ -37,11 +37,19 @@ i18n
   .init({
     resources,
     fallbackLng: defaultLanguage,
+    // Only resolve to languages we actually ship; anything else (e.g. an
+    // unsupported browser locale) falls back to defaultLanguage.
+    supportedLngs: languages.map((l) => l.code),
+    // Strip region from detected locales ('en-US' -> 'en') so resolvedLanguage
+    // is always one of our base codes and non-React consumers stay in sync.
+    load: 'languageOnly',
     defaultNS: 'translation',
     interpolation: {
       escapeValue: false, // React already escapes values
     },
     detection: {
+      // localStorage (the user's saved app preference) takes priority over the
+      // browser's navigator language; navigator is only used on first visit.
       order: ['localStorage', 'navigator'],
       caches: ['localStorage'],
       lookupLocalStorage: 'language',
