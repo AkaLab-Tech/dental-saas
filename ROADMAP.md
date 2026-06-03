@@ -68,7 +68,8 @@ The three sub-tasks below should be done in sequence: tabs first, then the new o
 
 ### Language & Regional Settings
 - [x] Fix `i18next-browser-languagedetector` priority: app preference (localStorage) should override browser language for non-React code (utility functions, stores) — detection order keeps `localStorage` ahead of `navigator`, added `supportedLngs` + `load: 'languageOnly'`, and `appointment-api`'s `getUserLanguage()` now reads `i18n.resolvedLanguage` instead of `localStorage` directly (2026-06-03)
-- [ ] Language selector in web landing page and registration form
+- [x] Language selector in the registration form — added the existing `LanguageSelector` (buttons variant) to `RegisterPage`; the choice is cached to `localStorage` and becomes the saved preference (2026-06-03)
+- [ ] Language selector in the web landing page (`apps/web`)
 - [ ] Save language preference on registration
 - [ ] Allow language change in settings (post-registration)
 - [ ] Detect and use browser's default language
