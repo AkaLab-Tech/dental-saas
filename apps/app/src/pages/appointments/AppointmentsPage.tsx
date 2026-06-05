@@ -289,7 +289,7 @@ export function AppointmentsPage() {
               <ChevronLeft className="h-5 w-5" />
             </button>
 
-            <h2 className="text-lg font-semibold text-gray-900 min-w-[200px] text-center capitalize">
+            <h2 className="text-lg font-semibold text-gray-900 min-w-[200px] text-center first-letter:uppercase">
               {formatMonthYear(currentDate)}
             </h2>
 

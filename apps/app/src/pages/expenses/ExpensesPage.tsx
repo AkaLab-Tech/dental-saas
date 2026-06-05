@@ -11,6 +11,8 @@ import {
 } from 'lucide-react'
 import { Permission } from '@dental/shared'
 import { useExpensesStore } from '@/stores/expenses.store'
+import { useAuthStore } from '@/stores/auth.store'
+import { formatCurrency } from '@/lib/format'
 import { ExpenseCard } from '@/components/expenses/ExpenseCard'
 import { ExpenseFormModal } from '@/components/expenses/ExpenseFormModal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -34,6 +36,8 @@ export function ExpensesPage() {
     setFilters,
     clearError,
   } = useExpensesStore()
+
+  const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
 
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
@@ -151,7 +155,7 @@ export function ExpensesPage() {
             Gestiona los gastos de tu clínica
             {stats && (
               <span className="text-gray-500 ml-1">
-                ({stats.total} gastos, ${stats.totalAmount?.toLocaleString() || 0})
+                ({stats.total} gastos, {formatCurrency(stats.totalAmount || 0, currency)})
               </span>
             )}
           </p>
@@ -215,7 +219,7 @@ export function ExpensesPage() {
               <div>
                 <p className="text-sm text-gray-500">Monto Total</p>
                 <p className="text-xl font-semibold text-gray-900">
-                  ${stats.totalAmount?.toLocaleString() || 0}
+                  {formatCurrency(stats.totalAmount || 0, currency)}
                 </p>
               </div>
             </div>
