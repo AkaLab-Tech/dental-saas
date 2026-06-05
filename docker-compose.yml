@@ -126,6 +126,15 @@ services:
     networks:
       - dental-network
       - coolify
+    # Liveness probe so Traefik only routes once nginx is accepting connections.
+    # Hits the dedicated /health endpoint (always 200), NOT "/", to avoid coupling
+    # health to SPA routing. Uses busybox wget (node is not in the nginx:alpine runtime).
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   app:
     build:
@@ -146,6 +155,15 @@ services:
       - coolify
     labels:
       - "traefik.docker.network=coolify"
+    # Liveness probe so Traefik only routes once nginx is accepting connections.
+    # Hits the dedicated /health endpoint (always 200), NOT "/", to avoid coupling
+    # health to SPA routing. Uses busybox wget (node is not in the nginx:alpine runtime).
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     # NOTE: Do NOT add custom traefik.http.services.* labels here.
     # Coolify auto-generates Traefik routing labels and custom ones create
     # conflicting service definitions that cause gateway timeouts.
