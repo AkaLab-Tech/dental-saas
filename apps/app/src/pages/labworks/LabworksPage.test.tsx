@@ -215,7 +215,7 @@ describe('LabworksPage', () => {
       renderLabworksPage()
 
       expect(screen.getByText(/3 trabajos/i)).toBeInTheDocument()
-      expect(screen.getAllByText(/\$1,800/i).length).toBeGreaterThan(0)
+      expect(screen.getAllByText(/1,800\.00/).length).toBeGreaterThan(0)
     })
 
     it('should render stats cards', () => {

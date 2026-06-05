@@ -12,6 +12,8 @@ import {
 } from 'lucide-react'
 import { Permission } from '@dental/shared'
 import { useLabworksStore } from '@/stores/labworks.store'
+import { useAuthStore } from '@/stores/auth.store'
+import { formatCurrency } from '@/lib/format'
 import { LabworkCard } from '@/components/labworks/LabworkCard'
 import { LabworkFormModal } from '@/components/labworks/LabworkFormModal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -35,6 +37,8 @@ export function LabworksPage() {
     setFilters,
     clearError,
   } = useLabworksStore()
+
+  const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
 
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [selectedLabwork, setSelectedLabwork] = useState<Labwork | null>(null)
@@ -160,7 +164,7 @@ export function LabworksPage() {
             Gestiona los trabajos enviados a laboratorio
             {stats && (
               <span className="text-gray-500 ml-1">
-                ({stats.total} trabajos, ${stats.totalValue?.toLocaleString() || 0})
+                ({stats.total} trabajos, {formatCurrency(stats.totalValue || 0, currency)})
               </span>
             )}
           </p>
@@ -224,7 +228,7 @@ export function LabworksPage() {
               <div>
                 <p className="text-sm text-gray-500">Valor Total</p>
                 <p className="text-xl font-semibold text-gray-900">
-                  ${stats.totalValue?.toLocaleString() || 0}
+                  {formatCurrency(stats.totalValue || 0, currency)}
                 </p>
               </div>
             </div>
