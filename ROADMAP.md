@@ -2,6 +2,44 @@
 
 ## High Priority
 
+### Epic: Patient Budgets (Presupuestos) — remaining work
+
+Multi-PR epic. PRs **A** (#176, data model + backend + RBAC) and **B** (#177, frontend CRUD) are merged and recorded in `HISTORY.md`. Remaining: a small polish PR, then PR C, then PR D.
+
+**Goal:** Allow creating a budget per patient with planned treatments and costs, share it with the patient (PDF or public link), and link budget items to appointments for tracking execution. Items may span multiple appointments and are only marked as executed on explicit doctor confirmation.
+
+| PR | Stories | Risk | Status |
+|----|---------|------|--------|
+| A | 1 + 2 (model + backend + RBAC + tests) | Low — pure API | ✅ Merged (#176) |
+| B | 4 (frontend management, PDF-less) | Medium — UI | ✅ Merged (#177) |
+| C | 3 (PDF + public share link) | Medium — web public surface | ⚪ Pending (blocked on polish below) |
+| D | 5 (appointment integration) | High — touches clinical flow | ⚪ Pending |
+
+#### Polish before PR C
+
+- [ ] Hide auto-derived budget statuses (`PARTIAL`, `COMPLETED`) from the manual dropdown in `BudgetDetailPage`. Keep only `DRAFT`, `APPROVED`, `CANCELLED` as user-settable. Backend normalizes auto-derived statuses on every write (`deriveBudgetStatus` in `budget.service.ts`), so the dropdown currently lets the user "save" a value that is silently overridden — which reads like a bug from the UI.
+
+#### PR C — Story 3: PDF + public share link
+
+- [ ] `BudgetPdf` template with `@react-pdf/renderer`, multi-language (ES/EN/AR, PT once the PT-BR track lands)
+- [ ] `GET /api/budgets/:id/pdf` — authenticated download
+- [ ] `publicToken` on `Budget` (nullable, generated on demand), optional `publicTokenExpiresAt`
+- [ ] `POST /api/budgets/:id/share` — generate / rotate public token
+- [ ] `GET /api/public/budgets/:token` — read-only public endpoint (no auth), rate-limited
+- [ ] Public page in `apps/web` at `/budget/:token` — read-only view with clinic branding
+- [ ] Tests for PDF generation and public access flow
+
+#### PR D — Story 5: Appointment integration (with doctor confirmation)
+
+- [ ] On appointment create/edit: if the patient has budgets with items in `PENDING` or `SCHEDULED`, show a multi-select to **associate** items to this appointment. Associated items transition to `SCHEDULED` (not executed yet).
+- [ ] On marking an appointment as completed, the completion form shows **each associated budget item** with an explicit "Executed in this appointment?" control (default off). Only items the doctor explicitly marks transition to `EXECUTED`.
+- [ ] Items not marked stay in `SCHEDULED` (available for future appointments). Unassociating an item returns it to `PENDING`.
+- [ ] Each transition creates a `BudgetItemAppointment` row with role `SCHEDULED` or `EXECUTED`.
+- [ ] `Budget.status` recalculates on each transition.
+- [ ] Backend enforces the same rules (no auto-execution on appointment completion).
+- [ ] i18n keys for ES/EN/AR (PT via parallel track).
+- [ ] E2E test: full flow — create budget → create appointment linked to items → complete appointment marking some items executed → verify budget status becomes `PARTIAL`.
+
 ### Labwork Improvements
 - [ ] Save laboratory name when creating a labwork (autocomplete from previously used labs, or create new)
 - [ ] Add labwork list/section to patient detail page
@@ -17,6 +55,29 @@ On a freshly authenticated session (right after register or login), `DashboardPa
 
 - [ ] Gate the stats requests on the auth-ready state (token attached) before firing, or retry once after the token is set
 - [ ] Verify a fresh login shows no `401`s in the console and the cards populate on first paint
+
+#### Currency renders as `$(UYU)` instead of a proper symbol
+
+Monetary values render the ISO currency code literally next to a bare `$` — e.g. `$(UYU) 2,300.00` — instead of a proper symbol/format (`$U 2.300,00` or `UYU 2.300,00`). The clinic currency is set to "Peso Uruguayo (UYU)" in Settings. Observed end-to-end with the Playwright MCP on production on 2026-06-05 (post-deploy, bundle `index-Dv1s5dOA.js`). The formatting is **inconsistent across modules**: it appears on the Dashboard ("Ingresos del Mes"), patient-detail Payments ("Entregas"), and appointment cards, but Labworks and Expenses summary cards show a clean `$0` — strongly suggesting two different currency helpers, only one of which mishandles the code.
+
+- [ ] Find the shared currency formatter in `apps/app` (grep for the `$(` literal and `Intl.NumberFormat`/`currencyDisplay`); fix it once so it emits a proper symbol for UYU
+- [ ] Make Labworks/Expenses and Dashboard/Payments/Appointments all use the same formatter
+- [ ] Verify every money value (dashboard, payments, appointments, labworks, expenses) renders consistently
+
+#### Sidebar nav labels flicker between locale variants on navigation
+
+The sidebar labels alternate between two renderings depending on load timing: "Dashboard" / "Cerrar Sesión" on some page loads and "Panel de Control" / "Cerrar sesión" on others. Observed via the Playwright MCP on production on 2026-06-05 while navigating between sections. Likely the `nav.*` keys resolving against a different language before the resolved locale settles — related to the non-React language-sync work in #187 / the `i18next-browser-languagedetector` priority item under Medium Priority.
+
+- [ ] Identify why the same `nav.*`/logout keys resolve to different values across renders (locale not settled before first paint)
+- [ ] Ensure the resolved locale is stable before the layout renders, or that all `nav.*` keys resolve to a single consistent value
+- [ ] Verify labels are identical across all sections on first paint and after navigation
+
+#### Month label capitalized as "Junio De 2026" in the appointments calendar
+
+The appointments calendar header capitalizes the connector: "Junio **De** 2026" instead of "Junio de 2026". Observed via the Playwright MCP on production on 2026-06-05. Likely a title-casing transform applied over a localized month-year string.
+
+- [ ] Fix the date formatting so the Spanish month-year label reads "Junio de 2026" (no capital connector); verify EN/AR are unaffected
+- [ ] Verify the appointments calendar header in ES/EN/AR
 
 > **Resolved:** "Patient payment edits do not persist / payments stay stuck" — this was the original report behind [#179](https://github.com/Miguelslo27/dental-saas/pull/179) (FIFO paid flow). Reproduced end-to-end with the Playwright MCP and **verified fixed on production** on 2026-06-03 (see HISTORY). No further action.
 
@@ -101,6 +162,23 @@ The three sub-tasks below should be done in sequence: tabs first, then the new o
 **Tests:**
 - [ ] Add `pt` coverage to `apps/app/src/i18n/i18n.test.ts`
 - [ ] Smoke test: render at least one page in `pt` and verify no missing keys
+
+> **Note (from prior IN_PROGRESS tracking):** PT-BR is being executed on a separate branch by another agent. All i18n keys introduced by the Budgets epic must be added to `pt.json` by whichever track merges last.
+
+### i18n Hardcoded Strings Migration
+
+Migrate hardcoded Spanish strings to i18n keys, split by module:
+
+- [ ] Appointments module (error messages done, form labels pending)
+- [ ] Patients module
+- [ ] Doctors module
+- [ ] Labworks module
+- [ ] Expenses module
+- [ ] Dashboard module
+- [ ] Settings module
+- [ ] Auth module
+- [ ] Admin module
+- [ ] Layout/Nav module
 
 ### UX Improvements
 - [ ] Superadmin tables: allow clicking on clinic/user name to view details (not just ••• menu)
