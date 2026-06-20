@@ -1,21 +1,21 @@
 /**
- * Format a number as currency with symbol, code, and amount.
- * Output: "$(USD) 1,234.56" — symbol + (CODE) + space + amount
+ * Format a number as currency using the ISO code as a prefix.
+ * Output: "UYU 2,300.00" — CODE + space + amount.
+ *
+ * Uses `currencyDisplay: 'code'` so every currency is disambiguated by its
+ * ISO code (many currencies share the bare "$" narrow symbol — USD, UYU, ARS,
+ * …), while still rendering a clean, parenthesis-free value.
  */
 export function formatCurrency(amount: number, currency = 'USD'): string {
-  const parts = new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
-    currencyDisplay: 'narrowSymbol',
-  }).formatToParts(amount)
-
-  const symbol = parts.find((p) => p.type === 'currency')?.value ?? '$'
-  const numericParts = parts
-    .filter((p) => p.type !== 'currency' && p.type !== 'literal')
-    .map((p) => p.value)
-    .join('')
-
-  return `${symbol}(${currency}) ${numericParts}`
+    currencyDisplay: 'code',
+  })
+    .format(amount)
+    // Intl separates the code from the amount with a non-breaking space
+    // (U+00A0 / U+202F); normalize to a regular space for predictable output.
+    .replace(/[\u00A0\u202F]/g, ' ')
 }
 
 /**
