@@ -1,8 +1,9 @@
+import { randomBytes } from 'node:crypto'
 import { prisma, UserRole } from '@dental/database'
 import { hashPassword } from './auth.service.js'
 import { logger } from '../utils/logger.js'
 
-// Fields to exclude from user responses (never expose password hash)
+// Fields to select from user queries (includes pinHash for hasPinSet derivation)
 const USER_SELECT = {
   id: true,
   tenantId: true,
@@ -12,6 +13,7 @@ const USER_SELECT = {
   role: true,
   avatar: true,
   phone: true,
+  pinHash: true,
   emailVerified: true,
   lastLoginAt: true,
   isActive: true,
@@ -28,11 +30,18 @@ export type SafeUser = {
   role: UserRole
   avatar: string | null
   phone: string | null
+  hasPinSet: boolean
   emailVerified: boolean
   lastLoginAt: Date | null
   isActive: boolean
   createdAt: Date
   updatedAt: Date
+}
+
+/** Strip pinHash and add hasPinSet boolean */
+function toSafeUser(user: { pinHash: string | null; [key: string]: unknown }): SafeUser {
+  const { pinHash, ...rest } = user
+  return { ...rest, hasPinSet: !!pinHash } as SafeUser
 }
 
 /**
@@ -144,7 +153,7 @@ export async function listUsers(
     orderBy: { createdAt: 'desc' },
   })
 
-  return users
+  return users.map(toSafeUser)
 }
 
 /**
@@ -156,7 +165,7 @@ export async function getUserById(tenantId: string, userId: string): Promise<Saf
     select: USER_SELECT,
   })
 
-  return user
+  return user ? toSafeUser(user) : null
 }
 
 /**
@@ -195,7 +204,47 @@ export async function createUser(
 
   logger.info({ userId: user.id, tenantId, role }, 'User created')
 
-  return user
+  return toSafeUser(user)
+}
+
+/**
+ * Create a profile-only user (no email/password login).
+ * Generates a placeholder email and random password hash so the DB schema is satisfied.
+ * The user authenticates exclusively via PIN on the lock screen.
+ */
+export async function createProfile(
+  tenantId: string,
+  data: {
+    firstName: string
+    lastName: string
+    role: UserRole
+  }
+): Promise<SafeUser> {
+  const { firstName, lastName, role } = data
+
+  // Generate a unique placeholder email that won't collide
+  const randomId = randomBytes(8).toString('hex')
+  const placeholderEmail = `profile-${randomId}@noreply.internal`
+
+  // Random password hash — this user can never log in via email/password
+  const randomPassword = randomBytes(32).toString('hex')
+  const passwordHash = await hashPassword(randomPassword)
+
+  const user = await prisma.user.create({
+    data: {
+      tenantId,
+      email: placeholderEmail,
+      passwordHash,
+      firstName,
+      lastName,
+      role,
+    },
+    select: USER_SELECT,
+  })
+
+  logger.info({ userId: user.id, tenantId, role, profileOnly: true }, 'Profile created')
+
+  return toSafeUser(user)
 }
 
 /**
@@ -231,7 +280,7 @@ export async function updateUser(
 
   logger.info({ userId, tenantId }, 'User updated')
 
-  return user
+  return toSafeUser(user)
 }
 
 /**
@@ -284,7 +333,7 @@ export async function updateUserRole(
 
   logger.info({ userId, tenantId, oldRole: existing.role, newRole }, 'User role updated')
 
-  return { success: true, user }
+  return { success: true, user: toSafeUser(user) }
 }
 
 /**
@@ -337,4 +386,26 @@ export async function getUserCount(tenantId: string): Promise<number> {
   return prisma.user.count({
     where: { tenantId, isActive: true },
   })
+}
+
+/**
+ * Set or update a user's 4-digit PIN
+ */
+export async function setUserPin(tenantId: string, userId: string, pin: string): Promise<void> {
+  const existing = await prisma.user.findFirst({
+    where: { id: userId, tenantId },
+    select: { id: true },
+  })
+
+  if (!existing) {
+    throw new Error('User not found')
+  }
+
+  const pinHash = await hashPassword(pin)
+  await prisma.user.update({
+    where: { id: userId },
+    data: { pinHash },
+  })
+
+  logger.info({ userId, tenantId }, 'User PIN set')
 }

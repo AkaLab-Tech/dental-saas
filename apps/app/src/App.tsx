@@ -15,6 +15,7 @@ import { LabworksPage } from '@pages/labworks/LabworksPage'
 import { ExpensesPage } from '@pages/expenses/ExpensesPage'
 import BudgetDetailPage from '@pages/budgets/BudgetDetailPage'
 import SettingsPage from '@pages/settings/SettingsPage'
+import { UsersPage } from '@pages/users/UsersPage'
 import ProtectedRoute from '@/components/auth/ProtectedRoute'
 import AppLayout from '@/components/layout/AppLayout'
 
@@ -65,6 +66,7 @@ function App() {
         <Route path="/appointments" element={<AppointmentsPage />} />
         <Route path="/labworks" element={<LabworksPage />} />
         <Route path="/expenses" element={<ExpensesPage />} />
+        <Route path="/users" element={<UsersPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
 

@@ -23,6 +23,7 @@ export interface TenantSettingsInput {
   smsNotifications?: boolean
   appointmentReminders?: boolean
   reminderHoursBefore?: number
+  autoLockMinutes?: number
 }
 
 export const TenantSettingsService = {
@@ -93,6 +94,9 @@ export const TenantSettingsService = {
         }),
         ...(data.reminderHoursBefore !== undefined && {
           reminderHoursBefore: data.reminderHoursBefore,
+        }),
+        ...(data.autoLockMinutes !== undefined && {
+          autoLockMinutes: data.autoLockMinutes,
         }),
       },
     })

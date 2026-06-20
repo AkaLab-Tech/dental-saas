@@ -50,6 +50,7 @@ const updateSettingsSchema = z.object({
   smsNotifications: z.boolean().optional(),
   appointmentReminders: z.boolean().optional(),
   reminderHoursBefore: z.number().min(1).max(168).optional(),
+  autoLockMinutes: z.number().int().min(0).max(60).optional(),
 })
 
 /**
@@ -86,6 +87,7 @@ router.get(
           smsNotifications: settings.smsNotifications,
           appointmentReminders: settings.appointmentReminders,
           reminderHoursBefore: settings.reminderHoursBefore,
+          autoLockMinutes: settings.autoLockMinutes,
           updatedAt: settings.updatedAt,
         },
       })
@@ -144,6 +146,7 @@ router.put(
           smsNotifications: settings.smsNotifications,
           appointmentReminders: settings.appointmentReminders,
           reminderHoursBefore: settings.reminderHoursBefore,
+          autoLockMinutes: settings.autoLockMinutes,
           updatedAt: settings.updatedAt,
         },
       })

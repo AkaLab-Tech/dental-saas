@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express'
-import { verifyAccessToken, type TokenPayload } from '../services/auth.service.js'
+import { verifyAccessToken, verifyProfileToken, type TokenPayload } from '../services/auth.service.js'
 
 // Extend Express Request type to include user
 declare global {
@@ -30,13 +30,31 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
     const payload = verifyAccessToken(token)
     req.user = payload
-    next()
   } catch {
     return res.status(401).json({
       success: false,
       error: { message: 'Invalid or expired token', code: 'INVALID_TOKEN' },
     })
   }
+
+  // Check for profile token (two-token PIN auth)
+  const profileHeader = req.headers['x-profile-token']
+  if (typeof profileHeader === 'string' && profileHeader) {
+    try {
+      const profile = verifyProfileToken(profileHeader)
+      if (profile.tenantId === req.user!.tenantId) {
+        req.user!.role = profile.role
+        req.user!.profileUserId = profile.profileUserId
+      }
+    } catch {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Profile session expired', code: 'PROFILE_TOKEN_EXPIRED' },
+      })
+    }
+  }
+
+  next()
 }
 
 /**
