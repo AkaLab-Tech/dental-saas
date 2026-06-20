@@ -2,6 +2,44 @@
 
 ## High Priority
 
+### Epic: Patient Budgets (Presupuestos) — remaining work
+
+Multi-PR epic. PRs **A** (#176, data model + backend + RBAC) and **B** (#177, frontend CRUD) are merged and recorded in `HISTORY.md`. Remaining: a small polish PR, then PR C, then PR D.
+
+**Goal:** Allow creating a budget per patient with planned treatments and costs, share it with the patient (PDF or public link), and link budget items to appointments for tracking execution. Items may span multiple appointments and are only marked as executed on explicit doctor confirmation.
+
+| PR | Stories | Risk | Status |
+|----|---------|------|--------|
+| A | 1 + 2 (model + backend + RBAC + tests) | Low — pure API | ✅ Merged (#176) |
+| B | 4 (frontend management, PDF-less) | Medium — UI | ✅ Merged (#177) |
+| C | 3 (PDF + public share link) | Medium — web public surface | ⚪ Pending (blocked on polish below) |
+| D | 5 (appointment integration) | High — touches clinical flow | ⚪ Pending |
+
+#### Polish before PR C
+
+- [ ] Hide auto-derived budget statuses (`PARTIAL`, `COMPLETED`) from the manual dropdown in `BudgetDetailPage`. Keep only `DRAFT`, `APPROVED`, `CANCELLED` as user-settable. Backend normalizes auto-derived statuses on every write (`deriveBudgetStatus` in `budget.service.ts`), so the dropdown currently lets the user "save" a value that is silently overridden — which reads like a bug from the UI.
+
+#### PR C — Story 3: PDF + public share link
+
+- [ ] `BudgetPdf` template with `@react-pdf/renderer`, multi-language (ES/EN/AR, PT once the PT-BR track lands)
+- [ ] `GET /api/budgets/:id/pdf` — authenticated download
+- [ ] `publicToken` on `Budget` (nullable, generated on demand), optional `publicTokenExpiresAt`
+- [ ] `POST /api/budgets/:id/share` — generate / rotate public token
+- [ ] `GET /api/public/budgets/:token` — read-only public endpoint (no auth), rate-limited
+- [ ] Public page in `apps/web` at `/budget/:token` — read-only view with clinic branding
+- [ ] Tests for PDF generation and public access flow
+
+#### PR D — Story 5: Appointment integration (with doctor confirmation)
+
+- [ ] On appointment create/edit: if the patient has budgets with items in `PENDING` or `SCHEDULED`, show a multi-select to **associate** items to this appointment. Associated items transition to `SCHEDULED` (not executed yet).
+- [ ] On marking an appointment as completed, the completion form shows **each associated budget item** with an explicit "Executed in this appointment?" control (default off). Only items the doctor explicitly marks transition to `EXECUTED`.
+- [ ] Items not marked stay in `SCHEDULED` (available for future appointments). Unassociating an item returns it to `PENDING`.
+- [ ] Each transition creates a `BudgetItemAppointment` row with role `SCHEDULED` or `EXECUTED`.
+- [ ] `Budget.status` recalculates on each transition.
+- [ ] Backend enforces the same rules (no auto-execution on appointment completion).
+- [ ] i18n keys for ES/EN/AR (PT via parallel track).
+- [ ] E2E test: full flow — create budget → create appointment linked to items → complete appointment marking some items executed → verify budget status becomes `PARTIAL`.
+
 ### Labwork Improvements
 - [ ] Save laboratory name when creating a labwork (autocomplete from previously used labs, or create new)
 - [ ] Add labwork list/section to patient detail page
@@ -9,11 +47,97 @@
 ### Production Hardening
 - [ ] Harden API startup: eager Prisma init, DB-verified health check, graceful shutdown, connection timeout — see [docs/GATEWAY-TIMEOUT-FIX.md](docs/GATEWAY-TIMEOUT-FIX.md)
 
+### Bugs
+
+#### Dashboard stats `401` race on a fresh login
+
+On a freshly authenticated session (right after register or login), `DashboardPage` fires its `/api/stats/*` requests (`overview`, `revenue`, `patients-growth`, `appointments`) before the access token is attached to the API client, so the first render logs four `401 Unauthorized` errors in the console and the cards briefly show empty/zero data. The dashboard recovers on the next render/navigation, so it is cosmetic — but it pollutes the console and is a poor first impression. Observed end-to-end with the Playwright MCP on 2026-06-03; pre-existing, unrelated to the i18n work.
+
+- [ ] Gate the stats requests on the auth-ready state (token attached) before firing, or retry once after the token is set
+- [ ] Verify a fresh login shows no `401`s in the console and the cards populate on first paint
+
+#### Currency renders as `$(UYU)` instead of a proper symbol
+
+Monetary values render the ISO currency code literally next to a bare `$` — e.g. `$(UYU) 2,300.00` — instead of a proper symbol/format (`$U 2.300,00` or `UYU 2.300,00`). The clinic currency is set to "Peso Uruguayo (UYU)" in Settings. Observed end-to-end with the Playwright MCP on production on 2026-06-05 (post-deploy, bundle `index-Dv1s5dOA.js`). The formatting is **inconsistent across modules**: it appears on the Dashboard ("Ingresos del Mes"), patient-detail Payments ("Entregas"), and appointment cards, but Labworks and Expenses summary cards show a clean `$0` — strongly suggesting two different currency helpers, only one of which mishandles the code.
+
+- [ ] Find the shared currency formatter in `apps/app` (grep for the `$(` literal and `Intl.NumberFormat`/`currencyDisplay`); fix it once so it emits a proper symbol for UYU
+- [ ] Make Labworks/Expenses and Dashboard/Payments/Appointments all use the same formatter
+- [ ] Verify every money value (dashboard, payments, appointments, labworks, expenses) renders consistently
+
+#### Sidebar nav labels flicker between locale variants on navigation
+
+The sidebar labels alternate between two renderings depending on load timing: "Dashboard" / "Cerrar Sesión" on some page loads and "Panel de Control" / "Cerrar sesión" on others. Observed via the Playwright MCP on production on 2026-06-05 while navigating between sections. Likely the `nav.*` keys resolving against a different language before the resolved locale settles — related to the non-React language-sync work in #187 / the `i18next-browser-languagedetector` priority item under Medium Priority.
+
+- [ ] Identify why the same `nav.*`/logout keys resolve to different values across renders (locale not settled before first paint)
+- [ ] Ensure the resolved locale is stable before the layout renders, or that all `nav.*` keys resolve to a single consistent value
+- [ ] Verify labels are identical across all sections on first paint and after navigation
+
+#### Month label capitalized as "Junio De 2026" in the appointments calendar
+
+The appointments calendar header capitalizes the connector: "Junio **De** 2026" instead of "Junio de 2026". Observed via the Playwright MCP on production on 2026-06-05. Likely a title-casing transform applied over a localized month-year string.
+
+- [ ] Fix the date formatting so the Spanish month-year label reads "Junio de 2026" (no capital connector); verify EN/AR are unaffected
+- [ ] Verify the appointments calendar header in ES/EN/AR
+
+> **Resolved:** "Patient payment edits do not persist / payments stay stuck" — this was the original report behind [#179](https://github.com/Miguelslo27/dental-saas/pull/179) (FIFO paid flow). Reproduced end-to-end with the Playwright MCP and **verified fixed on production** on 2026-06-03 (see HISTORY). No further action.
+
+> **Resolved (2026-06-03):** two i18n bugs — (1) the appointment-card `⋮` menu rendered the raw key `common.options` (the key was missing in all locales; added to es / en / ar), and (2) the sidebar nav labels in `AppLayout.tsx` were hardcoded Spanish instead of using the existing `nav.*` keys (now wired through `t()`). The earlier "mixed ES/EN on the patient detail page" report was a mis-diagnosis: those section components already use `t()` with complete `es` / `ar` translations — they render English only when the active language resolves to `en`, which is the language-detection issue tracked under **Medium Priority → Language & Regional Settings** ("Fix `i18next-browser-languagedetector` priority"), not a hardcoded-string bug.
+
+### UX Improvements
+
+#### Spike: Patient & Doctor list view alternatives
+
+Both the patient list and the doctor list currently use a card-based layout. Explore alternative presentations to improve the user experience on both screens.
+
+**Scope:** Patients list page and Doctors list page only.
+
+**Deliverables:**
+- [ ] Three list/view alternatives, each with a UX-driven rationale explaining why it is among the best options
+- [ ] Comparative analysis of the three alternatives (pros, cons, fit for the data shown on each screen, accessibility, mobile/RTL behavior)
+- [ ] Mockups and visual references for each alternative
+- [ ] POC implementation of all three alternatives so a full hands-on comparison is possible
+- [ ] Final recommendation: which option to adopt and whether it applies to one screen or both
+
+**Acceptance:** the user can interact with all three POCs side by side and pick the one to ship as the follow-up implementation task.
+
+#### Implement new list view for Patients and Doctors
+
+Follow-up to the spike above. Once the spike picks a winning option, implement it on the Patients and Doctors list pages.
+
+**Blocked by:** Spike: Patient & Doctor list view alternatives
+
+- [ ] Replace the card layout on the Patients list page with the chosen alternative
+- [ ] Replace the card layout on the Doctors list page with the chosen alternative
+- [ ] Remove dead code from the previous card layout
+
+#### Patient detail page redesign
+
+Today the patient detail page stacks several blocks vertically (patient info, appointments, budgets, payments, images) with the odontogram as the main section. As more information lives on this page, the layout becomes hard to navigate. Reorganize it so the odontogram is always visible and the rest of the information moves into tabs.
+
+The three sub-tasks below should be done in sequence: tabs first, then the new odontogram layout, then the visual polish that takes advantage of the wider available space.
+
+##### 1. Reorganize patient detail into tabs
+
+- [ ] Convert the existing blocks into tabs: `Patient` | `Appointments` | `Budgets` | `Payments` | `Images`
+- [ ] The odontogram stays always visible, outside the tab system
+
+##### 2. New odontogram layout (1 / 3 / 1 columns)
+
+- [ ] Left column: legend / condition keys
+- [ ] Center column: odontogram itself
+- [ ] Right column: registered teeth list
+
+##### 3. Visual polish per tab
+
+- [ ] Redistribute the content inside each tab to take advantage of the wider available space
+- [ ] Apply the polish to all five tabs: `Patient`, `Appointments`, `Budgets`, `Payments`, `Images`
+
 ## Medium Priority
 
 ### Language & Regional Settings
-- [ ] Fix `i18next-browser-languagedetector` priority: app preference (localStorage) should override browser language for non-React code (utility functions, stores)
-- [ ] Language selector in web landing page and registration form
+- [x] Fix `i18next-browser-languagedetector` priority: app preference (localStorage) should override browser language for non-React code (utility functions, stores) — detection order keeps `localStorage` ahead of `navigator`, added `supportedLngs` + `load: 'languageOnly'`, and `appointment-api`'s `getUserLanguage()` now reads `i18n.resolvedLanguage` instead of `localStorage` directly (2026-06-03)
+- [x] Language selector in the registration form — added the existing `LanguageSelector` (buttons variant) to `RegisterPage`; the choice is cached to `localStorage` and becomes the saved preference (2026-06-03)
+- [ ] Language selector in the web landing page (`apps/web`)
 - [ ] Save language preference on registration
 - [ ] Allow language change in settings (post-registration)
 - [ ] Detect and use browser's default language
@@ -38,6 +162,23 @@
 **Tests:**
 - [ ] Add `pt` coverage to `apps/app/src/i18n/i18n.test.ts`
 - [ ] Smoke test: render at least one page in `pt` and verify no missing keys
+
+> **Note (from prior IN_PROGRESS tracking):** PT-BR is being executed on a separate branch by another agent. All i18n keys introduced by the Budgets epic must be added to `pt.json` by whichever track merges last.
+
+### i18n Hardcoded Strings Migration
+
+Migrate hardcoded Spanish strings to i18n keys, split by module:
+
+- [ ] Appointments module (error messages done, form labels pending)
+- [ ] Patients module
+- [ ] Doctors module
+- [ ] Labworks module
+- [ ] Expenses module
+- [ ] Dashboard module
+- [ ] Settings module
+- [ ] Auth module
+- [ ] Admin module
+- [ ] Layout/Nav module
 
 ### UX Improvements
 - [ ] Superadmin tables: allow clicking on clinic/user name to view details (not just ••• menu)

@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useAuthStore } from '@/stores/auth.store'
 import { PASSWORD_REGEX } from '@/lib/constants'
 import { generateSlug, sanitizeSlugInput } from '@/lib/slug'
+import { LanguageSelector } from '@/components/ui/LanguageSelector'
 
 const registerSchema = z
   .object({
@@ -87,6 +88,9 @@ export function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
+        <div className="flex justify-end">
+          <LanguageSelector variant="buttons" />
+        </div>
         <div>
           <h1 className="text-center text-3xl font-extrabold text-gray-900">
             🦷 Alveo System

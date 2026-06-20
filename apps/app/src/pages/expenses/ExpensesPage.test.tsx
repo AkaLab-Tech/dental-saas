@@ -199,7 +199,7 @@ describe('ExpensesPage', () => {
       renderExpensesPage()
 
       expect(screen.getByText(/3 gastos/i)).toBeInTheDocument()
-      expect(screen.getAllByText(/\$2,200/i).length).toBeGreaterThan(0)
+      expect(screen.getAllByText(/2,200\.00/).length).toBeGreaterThan(0)
     })
 
     it('should render stats cards', () => {

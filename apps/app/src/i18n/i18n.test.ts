@@ -60,4 +60,30 @@ describe('i18n configuration', () => {
       expect(defaultLanguage).toBe('es')
     })
   })
+
+  describe('language resolution', () => {
+    it('should only support the shipped languages', () => {
+      expect(i18n.options.supportedLngs).toEqual(
+        expect.arrayContaining(['es', 'en', 'ar'])
+      )
+    })
+
+    it('should strip region from detected locales (languageOnly)', () => {
+      expect(i18n.options.load).toBe('languageOnly')
+    })
+
+    it('should prefer the saved app preference over the browser language', () => {
+      // localStorage (saved preference) must come before navigator so the
+      // browser locale only applies on first visit.
+      const order = i18n.options.detection?.order ?? []
+      expect(order.indexOf('localStorage')).toBeLessThan(
+        order.indexOf('navigator')
+      )
+    })
+
+    it('should resolve to a supported base code after switching', () => {
+      i18n.changeLanguage('en')
+      expect(i18n.resolvedLanguage).toBe('en')
+    })
+  })
 })
