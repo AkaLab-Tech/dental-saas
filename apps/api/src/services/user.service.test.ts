@@ -183,8 +183,8 @@ describe('user.service', () => {
   describe('listUsers', () => {
     it('should list active users for tenant', async () => {
       const mockUsers = [
-        { id: 'user-1', email: 'user1@test.com', firstName: 'User', lastName: 'One' },
-        { id: 'user-2', email: 'user2@test.com', firstName: 'User', lastName: 'Two' },
+        { id: 'user-1', email: 'user1@test.com', firstName: 'User', lastName: 'One', pinHash: null },
+        { id: 'user-2', email: 'user2@test.com', firstName: 'User', lastName: 'Two', pinHash: null },
       ]
       vi.mocked(prisma.user.findMany).mockResolvedValue(mockUsers as never)
 
@@ -195,7 +195,10 @@ describe('user.service', () => {
           where: { tenantId: 'tenant-1', isActive: true },
         })
       )
-      expect(users).toEqual(mockUsers)
+      expect(users).toEqual([
+        { id: 'user-1', email: 'user1@test.com', firstName: 'User', lastName: 'One', hasPinSet: false },
+        { id: 'user-2', email: 'user2@test.com', firstName: 'User', lastName: 'Two', hasPinSet: false },
+      ])
     })
 
     it('should include inactive users when requested', async () => {
@@ -213,7 +216,7 @@ describe('user.service', () => {
 
   describe('getUserById', () => {
     it('should return user when found in tenant', async () => {
-      const mockUser = { id: 'user-1', email: 'user1@test.com', tenantId: 'tenant-1' }
+      const mockUser = { id: 'user-1', email: 'user1@test.com', tenantId: 'tenant-1', pinHash: null }
       vi.mocked(prisma.user.findFirst).mockResolvedValue(mockUser as never)
 
       const user = await userService.getUserById('tenant-1', 'user-1')
@@ -222,7 +225,7 @@ describe('user.service', () => {
         where: { id: 'user-1', tenantId: 'tenant-1' },
         select: expect.any(Object),
       })
-      expect(user).toEqual(mockUser)
+      expect(user).toEqual({ id: 'user-1', email: 'user1@test.com', tenantId: 'tenant-1', hasPinSet: false })
     })
 
     it('should return null when user not found', async () => {
@@ -248,7 +251,7 @@ describe('user.service', () => {
 
   describe('updateUser', () => {
     it('should update user when found in tenant', async () => {
-      const mockUser = { id: 'user-1', email: 'updated@test.com', firstName: 'Updated' }
+      const mockUser = { id: 'user-1', email: 'updated@test.com', firstName: 'Updated', pinHash: null }
       vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 'user-1' } as never)
       vi.mocked(prisma.user.update).mockResolvedValue(mockUser as never)
 
@@ -262,7 +265,7 @@ describe('user.service', () => {
         data: { email: 'updated@test.com', firstName: 'Updated' },
         select: expect.any(Object),
       })
-      expect(user).toEqual(mockUser)
+      expect(user).toEqual({ id: 'user-1', email: 'updated@test.com', firstName: 'Updated', hasPinSet: false })
     })
 
     it('should return null when user not found in tenant', async () => {
@@ -299,6 +302,7 @@ describe('user.service', () => {
         firstName: 'New',
         lastName: 'User',
         role: 'STAFF',
+        pinHash: null,
       }
       vi.mocked(prisma.user.create).mockResolvedValue(mockUser as never)
 
@@ -320,7 +324,14 @@ describe('user.service', () => {
           }),
         })
       )
-      expect(user).toEqual(mockUser)
+      expect(user).toEqual({
+        id: 'new-user',
+        email: 'new@test.com',
+        firstName: 'New',
+        lastName: 'User',
+        role: 'STAFF',
+        hasPinSet: false,
+      })
     })
   })
 

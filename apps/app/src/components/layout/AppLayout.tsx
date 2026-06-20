@@ -9,12 +9,29 @@ import {
   FlaskConical,
   Receipt,
   Settings,
+  Shield,
+  Lock,
   LogOut,
   Menu,
   X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Permission } from '@dental/shared'
+import { usePermissions } from '@/hooks/usePermissions'
+import { useLockStore } from '@/stores/lock.store'
+import { useSettingsStore } from '@/stores/settings.store'
+import { useInactivityTimer } from '@/hooks/useInactivityTimer'
+import { LockScreen } from '@/components/auth/LockScreen'
+import { PinSetupModal } from '@/components/auth/PinSetupModal'
+
+const ROLE_LABELS: Record<string, string> = {
+  OWNER: 'Owner',
+  ADMIN: 'Admin',
+  CLINIC_ADMIN: 'Clinic Admin',
+  DOCTOR: 'Doctor',
+  STAFF: 'Staff',
+}
 
 const navItems = [
   { path: '/', labelKey: 'nav.dashboard', icon: LayoutDashboard },
@@ -23,18 +40,58 @@ const navItems = [
   { path: '/appointments', labelKey: 'nav.appointments', icon: Calendar },
   { path: '/labworks', labelKey: 'nav.labworks', icon: FlaskConical },
   { path: '/expenses', labelKey: 'nav.expenses', icon: Receipt },
+  { path: '/users', labelKey: 'nav.users', icon: Shield, permission: Permission.USERS_CREATE },
   { path: '/settings', labelKey: 'nav.settings', icon: Settings },
 ]
 
 export function AppLayout() {
   const { t } = useTranslation()
   const { isAuthenticated, user, logout, refreshToken } = useAuthStore()
+  const { can } = usePermissions()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  const isLocked = useLockStore((s) => s.isLocked)
+  const setAutoLockMinutes = useLockStore((s) => s.setAutoLockMinutes)
+  const autoLockMinutes = useLockStore((s) => s.autoLockMinutes)
+  const fetchProfiles = useLockStore((s) => s.fetchProfiles)
+  const activeUser = useLockStore((s) => s.activeUser)
+  const settings = useSettingsStore((s) => s.settings)
+  const fetchSettings = useSettingsStore((s) => s.fetchSettings)
+
+  useInactivityTimer()
+
+  // Sync autoLockMinutes from tenant settings
+  useEffect(() => {
+    if (!settings) {
+      fetchSettings()
+    }
+  }, [settings, fetchSettings])
+
+  useEffect(() => {
+    if (settings?.autoLockMinutes !== undefined) {
+      setAutoLockMinutes(settings.autoLockMinutes)
+    }
+  }, [settings?.autoLockMinutes, setAutoLockMinutes])
+
+  // Fetch profiles when auto-lock is enabled
+  useEffect(() => {
+    if (autoLockMinutes > 0) {
+      fetchProfiles()
+    }
+  }, [autoLockMinutes, fetchProfiles])
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
   }
+
+  // Show lock screen when locked
+  if (isLocked) {
+    return <LockScreen />
+  }
+
+  // Show PIN setup modal when auto-lock is enabled but user has no PIN
+  const showPinSetup = autoLockMinutes > 0 && user?.hasPinSet === false
 
   const handleLogout = async () => {
     try {
@@ -45,6 +102,12 @@ export function AppLayout() {
       // Ignore logout API errors
     } finally {
       logout()
+    }
+  }
+
+  const handleLock = () => {
+    if (autoLockMinutes > 0) {
+      useLockStore.getState().lock()
     }
   }
 
@@ -91,7 +154,7 @@ export function AppLayout() {
         {/* Navigation */}
         <nav className="mt-6 px-4">
           <ul className="space-y-1">
-            {navItems.map((item) => {
+            {navItems.filter((item) => !item.permission || can(item.permission)).map((item) => {
               const isActive =
                 item.path === '/'
                   ? location.pathname === '/'
@@ -120,17 +183,28 @@ export function AppLayout() {
           <div className="flex items-center gap-3 px-2 mb-3">
             <div className="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center">
               <span className="text-sm font-medium text-white">
-                {user?.firstName?.[0]}
-                {user?.lastName?.[0]}
+                {(activeUser?.firstName ?? user?.firstName)?.[0]}
+                {(activeUser?.lastName ?? user?.lastName)?.[0]}
               </span>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 truncate">
-                {user?.firstName} {user?.lastName}
+                {activeUser?.firstName ?? user?.firstName} {activeUser?.lastName ?? user?.lastName}
               </p>
-              <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+              <p className="text-xs text-gray-500 truncate">
+                {activeUser ? (ROLE_LABELS[activeUser.role] || activeUser.role) : user?.email}
+              </p>
             </div>
           </div>
+          {autoLockMinutes > 0 && (
+            <button
+              onClick={handleLock}
+              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition-colors"
+            >
+              <Lock className="h-4 w-4" />
+              {t('nav.lock')}
+            </button>
+          )}
           <button
             onClick={handleLogout}
             className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition-colors"
@@ -168,6 +242,8 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      {showPinSetup && <PinSetupModal />}
     </div>
   )
 }

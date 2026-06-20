@@ -30,12 +30,14 @@ export type TenantSettingsAvgAggregateOutputType = {
   defaultAppointmentDuration: number | null
   appointmentBuffer: number | null
   reminderHoursBefore: number | null
+  autoLockMinutes: number | null
 }
 
 export type TenantSettingsSumAggregateOutputType = {
   defaultAppointmentDuration: number | null
   appointmentBuffer: number | null
   reminderHoursBefore: number | null
+  autoLockMinutes: number | null
 }
 
 export type TenantSettingsMinAggregateOutputType = {
@@ -50,6 +52,7 @@ export type TenantSettingsMinAggregateOutputType = {
   smsNotifications: boolean | null
   appointmentReminders: boolean | null
   reminderHoursBefore: number | null
+  autoLockMinutes: number | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -66,6 +69,7 @@ export type TenantSettingsMaxAggregateOutputType = {
   smsNotifications: boolean | null
   appointmentReminders: boolean | null
   reminderHoursBefore: number | null
+  autoLockMinutes: number | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -84,6 +88,7 @@ export type TenantSettingsCountAggregateOutputType = {
   smsNotifications: number
   appointmentReminders: number
   reminderHoursBefore: number
+  autoLockMinutes: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -94,12 +99,14 @@ export type TenantSettingsAvgAggregateInputType = {
   defaultAppointmentDuration?: true
   appointmentBuffer?: true
   reminderHoursBefore?: true
+  autoLockMinutes?: true
 }
 
 export type TenantSettingsSumAggregateInputType = {
   defaultAppointmentDuration?: true
   appointmentBuffer?: true
   reminderHoursBefore?: true
+  autoLockMinutes?: true
 }
 
 export type TenantSettingsMinAggregateInputType = {
@@ -114,6 +121,7 @@ export type TenantSettingsMinAggregateInputType = {
   smsNotifications?: true
   appointmentReminders?: true
   reminderHoursBefore?: true
+  autoLockMinutes?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -130,6 +138,7 @@ export type TenantSettingsMaxAggregateInputType = {
   smsNotifications?: true
   appointmentReminders?: true
   reminderHoursBefore?: true
+  autoLockMinutes?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -148,6 +157,7 @@ export type TenantSettingsCountAggregateInputType = {
   smsNotifications?: true
   appointmentReminders?: true
   reminderHoursBefore?: true
+  autoLockMinutes?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -253,6 +263,7 @@ export type TenantSettingsGroupByOutputType = {
   smsNotifications: boolean
   appointmentReminders: boolean
   reminderHoursBefore: number
+  autoLockMinutes: number
   createdAt: Date
   updatedAt: Date
   _count: TenantSettingsCountAggregateOutputType | null
@@ -294,6 +305,7 @@ export type TenantSettingsWhereInput = {
   smsNotifications?: Prisma.BoolFilter<"TenantSettings"> | boolean
   appointmentReminders?: Prisma.BoolFilter<"TenantSettings"> | boolean
   reminderHoursBefore?: Prisma.IntFilter<"TenantSettings"> | number
+  autoLockMinutes?: Prisma.IntFilter<"TenantSettings"> | number
   createdAt?: Prisma.DateTimeFilter<"TenantSettings"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"TenantSettings"> | Date | string
   tenant?: Prisma.XOR<Prisma.TenantScalarRelationFilter, Prisma.TenantWhereInput>
@@ -313,6 +325,7 @@ export type TenantSettingsOrderByWithRelationInput = {
   smsNotifications?: Prisma.SortOrder
   appointmentReminders?: Prisma.SortOrder
   reminderHoursBefore?: Prisma.SortOrder
+  autoLockMinutes?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   tenant?: Prisma.TenantOrderByWithRelationInput
@@ -335,6 +348,7 @@ export type TenantSettingsWhereUniqueInput = Prisma.AtLeast<{
   smsNotifications?: Prisma.BoolFilter<"TenantSettings"> | boolean
   appointmentReminders?: Prisma.BoolFilter<"TenantSettings"> | boolean
   reminderHoursBefore?: Prisma.IntFilter<"TenantSettings"> | number
+  autoLockMinutes?: Prisma.IntFilter<"TenantSettings"> | number
   createdAt?: Prisma.DateTimeFilter<"TenantSettings"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"TenantSettings"> | Date | string
   tenant?: Prisma.XOR<Prisma.TenantScalarRelationFilter, Prisma.TenantWhereInput>
@@ -354,6 +368,7 @@ export type TenantSettingsOrderByWithAggregationInput = {
   smsNotifications?: Prisma.SortOrder
   appointmentReminders?: Prisma.SortOrder
   reminderHoursBefore?: Prisma.SortOrder
+  autoLockMinutes?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.TenantSettingsCountOrderByAggregateInput
@@ -380,6 +395,7 @@ export type TenantSettingsScalarWhereWithAggregatesInput = {
   smsNotifications?: Prisma.BoolWithAggregatesFilter<"TenantSettings"> | boolean
   appointmentReminders?: Prisma.BoolWithAggregatesFilter<"TenantSettings"> | boolean
   reminderHoursBefore?: Prisma.IntWithAggregatesFilter<"TenantSettings"> | number
+  autoLockMinutes?: Prisma.IntWithAggregatesFilter<"TenantSettings"> | number
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"TenantSettings"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"TenantSettings"> | Date | string
 }
@@ -397,6 +413,7 @@ export type TenantSettingsCreateInput = {
   smsNotifications?: boolean
   appointmentReminders?: boolean
   reminderHoursBefore?: number
+  autoLockMinutes?: number
   createdAt?: Date | string
   updatedAt?: Date | string
   tenant: Prisma.TenantCreateNestedOneWithoutSettingsInput
@@ -416,6 +433,7 @@ export type TenantSettingsUncheckedCreateInput = {
   smsNotifications?: boolean
   appointmentReminders?: boolean
   reminderHoursBefore?: number
+  autoLockMinutes?: number
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -433,6 +451,7 @@ export type TenantSettingsUpdateInput = {
   smsNotifications?: Prisma.BoolFieldUpdateOperationsInput | boolean
   appointmentReminders?: Prisma.BoolFieldUpdateOperationsInput | boolean
   reminderHoursBefore?: Prisma.IntFieldUpdateOperationsInput | number
+  autoLockMinutes?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tenant?: Prisma.TenantUpdateOneRequiredWithoutSettingsNestedInput
@@ -452,6 +471,7 @@ export type TenantSettingsUncheckedUpdateInput = {
   smsNotifications?: Prisma.BoolFieldUpdateOperationsInput | boolean
   appointmentReminders?: Prisma.BoolFieldUpdateOperationsInput | boolean
   reminderHoursBefore?: Prisma.IntFieldUpdateOperationsInput | number
+  autoLockMinutes?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -470,6 +490,7 @@ export type TenantSettingsCreateManyInput = {
   smsNotifications?: boolean
   appointmentReminders?: boolean
   reminderHoursBefore?: number
+  autoLockMinutes?: number
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -487,6 +508,7 @@ export type TenantSettingsUpdateManyMutationInput = {
   smsNotifications?: Prisma.BoolFieldUpdateOperationsInput | boolean
   appointmentReminders?: Prisma.BoolFieldUpdateOperationsInput | boolean
   reminderHoursBefore?: Prisma.IntFieldUpdateOperationsInput | number
+  autoLockMinutes?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -505,6 +527,7 @@ export type TenantSettingsUncheckedUpdateManyInput = {
   smsNotifications?: Prisma.BoolFieldUpdateOperationsInput | boolean
   appointmentReminders?: Prisma.BoolFieldUpdateOperationsInput | boolean
   reminderHoursBefore?: Prisma.IntFieldUpdateOperationsInput | number
+  autoLockMinutes?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -528,6 +551,7 @@ export type TenantSettingsCountOrderByAggregateInput = {
   smsNotifications?: Prisma.SortOrder
   appointmentReminders?: Prisma.SortOrder
   reminderHoursBefore?: Prisma.SortOrder
+  autoLockMinutes?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -536,6 +560,7 @@ export type TenantSettingsAvgOrderByAggregateInput = {
   defaultAppointmentDuration?: Prisma.SortOrder
   appointmentBuffer?: Prisma.SortOrder
   reminderHoursBefore?: Prisma.SortOrder
+  autoLockMinutes?: Prisma.SortOrder
 }
 
 export type TenantSettingsMaxOrderByAggregateInput = {
@@ -550,6 +575,7 @@ export type TenantSettingsMaxOrderByAggregateInput = {
   smsNotifications?: Prisma.SortOrder
   appointmentReminders?: Prisma.SortOrder
   reminderHoursBefore?: Prisma.SortOrder
+  autoLockMinutes?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -566,6 +592,7 @@ export type TenantSettingsMinOrderByAggregateInput = {
   smsNotifications?: Prisma.SortOrder
   appointmentReminders?: Prisma.SortOrder
   reminderHoursBefore?: Prisma.SortOrder
+  autoLockMinutes?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -574,6 +601,7 @@ export type TenantSettingsSumOrderByAggregateInput = {
   defaultAppointmentDuration?: Prisma.SortOrder
   appointmentBuffer?: Prisma.SortOrder
   reminderHoursBefore?: Prisma.SortOrder
+  autoLockMinutes?: Prisma.SortOrder
 }
 
 export type TenantSettingsCreateNestedOneWithoutTenantInput = {
@@ -621,6 +649,7 @@ export type TenantSettingsCreateWithoutTenantInput = {
   smsNotifications?: boolean
   appointmentReminders?: boolean
   reminderHoursBefore?: number
+  autoLockMinutes?: number
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -638,6 +667,7 @@ export type TenantSettingsUncheckedCreateWithoutTenantInput = {
   smsNotifications?: boolean
   appointmentReminders?: boolean
   reminderHoursBefore?: number
+  autoLockMinutes?: number
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -671,6 +701,7 @@ export type TenantSettingsUpdateWithoutTenantInput = {
   smsNotifications?: Prisma.BoolFieldUpdateOperationsInput | boolean
   appointmentReminders?: Prisma.BoolFieldUpdateOperationsInput | boolean
   reminderHoursBefore?: Prisma.IntFieldUpdateOperationsInput | number
+  autoLockMinutes?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -688,6 +719,7 @@ export type TenantSettingsUncheckedUpdateWithoutTenantInput = {
   smsNotifications?: Prisma.BoolFieldUpdateOperationsInput | boolean
   appointmentReminders?: Prisma.BoolFieldUpdateOperationsInput | boolean
   reminderHoursBefore?: Prisma.IntFieldUpdateOperationsInput | number
+  autoLockMinutes?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -708,6 +740,7 @@ export type TenantSettingsSelect<ExtArgs extends runtime.Types.Extensions.Intern
   smsNotifications?: boolean
   appointmentReminders?: boolean
   reminderHoursBefore?: boolean
+  autoLockMinutes?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
@@ -727,6 +760,7 @@ export type TenantSettingsSelectCreateManyAndReturn<ExtArgs extends runtime.Type
   smsNotifications?: boolean
   appointmentReminders?: boolean
   reminderHoursBefore?: boolean
+  autoLockMinutes?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
@@ -746,6 +780,7 @@ export type TenantSettingsSelectUpdateManyAndReturn<ExtArgs extends runtime.Type
   smsNotifications?: boolean
   appointmentReminders?: boolean
   reminderHoursBefore?: boolean
+  autoLockMinutes?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
@@ -765,11 +800,12 @@ export type TenantSettingsSelectScalar = {
   smsNotifications?: boolean
   appointmentReminders?: boolean
   reminderHoursBefore?: boolean
+  autoLockMinutes?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type TenantSettingsOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "language" | "dateFormat" | "timeFormat" | "defaultAppointmentDuration" | "appointmentBuffer" | "businessHours" | "workingDays" | "emailNotifications" | "smsNotifications" | "appointmentReminders" | "reminderHoursBefore" | "createdAt" | "updatedAt", ExtArgs["result"]["tenantSettings"]>
+export type TenantSettingsOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "language" | "dateFormat" | "timeFormat" | "defaultAppointmentDuration" | "appointmentBuffer" | "businessHours" | "workingDays" | "emailNotifications" | "smsNotifications" | "appointmentReminders" | "reminderHoursBefore" | "autoLockMinutes" | "createdAt" | "updatedAt", ExtArgs["result"]["tenantSettings"]>
 export type TenantSettingsInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
 }
@@ -799,6 +835,7 @@ export type $TenantSettingsPayload<ExtArgs extends runtime.Types.Extensions.Inte
     smsNotifications: boolean
     appointmentReminders: boolean
     reminderHoursBefore: number
+    autoLockMinutes: number
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["tenantSettings"]>
@@ -1238,6 +1275,7 @@ export interface TenantSettingsFieldRefs {
   readonly smsNotifications: Prisma.FieldRef<"TenantSettings", 'Boolean'>
   readonly appointmentReminders: Prisma.FieldRef<"TenantSettings", 'Boolean'>
   readonly reminderHoursBefore: Prisma.FieldRef<"TenantSettings", 'Int'>
+  readonly autoLockMinutes: Prisma.FieldRef<"TenantSettings", 'Int'>
   readonly createdAt: Prisma.FieldRef<"TenantSettings", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"TenantSettings", 'DateTime'>
 }

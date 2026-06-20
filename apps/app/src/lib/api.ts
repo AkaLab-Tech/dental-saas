@@ -2,6 +2,7 @@ import axios from 'axios'
 import type { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import type { UserRole } from '@dental/shared'
 import { useAuthStore } from '@/stores/auth.store'
+import { useLockStore } from '@/stores/lock.store'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
 
@@ -13,12 +14,16 @@ export const apiClient = axios.create({
   withCredentials: false,
 })
 
-// Request interceptor - add access token to requests
+// Request interceptor - add access token and profile token to requests
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const { accessToken } = useAuthStore.getState()
     if (accessToken && config.headers) {
       config.headers.Authorization = `Bearer ${accessToken}`
+    }
+    const { profileToken } = useLockStore.getState()
+    if (profileToken && config.headers) {
+      config.headers['X-Profile-Token'] = profileToken
     }
     return config
   },
@@ -45,7 +50,13 @@ const processQueue = (error: Error | null, token: string | null = null) => {
 
 apiClient.interceptors.response.use(
   (response) => response,
-  async (error: AxiosError) => {
+  async (error: AxiosError<{ error?: { code?: string } }>) => {
+    // Handle profile token expiration — auto-lock
+    if (error.response?.status === 403 && error.response?.data?.error?.code === 'PROFILE_TOKEN_EXPIRED') {
+      useLockStore.getState().lock()
+      return Promise.reject(error)
+    }
+
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _retry?: boolean
     }
@@ -150,6 +161,25 @@ export interface AuthResponse {
   refreshToken: string
 }
 
+export interface ProfileUser {
+  id: string
+  firstName: string
+  lastName: string
+  role: string
+  avatar: string | null
+  hasPinSet: boolean
+}
+
+export interface PinLoginPayload {
+  userId: string
+  pin: string
+}
+
+export interface ProfileLoginResponse {
+  profileToken: string
+  user: ProfileUser
+}
+
 export const authApi = {
   login: async (payload: LoginPayload): Promise<AuthResponse> => {
     const response = await apiClient.post<AuthResponse>('/auth/login', payload)
@@ -175,6 +205,21 @@ export const authApi = {
 
   refreshToken: async (refreshToken: string) => {
     const response = await apiClient.post('/auth/refresh', { refreshToken })
+    return response.data
+  },
+
+  getProfiles: async (): Promise<ProfileUser[]> => {
+    const response = await apiClient.get<ProfileUser[]>('/auth/profiles')
+    return response.data
+  },
+
+  pinLogin: async (payload: PinLoginPayload): Promise<ProfileLoginResponse> => {
+    const response = await apiClient.post<ProfileLoginResponse>('/auth/pin-login', payload)
+    return response.data
+  },
+
+  setupPin: async (payload: PinLoginPayload): Promise<ProfileLoginResponse> => {
+    const response = await apiClient.post<ProfileLoginResponse>('/auth/setup-pin', payload)
     return response.data
   },
 }

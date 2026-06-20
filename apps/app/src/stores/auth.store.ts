@@ -11,6 +11,7 @@ export interface User {
   tenantId: string
   avatar?: string
   phone?: string
+  hasPinSet?: boolean
   tenant?: {
     id: string
     name: string

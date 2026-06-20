@@ -1879,6 +1879,7 @@ export const TenantSettingsScalarFieldEnum = {
   smsNotifications: 'smsNotifications',
   appointmentReminders: 'appointmentReminders',
   reminderHoursBefore: 'reminderHoursBefore',
+  autoLockMinutes: 'autoLockMinutes',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -1891,6 +1892,7 @@ export const UserScalarFieldEnum = {
   tenantId: 'tenantId',
   email: 'email',
   passwordHash: 'passwordHash',
+  pinHash: 'pinHash',
   firstName: 'firstName',
   lastName: 'lastName',
   role: 'role',

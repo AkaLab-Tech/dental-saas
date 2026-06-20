@@ -17,6 +17,7 @@ export interface TenantSettings {
   smsNotifications: boolean
   appointmentReminders: boolean
   reminderHoursBefore: number
+  autoLockMinutes: number
   updatedAt: string
 }
 
@@ -46,6 +47,7 @@ export interface UpdateSettingsData {
   smsNotifications?: boolean
   appointmentReminders?: boolean
   reminderHoursBefore?: number
+  autoLockMinutes?: number
 }
 
 export interface UpdateTenantProfileData {

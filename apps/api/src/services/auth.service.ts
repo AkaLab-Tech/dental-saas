@@ -16,6 +16,14 @@ export interface TokenPayload {
   tenantId: string
   email: string
   role: string
+  profileUserId?: string
+}
+
+export interface ProfileTokenPayload {
+  profileUserId: string
+  role: string
+  tenantId: string
+  type: 'profile'
 }
 
 export interface TokenPair {
@@ -86,6 +94,25 @@ export function verifyRefreshToken(token: string): { userId: string } {
   }
   
   return { userId: decoded.userId }
+}
+
+/**
+ * Generate a profile token (lightweight JWT for active user identification)
+ */
+export function generateProfileToken(payload: Omit<ProfileTokenPayload, 'type'>): string {
+  return jwt.sign({ ...payload, type: 'profile' }, env.JWT_SECRET, { expiresIn: '24h' })
+}
+
+/**
+ * Verify a profile token
+ * @throws Error if token is invalid or not a profile token
+ */
+export function verifyProfileToken(token: string): ProfileTokenPayload {
+  const decoded = jwt.verify(token, env.JWT_SECRET) as ProfileTokenPayload
+  if (decoded.type !== 'profile') {
+    throw new Error('Invalid token type: expected profile token')
+  }
+  return decoded
 }
 
 /**

@@ -5,12 +5,14 @@ import {
   hashPassword,
   verifyPassword,
   generateTokens,
+  generateProfileToken,
   verifyAccessToken,
   verifyRefreshToken,
   hashToken,
   getExpiryDate,
   cleanupOldRefreshTokens,
 } from '../services/auth.service.js'
+import { requireAuth } from '../middleware/auth.js'
 import { sendWelcomeEmail, sendPasswordResetEmail } from '../services/email.service.js'
 import { logger } from '../utils/logger.js'
 import { env } from '../config/env.js'
@@ -476,6 +478,7 @@ authRouter.get('/me', async (req, res, next) => {
         tenantId: true,
         avatar: true,
         phone: true,
+        pinHash: true,
         emailVerified: true,
         lastLoginAt: true,
         createdAt: true,
@@ -498,7 +501,8 @@ authRouter.get('/me', async (req, res, next) => {
       })
     }
 
-    res.json(user)
+    const { pinHash, ...userData } = user
+    res.json({ ...userData, hasPinSet: !!pinHash })
   } catch (e) {
     next(e)
   }
@@ -711,6 +715,167 @@ authRouter.post('/reset-password', async (req, res, next) => {
     })
   } catch (err) {
     next(err)
+  }
+})
+
+// GET /api/auth/profiles - List user profiles for lock screen (requires JWT)
+authRouter.get('/profiles', requireAuth, async (req, res, next) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: { tenantId: req.user!.tenantId, isActive: true, role: { not: 'SUPER_ADMIN' } },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        avatar: true,
+        pinHash: true,
+      },
+      orderBy: { firstName: 'asc' },
+    })
+
+    const profiles = users.map(({ pinHash, ...u }) => ({
+      ...u,
+      hasPinSet: !!pinHash,
+    }))
+
+    res.json(profiles)
+  } catch (e) {
+    next(e)
+  }
+})
+
+// POST /api/auth/pin-login - Authenticate with PIN (requires JWT)
+const pinLoginSchema = z.object({
+  userId: z.string().min(1),
+  pin: z.string().regex(/^\d{4}$/, 'PIN must be exactly 4 digits'),
+})
+
+authRouter.post('/pin-login', requireAuth, async (req, res, next) => {
+  try {
+    const parse = pinLoginSchema.safeParse(req.body)
+    if (!parse.success) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid payload', code: 'INVALID_PAYLOAD', details: parse.error.errors },
+      })
+    }
+
+    const { userId, pin } = parse.data
+
+    const user = await prisma.user.findFirst({
+      where: { id: userId, tenantId: req.user!.tenantId, isActive: true },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        avatar: true,
+        pinHash: true,
+      },
+    })
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: { message: 'Invalid credentials', code: 'INVALID_CREDENTIALS' },
+      })
+    }
+
+    if (!user.pinHash) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'PIN not set', code: 'PIN_NOT_SET' },
+      })
+    }
+
+    const isValid = await verifyPassword(pin, user.pinHash)
+    if (!isValid) {
+      return res.status(401).json({
+        success: false,
+        error: { message: 'Invalid credentials', code: 'INVALID_CREDENTIALS' },
+      })
+    }
+
+    const profileToken = generateProfileToken({
+      profileUserId: user.id,
+      role: user.role,
+      tenantId: req.user!.tenantId,
+    })
+
+    const { pinHash, ...userData } = user
+
+    res.json({
+      profileToken,
+      user: { ...userData, hasPinSet: !!pinHash },
+    })
+  } catch (e) {
+    next(e)
+  }
+})
+
+// POST /api/auth/setup-pin - Set PIN for first time (requires JWT)
+const setupPinSchema = z.object({
+  userId: z.string().min(1),
+  pin: z.string().regex(/^\d{4}$/, 'PIN must be exactly 4 digits'),
+})
+
+authRouter.post('/setup-pin', requireAuth, async (req, res, next) => {
+  try {
+    const parse = setupPinSchema.safeParse(req.body)
+    if (!parse.success) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid payload', code: 'INVALID_PAYLOAD', details: parse.error.errors },
+      })
+    }
+
+    const { userId, pin } = parse.data
+
+    const user = await prisma.user.findFirst({
+      where: { id: userId, tenantId: req.user!.tenantId, isActive: true },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        avatar: true,
+        pinHash: true,
+      },
+    })
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'User not found', code: 'USER_NOT_FOUND' },
+      })
+    }
+
+    if (user.pinHash) {
+      return res.status(409).json({
+        success: false,
+        error: { message: 'PIN already set. Use the users page to change it.', code: 'PIN_ALREADY_SET' },
+      })
+    }
+
+    const pinHash = await hashPassword(pin)
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { pinHash },
+    })
+
+    const profileToken = generateProfileToken({
+      profileUserId: user.id,
+      role: user.role,
+      tenantId: req.user!.tenantId,
+    })
+
+    res.json({
+      profileToken,
+      user: { id: user.id, firstName: user.firstName, lastName: user.lastName, role: user.role, avatar: user.avatar, hasPinSet: true },
+    })
+  } catch (e) {
+    next(e)
   }
 })
 

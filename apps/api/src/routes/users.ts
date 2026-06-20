@@ -1,14 +1,16 @@
 import { Router, type IRouter } from 'express'
 import { z } from 'zod'
 import { prisma, UserRole } from '@dental/database'
-import { requireMinRole } from '../middleware/auth.js'
+import { requireMinRole, hasMinRole } from '../middleware/auth.js'
 import {
   listUsers,
   getUserById,
   createUser,
+  createProfile,
   updateUser,
   updateUserRole,
   deleteUser,
+  setUserPin,
   checkRoleLimitForNewUser,
   countUsersByRole,
   getTenantPlanLimits,
@@ -44,6 +46,13 @@ const createUserSchema = z.object({
   role: z.enum(['ADMIN', 'CLINIC_ADMIN', 'DOCTOR', 'STAFF']), // OWNER cannot be assigned via API, SUPER_ADMIN is forbidden
   phone: phoneSchema,
   avatar: z.string().url().optional(),
+})
+
+const createProfileSchema = z.object({
+  profileOnly: z.literal(true),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  role: z.enum(['ADMIN', 'CLINIC_ADMIN', 'DOCTOR', 'STAFF']),
 })
 
 const updateUserSchema = z.object({
@@ -146,12 +155,52 @@ usersRouter.get('/:id', requireMinRole('ADMIN'), async (req, res, next) => {
 
 /**
  * POST /api/users
- * Create a new user (ADMIN+ required)
+ * Create a new user or profile-only user (ADMIN+ required)
+ * When profileOnly=true, only firstName, lastName, and role are required.
  */
 usersRouter.post('/', requireMinRole('ADMIN'), async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId
 
+    // Check if this is a profile-only creation
+    if (req.body.profileOnly === true) {
+      const parse = createProfileSchema.safeParse(req.body)
+      if (!parse.success) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Invalid payload', code: 'INVALID_PAYLOAD', details: parse.error.errors },
+        })
+      }
+
+      const { firstName, lastName, role } = parse.data
+
+      // Check plan limits
+      const limitCheck = await checkRoleLimitForNewUser(tenantId, role as UserRole)
+      if (!limitCheck.allowed) {
+        return res.status(403).json({
+          success: false,
+          error: {
+            message: limitCheck.message,
+            code: 'PLAN_LIMIT_EXCEEDED',
+            currentCount: limitCheck.currentCount,
+            limit: limitCheck.limit,
+          },
+        })
+      }
+
+      const user = await createProfile(tenantId, {
+        firstName,
+        lastName,
+        role: role as UserRole,
+      })
+
+      return res.status(201).json({
+        success: true,
+        data: user,
+      })
+    }
+
+    // Standard user creation with email + password
     const parse = createUserSchema.safeParse(req.body)
     if (!parse.success) {
       return res.status(400).json({
@@ -320,6 +369,51 @@ usersRouter.delete('/:id', requireMinRole('ADMIN'), async (req, res, next) => {
       message: 'User deleted successfully',
     })
   } catch (e) {
+    next(e)
+  }
+})
+
+/**
+ * PUT /api/users/:id/pin
+ * Set or update a user's 4-digit PIN (self-service or ADMIN+)
+ */
+const pinSchema = z.object({
+  pin: z.string().regex(/^\d{4}$/, 'PIN must be exactly 4 digits'),
+})
+
+usersRouter.put('/:id/pin', async (req, res, next) => {
+  try {
+    const tenantId = req.user!.tenantId
+    const requestingUserId = req.user!.userId
+    const { id } = req.params
+
+    // Self-service or ADMIN+ can set PIN for others
+    const isSelf = id === requestingUserId
+    if (!isSelf && !hasMinRole(req.user!.role, 'ADMIN')) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Insufficient permissions', code: 'FORBIDDEN' },
+      })
+    }
+
+    const parse = pinSchema.safeParse(req.body)
+    if (!parse.success) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid payload', code: 'INVALID_PAYLOAD', details: parse.error.errors },
+      })
+    }
+
+    await setUserPin(tenantId, id, parse.data.pin)
+
+    res.json({ success: true, message: 'PIN set successfully' })
+  } catch (e) {
+    if (e instanceof Error && e.message === 'User not found') {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'User not found', code: 'NOT_FOUND' },
+      })
+    }
     next(e)
   }
 })
