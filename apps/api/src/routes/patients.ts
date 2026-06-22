@@ -308,7 +308,10 @@ patientsRouter.post('/', requireMinRole('CLINIC_ADMIN'), async (req, res, next) 
       gender: parsed.data.gender ?? undefined,
     }
 
-    const patient = await createPatient(tenantId, createData)
+    const patient = await createPatient(tenantId, {
+      ...createData,
+      createdBy: req.user!.profileUserId || req.user!.userId,
+    })
 
     res.status(201).json({
       success: true,

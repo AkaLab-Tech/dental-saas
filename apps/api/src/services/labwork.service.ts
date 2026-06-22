@@ -74,6 +74,7 @@ export interface CreateLabworkInput {
   isPaid?: boolean
   isDelivered?: boolean
   doctorIds?: string[]
+  createdBy?: string
 }
 
 export interface UpdateLabworkInput {
@@ -233,6 +234,7 @@ export async function createLabwork(
       isPaid: priceIncluded ? true : (input.isPaid || false),
       isDelivered: input.isDelivered || false,
       doctorIds: input.doctorIds || [],
+      createdBy: input.createdBy,
     },
     select: {
       ...LABWORK_SELECT,

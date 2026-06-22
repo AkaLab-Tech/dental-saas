@@ -47,6 +47,20 @@ export interface DoctorPerformanceStats {
   completionRate: number
 }
 
+export interface UpcomingAppointment {
+  id: string
+  patientName: string
+  startTime: string
+  endTime: string
+  type: string | null
+  status: string
+}
+
+export interface AppointmentTypeCount {
+  type: string
+  count: number
+}
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -76,11 +90,14 @@ function getLastMonthEnd(): Date {
 /**
  * Get overview statistics for the dashboard
  */
-export async function getOverviewStats(tenantId: string): Promise<OverviewStats> {
-  logger.debug({ tenantId }, 'Fetching overview stats')
+export async function getOverviewStats(tenantId: string, doctorId?: string): Promise<OverviewStats> {
+  logger.debug({ tenantId, doctorId }, 'Fetching overview stats')
 
   const monthStart = getMonthStart()
   const monthEnd = getMonthEnd()
+
+  // When scoped to a doctor, filter appointments by doctorId
+  const appointmentDoctorFilter = doctorId ? { doctorId } : {}
 
   const [
     totalPatients,
@@ -93,23 +110,30 @@ export async function getOverviewStats(tenantId: string): Promise<OverviewStats>
     revenueData,
     pendingPaymentsData,
   ] = await Promise.all([
-    // Total active patients
-    prisma.patient.count({
-      where: { tenantId, isActive: true },
-    }),
+    // Total active patients (for doctor: distinct patients from their appointments)
+    doctorId
+      ? prisma.appointment.findMany({
+          where: { tenantId, isActive: true, doctorId },
+          select: { patientId: true },
+          distinct: ['patientId'],
+        }).then((r) => r.length)
+      : prisma.patient.count({
+          where: { tenantId, isActive: true },
+        }),
     // Total active doctors
     prisma.doctor.count({
       where: { tenantId, isActive: true },
     }),
     // Total appointments (all time)
     prisma.appointment.count({
-      where: { tenantId, isActive: true },
+      where: { tenantId, isActive: true, ...appointmentDoctorFilter },
     }),
     // Appointments this month
     prisma.appointment.count({
       where: {
         tenantId,
         isActive: true,
+        ...appointmentDoctorFilter,
         startTime: { gte: monthStart, lte: monthEnd },
       },
     }),
@@ -119,6 +143,7 @@ export async function getOverviewStats(tenantId: string): Promise<OverviewStats>
         tenantId,
         isActive: true,
         status: 'COMPLETED',
+        ...appointmentDoctorFilter,
         startTime: { gte: monthStart, lte: monthEnd },
       },
     }),
@@ -136,6 +161,7 @@ export async function getOverviewStats(tenantId: string): Promise<OverviewStats>
         tenantId,
         isActive: true,
         isPaid: true,
+        ...appointmentDoctorFilter,
         startTime: { gte: monthStart, lte: monthEnd },
       },
       _sum: { cost: true },
@@ -147,6 +173,7 @@ export async function getOverviewStats(tenantId: string): Promise<OverviewStats>
         isActive: true,
         isPaid: false,
         status: 'COMPLETED',
+        ...appointmentDoctorFilter,
       },
       _sum: { cost: true },
     }),
@@ -171,15 +198,17 @@ export async function getOverviewStats(tenantId: string): Promise<OverviewStats>
 export async function getAppointmentStatsForPeriod(
   tenantId: string,
   startDate: Date,
-  endDate: Date
+  endDate: Date,
+  doctorId?: string
 ): Promise<AppointmentStats> {
-  logger.debug({ tenantId, startDate, endDate }, 'Fetching appointment stats')
+  logger.debug({ tenantId, startDate, endDate, doctorId }, 'Fetching appointment stats')
 
   // Get appointments in range
   const appointments = await prisma.appointment.findMany({
     where: {
       tenantId,
       isActive: true,
+      ...(doctorId ? { doctorId } : {}),
       startTime: { gte: startDate, lte: endDate },
     },
     select: {
@@ -218,9 +247,10 @@ export async function getAppointmentStatsForPeriod(
  */
 export async function getRevenueStats(
   tenantId: string,
-  monthsBack: number = 6
+  monthsBack: number = 6,
+  doctorId?: string
 ): Promise<RevenueStats> {
-  logger.debug({ tenantId, monthsBack }, 'Fetching revenue stats')
+  logger.debug({ tenantId, monthsBack, doctorId }, 'Fetching revenue stats')
 
   const now = new Date()
   const startDate = new Date(now.getFullYear(), now.getMonth() - monthsBack + 1, 1)
@@ -231,6 +261,7 @@ export async function getRevenueStats(
       tenantId,
       isActive: true,
       status: 'COMPLETED',
+      ...(doctorId ? { doctorId } : {}),
       startTime: { gte: startDate },
     },
     select: {
@@ -420,4 +451,75 @@ export async function getDoctorPerformanceStats(tenantId: string): Promise<Docto
 
   // Sort by appointments count descending
   return performanceStats.sort((a, b) => b.appointmentsCount - a.appointmentsCount)
+}
+
+/**
+ * Get upcoming appointments for a doctor
+ */
+export async function getUpcomingAppointments(
+  tenantId: string,
+  doctorId: string,
+  limit: number = 10
+): Promise<UpcomingAppointment[]> {
+  const appointments = await prisma.appointment.findMany({
+    where: {
+      tenantId,
+      doctorId,
+      isActive: true,
+      status: { in: ['SCHEDULED', 'CONFIRMED'] },
+      startTime: { gte: new Date() },
+    },
+    select: {
+      id: true,
+      startTime: true,
+      endTime: true,
+      type: true,
+      status: true,
+      patient: {
+        select: { firstName: true, lastName: true },
+      },
+    },
+    orderBy: { startTime: 'asc' },
+    take: limit,
+  })
+
+  return appointments.map((a) => ({
+    id: a.id,
+    patientName: `${a.patient.firstName} ${a.patient.lastName}`,
+    startTime: a.startTime.toISOString(),
+    endTime: a.endTime.toISOString(),
+    type: a.type,
+    status: a.status,
+  }))
+}
+
+/**
+ * Get appointment type distribution for a doctor (current month)
+ */
+export async function getAppointmentTypeStats(
+  tenantId: string,
+  doctorId: string
+): Promise<AppointmentTypeCount[]> {
+  const monthStart = getMonthStart()
+  const monthEnd = getMonthEnd()
+
+  const appointments = await prisma.appointment.findMany({
+    where: {
+      tenantId,
+      doctorId,
+      isActive: true,
+      startTime: { gte: monthStart, lte: monthEnd },
+    },
+    select: { type: true },
+  })
+
+  const countMap: Record<string, number> = {}
+  for (const a of appointments) {
+    const type = a.type || 'Sin tipo'
+    countMap[type] = (countMap[type] || 0) + 1
+  }
+
+  return Object.entries(countMap)
+    .map(([type, count]) => ({ type, count }))
+    .sort((a, b) => b.count - a.count)
 }

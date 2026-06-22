@@ -369,7 +369,24 @@
     "monthlyRevenue": "Ingresos del mes",
     "recentActivity": "Actividad reciente",
     "upcomingAppointments": "Próximas citas",
-    "quickActions": "Acciones rápidas"
+    "quickActions": "Acciones rápidas",
+    "doctor": {
+      "title": "Mi Dashboard",
+      "welcome": "Hola, {{name}}. Aquí está tu resumen.",
+      "monthAppointments": "Mis Citas del Mes",
+      "completed": "completadas",
+      "patientsAttended": "Pacientes Atendidos",
+      "upcomingCount": "Próximas Citas",
+      "monthRevenue": "Mis Ingresos del Mes",
+      "upcoming": "Próximas Citas",
+      "noUpcoming": "No tienes citas próximas",
+      "appointmentsByDay": "Mis Citas por Día (Últimos 14 días)",
+      "noAppointmentData": "No hay datos de citas para mostrar",
+      "procedureTypes": "Procedimientos Más Realizados",
+      "noProcedureData": "No hay datos de procedimientos",
+      "appointmentStatus": "Estado de Mis Citas (Este Mes)",
+      "notLinked": "Tu cuenta no está vinculada a un perfil de doctor. Contacta a tu administrador."
+    }
   },
   "errors": {
     "generic": "Algo salió mal. Por favor intenta de nuevo.",

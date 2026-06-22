@@ -296,7 +296,10 @@ appointmentsRouter.post('/', requireMinRole('CLINIC_ADMIN'), async (req, res, ne
       })
     }
 
-    const result = await createAppointment(tenantId, parse.data)
+    const result = await createAppointment(tenantId, {
+      ...parse.data,
+      createdBy: req.user!.profileUserId || req.user!.userId,
+    })
 
     if (result.error) {
       const status = mapErrorCodeToStatus(result.error.code)

@@ -5,12 +5,17 @@ import {
   getRevenueStats,
   getPatientsGrowthStats,
   getDoctorPerformanceStats,
+  getMyDoctorId,
+  getUpcomingAppointments,
+  getAppointmentTypeStats,
   getStatsApiErrorMessage,
   type OverviewStats,
   type AppointmentStats,
   type RevenueStats,
   type PatientsGrowthStats,
   type DoctorPerformanceStats,
+  type UpcomingAppointment,
+  type AppointmentTypeCount,
 } from '@/lib/stats-api'
 
 // ============================================================================
@@ -23,6 +28,9 @@ export interface StatsState {
   revenueStats: RevenueStats | null
   patientsGrowth: PatientsGrowthStats | null
   doctorPerformance: DoctorPerformanceStats[] | null
+  upcomingAppointments: UpcomingAppointment[] | null
+  appointmentTypes: AppointmentTypeCount[] | null
+  myDoctorId: string | null
   isLoading: boolean
   error: string | null
 }
@@ -34,6 +42,8 @@ export interface StatsActions {
   fetchPatientsGrowth: (months?: number) => Promise<void>
   fetchDoctorPerformance: () => Promise<void>
   fetchAllStats: () => Promise<void>
+  fetchMyDoctorId: () => Promise<string | null>
+  fetchDoctorStats: (doctorId: string) => Promise<void>
   clearError: () => void
   reset: () => void
 }
@@ -48,6 +58,9 @@ const initialState: StatsState = {
   revenueStats: null,
   patientsGrowth: null,
   doctorPerformance: null,
+  upcomingAppointments: null,
+  appointmentTypes: null,
+  myDoctorId: null,
   isLoading: false,
   error: null,
 }
@@ -141,6 +154,42 @@ export const useStatsStore = create<StatsState & StatsActions>((set) => ({
         revenueStats,
         patientsGrowth,
         doctorPerformance,
+        isLoading: false,
+      })
+    } catch (error) {
+      set({ error: getStatsApiErrorMessage(error), isLoading: false })
+    }
+  },
+
+  fetchMyDoctorId: async () => {
+    try {
+      const doctorId = await getMyDoctorId()
+      set({ myDoctorId: doctorId })
+      return doctorId
+    } catch {
+      set({ myDoctorId: null })
+      return null
+    }
+  },
+
+  fetchDoctorStats: async (doctorId: string) => {
+    set({ isLoading: true, error: null })
+    try {
+      const [overview, appointmentStats, revenueStats, upcomingAppointments, appointmentTypes] =
+        await Promise.all([
+          getOverviewStats(doctorId),
+          getAppointmentStats(undefined, undefined, doctorId),
+          getRevenueStats(undefined, doctorId),
+          getUpcomingAppointments(doctorId),
+          getAppointmentTypeStats(doctorId),
+        ])
+
+      set({
+        overview,
+        appointmentStats,
+        revenueStats,
+        upcomingAppointments,
+        appointmentTypes,
         isLoading: false,
       })
     } catch (error) {

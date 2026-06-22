@@ -369,7 +369,24 @@
     "monthlyRevenue": "إيرادات الشهر",
     "recentActivity": "النشاط الأخير",
     "upcomingAppointments": "المواعيد القادمة",
-    "quickActions": "إجراءات سريعة"
+    "quickActions": "إجراءات سريعة",
+    "doctor": {
+      "title": "لوحتي",
+      "welcome": "مرحبًا، {{name}}. إليك ملخصك.",
+      "monthAppointments": "مواعيدي هذا الشهر",
+      "completed": "مكتملة",
+      "patientsAttended": "المرضى المعالَجون",
+      "upcomingCount": "المواعيد القادمة",
+      "monthRevenue": "إيراداتي هذا الشهر",
+      "upcoming": "المواعيد القادمة",
+      "noUpcoming": "لا توجد مواعيد قادمة",
+      "appointmentsByDay": "مواعيدي حسب اليوم (آخر ١٤ يومًا)",
+      "noAppointmentData": "لا توجد بيانات مواعيد لعرضها",
+      "procedureTypes": "أكثر الإجراءات شيوعًا",
+      "noProcedureData": "لا توجد بيانات إجراءات",
+      "appointmentStatus": "حالة مواعيدي (هذا الشهر)",
+      "notLinked": "حسابك غير مرتبط بملف طبيب. اتصل بالمسؤول."
+    }
   },
   "errors": {
     "generic": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",

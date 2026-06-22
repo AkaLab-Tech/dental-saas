@@ -24,8 +24,10 @@ import {
 } from 'recharts'
 import { useStatsStore } from '@/stores/stats.store'
 import { useAuthStore } from '@/stores/auth.store'
+import { useLockStore } from '@/stores/lock.store'
 import { UserRole } from '@dental/shared'
 import { formatCurrency } from '@/lib/format'
+import DoctorDashboard from './DoctorDashboard'
 
 // ============================================================================
 // Stat Card Component
@@ -88,12 +90,24 @@ function StatCard({ title, value, subtitle, icon, trend, linkTo, color }: StatCa
 export default function DashboardPage() {
   const { overview, appointmentStats, revenueStats, patientsGrowth, doctorPerformance, isLoading, error, fetchAllStats } = useStatsStore()
   const { user } = useAuthStore()
+  const activeUser = useLockStore((s) => s.activeUser)
+  const effectiveRole = activeUser?.role || user?.role
+  const isDoctorOrStaff = effectiveRole === UserRole.DOCTOR || effectiveRole === UserRole.STAFF
+
+  // Admin/owner stats — skip the fetch for doctor/staff, who render DoctorDashboard.
+  useEffect(() => {
+    if (!isDoctorOrStaff) {
+      fetchAllStats()
+    }
+  }, [fetchAllStats, isDoctorOrStaff])
+
+  // Show doctor dashboard for DOCTOR and STAFF roles
+  if (isDoctorOrStaff) {
+    return <DoctorDashboard />
+  }
+
   const currency = user?.tenant?.currency || 'USD'
   const isAdmin = user?.role === UserRole.OWNER || user?.role === UserRole.ADMIN || user?.role === UserRole.CLINIC_ADMIN
-
-  useEffect(() => {
-    fetchAllStats()
-  }, [fetchAllStats])
 
   if (isLoading && !overview) {
     return (

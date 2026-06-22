@@ -160,6 +160,7 @@ labworksRouter.post('/', requireMinRole('CLINIC_ADMIN'), async (req, res, next) 
     const result = await createLabwork(tenantId, {
       ...parsed.data,
       date: new Date(parsed.data.date),
+      createdBy: req.user!.profileUserId || req.user!.userId,
     })
 
     if (!result.success) {

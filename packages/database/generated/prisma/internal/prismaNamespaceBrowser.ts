@@ -216,6 +216,7 @@ export const PatientScalarFieldEnum = {
   notes: 'notes',
   teeth: 'teeth',
   showPrimaryTeeth: 'showPrimaryTeeth',
+  createdBy: 'createdBy',
   isActive: 'isActive',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -239,6 +240,7 @@ export const DoctorScalarFieldEnum = {
   avatar: 'avatar',
   bio: 'bio',
   hourlyRate: 'hourlyRate',
+  userId: 'userId',
   isActive: 'isActive',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -261,6 +263,7 @@ export const AppointmentScalarFieldEnum = {
   privateNotes: 'privateNotes',
   cost: 'cost',
   isPaid: 'isPaid',
+  createdBy: 'createdBy',
   isActive: 'isActive',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -283,6 +286,7 @@ export const LabworkScalarFieldEnum = {
   isPaid: 'isPaid',
   isDelivered: 'isDelivered',
   doctorIds: 'doctorIds',
+  createdBy: 'createdBy',
   isActive: 'isActive',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'

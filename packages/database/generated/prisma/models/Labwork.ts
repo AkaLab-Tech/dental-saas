@@ -47,6 +47,7 @@ export type LabworkMinAggregateOutputType = {
   price: runtime.Decimal | null
   isPaid: boolean | null
   isDelivered: boolean | null
+  createdBy: string | null
   isActive: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -65,6 +66,7 @@ export type LabworkMaxAggregateOutputType = {
   price: runtime.Decimal | null
   isPaid: boolean | null
   isDelivered: boolean | null
+  createdBy: string | null
   isActive: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -84,6 +86,7 @@ export type LabworkCountAggregateOutputType = {
   isPaid: number
   isDelivered: number
   doctorIds: number
+  createdBy: number
   isActive: number
   createdAt: number
   updatedAt: number
@@ -112,6 +115,7 @@ export type LabworkMinAggregateInputType = {
   price?: true
   isPaid?: true
   isDelivered?: true
+  createdBy?: true
   isActive?: true
   createdAt?: true
   updatedAt?: true
@@ -130,6 +134,7 @@ export type LabworkMaxAggregateInputType = {
   price?: true
   isPaid?: true
   isDelivered?: true
+  createdBy?: true
   isActive?: true
   createdAt?: true
   updatedAt?: true
@@ -149,6 +154,7 @@ export type LabworkCountAggregateInputType = {
   isPaid?: true
   isDelivered?: true
   doctorIds?: true
+  createdBy?: true
   isActive?: true
   createdAt?: true
   updatedAt?: true
@@ -255,6 +261,7 @@ export type LabworkGroupByOutputType = {
   isPaid: boolean
   isDelivered: boolean
   doctorIds: runtime.JsonValue
+  createdBy: string | null
   isActive: boolean
   createdAt: Date
   updatedAt: Date
@@ -297,6 +304,7 @@ export type LabworkWhereInput = {
   isPaid?: Prisma.BoolFilter<"Labwork"> | boolean
   isDelivered?: Prisma.BoolFilter<"Labwork"> | boolean
   doctorIds?: Prisma.JsonFilter<"Labwork">
+  createdBy?: Prisma.StringNullableFilter<"Labwork"> | string | null
   isActive?: Prisma.BoolFilter<"Labwork"> | boolean
   createdAt?: Prisma.DateTimeFilter<"Labwork"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Labwork"> | Date | string
@@ -319,6 +327,7 @@ export type LabworkOrderByWithRelationInput = {
   isPaid?: Prisma.SortOrder
   isDelivered?: Prisma.SortOrder
   doctorIds?: Prisma.SortOrder
+  createdBy?: Prisma.SortOrderInput | Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -344,6 +353,7 @@ export type LabworkWhereUniqueInput = Prisma.AtLeast<{
   isPaid?: Prisma.BoolFilter<"Labwork"> | boolean
   isDelivered?: Prisma.BoolFilter<"Labwork"> | boolean
   doctorIds?: Prisma.JsonFilter<"Labwork">
+  createdBy?: Prisma.StringNullableFilter<"Labwork"> | string | null
   isActive?: Prisma.BoolFilter<"Labwork"> | boolean
   createdAt?: Prisma.DateTimeFilter<"Labwork"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Labwork"> | Date | string
@@ -366,6 +376,7 @@ export type LabworkOrderByWithAggregationInput = {
   isPaid?: Prisma.SortOrder
   isDelivered?: Prisma.SortOrder
   doctorIds?: Prisma.SortOrder
+  createdBy?: Prisma.SortOrderInput | Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -393,6 +404,7 @@ export type LabworkScalarWhereWithAggregatesInput = {
   isPaid?: Prisma.BoolWithAggregatesFilter<"Labwork"> | boolean
   isDelivered?: Prisma.BoolWithAggregatesFilter<"Labwork"> | boolean
   doctorIds?: Prisma.JsonWithAggregatesFilter<"Labwork">
+  createdBy?: Prisma.StringNullableWithAggregatesFilter<"Labwork"> | string | null
   isActive?: Prisma.BoolWithAggregatesFilter<"Labwork"> | boolean
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Labwork"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Labwork"> | Date | string
@@ -409,6 +421,7 @@ export type LabworkCreateInput = {
   isPaid?: boolean
   isDelivered?: boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -431,6 +444,7 @@ export type LabworkUncheckedCreateInput = {
   isPaid?: boolean
   isDelivered?: boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -447,6 +461,7 @@ export type LabworkUpdateInput = {
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -469,6 +484,7 @@ export type LabworkUncheckedUpdateInput = {
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -488,6 +504,7 @@ export type LabworkCreateManyInput = {
   isPaid?: boolean
   isDelivered?: boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -504,6 +521,7 @@ export type LabworkUpdateManyMutationInput = {
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -523,6 +541,7 @@ export type LabworkUncheckedUpdateManyInput = {
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -552,6 +571,7 @@ export type LabworkCountOrderByAggregateInput = {
   isPaid?: Prisma.SortOrder
   isDelivered?: Prisma.SortOrder
   doctorIds?: Prisma.SortOrder
+  createdBy?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -574,6 +594,7 @@ export type LabworkMaxOrderByAggregateInput = {
   price?: Prisma.SortOrder
   isPaid?: Prisma.SortOrder
   isDelivered?: Prisma.SortOrder
+  createdBy?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -592,6 +613,7 @@ export type LabworkMinOrderByAggregateInput = {
   price?: Prisma.SortOrder
   isPaid?: Prisma.SortOrder
   isDelivered?: Prisma.SortOrder
+  createdBy?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -738,6 +760,7 @@ export type LabworkCreateWithoutTenantInput = {
   isPaid?: boolean
   isDelivered?: boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -758,6 +781,7 @@ export type LabworkUncheckedCreateWithoutTenantInput = {
   isPaid?: boolean
   isDelivered?: boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -806,6 +830,7 @@ export type LabworkScalarWhereInput = {
   isPaid?: Prisma.BoolFilter<"Labwork"> | boolean
   isDelivered?: Prisma.BoolFilter<"Labwork"> | boolean
   doctorIds?: Prisma.JsonFilter<"Labwork">
+  createdBy?: Prisma.StringNullableFilter<"Labwork"> | string | null
   isActive?: Prisma.BoolFilter<"Labwork"> | boolean
   createdAt?: Prisma.DateTimeFilter<"Labwork"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Labwork"> | Date | string
@@ -822,6 +847,7 @@ export type LabworkCreateWithoutPatientInput = {
   isPaid?: boolean
   isDelivered?: boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -842,6 +868,7 @@ export type LabworkUncheckedCreateWithoutPatientInput = {
   isPaid?: boolean
   isDelivered?: boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -884,6 +911,7 @@ export type LabworkCreateWithoutAppointmentInput = {
   isPaid?: boolean
   isDelivered?: boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -904,6 +932,7 @@ export type LabworkUncheckedCreateWithoutAppointmentInput = {
   isPaid?: boolean
   isDelivered?: boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -948,6 +977,7 @@ export type LabworkCreateManyTenantInput = {
   isPaid?: boolean
   isDelivered?: boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -964,6 +994,7 @@ export type LabworkUpdateWithoutTenantInput = {
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -984,6 +1015,7 @@ export type LabworkUncheckedUpdateWithoutTenantInput = {
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1002,6 +1034,7 @@ export type LabworkUncheckedUpdateManyWithoutTenantInput = {
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1020,6 +1053,7 @@ export type LabworkCreateManyPatientInput = {
   isPaid?: boolean
   isDelivered?: boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -1036,6 +1070,7 @@ export type LabworkUpdateWithoutPatientInput = {
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1056,6 +1091,7 @@ export type LabworkUncheckedUpdateWithoutPatientInput = {
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1074,6 +1110,7 @@ export type LabworkUncheckedUpdateManyWithoutPatientInput = {
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1092,6 +1129,7 @@ export type LabworkCreateManyAppointmentInput = {
   isPaid?: boolean
   isDelivered?: boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -1108,6 +1146,7 @@ export type LabworkUpdateWithoutAppointmentInput = {
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1128,6 +1167,7 @@ export type LabworkUncheckedUpdateWithoutAppointmentInput = {
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1146,6 +1186,7 @@ export type LabworkUncheckedUpdateManyWithoutAppointmentInput = {
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1167,6 +1208,7 @@ export type LabworkSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   isPaid?: boolean
   isDelivered?: boolean
   doctorIds?: boolean
+  createdBy?: boolean
   isActive?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -1189,6 +1231,7 @@ export type LabworkSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   isPaid?: boolean
   isDelivered?: boolean
   doctorIds?: boolean
+  createdBy?: boolean
   isActive?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -1211,6 +1254,7 @@ export type LabworkSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   isPaid?: boolean
   isDelivered?: boolean
   doctorIds?: boolean
+  createdBy?: boolean
   isActive?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -1233,12 +1277,13 @@ export type LabworkSelectScalar = {
   isPaid?: boolean
   isDelivered?: boolean
   doctorIds?: boolean
+  createdBy?: boolean
   isActive?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type LabworkOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "patientId" | "appointmentId" | "priceIncludedInAppointment" | "lab" | "phoneNumber" | "date" | "note" | "price" | "isPaid" | "isDelivered" | "doctorIds" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["labwork"]>
+export type LabworkOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "patientId" | "appointmentId" | "priceIncludedInAppointment" | "lab" | "phoneNumber" | "date" | "note" | "price" | "isPaid" | "isDelivered" | "doctorIds" | "createdBy" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["labwork"]>
 export type LabworkInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.Labwork$patientArgs<ExtArgs>
@@ -1309,6 +1354,10 @@ export type $LabworkPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
      * IDs of doctors associated with this labwork (stored as JSON array)
      */
     doctorIds: runtime.JsonValue
+    /**
+     * User ID who created this labwork
+     */
+    createdBy: string | null
     isActive: boolean
     createdAt: Date
     updatedAt: Date
@@ -1751,6 +1800,7 @@ export interface LabworkFieldRefs {
   readonly isPaid: Prisma.FieldRef<"Labwork", 'Boolean'>
   readonly isDelivered: Prisma.FieldRef<"Labwork", 'Boolean'>
   readonly doctorIds: Prisma.FieldRef<"Labwork", 'Json'>
+  readonly createdBy: Prisma.FieldRef<"Labwork", 'String'>
   readonly isActive: Prisma.FieldRef<"Labwork", 'Boolean'>
   readonly createdAt: Prisma.FieldRef<"Labwork", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Labwork", 'DateTime'>
