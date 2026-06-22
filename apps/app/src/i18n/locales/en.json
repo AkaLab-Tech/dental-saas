@@ -360,7 +360,24 @@
     "monthlyRevenue": "Monthly revenue",
     "recentActivity": "Recent activity",
     "upcomingAppointments": "Upcoming appointments",
-    "quickActions": "Quick actions"
+    "quickActions": "Quick actions",
+    "doctor": {
+      "title": "My Dashboard",
+      "welcome": "Hello, {{name}}. Here's your summary.",
+      "monthAppointments": "My Appointments This Month",
+      "completed": "completed",
+      "patientsAttended": "Patients Attended",
+      "upcomingCount": "Upcoming Appointments",
+      "monthRevenue": "My Revenue This Month",
+      "upcoming": "Upcoming Appointments",
+      "noUpcoming": "No upcoming appointments",
+      "appointmentsByDay": "My Appointments by Day (Last 14 days)",
+      "noAppointmentData": "No appointment data to show",
+      "procedureTypes": "Most Common Procedures",
+      "noProcedureData": "No procedure data",
+      "appointmentStatus": "My Appointment Status (This Month)",
+      "notLinked": "Your account is not linked to a doctor profile. Contact your administrator."
+    }
   },
   "errors": {
     "generic": "Something went wrong. Please try again.",

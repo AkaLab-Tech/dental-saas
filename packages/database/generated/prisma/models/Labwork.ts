@@ -38,6 +38,8 @@ export type LabworkMinAggregateOutputType = {
   id: string | null
   tenantId: string | null
   patientId: string | null
+  appointmentId: string | null
+  priceIncludedInAppointment: boolean | null
   lab: string | null
   phoneNumber: string | null
   date: Date | null
@@ -55,6 +57,8 @@ export type LabworkMaxAggregateOutputType = {
   id: string | null
   tenantId: string | null
   patientId: string | null
+  appointmentId: string | null
+  priceIncludedInAppointment: boolean | null
   lab: string | null
   phoneNumber: string | null
   date: Date | null
@@ -72,6 +76,8 @@ export type LabworkCountAggregateOutputType = {
   id: number
   tenantId: number
   patientId: number
+  appointmentId: number
+  priceIncludedInAppointment: number
   lab: number
   phoneNumber: number
   date: number
@@ -100,6 +106,8 @@ export type LabworkMinAggregateInputType = {
   id?: true
   tenantId?: true
   patientId?: true
+  appointmentId?: true
+  priceIncludedInAppointment?: true
   lab?: true
   phoneNumber?: true
   date?: true
@@ -117,6 +125,8 @@ export type LabworkMaxAggregateInputType = {
   id?: true
   tenantId?: true
   patientId?: true
+  appointmentId?: true
+  priceIncludedInAppointment?: true
   lab?: true
   phoneNumber?: true
   date?: true
@@ -134,6 +144,8 @@ export type LabworkCountAggregateInputType = {
   id?: true
   tenantId?: true
   patientId?: true
+  appointmentId?: true
+  priceIncludedInAppointment?: true
   lab?: true
   phoneNumber?: true
   date?: true
@@ -239,6 +251,8 @@ export type LabworkGroupByOutputType = {
   id: string
   tenantId: string
   patientId: string | null
+  appointmentId: string | null
+  priceIncludedInAppointment: boolean
   lab: string
   phoneNumber: string | null
   date: Date
@@ -280,6 +294,8 @@ export type LabworkWhereInput = {
   id?: Prisma.StringFilter<"Labwork"> | string
   tenantId?: Prisma.StringFilter<"Labwork"> | string
   patientId?: Prisma.StringNullableFilter<"Labwork"> | string | null
+  appointmentId?: Prisma.StringNullableFilter<"Labwork"> | string | null
+  priceIncludedInAppointment?: Prisma.BoolFilter<"Labwork"> | boolean
   lab?: Prisma.StringFilter<"Labwork"> | string
   phoneNumber?: Prisma.StringNullableFilter<"Labwork"> | string | null
   date?: Prisma.DateTimeFilter<"Labwork"> | Date | string
@@ -294,12 +310,15 @@ export type LabworkWhereInput = {
   updatedAt?: Prisma.DateTimeFilter<"Labwork"> | Date | string
   tenant?: Prisma.XOR<Prisma.TenantScalarRelationFilter, Prisma.TenantWhereInput>
   patient?: Prisma.XOR<Prisma.PatientNullableScalarRelationFilter, Prisma.PatientWhereInput> | null
+  appointment?: Prisma.XOR<Prisma.AppointmentNullableScalarRelationFilter, Prisma.AppointmentWhereInput> | null
 }
 
 export type LabworkOrderByWithRelationInput = {
   id?: Prisma.SortOrder
   tenantId?: Prisma.SortOrder
   patientId?: Prisma.SortOrderInput | Prisma.SortOrder
+  appointmentId?: Prisma.SortOrderInput | Prisma.SortOrder
+  priceIncludedInAppointment?: Prisma.SortOrder
   lab?: Prisma.SortOrder
   phoneNumber?: Prisma.SortOrderInput | Prisma.SortOrder
   date?: Prisma.SortOrder
@@ -314,6 +333,7 @@ export type LabworkOrderByWithRelationInput = {
   updatedAt?: Prisma.SortOrder
   tenant?: Prisma.TenantOrderByWithRelationInput
   patient?: Prisma.PatientOrderByWithRelationInput
+  appointment?: Prisma.AppointmentOrderByWithRelationInput
 }
 
 export type LabworkWhereUniqueInput = Prisma.AtLeast<{
@@ -323,6 +343,8 @@ export type LabworkWhereUniqueInput = Prisma.AtLeast<{
   NOT?: Prisma.LabworkWhereInput | Prisma.LabworkWhereInput[]
   tenantId?: Prisma.StringFilter<"Labwork"> | string
   patientId?: Prisma.StringNullableFilter<"Labwork"> | string | null
+  appointmentId?: Prisma.StringNullableFilter<"Labwork"> | string | null
+  priceIncludedInAppointment?: Prisma.BoolFilter<"Labwork"> | boolean
   lab?: Prisma.StringFilter<"Labwork"> | string
   phoneNumber?: Prisma.StringNullableFilter<"Labwork"> | string | null
   date?: Prisma.DateTimeFilter<"Labwork"> | Date | string
@@ -337,12 +359,15 @@ export type LabworkWhereUniqueInput = Prisma.AtLeast<{
   updatedAt?: Prisma.DateTimeFilter<"Labwork"> | Date | string
   tenant?: Prisma.XOR<Prisma.TenantScalarRelationFilter, Prisma.TenantWhereInput>
   patient?: Prisma.XOR<Prisma.PatientNullableScalarRelationFilter, Prisma.PatientWhereInput> | null
+  appointment?: Prisma.XOR<Prisma.AppointmentNullableScalarRelationFilter, Prisma.AppointmentWhereInput> | null
 }, "id">
 
 export type LabworkOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   tenantId?: Prisma.SortOrder
   patientId?: Prisma.SortOrderInput | Prisma.SortOrder
+  appointmentId?: Prisma.SortOrderInput | Prisma.SortOrder
+  priceIncludedInAppointment?: Prisma.SortOrder
   lab?: Prisma.SortOrder
   phoneNumber?: Prisma.SortOrderInput | Prisma.SortOrder
   date?: Prisma.SortOrder
@@ -369,6 +394,8 @@ export type LabworkScalarWhereWithAggregatesInput = {
   id?: Prisma.StringWithAggregatesFilter<"Labwork"> | string
   tenantId?: Prisma.StringWithAggregatesFilter<"Labwork"> | string
   patientId?: Prisma.StringNullableWithAggregatesFilter<"Labwork"> | string | null
+  appointmentId?: Prisma.StringNullableWithAggregatesFilter<"Labwork"> | string | null
+  priceIncludedInAppointment?: Prisma.BoolWithAggregatesFilter<"Labwork"> | boolean
   lab?: Prisma.StringWithAggregatesFilter<"Labwork"> | string
   phoneNumber?: Prisma.StringNullableWithAggregatesFilter<"Labwork"> | string | null
   date?: Prisma.DateTimeWithAggregatesFilter<"Labwork"> | Date | string
@@ -385,6 +412,7 @@ export type LabworkScalarWhereWithAggregatesInput = {
 
 export type LabworkCreateInput = {
   id?: string
+  priceIncludedInAppointment?: boolean
   lab: string
   phoneNumber?: string | null
   date: Date | string
@@ -399,12 +427,15 @@ export type LabworkCreateInput = {
   updatedAt?: Date | string
   tenant: Prisma.TenantCreateNestedOneWithoutLabworksInput
   patient?: Prisma.PatientCreateNestedOneWithoutLabworksInput
+  appointment?: Prisma.AppointmentCreateNestedOneWithoutLabworksInput
 }
 
 export type LabworkUncheckedCreateInput = {
   id?: string
   tenantId: string
   patientId?: string | null
+  appointmentId?: string | null
+  priceIncludedInAppointment?: boolean
   lab: string
   phoneNumber?: string | null
   date: Date | string
@@ -421,6 +452,7 @@ export type LabworkUncheckedCreateInput = {
 
 export type LabworkUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  priceIncludedInAppointment?: Prisma.BoolFieldUpdateOperationsInput | boolean
   lab?: Prisma.StringFieldUpdateOperationsInput | string
   phoneNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -435,12 +467,15 @@ export type LabworkUpdateInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tenant?: Prisma.TenantUpdateOneRequiredWithoutLabworksNestedInput
   patient?: Prisma.PatientUpdateOneWithoutLabworksNestedInput
+  appointment?: Prisma.AppointmentUpdateOneWithoutLabworksNestedInput
 }
 
 export type LabworkUncheckedUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   patientId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  appointmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  priceIncludedInAppointment?: Prisma.BoolFieldUpdateOperationsInput | boolean
   lab?: Prisma.StringFieldUpdateOperationsInput | string
   phoneNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -459,6 +494,8 @@ export type LabworkCreateManyInput = {
   id?: string
   tenantId: string
   patientId?: string | null
+  appointmentId?: string | null
+  priceIncludedInAppointment?: boolean
   lab: string
   phoneNumber?: string | null
   date: Date | string
@@ -475,6 +512,7 @@ export type LabworkCreateManyInput = {
 
 export type LabworkUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  priceIncludedInAppointment?: Prisma.BoolFieldUpdateOperationsInput | boolean
   lab?: Prisma.StringFieldUpdateOperationsInput | string
   phoneNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -493,6 +531,8 @@ export type LabworkUncheckedUpdateManyInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   patientId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  appointmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  priceIncludedInAppointment?: Prisma.BoolFieldUpdateOperationsInput | boolean
   lab?: Prisma.StringFieldUpdateOperationsInput | string
   phoneNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -521,6 +561,8 @@ export type LabworkCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   tenantId?: Prisma.SortOrder
   patientId?: Prisma.SortOrder
+  appointmentId?: Prisma.SortOrder
+  priceIncludedInAppointment?: Prisma.SortOrder
   lab?: Prisma.SortOrder
   phoneNumber?: Prisma.SortOrder
   date?: Prisma.SortOrder
@@ -543,6 +585,8 @@ export type LabworkMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
   tenantId?: Prisma.SortOrder
   patientId?: Prisma.SortOrder
+  appointmentId?: Prisma.SortOrder
+  priceIncludedInAppointment?: Prisma.SortOrder
   lab?: Prisma.SortOrder
   phoneNumber?: Prisma.SortOrder
   date?: Prisma.SortOrder
@@ -560,6 +604,8 @@ export type LabworkMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
   tenantId?: Prisma.SortOrder
   patientId?: Prisma.SortOrder
+  appointmentId?: Prisma.SortOrder
+  priceIncludedInAppointment?: Prisma.SortOrder
   lab?: Prisma.SortOrder
   phoneNumber?: Prisma.SortOrder
   date?: Prisma.SortOrder
@@ -661,8 +707,51 @@ export type LabworkUncheckedUpdateManyWithoutPatientNestedInput = {
   deleteMany?: Prisma.LabworkScalarWhereInput | Prisma.LabworkScalarWhereInput[]
 }
 
+export type LabworkCreateNestedManyWithoutAppointmentInput = {
+  create?: Prisma.XOR<Prisma.LabworkCreateWithoutAppointmentInput, Prisma.LabworkUncheckedCreateWithoutAppointmentInput> | Prisma.LabworkCreateWithoutAppointmentInput[] | Prisma.LabworkUncheckedCreateWithoutAppointmentInput[]
+  connectOrCreate?: Prisma.LabworkCreateOrConnectWithoutAppointmentInput | Prisma.LabworkCreateOrConnectWithoutAppointmentInput[]
+  createMany?: Prisma.LabworkCreateManyAppointmentInputEnvelope
+  connect?: Prisma.LabworkWhereUniqueInput | Prisma.LabworkWhereUniqueInput[]
+}
+
+export type LabworkUncheckedCreateNestedManyWithoutAppointmentInput = {
+  create?: Prisma.XOR<Prisma.LabworkCreateWithoutAppointmentInput, Prisma.LabworkUncheckedCreateWithoutAppointmentInput> | Prisma.LabworkCreateWithoutAppointmentInput[] | Prisma.LabworkUncheckedCreateWithoutAppointmentInput[]
+  connectOrCreate?: Prisma.LabworkCreateOrConnectWithoutAppointmentInput | Prisma.LabworkCreateOrConnectWithoutAppointmentInput[]
+  createMany?: Prisma.LabworkCreateManyAppointmentInputEnvelope
+  connect?: Prisma.LabworkWhereUniqueInput | Prisma.LabworkWhereUniqueInput[]
+}
+
+export type LabworkUpdateManyWithoutAppointmentNestedInput = {
+  create?: Prisma.XOR<Prisma.LabworkCreateWithoutAppointmentInput, Prisma.LabworkUncheckedCreateWithoutAppointmentInput> | Prisma.LabworkCreateWithoutAppointmentInput[] | Prisma.LabworkUncheckedCreateWithoutAppointmentInput[]
+  connectOrCreate?: Prisma.LabworkCreateOrConnectWithoutAppointmentInput | Prisma.LabworkCreateOrConnectWithoutAppointmentInput[]
+  upsert?: Prisma.LabworkUpsertWithWhereUniqueWithoutAppointmentInput | Prisma.LabworkUpsertWithWhereUniqueWithoutAppointmentInput[]
+  createMany?: Prisma.LabworkCreateManyAppointmentInputEnvelope
+  set?: Prisma.LabworkWhereUniqueInput | Prisma.LabworkWhereUniqueInput[]
+  disconnect?: Prisma.LabworkWhereUniqueInput | Prisma.LabworkWhereUniqueInput[]
+  delete?: Prisma.LabworkWhereUniqueInput | Prisma.LabworkWhereUniqueInput[]
+  connect?: Prisma.LabworkWhereUniqueInput | Prisma.LabworkWhereUniqueInput[]
+  update?: Prisma.LabworkUpdateWithWhereUniqueWithoutAppointmentInput | Prisma.LabworkUpdateWithWhereUniqueWithoutAppointmentInput[]
+  updateMany?: Prisma.LabworkUpdateManyWithWhereWithoutAppointmentInput | Prisma.LabworkUpdateManyWithWhereWithoutAppointmentInput[]
+  deleteMany?: Prisma.LabworkScalarWhereInput | Prisma.LabworkScalarWhereInput[]
+}
+
+export type LabworkUncheckedUpdateManyWithoutAppointmentNestedInput = {
+  create?: Prisma.XOR<Prisma.LabworkCreateWithoutAppointmentInput, Prisma.LabworkUncheckedCreateWithoutAppointmentInput> | Prisma.LabworkCreateWithoutAppointmentInput[] | Prisma.LabworkUncheckedCreateWithoutAppointmentInput[]
+  connectOrCreate?: Prisma.LabworkCreateOrConnectWithoutAppointmentInput | Prisma.LabworkCreateOrConnectWithoutAppointmentInput[]
+  upsert?: Prisma.LabworkUpsertWithWhereUniqueWithoutAppointmentInput | Prisma.LabworkUpsertWithWhereUniqueWithoutAppointmentInput[]
+  createMany?: Prisma.LabworkCreateManyAppointmentInputEnvelope
+  set?: Prisma.LabworkWhereUniqueInput | Prisma.LabworkWhereUniqueInput[]
+  disconnect?: Prisma.LabworkWhereUniqueInput | Prisma.LabworkWhereUniqueInput[]
+  delete?: Prisma.LabworkWhereUniqueInput | Prisma.LabworkWhereUniqueInput[]
+  connect?: Prisma.LabworkWhereUniqueInput | Prisma.LabworkWhereUniqueInput[]
+  update?: Prisma.LabworkUpdateWithWhereUniqueWithoutAppointmentInput | Prisma.LabworkUpdateWithWhereUniqueWithoutAppointmentInput[]
+  updateMany?: Prisma.LabworkUpdateManyWithWhereWithoutAppointmentInput | Prisma.LabworkUpdateManyWithWhereWithoutAppointmentInput[]
+  deleteMany?: Prisma.LabworkScalarWhereInput | Prisma.LabworkScalarWhereInput[]
+}
+
 export type LabworkCreateWithoutTenantInput = {
   id?: string
+  priceIncludedInAppointment?: boolean
   lab: string
   phoneNumber?: string | null
   date: Date | string
@@ -676,11 +765,14 @@ export type LabworkCreateWithoutTenantInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   patient?: Prisma.PatientCreateNestedOneWithoutLabworksInput
+  appointment?: Prisma.AppointmentCreateNestedOneWithoutLabworksInput
 }
 
 export type LabworkUncheckedCreateWithoutTenantInput = {
   id?: string
   patientId?: string | null
+  appointmentId?: string | null
+  priceIncludedInAppointment?: boolean
   lab: string
   phoneNumber?: string | null
   date: Date | string
@@ -728,6 +820,8 @@ export type LabworkScalarWhereInput = {
   id?: Prisma.StringFilter<"Labwork"> | string
   tenantId?: Prisma.StringFilter<"Labwork"> | string
   patientId?: Prisma.StringNullableFilter<"Labwork"> | string | null
+  appointmentId?: Prisma.StringNullableFilter<"Labwork"> | string | null
+  priceIncludedInAppointment?: Prisma.BoolFilter<"Labwork"> | boolean
   lab?: Prisma.StringFilter<"Labwork"> | string
   phoneNumber?: Prisma.StringNullableFilter<"Labwork"> | string | null
   date?: Prisma.DateTimeFilter<"Labwork"> | Date | string
@@ -744,6 +838,7 @@ export type LabworkScalarWhereInput = {
 
 export type LabworkCreateWithoutPatientInput = {
   id?: string
+  priceIncludedInAppointment?: boolean
   lab: string
   phoneNumber?: string | null
   date: Date | string
@@ -757,11 +852,14 @@ export type LabworkCreateWithoutPatientInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   tenant: Prisma.TenantCreateNestedOneWithoutLabworksInput
+  appointment?: Prisma.AppointmentCreateNestedOneWithoutLabworksInput
 }
 
 export type LabworkUncheckedCreateWithoutPatientInput = {
   id?: string
   tenantId: string
+  appointmentId?: string | null
+  priceIncludedInAppointment?: boolean
   lab: string
   phoneNumber?: string | null
   date: Date | string
@@ -802,9 +900,75 @@ export type LabworkUpdateManyWithWhereWithoutPatientInput = {
   data: Prisma.XOR<Prisma.LabworkUpdateManyMutationInput, Prisma.LabworkUncheckedUpdateManyWithoutPatientInput>
 }
 
+export type LabworkCreateWithoutAppointmentInput = {
+  id?: string
+  priceIncludedInAppointment?: boolean
+  lab: string
+  phoneNumber?: string | null
+  date: Date | string
+  note?: string | null
+  price?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  isPaid?: boolean
+  isDelivered?: boolean
+  doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: string | null
+  isActive?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  tenant: Prisma.TenantCreateNestedOneWithoutLabworksInput
+  patient?: Prisma.PatientCreateNestedOneWithoutLabworksInput
+}
+
+export type LabworkUncheckedCreateWithoutAppointmentInput = {
+  id?: string
+  tenantId: string
+  patientId?: string | null
+  priceIncludedInAppointment?: boolean
+  lab: string
+  phoneNumber?: string | null
+  date: Date | string
+  note?: string | null
+  price?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  isPaid?: boolean
+  isDelivered?: boolean
+  doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: string | null
+  isActive?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type LabworkCreateOrConnectWithoutAppointmentInput = {
+  where: Prisma.LabworkWhereUniqueInput
+  create: Prisma.XOR<Prisma.LabworkCreateWithoutAppointmentInput, Prisma.LabworkUncheckedCreateWithoutAppointmentInput>
+}
+
+export type LabworkCreateManyAppointmentInputEnvelope = {
+  data: Prisma.LabworkCreateManyAppointmentInput | Prisma.LabworkCreateManyAppointmentInput[]
+  skipDuplicates?: boolean
+}
+
+export type LabworkUpsertWithWhereUniqueWithoutAppointmentInput = {
+  where: Prisma.LabworkWhereUniqueInput
+  update: Prisma.XOR<Prisma.LabworkUpdateWithoutAppointmentInput, Prisma.LabworkUncheckedUpdateWithoutAppointmentInput>
+  create: Prisma.XOR<Prisma.LabworkCreateWithoutAppointmentInput, Prisma.LabworkUncheckedCreateWithoutAppointmentInput>
+}
+
+export type LabworkUpdateWithWhereUniqueWithoutAppointmentInput = {
+  where: Prisma.LabworkWhereUniqueInput
+  data: Prisma.XOR<Prisma.LabworkUpdateWithoutAppointmentInput, Prisma.LabworkUncheckedUpdateWithoutAppointmentInput>
+}
+
+export type LabworkUpdateManyWithWhereWithoutAppointmentInput = {
+  where: Prisma.LabworkScalarWhereInput
+  data: Prisma.XOR<Prisma.LabworkUpdateManyMutationInput, Prisma.LabworkUncheckedUpdateManyWithoutAppointmentInput>
+}
+
 export type LabworkCreateManyTenantInput = {
   id?: string
   patientId?: string | null
+  appointmentId?: string | null
+  priceIncludedInAppointment?: boolean
   lab: string
   phoneNumber?: string | null
   date: Date | string
@@ -821,6 +985,7 @@ export type LabworkCreateManyTenantInput = {
 
 export type LabworkUpdateWithoutTenantInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  priceIncludedInAppointment?: Prisma.BoolFieldUpdateOperationsInput | boolean
   lab?: Prisma.StringFieldUpdateOperationsInput | string
   phoneNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -834,11 +999,14 @@ export type LabworkUpdateWithoutTenantInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   patient?: Prisma.PatientUpdateOneWithoutLabworksNestedInput
+  appointment?: Prisma.AppointmentUpdateOneWithoutLabworksNestedInput
 }
 
 export type LabworkUncheckedUpdateWithoutTenantInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   patientId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  appointmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  priceIncludedInAppointment?: Prisma.BoolFieldUpdateOperationsInput | boolean
   lab?: Prisma.StringFieldUpdateOperationsInput | string
   phoneNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -856,6 +1024,8 @@ export type LabworkUncheckedUpdateWithoutTenantInput = {
 export type LabworkUncheckedUpdateManyWithoutTenantInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   patientId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  appointmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  priceIncludedInAppointment?: Prisma.BoolFieldUpdateOperationsInput | boolean
   lab?: Prisma.StringFieldUpdateOperationsInput | string
   phoneNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -873,6 +1043,8 @@ export type LabworkUncheckedUpdateManyWithoutTenantInput = {
 export type LabworkCreateManyPatientInput = {
   id?: string
   tenantId: string
+  appointmentId?: string | null
+  priceIncludedInAppointment?: boolean
   lab: string
   phoneNumber?: string | null
   date: Date | string
@@ -889,6 +1061,7 @@ export type LabworkCreateManyPatientInput = {
 
 export type LabworkUpdateWithoutPatientInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  priceIncludedInAppointment?: Prisma.BoolFieldUpdateOperationsInput | boolean
   lab?: Prisma.StringFieldUpdateOperationsInput | string
   phoneNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -902,11 +1075,14 @@ export type LabworkUpdateWithoutPatientInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tenant?: Prisma.TenantUpdateOneRequiredWithoutLabworksNestedInput
+  appointment?: Prisma.AppointmentUpdateOneWithoutLabworksNestedInput
 }
 
 export type LabworkUncheckedUpdateWithoutPatientInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  appointmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  priceIncludedInAppointment?: Prisma.BoolFieldUpdateOperationsInput | boolean
   lab?: Prisma.StringFieldUpdateOperationsInput | string
   phoneNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -924,6 +1100,84 @@ export type LabworkUncheckedUpdateWithoutPatientInput = {
 export type LabworkUncheckedUpdateManyWithoutPatientInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  appointmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  priceIncludedInAppointment?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lab?: Prisma.StringFieldUpdateOperationsInput | string
+  phoneNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  price?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type LabworkCreateManyAppointmentInput = {
+  id?: string
+  tenantId: string
+  patientId?: string | null
+  priceIncludedInAppointment?: boolean
+  lab: string
+  phoneNumber?: string | null
+  date: Date | string
+  note?: string | null
+  price?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  isPaid?: boolean
+  isDelivered?: boolean
+  doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: string | null
+  isActive?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type LabworkUpdateWithoutAppointmentInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  priceIncludedInAppointment?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lab?: Prisma.StringFieldUpdateOperationsInput | string
+  phoneNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  price?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  tenant?: Prisma.TenantUpdateOneRequiredWithoutLabworksNestedInput
+  patient?: Prisma.PatientUpdateOneWithoutLabworksNestedInput
+}
+
+export type LabworkUncheckedUpdateWithoutAppointmentInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  patientId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  priceIncludedInAppointment?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lab?: Prisma.StringFieldUpdateOperationsInput | string
+  phoneNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  price?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type LabworkUncheckedUpdateManyWithoutAppointmentInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  patientId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  priceIncludedInAppointment?: Prisma.BoolFieldUpdateOperationsInput | boolean
   lab?: Prisma.StringFieldUpdateOperationsInput | string
   phoneNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -944,6 +1198,8 @@ export type LabworkSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   id?: boolean
   tenantId?: boolean
   patientId?: boolean
+  appointmentId?: boolean
+  priceIncludedInAppointment?: boolean
   lab?: boolean
   phoneNumber?: boolean
   date?: boolean
@@ -958,12 +1214,15 @@ export type LabworkSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   updatedAt?: boolean
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.Labwork$patientArgs<ExtArgs>
+  appointment?: boolean | Prisma.Labwork$appointmentArgs<ExtArgs>
 }, ExtArgs["result"]["labwork"]>
 
 export type LabworkSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   tenantId?: boolean
   patientId?: boolean
+  appointmentId?: boolean
+  priceIncludedInAppointment?: boolean
   lab?: boolean
   phoneNumber?: boolean
   date?: boolean
@@ -978,12 +1237,15 @@ export type LabworkSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   updatedAt?: boolean
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.Labwork$patientArgs<ExtArgs>
+  appointment?: boolean | Prisma.Labwork$appointmentArgs<ExtArgs>
 }, ExtArgs["result"]["labwork"]>
 
 export type LabworkSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   tenantId?: boolean
   patientId?: boolean
+  appointmentId?: boolean
+  priceIncludedInAppointment?: boolean
   lab?: boolean
   phoneNumber?: boolean
   date?: boolean
@@ -998,12 +1260,15 @@ export type LabworkSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   updatedAt?: boolean
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.Labwork$patientArgs<ExtArgs>
+  appointment?: boolean | Prisma.Labwork$appointmentArgs<ExtArgs>
 }, ExtArgs["result"]["labwork"]>
 
 export type LabworkSelectScalar = {
   id?: boolean
   tenantId?: boolean
   patientId?: boolean
+  appointmentId?: boolean
+  priceIncludedInAppointment?: boolean
   lab?: boolean
   phoneNumber?: boolean
   date?: boolean
@@ -1018,18 +1283,21 @@ export type LabworkSelectScalar = {
   updatedAt?: boolean
 }
 
-export type LabworkOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "patientId" | "lab" | "phoneNumber" | "date" | "note" | "price" | "isPaid" | "isDelivered" | "doctorIds" | "createdBy" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["labwork"]>
+export type LabworkOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "patientId" | "appointmentId" | "priceIncludedInAppointment" | "lab" | "phoneNumber" | "date" | "note" | "price" | "isPaid" | "isDelivered" | "doctorIds" | "createdBy" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["labwork"]>
 export type LabworkInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.Labwork$patientArgs<ExtArgs>
+  appointment?: boolean | Prisma.Labwork$appointmentArgs<ExtArgs>
 }
 export type LabworkIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.Labwork$patientArgs<ExtArgs>
+  appointment?: boolean | Prisma.Labwork$appointmentArgs<ExtArgs>
 }
 export type LabworkIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.Labwork$patientArgs<ExtArgs>
+  appointment?: boolean | Prisma.Labwork$appointmentArgs<ExtArgs>
 }
 
 export type $LabworkPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1037,6 +1305,7 @@ export type $LabworkPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
   objects: {
     tenant: Prisma.$TenantPayload<ExtArgs>
     patient: Prisma.$PatientPayload<ExtArgs> | null
+    appointment: Prisma.$AppointmentPayload<ExtArgs> | null
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1045,6 +1314,14 @@ export type $LabworkPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
      * Optional reference to the patient this labwork is for
      */
     patientId: string | null
+    /**
+     * Optional reference to the appointment this labwork is linked to
+     */
+    appointmentId: string | null
+    /**
+     * Whether the labwork price is already included in the linked appointment cost
+     */
+    priceIncludedInAppointment: boolean
     /**
      * Name of the laboratory
      */
@@ -1480,6 +1757,7 @@ export interface Prisma__LabworkClient<T, Null = never, ExtArgs extends runtime.
   readonly [Symbol.toStringTag]: "PrismaPromise"
   tenant<T extends Prisma.TenantDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.TenantDefaultArgs<ExtArgs>>): Prisma.Prisma__TenantClient<runtime.Types.Result.GetResult<Prisma.$TenantPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   patient<T extends Prisma.Labwork$patientArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Labwork$patientArgs<ExtArgs>>): Prisma.Prisma__PatientClient<runtime.Types.Result.GetResult<Prisma.$PatientPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+  appointment<T extends Prisma.Labwork$appointmentArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Labwork$appointmentArgs<ExtArgs>>): Prisma.Prisma__AppointmentClient<runtime.Types.Result.GetResult<Prisma.$AppointmentPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1512,6 +1790,8 @@ export interface LabworkFieldRefs {
   readonly id: Prisma.FieldRef<"Labwork", 'String'>
   readonly tenantId: Prisma.FieldRef<"Labwork", 'String'>
   readonly patientId: Prisma.FieldRef<"Labwork", 'String'>
+  readonly appointmentId: Prisma.FieldRef<"Labwork", 'String'>
+  readonly priceIncludedInAppointment: Prisma.FieldRef<"Labwork", 'Boolean'>
   readonly lab: Prisma.FieldRef<"Labwork", 'String'>
   readonly phoneNumber: Prisma.FieldRef<"Labwork", 'String'>
   readonly date: Prisma.FieldRef<"Labwork", 'DateTime'>
@@ -1936,6 +2216,25 @@ export type Labwork$patientArgs<ExtArgs extends runtime.Types.Extensions.Interna
    */
   include?: Prisma.PatientInclude<ExtArgs> | null
   where?: Prisma.PatientWhereInput
+}
+
+/**
+ * Labwork.appointment
+ */
+export type Labwork$appointmentArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Appointment
+   */
+  select?: Prisma.AppointmentSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Appointment
+   */
+  omit?: Prisma.AppointmentOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.AppointmentInclude<ExtArgs> | null
+  where?: Prisma.AppointmentWhereInput
 }
 
 /**

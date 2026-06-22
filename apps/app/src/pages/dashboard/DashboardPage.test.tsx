@@ -4,10 +4,12 @@ import { BrowserRouter } from 'react-router'
 import DashboardPage from './DashboardPage'
 import { useStatsStore } from '@/stores/stats.store'
 import { useAuthStore } from '@/stores/auth.store'
+import { useLockStore } from '@/stores/lock.store'
 
 // Mock the stores
 vi.mock('@/stores/stats.store')
 vi.mock('@/stores/auth.store')
+vi.mock('@/stores/lock.store')
 
 // Mock Recharts to avoid canvas issues in tests
 vi.mock('recharts', () => ({
@@ -102,6 +104,10 @@ const mockStaffUser = {
 describe('DashboardPage', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    // Default: no active profile user (admin context)
+    ;(useLockStore as unknown as Mock).mockImplementation((selector: (s: { activeUser: null }) => unknown) =>
+      selector({ activeUser: null })
+    )
   })
 
   it('should show loading state when data is loading', () => {
@@ -203,16 +209,22 @@ describe('DashboardPage', () => {
     expect(screen.getByText('COMPLETED')).toBeInTheDocument()
   })
 
-  it('should hide doctor performance table for staff users', () => {
-    (useStatsStore as unknown as Mock).mockReturnValue({
-      overview: mockOverview,
-      appointmentStats: mockAppointmentStats,
-      revenueStats: mockRevenueStats,
-      patientsGrowth: mockPatientsGrowth,
-      doctorPerformance: mockDoctorPerformance,
+  it('should show doctor dashboard for staff users', () => {
+    const mockFetchMyDoctorId = vi.fn().mockResolvedValue(null)
+    ;(useStatsStore as unknown as Mock).mockReturnValue({
+      overview: null,
+      appointmentStats: null,
+      revenueStats: null,
+      patientsGrowth: null,
+      doctorPerformance: null,
+      upcomingAppointments: null,
+      appointmentTypes: null,
+      myDoctorId: null,
       isLoading: false,
       error: null,
       fetchAllStats: mockFetchAllStats,
+      fetchMyDoctorId: mockFetchMyDoctorId,
+      fetchDoctorStats: vi.fn(),
     })
     ;(useAuthStore as unknown as Mock).mockReturnValue({
       user: mockStaffUser,
@@ -224,9 +236,8 @@ describe('DashboardPage', () => {
       </BrowserRouter>
     )
 
-    // Staff should NOT see doctor performance table
+    // Staff sees doctor dashboard — shows "not linked" message when no doctorId
     expect(screen.queryByText('Rendimiento de Doctores (Este Mes)')).not.toBeInTheDocument()
-    expect(screen.queryByText('Dr. Smith')).not.toBeInTheDocument()
   })
 
   it('should call fetchAllStats on mount', () => {
