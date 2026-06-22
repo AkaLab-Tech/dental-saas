@@ -1,4 +1,4 @@
-import { Router, type IRouter } from 'express'
+import { Router, type IRouter, type Request } from 'express'
 import { z } from 'zod'
 import { requireMinRole } from '../middleware/auth.js'
 import {
@@ -40,6 +40,46 @@ const monthsBackSchema = z.object({
 })
 
 // ============================================================================
+// Authorization helper
+// ============================================================================
+
+const ADMIN_STATS_ROLES = ['OWNER', 'ADMIN', 'CLINIC_ADMIN']
+
+/**
+ * Authorize a doctor-scoped stats request.
+ * - Admins (OWNER/ADMIN/CLINIC_ADMIN) may scope to any doctorId, or none
+ *   (tenant-wide).
+ * - Non-admins (DOCTOR/STAFF) may view tenant-wide stats (no doctorId) — the
+ *   existing behaviour — but if they request a SPECIFIC doctorId it must be
+ *   their own linked doctor. Requesting another doctor's id is forbidden.
+ *   This closes an intra-tenant IDOR where one doctor could read another
+ *   doctor's revenue / appointments / patient names by passing their id.
+ */
+async function resolveScopedDoctorId(
+  req: Request,
+  requestedDoctorId?: string
+): Promise<{ allowed: true; doctorId?: string } | { allowed: false; message: string }> {
+  const role = req.user!.role
+  if (ADMIN_STATS_ROLES.includes(role)) {
+    return { allowed: true, doctorId: requestedDoctorId }
+  }
+
+  // Non-admin with no specific doctor requested → tenant-wide (unchanged).
+  if (!requestedDoctorId) {
+    return { allowed: true, doctorId: undefined }
+  }
+
+  // Non-admin requesting a specific doctor → must be their own linked doctor.
+  const tenantId = req.user!.tenantId
+  const userId = req.user!.profileUserId || req.user!.userId
+  const ownDoctorId = await getLinkedDoctorId(userId, tenantId)
+  if (!ownDoctorId || requestedDoctorId !== ownDoctorId) {
+    return { allowed: false, message: 'You can only view your own statistics' }
+  }
+  return { allowed: true, doctorId: ownDoctorId }
+}
+
+// ============================================================================
 // Routes
 // ============================================================================
 
@@ -71,9 +111,14 @@ statsRouter.get('/my-doctor-id', async (req, res, next) => {
 statsRouter.get('/overview', async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId
-    const doctorId = typeof req.query.doctorId === 'string' ? req.query.doctorId : undefined
+    const requestedDoctorId = typeof req.query.doctorId === 'string' ? req.query.doctorId : undefined
 
-    const stats = await getOverviewStats(tenantId, doctorId)
+    const scope = await resolveScopedDoctorId(req, requestedDoctorId)
+    if (!scope.allowed) {
+      return res.status(403).json({ success: false, error: { message: scope.message } })
+    }
+
+    const stats = await getOverviewStats(tenantId, scope.doctorId)
 
     res.json({
       success: true,
@@ -118,7 +163,12 @@ statsRouter.get('/appointments', async (req, res, next) => {
       })
     }
 
-    const stats = await getAppointmentStatsForPeriod(tenantId, startDate, endDate, parseResult.data.doctorId)
+    const scope = await resolveScopedDoctorId(req, parseResult.data.doctorId)
+    if (!scope.allowed) {
+      return res.status(403).json({ success: false, error: { message: scope.message } })
+    }
+
+    const stats = await getAppointmentStatsForPeriod(tenantId, startDate, endDate, scope.doctorId)
 
     res.json({
       success: true,
@@ -148,7 +198,12 @@ statsRouter.get('/revenue', async (req, res, next) => {
 
     const monthsBack = parseResult.data.months ?? 6
 
-    const stats = await getRevenueStats(tenantId, monthsBack, parseResult.data.doctorId)
+    const scope = await resolveScopedDoctorId(req, parseResult.data.doctorId)
+    if (!scope.allowed) {
+      return res.status(403).json({ success: false, error: { message: scope.message } })
+    }
+
+    const stats = await getRevenueStats(tenantId, monthsBack, scope.doctorId)
 
     res.json({
       success: true,
@@ -217,17 +272,21 @@ statsRouter.get('/doctors-performance', requireMinRole('CLINIC_ADMIN'), async (r
 statsRouter.get('/upcoming', async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId
-    const doctorId = typeof req.query.doctorId === 'string' ? req.query.doctorId : undefined
+    const requestedDoctorId = typeof req.query.doctorId === 'string' ? req.query.doctorId : undefined
     const limit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : 10
 
-    if (!doctorId) {
+    const scope = await resolveScopedDoctorId(req, requestedDoctorId)
+    if (!scope.allowed) {
+      return res.status(403).json({ success: false, error: { message: scope.message } })
+    }
+    if (!scope.doctorId) {
       return res.status(400).json({
         success: false,
         error: { message: 'doctorId query parameter is required' },
       })
     }
 
-    const data = await getUpcomingAppointments(tenantId, doctorId, Math.min(limit, 50))
+    const data = await getUpcomingAppointments(tenantId, scope.doctorId, Math.min(limit, 50))
 
     res.json({ success: true, data })
   } catch (error) {
@@ -243,16 +302,20 @@ statsRouter.get('/upcoming', async (req, res, next) => {
 statsRouter.get('/appointment-types', async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId
-    const doctorId = typeof req.query.doctorId === 'string' ? req.query.doctorId : undefined
+    const requestedDoctorId = typeof req.query.doctorId === 'string' ? req.query.doctorId : undefined
 
-    if (!doctorId) {
+    const scope = await resolveScopedDoctorId(req, requestedDoctorId)
+    if (!scope.allowed) {
+      return res.status(403).json({ success: false, error: { message: scope.message } })
+    }
+    if (!scope.doctorId) {
       return res.status(400).json({
         success: false,
         error: { message: 'doctorId query parameter is required' },
       })
     }
 
-    const data = await getAppointmentTypeStats(tenantId, doctorId)
+    const data = await getAppointmentTypeStats(tenantId, scope.doctorId)
 
     res.json({ success: true, data })
   } catch (error) {

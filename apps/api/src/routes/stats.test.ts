@@ -387,4 +387,76 @@ describe('Stats API', () => {
       expect(res.status).toBe(403)
     })
   })
+
+  // ============================================================================
+  // Doctor-scope authorization (intra-tenant IDOR guard)
+  // ============================================================================
+
+  describe('doctor-scope authorization', () => {
+    let doctorUserToken: string
+    let otherDoctorId: string
+
+    beforeAll(async () => {
+      // A DOCTOR-role user linked to the existing `doctorId`.
+      const passwordHash = await hashPassword('TestPass123!')
+      const doctorUser = await prisma.user.create({
+        data: {
+          email: 'dr.user-stats@test.com',
+          passwordHash,
+          firstName: 'Dr',
+          lastName: 'User',
+          role: 'DOCTOR',
+          tenantId,
+        },
+      })
+      await prisma.doctor.update({ where: { id: doctorId }, data: { userId: doctorUser.id } })
+      doctorUserToken = generateToken(doctorUser.id, tenantId, 'DOCTOR')
+
+      // A second, unrelated doctor in the same tenant.
+      const otherDoctor = await prisma.doctor.create({
+        data: { firstName: 'Other', lastName: 'Doctor', email: 'other.dr-stats@test.com', tenantId },
+      })
+      otherDoctorId = otherDoctor.id
+    })
+
+    it('lets a doctor read their OWN scoped stats', async () => {
+      const res = await request(app)
+        .get(`/api/stats/overview?doctorId=${doctorId}`)
+        .set('Authorization', `Bearer ${doctorUserToken}`)
+      expect(res.status).toBe(200)
+    })
+
+    it('forbids a doctor from reading another doctor\'s stats (403)', async () => {
+      const res = await request(app)
+        .get(`/api/stats/overview?doctorId=${otherDoctorId}`)
+        .set('Authorization', `Bearer ${doctorUserToken}`)
+      expect(res.status).toBe(403)
+    })
+
+    it('also forbids cross-doctor access on revenue and upcoming', async () => {
+      const revenue = await request(app)
+        .get(`/api/stats/revenue?doctorId=${otherDoctorId}`)
+        .set('Authorization', `Bearer ${doctorUserToken}`)
+      expect(revenue.status).toBe(403)
+
+      const upcoming = await request(app)
+        .get(`/api/stats/upcoming?doctorId=${otherDoctorId}`)
+        .set('Authorization', `Bearer ${doctorUserToken}`)
+      expect(upcoming.status).toBe(403)
+    })
+
+    it('still lets a non-admin view tenant-wide stats (no doctorId)', async () => {
+      const res = await request(app)
+        .get('/api/stats/overview')
+        .set('Authorization', `Bearer ${doctorUserToken}`)
+      expect(res.status).toBe(200)
+    })
+
+    it('lets an admin read any doctor\'s scoped stats', async () => {
+      const res = await request(app)
+        .get(`/api/stats/overview?doctorId=${otherDoctorId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+      expect(res.status).toBe(200)
+    })
+  })
 })
