@@ -3,6 +3,7 @@ import { z } from 'zod'
 import React from 'react'
 import { type TeethData } from '@dental/shared'
 import { requireMinRole } from '../middleware/auth.js'
+import { requireOwnership } from '../middleware/ownership.js'
 import {
   listPatients,
   getPatientById,
@@ -329,7 +330,7 @@ patientsRouter.post('/', requireMinRole('CLINIC_ADMIN'), async (req, res, next) 
  * PUT /api/patients/:id
  * Update a patient (ADMIN+ required)
  */
-patientsRouter.put('/:id', requireMinRole('CLINIC_ADMIN'), async (req, res, next) => {
+patientsRouter.put('/:id', requireMinRole('DOCTOR'), requireOwnership('patient'), async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId
     const { id } = req.params
@@ -368,7 +369,7 @@ patientsRouter.put('/:id', requireMinRole('CLINIC_ADMIN'), async (req, res, next
  * DELETE /api/patients/:id
  * Soft delete a patient (ADMIN+ required)
  */
-patientsRouter.delete('/:id', requireMinRole('CLINIC_ADMIN'), async (req, res, next) => {
+patientsRouter.delete('/:id', requireMinRole('DOCTOR'), requireOwnership('patient'), async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId
     const { id } = req.params

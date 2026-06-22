@@ -26,6 +26,7 @@ const APPOINTMENT_SELECT = {
   cost: true,
   isPaid: true,
   isActive: true,
+  createdBy: true,
   createdAt: true,
   updatedAt: true,
 } as const
@@ -61,6 +62,7 @@ export type SafeAppointment = {
   cost: Prisma.Decimal | null
   isPaid: boolean
   isActive: boolean
+  createdBy: string | null
   createdAt: Date
   updatedAt: Date
   // FIFO breakdown — present only on endpoints that compute it per patient

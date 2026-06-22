@@ -1,6 +1,7 @@
 import { Router, type IRouter } from 'express'
 import { z } from 'zod'
 import { requireMinRole } from '../middleware/auth.js'
+import { requireOwnership } from '../middleware/ownership.js'
 import {
   createLabwork,
   getLabworkById,
@@ -181,7 +182,7 @@ labworksRouter.post('/', requireMinRole('CLINIC_ADMIN'), async (req, res, next) 
  * PUT /api/labworks/:id
  * Update a labwork
  */
-labworksRouter.put('/:id', requireMinRole('CLINIC_ADMIN'), async (req, res, next) => {
+labworksRouter.put('/:id', requireMinRole('DOCTOR'), requireOwnership('labwork'), async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId!
     const { id } = req.params
@@ -219,7 +220,7 @@ labworksRouter.put('/:id', requireMinRole('CLINIC_ADMIN'), async (req, res, next
  * DELETE /api/labworks/:id
  * Soft delete a labwork
  */
-labworksRouter.delete('/:id', requireMinRole('CLINIC_ADMIN'), async (req, res, next) => {
+labworksRouter.delete('/:id', requireMinRole('DOCTOR'), requireOwnership('labwork'), async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId!
     const { id } = req.params
