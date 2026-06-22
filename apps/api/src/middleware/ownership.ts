@@ -77,8 +77,9 @@ export function requireOwnership(model: OwnershipModel) {
           code: 'OWNERSHIP_REQUIRED',
         },
       })
-    } catch {
-      return next()
+    } catch (error) {
+      // Fail closed: a failed ownership lookup must NOT grant access.
+      return next(error)
     }
   }
 }

@@ -35,13 +35,13 @@ const ROLE_LABELS: Record<string, string> = {
 
 const navItems = [
   { path: '/', labelKey: 'nav.dashboard', icon: LayoutDashboard },
-  { path: '/doctors', labelKey: 'nav.doctors', icon: Stethoscope },
-  { path: '/patients', labelKey: 'nav.patients', icon: Users },
-  { path: '/appointments', labelKey: 'nav.appointments', icon: Calendar },
-  { path: '/labworks', labelKey: 'nav.labworks', icon: FlaskConical },
-  { path: '/expenses', labelKey: 'nav.expenses', icon: Receipt },
+  { path: '/doctors', labelKey: 'nav.doctors', icon: Stethoscope, permission: Permission.DOCTORS_CREATE },
+  { path: '/patients', labelKey: 'nav.patients', icon: Users, permission: Permission.PATIENTS_VIEW },
+  { path: '/appointments', labelKey: 'nav.appointments', icon: Calendar, permission: Permission.APPOINTMENTS_VIEW },
+  { path: '/labworks', labelKey: 'nav.labworks', icon: FlaskConical, permission: Permission.LABWORKS_VIEW },
+  { path: '/expenses', labelKey: 'nav.expenses', icon: Receipt, permission: Permission.EXPENSES_CREATE },
   { path: '/users', labelKey: 'nav.users', icon: Shield, permission: Permission.USERS_CREATE },
-  { path: '/settings', labelKey: 'nav.settings', icon: Settings },
+  { path: '/settings', labelKey: 'nav.settings', icon: Settings, permission: Permission.SETTINGS_UPDATE },
 ]
 
 export function AppLayout() {
