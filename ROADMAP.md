@@ -79,6 +79,14 @@ The appointments calendar header capitalizes the connector: "Junio **De** 2026" 
 - [ ] Fix the date formatting so the Spanish month-year label reads "Junio de 2026" (no capital connector); verify EN/AR are unaffected
 - [ ] Verify the appointments calendar header in ES/EN/AR
 
+#### Kiosk: `logout()` leaks the lock-store profile token (privilege escalation)
+
+After a PIN-unlock, `logout()` resets `dental-auth` but does **not** clear the lock store (`dental-lock` in `sessionStorage`: `{ isLocked, autoLockMinutes, profileToken, activeUser }`). On a shared device, when user A (e.g. OWNER) PIN-unlocks then logs out and user B (e.g. DOCTOR) logs in **in the same tab**, A's `profileToken` + `activeUser` persist into B's session. Consequences: (1) `api.ts` sends A's `x-profile-token`, so the auth middleware overrides B's role to A's — **B operates with A's higher privileges** until the 24h token expires; (2) `DashboardPage` uses `activeUser?.role`, so B sees A's dashboard + A's name in the sidebar. The same persistence also leaves `isLocked` true across logout (user stuck on the lock screen after re-login). Found via prod E2E on 2026-06-23; introduced by the #195 PIN/kiosk re-land.
+
+- [ ] Reset the lock store on `logout()` — clear `activeUser`/`profileToken`, set `isLocked=false`, and remove the `dental-lock` sessionStorage entry
+- [ ] Verify after logout + a fresh login (same tab) there is no leftover `profileToken`/`activeUser` and the new user's own role/dashboard render
+- [ ] Add a regression test for the logout → fresh-login lock-store reset
+
 > **Resolved:** "Patient payment edits do not persist / payments stay stuck" — this was the original report behind [#179](https://github.com/Miguelslo27/dental-saas/pull/179) (FIFO paid flow). Reproduced end-to-end with the Playwright MCP and **verified fixed on production** on 2026-06-03 (see HISTORY). No further action.
 
 > **Resolved (2026-06-03):** two i18n bugs — (1) the appointment-card `⋮` menu rendered the raw key `common.options` (the key was missing in all locales; added to es / en / ar), and (2) the sidebar nav labels in `AppLayout.tsx` were hardcoded Spanish instead of using the existing `nav.*` keys (now wired through `t()`). The earlier "mixed ES/EN on the patient detail page" report was a mis-diagnosis: those section components already use `t()` with complete `es` / `ar` translations — they render English only when the active language resolves to `en`, which is the language-detection issue tracked under **Medium Priority → Language & Regional Settings** ("Fix `i18next-browser-languagedetector` priority"), not a hardcoded-string bug.
