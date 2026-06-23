@@ -6,6 +6,22 @@ Newest first. Each entry references the PR(s) that delivered the work.
 
 ---
 
+## 2026-06
+
+### Security: kiosk `logout()` lock-store leak (privilege escalation) — 2026-06-23
+**PR:** _(this PR)_
+
+**Report:** After a PIN-unlock, `logout()` reset `dental-auth` but left the lock store (`dental-lock` in `sessionStorage`: `isLocked`, `profileToken`, `activeUser`) intact. On a shared device, when user A (e.g. OWNER) PIN-unlocked then logged out and user B (e.g. DOCTOR) logged in **in the same tab**, A's `profileToken` + `activeUser` leaked into B's session: `api.ts` sent A's `x-profile-token`, so the auth middleware overrode B's role with A's — B operated with A's higher privileges until the token expired. Found via prod E2E on 2026-06-23; introduced by the #195 PIN/kiosk re-land.
+
+**Fix:**
+- `useAuthStore.logout()` now calls `useLockStore.getState().reset()` before clearing auth state. `reset()` already existed (sets `isLocked=false`, `profileToken=null`, `activeUser=null`); it was simply never wired into logout.
+- Centralized in the store action rather than per call site: there are three logout paths (`useAuth` hook, `AppLayout`, `LockScreen`), and two call `useAuthStore().logout()` directly — fixing the action covers all of them and prevents future callers from reintroducing the leak.
+- The cross-store import is a deferred, in-function reference (same module-cycle pattern already used by `api.ts`), so it carries no load-order risk.
+
+**Tests:** New regression test in `auth.store.test.ts` seeds the lock store with another user's token/`activeUser`/`isLocked=true`, calls logout, and asserts all three are cleared. Full app suite green (988 passing), lint clean, typecheck clean.
+
+---
+
 ## 2026-04
 
 ### Patient Budgets — post-PR B polish (status dropdown) — 2026-04-29

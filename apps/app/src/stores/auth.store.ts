@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { UserRole } from '@dental/shared'
+import { useLockStore } from './lock.store'
 
 export interface User {
   id: string
@@ -86,10 +87,15 @@ export const useAuthStore = create<AuthState & AuthActions>()(
           isLoading: false,
         }),
 
-      logout: () =>
+      logout: () => {
+        // Reset the kiosk lock store too. Otherwise the profile token and
+        // activeUser persisted under `dental-lock` survive logout and leak into
+        // the next user's session on a shared device (privilege escalation).
+        useLockStore.getState().reset()
         set({
           ...initialState,
-        }),
+        })
+      },
 
       clearError: () =>
         set({

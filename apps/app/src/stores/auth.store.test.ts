@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useAuthStore, type User } from './auth.store'
+import { useLockStore } from './lock.store'
 
 // Mock sessionStorage
 const mockSessionStorage = (() => {
@@ -255,6 +256,30 @@ describe('auth.store', () => {
 
       const state = useAuthStore.getState()
       expect(state.isLoading).toBe(false)
+    })
+
+    it('should reset the kiosk lock store so no profile token leaks into the next session', () => {
+      // Simulate a PIN-unlocked kiosk session: lock store holds another user's
+      // profile token / active user and is left in a locked state.
+      useLockStore.setState({
+        isLocked: true,
+        profileToken: 'leaked-profile-token',
+        activeUser: {
+          id: 'owner-1',
+          firstName: 'Owner',
+          lastName: 'Admin',
+          role: 'OWNER',
+          hasPinSet: true,
+        } as never,
+      })
+      useAuthStore.getState().setAuth(mockUser, mockAccessToken, mockRefreshToken)
+
+      useAuthStore.getState().logout()
+
+      const lock = useLockStore.getState()
+      expect(lock.profileToken).toBeNull()
+      expect(lock.activeUser).toBeNull()
+      expect(lock.isLocked).toBe(false)
     })
   })
 
