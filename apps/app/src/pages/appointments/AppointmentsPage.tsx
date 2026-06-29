@@ -207,7 +207,7 @@ export function AppointmentsPage() {
   }, [appointments])
 
   const formatMonthYear = (date: Date) => {
-    return date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+    return date.toLocaleDateString(i18n.language, { month: 'long', year: 'numeric' })
   }
 
   const formatDateHeader = (dateString: string) => {
@@ -406,7 +406,7 @@ export function AppointmentsPage() {
         <div className="space-y-6">
           {groupedAppointments.map(({ date, appointments: dayAppointments }) => (
             <div key={date}>
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 capitalize">
+              <h3 className="text-sm font-semibold text-gray-500 first-letter:uppercase tracking-wide mb-3">
                 {formatDateHeader(date)}
               </h3>
               <div className="space-y-3">

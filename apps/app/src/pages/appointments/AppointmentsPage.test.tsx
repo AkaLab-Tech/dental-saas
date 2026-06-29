@@ -3,6 +3,10 @@ import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import type { Appointment, AppointmentsStats } from '@/lib/appointment-api'
 
+// Mutable i18n language – mutated by locale regression tests (task #211)
+// Must be declared before vi.mock so the factory's inner closure can read it at render time.
+const mockI18nState = { language: 'es' }
+
 // Mock i18n
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -37,7 +41,7 @@ vi.mock('react-i18next', () => ({
       }
       return translations[key] || key
     },
-    i18n: { language: 'es' },
+    i18n: mockI18nState,
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
@@ -237,6 +241,34 @@ const mockCancelledAppointment: Appointment = {
   },
 }
 
+// Appointment on Wed 2024-01-10 (noon UTC) – far enough from midnight to be safe in
+// any timezone.  Neither "today" (Jan 15) nor "tomorrow" (Jan 16), so formatDateHeader
+// falls through to toLocaleDateString and returns "miércoles, 10 de enero" in ES.
+const mockAppointmentPastDate: Appointment = {
+  id: '4',
+  tenantId: 'tenant1',
+  patientId: 'patient1',
+  doctorId: 'doctor1',
+  startTime: '2024-01-10T12:00:00Z',
+  endTime: '2024-01-10T13:00:00Z',
+  status: 'COMPLETED',
+  reason: 'Past appointment',
+  notes: null,
+  isActive: true,
+  createdAt: '2024-01-01T00:00:00Z',
+  updatedAt: '2024-01-01T00:00:00Z',
+  patient: {
+    id: 'patient1',
+    firstName: 'Juan',
+    lastName: 'Pérez',
+  },
+  doctor: {
+    id: 'doctor1',
+    firstName: 'Dr. María',
+    lastName: 'García',
+  },
+}
+
 const mockStats: AppointmentsStats = {
   scheduled: 5,
   confirmed: 3,
@@ -253,6 +285,7 @@ describe('AppointmentsPage', () => {
     vi.clearAllMocks()
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2024-01-15'))
+    mockI18nState.language = 'es'
     mockAppointmentsState.appointments = []
     mockAppointmentsState.stats = null
     mockAppointmentsState.isLoading = false
@@ -690,6 +723,92 @@ describe('AppointmentsPage', () => {
       fireEvent.click(screen.getByRole('button', { name: /cerrar/i }))
 
       expect(screen.queryByTestId('appointment-form-modal')).not.toBeInTheDocument()
+    })
+  })
+
+  // ── task #211 regression: calendar date de-casing ─────────────────────────
+  // These tests pin the two fixes shipped in task #211 so neither can silently
+  // regress:
+  //   1. formatMonthYear now uses i18n.language (not a hardcoded 'es-ES') so
+  //      the month-year <h2> localises per the active language.
+  //   2. The day-group <h3> lost the `uppercase` / `capitalize` Tailwind classes
+  //      and now carries `first-letter:uppercase` only, so the connector "de"
+  //      stays lowercase in the source string (CSS handles the visual cap).
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('date casing and locale regression (task #211)', () => {
+    it('Spanish month-year h2 source text has lowercase connector "de", not title-cased "De"', () => {
+      // formatMonthYear(new Date('2024-01-15')) with language 'es'
+      // → "enero de 2024" (all lowercase; CSS first-letter:uppercase gives visual "E")
+      mockAppointmentsState.appointments = [mockAppointment1]
+      renderAppointmentsPage()
+
+      const h2 = screen.getByRole('heading', { level: 2 })
+      expect(h2.textContent).toMatch(/enero de 2024/)
+      // The connector must NOT be title-cased in the DOM source
+      expect(h2.textContent).not.toMatch(/ De /)
+    })
+
+    it('month-year h2 element carries first-letter:uppercase and lacks standalone capitalize/uppercase classes', () => {
+      mockAppointmentsState.appointments = [mockAppointment1]
+      renderAppointmentsPage()
+
+      const h2 = screen.getByRole('heading', { level: 2 })
+      const classes = h2.className.split(' ')
+      // Tailwind utility that visually uppercases only the first letter
+      expect(classes).toContain('first-letter:uppercase')
+      // These two were removed by the fix and must not reappear
+      expect(classes).not.toContain('capitalize')
+      expect(classes).not.toContain('uppercase')
+    })
+
+    it('day-group h3 source text has lowercase connector "de" for a non-today/tomorrow date', () => {
+      // 2024-01-10 is Wednesday – neither today (Jan 15) nor tomorrow (Jan 16).
+      // formatDateHeader falls through to toLocaleDateString('es', {weekday,day,month})
+      // → "miércoles, 10 de enero"  (lowercase connector "de")
+      mockAppointmentsState.appointments = [mockAppointmentPastDate]
+      renderAppointmentsPage()
+
+      const h3 = screen.getByRole('heading', { level: 3 })
+      expect(h3.textContent).toMatch(/de enero/)
+      // Must not be title-cased (old capitalize class) or all-caps (old uppercase class)
+      expect(h3.textContent).not.toMatch(/De Enero/)
+      expect(h3.textContent).not.toMatch(/DE ENERO/)
+    })
+
+    it('day-group h3 element carries first-letter:uppercase and lacks standalone capitalize/uppercase classes', () => {
+      mockAppointmentsState.appointments = [mockAppointmentPastDate]
+      renderAppointmentsPage()
+
+      const h3 = screen.getByRole('heading', { level: 3 })
+      const classes = h3.className.split(' ')
+      expect(classes).toContain('first-letter:uppercase')
+      // Removed by the fix – must not return
+      expect(classes).not.toContain('capitalize')
+      expect(classes).not.toContain('uppercase')
+    })
+
+    it('month-year localizes to English when language is "en"', () => {
+      // formatMonthYear uses i18n.language; switching to 'en' must change the output.
+      // toLocaleDateString('en', { month:'long', year:'numeric' }) → "January 2024"
+      mockI18nState.language = 'en'
+      mockAppointmentsState.appointments = [mockAppointment1]
+      renderAppointmentsPage()
+
+      const h2 = screen.getByRole('heading', { level: 2 })
+      expect(h2.textContent).toMatch(/January 2024/)
+      // Spanish month must not appear when locale is English
+      expect(h2.textContent).not.toMatch(/enero/i)
+    })
+
+    it('month-year does not show Spanish month name when language is "ar"', () => {
+      // Arabic ICU output differs per environment, so we only assert it is NOT Spanish.
+      // "يناير 2024" is the expected Arabic output; "enero" must be absent.
+      mockI18nState.language = 'ar'
+      mockAppointmentsState.appointments = [mockAppointment1]
+      renderAppointmentsPage()
+
+      const h2 = screen.getByRole('heading', { level: 2 })
+      expect(h2.textContent).not.toMatch(/enero/i)
     })
   })
 })
