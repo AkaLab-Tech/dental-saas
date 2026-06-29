@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import i18n, { languages, defaultLanguage, resources } from './index'
+import i18n, { languages, defaultLanguage, resources, i18nReady } from './index'
 
 describe('i18n configuration', () => {
   beforeEach(() => {
@@ -84,6 +84,64 @@ describe('i18n configuration', () => {
     it('should resolve to a supported base code after switching', () => {
       i18n.changeLanguage('en')
       expect(i18n.resolvedLanguage).toBe('en')
+    })
+  })
+
+  // --- regression: task #210 — sidebar nav labels flicker between locale variants ---
+  // Pre-fix: i18nReady was not exported; main.tsx rendered synchronously before the
+  // init-chain Promise settled, so useTranslation() could re-render on 'initialized'.
+  // Post-fix: i18nReady is the Promise returned by i18n.use(...).init(...).then(...)
+  // and main.tsx gates createRoot().render() on it.
+  describe('i18nReady', () => {
+    it('is exported from the module — main.tsx can gate render on it', () => {
+      // If this fails with pre-fix code, i18nReady is undefined (not exported)
+      expect(i18nReady).toBeDefined()
+    })
+
+    it('is a thenable Promise so main.tsx can call .then() before rendering', () => {
+      // A non-exported binding or a non-Promise would fail here
+      expect(typeof (i18nReady as { then?: unknown }).then).toBe('function')
+    })
+
+    it('resolves only after i18n.isInitialized is true', async () => {
+      await i18nReady
+      expect(i18n.isInitialized).toBe(true)
+    })
+
+    it('resolves to a settled resolvedLanguage that is within supportedLngs', async () => {
+      await i18nReady
+      // resolvedLanguage must not be null/undefined — language detection settled
+      expect(i18n.resolvedLanguage).toBeDefined()
+      const supportedCodes = languages.map((l) => l.code) as string[]
+      expect(supportedCodes).toContain(i18n.resolvedLanguage)
+    })
+
+    it('fires updateDocumentDirection before resolving — document.lang is a supported code', async () => {
+      // The .then() chain in index.ts calls updateDocumentDirection(i18n.language);
+      // awaiting i18nReady must mean that side-effect has already run.
+      await i18nReady
+      const supportedCodes = languages.map((l) => l.code) as string[]
+      expect(supportedCodes).toContain(document.documentElement.lang)
+    })
+
+    it('document.dir is consistent with the resolved language after ready', async () => {
+      await i18nReady
+      const lang = document.documentElement.lang as 'es' | 'en' | 'ar'
+      const expectedDir = languages.find((l) => l.code === lang)?.dir ?? 'ltr'
+      expect(document.documentElement.dir).toBe(expectedDir)
+    })
+
+    it('supportedLngs contains exactly the three shipped locales and no other production codes', () => {
+      // i18next always appends 'cimode' (its built-in debug locale) internally;
+      // filter it out before asserting on the production set.
+      const i18nextInternals = new Set(['cimode', 'dev'])
+      const production = (i18n.options.supportedLngs as string[]).filter(
+        (s) => typeof s === 'string' && !i18nextInternals.has(s),
+      )
+      expect(production).toHaveLength(3)
+      expect(production).toContain('es')
+      expect(production).toContain('en')
+      expect(production).toContain('ar')
     })
   })
 })
