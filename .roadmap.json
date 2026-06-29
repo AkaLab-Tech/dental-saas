@@ -1,0 +1,15 @@
+{
+  "backend": "github-project",
+  "offlineMirror": false,
+  "githubProject": {
+    "owner": "AkaLab-Tech",
+    "projectNumber": 4,
+    "projectId": "PVT_kwDOCSHEDc4BcAc4",
+    "historyWindow": "90d",
+    "stateMap": {
+      "roadmap": ["Todo"],
+      "inProgress": ["In Progress"],
+      "history": ["Done"]
+    }
+  }
+}
