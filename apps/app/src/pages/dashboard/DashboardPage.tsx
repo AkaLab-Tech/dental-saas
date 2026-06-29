@@ -89,17 +89,18 @@ function StatCard({ title, value, subtitle, icon, trend, linkTo, color }: StatCa
 
 export default function DashboardPage() {
   const { overview, appointmentStats, revenueStats, patientsGrowth, doctorPerformance, isLoading, error, fetchAllStats } = useStatsStore()
-  const { user } = useAuthStore()
+  const { user, accessToken } = useAuthStore()
   const activeUser = useLockStore((s) => s.activeUser)
   const effectiveRole = activeUser?.role || user?.role
   const isDoctorOrStaff = effectiveRole === UserRole.DOCTOR || effectiveRole === UserRole.STAFF
 
   // Admin/owner stats — skip the fetch for doctor/staff, who render DoctorDashboard.
+  // Gate on accessToken so we never fire before auth state is committed to the store.
   useEffect(() => {
-    if (!isDoctorOrStaff) {
+    if (!isDoctorOrStaff && accessToken) {
       fetchAllStats()
     }
-  }, [fetchAllStats, isDoctorOrStaff])
+  }, [fetchAllStats, isDoctorOrStaff, accessToken])
 
   // Show doctor dashboard for DOCTOR and STAFF roles
   if (isDoctorOrStaff) {

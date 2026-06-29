@@ -90,10 +90,12 @@ const statusDotColors: Record<string, string> = {
 export default function DoctorDashboard() {
   const { t } = useTranslation()
   const { overview, appointmentStats, upcomingAppointments, appointmentTypes, myDoctorId, isLoading, error, fetchMyDoctorId, fetchDoctorStats } = useStatsStore()
-  const { user } = useAuthStore()
+  const { user, accessToken } = useAuthStore()
   const currency = user?.tenant?.currency || 'USD'
 
+  // Gate on accessToken so we never fire before auth state is committed to the store.
   useEffect(() => {
+    if (!accessToken) return
     const loadDoctorStats = async () => {
       const doctorId = await fetchMyDoctorId()
       if (doctorId) {
@@ -101,7 +103,7 @@ export default function DoctorDashboard() {
       }
     }
     loadDoctorStats()
-  }, [fetchMyDoctorId, fetchDoctorStats])
+  }, [fetchMyDoctorId, fetchDoctorStats, accessToken])
 
   if (isLoading && !overview) {
     return (
