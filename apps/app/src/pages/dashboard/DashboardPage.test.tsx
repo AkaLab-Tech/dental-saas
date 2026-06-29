@@ -253,6 +253,7 @@ describe('DashboardPage', () => {
     })
     ;(useAuthStore as unknown as Mock).mockReturnValue({
       user: mockAdminUser,
+      accessToken: 'test-access-token',
     })
 
     render(
@@ -262,6 +263,34 @@ describe('DashboardPage', () => {
     )
 
     expect(mockFetchAllStats).toHaveBeenCalledTimes(1)
+  })
+
+  it('should not call fetchAllStats when accessToken is null', () => {
+    // Regression guard for #208: a freshly-authenticated user has a null token
+    // until the store is populated. The effect must not fire (and hit the API
+    // with no credentials) until a real token is present.
+    (useStatsStore as unknown as Mock).mockReturnValue({
+      overview: null,
+      appointmentStats: null,
+      revenueStats: null,
+      patientsGrowth: null,
+      doctorPerformance: null,
+      isLoading: true,
+      error: null,
+      fetchAllStats: mockFetchAllStats,
+    })
+    ;(useAuthStore as unknown as Mock).mockReturnValue({
+      user: mockAdminUser,
+      accessToken: null,
+    })
+
+    render(
+      <BrowserRouter>
+        <DashboardPage />
+      </BrowserRouter>
+    )
+
+    expect(mockFetchAllStats).toHaveBeenCalledTimes(0)
   })
 
   it('should show empty state for charts when no data', () => {
