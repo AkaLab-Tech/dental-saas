@@ -102,6 +102,12 @@
       "isPaidHint": "Al marcar, se registra una entrega que se aplica a la deuda más antigua del paciente.",
       "alreadyPaidHint": "Para revertir el pago, elimine la entrega correspondiente desde la sección de pagos."
     },
+    "budgetItems": {
+      "title": "Ítems de presupuesto",
+      "selectHint": "Selecciona los ítems del presupuesto que se atenderán en esta cita.",
+      "empty": "Este paciente no tiene ítems de presupuesto disponibles para asociar.",
+      "loading": "Cargando ítems de presupuesto..."
+    },
     "errors": {
       "timeConflict": "El doctor ya tiene una cita en este horario. Por favor, selecciona otro horario o doctor.",
       "invalidPatient": "El paciente seleccionado no es válido.",

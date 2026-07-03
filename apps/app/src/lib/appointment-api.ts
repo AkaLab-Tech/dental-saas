@@ -1,6 +1,7 @@
 import { apiClient } from './api'
 import { formatCurrency } from './format'
 import i18n from '@/i18n'
+import type { BudgetItemStatus } from './budget-api'
 
 // ============================================================================
 // Types
@@ -80,6 +81,9 @@ export interface CreateAppointmentData {
   privateNotes?: string
   cost?: number
   isPaid?: boolean
+  // Replace-set of budget item ids to associate (role SCHEDULED). Omit to
+  // leave untouched; see `getAppointmentBudgetItems` for hydration on edit.
+  budgetItemIds?: string[]
 }
 
 export interface UpdateAppointmentData {
@@ -94,6 +98,26 @@ export interface UpdateAppointmentData {
   privateNotes?: string | null
   cost?: number | null
   isPaid?: boolean
+  // Replace-set: provided = set associations (empty array clears them);
+  // omit to leave existing associations untouched.
+  budgetItemIds?: string[]
+}
+
+export type AppointmentBudgetItemRole = 'SCHEDULED' | 'EXECUTED'
+
+export interface AppointmentBudgetItemSummary {
+  id: string
+  budgetId: string
+  description: string
+  toothNumber: string | null
+  quantity: number
+  unitPrice: string
+  totalPrice: string
+  plannedAppointmentType: string | null
+  status: BudgetItemStatus
+  notes: string | null
+  order: number
+  roles: AppointmentBudgetItemRole[]
 }
 
 export interface ListAppointmentsParams {
@@ -268,6 +292,17 @@ export async function restoreAppointment(id: string): Promise<Appointment> {
  */
 export async function markAppointmentDone(id: string, notes?: string): Promise<Appointment> {
   const response = await apiClient.put<ApiResponse<Appointment>>(`/appointments/${id}/mark-done`, { notes })
+  return response.data.data
+}
+
+/**
+ * Get the budget items currently associated to an appointment (any role),
+ * for edit/completion hydration.
+ */
+export async function getAppointmentBudgetItems(id: string): Promise<AppointmentBudgetItemSummary[]> {
+  const response = await apiClient.get<ApiResponse<AppointmentBudgetItemSummary[]>>(
+    `/appointments/${id}/budget-items`
+  )
   return response.data.data
 }
 
