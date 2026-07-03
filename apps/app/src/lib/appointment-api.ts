@@ -288,10 +288,19 @@ export async function restoreAppointment(id: string): Promise<Appointment> {
 }
 
 /**
- * Mark an appointment as done/completed
+ * Mark an appointment as done/completed. `executedBudgetItemIds` confirms
+ * which SCHEDULED-linked budget items were executed in this appointment;
+ * items not listed stay SCHEDULED (default = execute none).
  */
-export async function markAppointmentDone(id: string, notes?: string): Promise<Appointment> {
-  const response = await apiClient.put<ApiResponse<Appointment>>(`/appointments/${id}/mark-done`, { notes })
+export async function markAppointmentDone(
+  id: string,
+  notes?: string,
+  executedBudgetItemIds?: string[]
+): Promise<Appointment> {
+  const response = await apiClient.put<ApiResponse<Appointment>>(`/appointments/${id}/mark-done`, {
+    notes,
+    executedBudgetItemIds,
+  })
   return response.data.data
 }
 

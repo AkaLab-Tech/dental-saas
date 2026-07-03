@@ -154,6 +154,22 @@ vi.mock('@/components/ui/ConfirmDialog', () => ({
   },
 }))
 
+// Mock AppointmentCompleteModal component (PR D-3: "Completar" now opens this
+// modal instead of calling completeAppointment directly — see its own test
+// suite in AppointmentCompleteModal.test.tsx for the modal's own behavior).
+vi.mock('@/components/appointments/AppointmentCompleteModal', () => ({
+  AppointmentCompleteModal: ({ isOpen, appointmentId, onClose, onCompleted }: any) => {
+    if (!isOpen) return null
+    return (
+      <div data-testid="appointment-complete-modal" role="dialog">
+        <span data-testid="complete-modal-appointment-id">{appointmentId}</span>
+        <button onClick={onClose}>Cerrar completar</button>
+        <button onClick={onCompleted}>Confirmar completar</button>
+      </div>
+    )
+  },
+}))
+
 // Import after mocks
 import { AppointmentsPage } from './AppointmentsPage'
 
@@ -650,21 +666,41 @@ describe('AppointmentsPage', () => {
   })
 
   describe('complete appointment', () => {
-    it('should call completeAppointment when clicking complete button', async () => {
-      vi.useRealTimers()
+    it('opens the complete confirmation modal for the clicked appointment instead of completing directly', () => {
       mockAppointmentsState.appointments = [mockAppointment2]
-      mockCompleteAppointment.mockResolvedValue(undefined)
       renderAppointmentsPage()
 
+      expect(screen.queryByTestId('appointment-complete-modal')).not.toBeInTheDocument()
+
       const completeButton = screen.getByRole('button', { name: /completar/i })
-      await act(async () => {
-        fireEvent.click(completeButton)
-        await new Promise(resolve => setTimeout(resolve, 50))
-      })
+      fireEvent.click(completeButton)
 
-      expect(mockCompleteAppointment).toHaveBeenCalledWith('2')
+      expect(screen.getByTestId('appointment-complete-modal')).toBeInTheDocument()
+      expect(screen.getByTestId('complete-modal-appointment-id')).toHaveTextContent('2')
+      // The page no longer calls the store directly — the modal owns the confirm flow.
+      expect(mockCompleteAppointment).not.toHaveBeenCalled()
+    })
 
-      vi.useFakeTimers()
+    it('shows the success message and closes the modal once completion is confirmed', () => {
+      mockAppointmentsState.appointments = [mockAppointment2]
+      renderAppointmentsPage()
+
+      fireEvent.click(screen.getByRole('button', { name: /completar/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar completar' }))
+
+      expect(screen.getByText('Cita completada')).toBeInTheDocument()
+      expect(screen.queryByTestId('appointment-complete-modal')).not.toBeInTheDocument()
+    })
+
+    it('closes the modal without a success message when dismissed via Close', () => {
+      mockAppointmentsState.appointments = [mockAppointment2]
+      renderAppointmentsPage()
+
+      fireEvent.click(screen.getByRole('button', { name: /completar/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'Cerrar completar' }))
+
+      expect(screen.queryByTestId('appointment-complete-modal')).not.toBeInTheDocument()
+      expect(screen.queryByText('Cita completada')).not.toBeInTheDocument()
     })
   })
 

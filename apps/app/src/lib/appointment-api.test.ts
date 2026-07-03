@@ -507,6 +507,35 @@ describe('appointment-api', () => {
       })
       expect(result.notes).toBe('Procedure completed successfully')
     })
+
+    it('should send executedBudgetItemIds alongside notes', async () => {
+      const completedAppointment = { ...mockAppointment, status: 'COMPLETED' as AppointmentStatus }
+      vi.mocked(apiClient.put).mockResolvedValue({
+        data: { success: true, data: completedAppointment },
+      })
+
+      const result = await markAppointmentDone('apt-123', 'Done', ['item-1', 'item-2'])
+
+      expect(apiClient.put).toHaveBeenCalledWith('/appointments/apt-123/mark-done', {
+        notes: 'Done',
+        executedBudgetItemIds: ['item-1', 'item-2'],
+      })
+      expect(result.status).toBe('COMPLETED')
+    })
+
+    it('should send an empty executedBudgetItemIds array as-is (no items executed)', async () => {
+      const completedAppointment = { ...mockAppointment, status: 'COMPLETED' as AppointmentStatus }
+      vi.mocked(apiClient.put).mockResolvedValue({
+        data: { success: true, data: completedAppointment },
+      })
+
+      await markAppointmentDone('apt-123', undefined, [])
+
+      expect(apiClient.put).toHaveBeenCalledWith('/appointments/apt-123/mark-done', {
+        notes: undefined,
+        executedBudgetItemIds: [],
+      })
+    })
   })
 
   describe('getAppointmentBudgetItems', () => {

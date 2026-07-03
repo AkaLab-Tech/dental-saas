@@ -27,6 +27,24 @@ vi.mock('@/lib/appointment-api', () => ({
   getStatusI18nKey: (status: string) => status.toLowerCase(),
 }))
 
+// PR D-3: "Completar" now opens AppointmentCompleteModal instead of the
+// shared inline confirm dialog — that modal's own behavior (budget item
+// toggles, notes, completeAppointment payload) is covered by
+// AppointmentCompleteModal.test.tsx. Stub it here to a minimal dialog so this
+// page's tests can assert it opens for the right appointment and that
+// onCompleted triggers a refresh.
+vi.mock('@/components/appointments/AppointmentCompleteModal', () => ({
+  AppointmentCompleteModal: ({ isOpen, appointmentId, onCompleted }: any) => {
+    if (!isOpen) return null
+    return (
+      <div data-testid="appointment-complete-modal" role="dialog">
+        <span data-testid="complete-modal-appointment-id">{appointmentId}</span>
+        <button onClick={onCompleted}>Confirmar completar</button>
+      </div>
+    )
+  },
+}))
+
 vi.mock('@/lib/pdf-api', () => ({
   downloadAppointmentPdf: vi.fn(),
 }))
@@ -413,22 +431,26 @@ describe('PatientAppointmentsSection', () => {
       expect(defaultProps.onEditAppointment).toHaveBeenCalledWith(upcomingAppointment)
     })
 
-    it('shows confirmation dialog when marking complete', async () => {
+    it('opens the AppointmentCompleteModal for the right appointment when marking complete', async () => {
       renderSection()
 
       await waitFor(() => {
         expect(screen.getByText('Limpieza')).toBeInTheDocument()
       })
 
+      expect(screen.queryByTestId('appointment-complete-modal')).not.toBeInTheDocument()
+
       fireEvent.click(screen.getByLabelText('common.options'))
       fireEvent.click(screen.getByText('appointments.markCompleted'))
 
-      // Confirmation dialog should appear
-      expect(screen.getByText('patients.appointments.confirmComplete')).toBeInTheDocument()
+      // The completion modal should open, scoped to the clicked appointment —
+      // not the shared inline confirm dialog (that's cancel-only now).
+      expect(screen.getByTestId('appointment-complete-modal')).toBeInTheDocument()
+      expect(screen.getByTestId('complete-modal-appointment-id')).toHaveTextContent('a1')
+      expect(mockMarkAppointmentDone).not.toHaveBeenCalled()
     })
 
-    it('calls markAppointmentDone and refreshes on confirm', async () => {
-      mockMarkAppointmentDone.mockResolvedValue({})
+    it('refetches appointments once the completion modal reports success', async () => {
       mockGetAppointmentsByPatient.mockResolvedValue([upcomingAppointment])
 
       renderSection()
@@ -437,19 +459,20 @@ describe('PatientAppointmentsSection', () => {
         expect(screen.getByText('Limpieza')).toBeInTheDocument()
       })
 
-      // Open menu, click complete
+      const callsBeforeComplete = mockGetAppointmentsByPatient.mock.calls.length
+
+      // Open menu, click complete to open the modal
       fireEvent.click(screen.getByLabelText('common.options'))
       fireEvent.click(screen.getByText('appointments.markCompleted'))
 
-      // Confirm
-      const confirmButtons = screen.getAllByText('appointments.markCompleted')
-      const confirmButton = confirmButtons[confirmButtons.length - 1]
+      // Simulate the modal reporting a successful completion
       await act(async () => {
-        fireEvent.click(confirmButton)
+        fireEvent.click(screen.getByText('Confirmar completar'))
       })
 
+      expect(screen.queryByTestId('appointment-complete-modal')).not.toBeInTheDocument()
       await waitFor(() => {
-        expect(mockMarkAppointmentDone).toHaveBeenCalledWith('a1')
+        expect(mockGetAppointmentsByPatient.mock.calls.length).toBeGreaterThan(callsBeforeComplete)
       })
       // Should have fetched appointments again for refresh
       expect(mockGetAppointmentsByPatient).toHaveBeenCalledTimes(2)

@@ -56,7 +56,7 @@ export interface AppointmentsActions {
   editAppointment: (id: string, data: UpdateAppointmentData) => Promise<Appointment>
   removeAppointment: (id: string) => Promise<void>
   restoreDeletedAppointment: (id: string) => Promise<Appointment>
-  completeAppointment: (id: string, notes?: string) => Promise<Appointment>
+  completeAppointment: (id: string, notes?: string, executedBudgetItemIds?: string[]) => Promise<Appointment>
 
   // UI state actions
   setSelectedAppointment: (appointment: Appointment | null) => void
@@ -249,10 +249,10 @@ export const useAppointmentsStore = create<AppointmentsState & AppointmentsActio
     }
   },
 
-  completeAppointment: async (id: string, notes?: string) => {
+  completeAppointment: async (id: string, notes?: string, executedBudgetItemIds?: string[]) => {
     set({ isLoading: true, error: null })
     try {
-      const completedAppointment = await markAppointmentDone(id, notes)
+      const completedAppointment = await markAppointmentDone(id, notes, executedBudgetItemIds)
       set((state) => ({
         appointments: state.appointments.map((a) => (a.id === id ? completedAppointment : a)),
         calendarAppointments: state.calendarAppointments.map((a) => (a.id === id ? completedAppointment : a)),
