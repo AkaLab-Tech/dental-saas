@@ -38,6 +38,38 @@ export default {
       "pending": "PENDIENTE",
       "informationalNotice": "Este documento es solo con fines informativos."
     },
+    "budget": {
+      "title": "Presupuesto de Tratamiento",
+      "budgetFor": "Presupuesto para",
+      "validUntil": "Válido hasta",
+      "createdOn": "Creado el",
+      "table": {
+        "item": "#",
+        "description": "Descripción",
+        "tooth": "Diente",
+        "qty": "Cant.",
+        "unitPrice": "Precio Unitario",
+        "lineTotal": "Total",
+        "status": "Estado"
+      },
+      "total": "Total",
+      "notes": "Notas",
+      "status": {
+        "DRAFT": "Borrador",
+        "APPROVED": "Aprobado",
+        "PARTIAL": "Parcial",
+        "COMPLETED": "Completado",
+        "CANCELLED": "Cancelado"
+      },
+      "itemStatus": {
+        "PENDING": "Pendiente",
+        "SCHEDULED": "Programado",
+        "IN_PROGRESS": "En curso",
+        "EXECUTED": "Ejecutado",
+        "CANCELLED": "Cancelado"
+      },
+      "footer": "Este presupuesto es una estimación y puede estar sujeto a cambios."
+    },
     "common": {
       "generatedOn": "Generado el",
       "at": "a las",

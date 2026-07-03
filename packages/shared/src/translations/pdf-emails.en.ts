@@ -38,6 +38,38 @@ export default {
       "pending": "PENDING",
       "informationalNotice": "This document is for informational purposes only."
     },
+    "budget": {
+      "title": "Treatment Budget",
+      "budgetFor": "Budget for",
+      "validUntil": "Valid until",
+      "createdOn": "Created on",
+      "table": {
+        "item": "#",
+        "description": "Description",
+        "tooth": "Tooth",
+        "qty": "Qty",
+        "unitPrice": "Unit Price",
+        "lineTotal": "Total",
+        "status": "Status"
+      },
+      "total": "Total",
+      "notes": "Notes",
+      "status": {
+        "DRAFT": "Draft",
+        "APPROVED": "Approved",
+        "PARTIAL": "Partial",
+        "COMPLETED": "Completed",
+        "CANCELLED": "Cancelled"
+      },
+      "itemStatus": {
+        "PENDING": "Pending",
+        "SCHEDULED": "Scheduled",
+        "IN_PROGRESS": "In progress",
+        "EXECUTED": "Executed",
+        "CANCELLED": "Cancelled"
+      },
+      "footer": "This budget is an estimate and may be subject to change."
+    },
     "common": {
       "generatedOn": "Generated on",
       "at": "at",

@@ -275,6 +275,16 @@
       "notesPlaceholder": "Optional detail",
       "empty": "Add at least one item to create the budget"
     },
+    "downloadPdf": "Download PDF",
+    "share": {
+      "button": "Share link",
+      "title": "Public share link",
+      "description": "Anyone with this link can view a read-only version of this budget.",
+      "generating": "Generating link...",
+      "copy": "Copy",
+      "copied": "Copied!",
+      "close": "Close"
+    },
     "errors": {
       "loadFailed": "Couldn't load budgets",
       "createFailed": "Couldn't create the budget",
@@ -286,7 +296,9 @@
       "minOneItem": "The budget must have at least one item",
       "descriptionRequired": "Description is required",
       "quantityInvalid": "Quantity must be at least 1",
-      "unitPriceInvalid": "Unit price must be greater than or equal to 0"
+      "unitPriceInvalid": "Unit price must be greater than or equal to 0",
+      "pdfDownloadFailed": "Couldn't download the PDF",
+      "shareFailed": "Couldn't generate the share link"
     }
   },
   "expenses": {

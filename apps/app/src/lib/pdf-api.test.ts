@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { downloadAppointmentPdf, downloadPatientHistoryPdf } from './pdf-api'
+import { downloadAppointmentPdf, downloadPatientHistoryPdf, downloadBudgetPdf } from './pdf-api'
 import { apiClient } from './api'
 
 // Mock apiClient
@@ -137,6 +137,46 @@ describe('pdf-api', () => {
       await downloadPatientHistoryPdf('789')
 
       expect(mockCreateObjectURL).toHaveBeenCalled()
+    })
+  })
+
+  describe('downloadBudgetPdf', () => {
+    it('should download budget PDF with correct filename from header', async () => {
+      const mockBlob = new Blob(['mock pdf'], { type: 'application/pdf' })
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: mockBlob,
+        headers: {
+          'content-disposition': 'attachment; filename="budget-123.pdf"',
+        },
+      })
+
+      await downloadBudgetPdf('123')
+
+      expect(apiClient.get).toHaveBeenCalledWith('/budgets/123/pdf', {
+        responseType: 'blob',
+      })
+      expect(mockCreateObjectURL).toHaveBeenCalled()
+      expect(mockLink.download).toBe('budget-123.pdf')
+      expect(mockLink.click).toHaveBeenCalled()
+      expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:mock-url')
+    })
+
+    it('should use default filename when no Content-Disposition header', async () => {
+      const mockBlob = new Blob(['mock pdf'], { type: 'application/pdf' })
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: mockBlob,
+        headers: {},
+      })
+
+      await downloadBudgetPdf('456')
+
+      expect(mockLink.download).toBe('budget-456.pdf')
+    })
+
+    it('should handle API errors', async () => {
+      vi.mocked(apiClient.get).mockRejectedValue(new Error('API Error'))
+
+      await expect(downloadBudgetPdf('error')).rejects.toThrow('API Error')
     })
   })
 })

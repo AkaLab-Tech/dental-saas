@@ -656,6 +656,155 @@ describe('Budgets routes', () => {
   })
 
   // --------------------------------------------------------------------------
+  // GET /api/budgets/:id/pdf
+  // --------------------------------------------------------------------------
+  describe('GET /api/budgets/:id/pdf', () => {
+    it('returns a PDF buffer with the correct headers', async () => {
+      const budget = await prisma.budget.create({
+        data: {
+          tenantId,
+          patientId,
+          items: {
+            create: [{ description: 'Cleaning', quantity: 1, unitPrice: 80, totalPrice: 80 }],
+          },
+        },
+      })
+
+      const res = await request(app)
+        .get(`/api/budgets/${budget.id}/pdf`)
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toBe('application/pdf')
+      expect(res.headers['content-disposition']).toBe(
+        `attachment; filename="budget-${budget.id}.pdf"`
+      )
+      const body = res.body as Buffer
+      expect(Buffer.isBuffer(body)).toBe(true)
+      expect(body.toString('utf8', 0, 5)).toBe('%PDF-')
+    })
+
+    it('allows STAFF (view-only) to download the PDF', async () => {
+      const budget = await prisma.budget.create({ data: { tenantId, patientId } })
+      const res = await request(app)
+        .get(`/api/budgets/${budget.id}/pdf`)
+        .set('Authorization', `Bearer ${staffToken}`)
+      expect(res.status).toBe(200)
+    })
+
+    it('returns 401 without a token', async () => {
+      const budget = await prisma.budget.create({ data: { tenantId, patientId } })
+      const res = await request(app).get(`/api/budgets/${budget.id}/pdf`)
+      expect(res.status).toBe(401)
+    })
+
+    it('returns 404 for a budget from another tenant', async () => {
+      const other = await prisma.budget.create({
+        data: { tenantId: otherTenantId, patientId: otherPatientId },
+      })
+      const res = await request(app)
+        .get(`/api/budgets/${other.id}/pdf`)
+        .set('Authorization', `Bearer ${adminToken}`)
+      expect(res.status).toBe(404)
+    })
+
+    it('returns 404 for a non-existent budget id', async () => {
+      const res = await request(app)
+        .get('/api/budgets/non-existent-id/pdf')
+        .set('Authorization', `Bearer ${adminToken}`)
+      expect(res.status).toBe(404)
+    })
+  })
+
+  // --------------------------------------------------------------------------
+  // POST /api/budgets/:id/share
+  // --------------------------------------------------------------------------
+  describe('POST /api/budgets/:id/share', () => {
+    it('generates a share link and returns token/url/expiresAt', async () => {
+      const budget = await prisma.budget.create({ data: { tenantId, patientId } })
+
+      const res = await request(app)
+        .post(`/api/budgets/${budget.id}/share`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({})
+
+      expect(res.status).toBe(200)
+      expect(res.body.success).toBe(true)
+      expect(res.body.data.token).toMatch(/^[0-9a-f]{64}$/)
+      expect(res.body.data.expiresAt).toBeNull()
+      expect(res.body.data.url).toBe(`${process.env.PUBLIC_WEB_URL || 'http://localhost:5003'}/budget/${res.body.data.token}`)
+    })
+
+    it('accepts an optional expiresInDays and returns a non-null expiresAt', async () => {
+      const budget = await prisma.budget.create({ data: { tenantId, patientId } })
+
+      const res = await request(app)
+        .post(`/api/budgets/${budget.id}/share`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ expiresInDays: 14 })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.expiresAt).not.toBeNull()
+    })
+
+    it('rejects STAFF (viewer) role with 403', async () => {
+      const budget = await prisma.budget.create({ data: { tenantId, patientId } })
+      const res = await request(app)
+        .post(`/api/budgets/${budget.id}/share`)
+        .set('Authorization', `Bearer ${staffToken}`)
+        .send({})
+      expect(res.status).toBe(403)
+    })
+
+    it('rejects DOCTOR role with 403 (no BUDGETS_SHARE permission)', async () => {
+      const budget = await prisma.budget.create({ data: { tenantId, patientId } })
+      const res = await request(app)
+        .post(`/api/budgets/${budget.id}/share`)
+        .set('Authorization', `Bearer ${doctorToken}`)
+        .send({})
+      expect(res.status).toBe(403)
+    })
+
+    it('returns 400 when expiresInDays is out of range', async () => {
+      const budget = await prisma.budget.create({ data: { tenantId, patientId } })
+      const res = await request(app)
+        .post(`/api/budgets/${budget.id}/share`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ expiresInDays: 0 })
+      expect(res.status).toBe(400)
+    })
+
+    it('returns 404 for a budget from another tenant', async () => {
+      const other = await prisma.budget.create({
+        data: { tenantId: otherTenantId, patientId: otherPatientId },
+      })
+      const res = await request(app)
+        .post(`/api/budgets/${other.id}/share`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({})
+      expect(res.status).toBe(404)
+    })
+
+    it('the generated public URL resolves via the unauthenticated public endpoint', async () => {
+      const budget = await prisma.budget.create({
+        data: {
+          tenantId,
+          patientId,
+          items: { create: [{ description: 'X', quantity: 1, unitPrice: 10, totalPrice: 10 }] },
+        },
+      })
+      const shareRes = await request(app)
+        .post(`/api/budgets/${budget.id}/share`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({})
+
+      const publicRes = await request(app).get(`/api/public/budgets/${shareRes.body.data.token}`)
+      expect(publicRes.status).toBe(200)
+      expect(publicRes.body.data.id).toBe(budget.id)
+    })
+  })
+
+  // --------------------------------------------------------------------------
   // Auth
   // --------------------------------------------------------------------------
   describe('Auth', () => {

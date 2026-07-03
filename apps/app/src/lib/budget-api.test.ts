@@ -9,6 +9,7 @@ import {
   updateBudgetItem,
   deleteBudgetItem,
   getExecutedItemsCount,
+  shareBudget,
   type Budget,
   type BudgetItem,
 } from './budget-api'
@@ -154,6 +155,38 @@ describe('budget-api', () => {
     vi.mocked(apiClient.delete).mockResolvedValue({ data: { success: true, data: b } })
     await deleteBudgetItem('budget-1', 'item-1')
     expect(apiClient.delete).toHaveBeenCalledWith('/budgets/budget-1/items/item-1')
+  })
+
+  describe('shareBudget', () => {
+    it('posts to the share sub-endpoint with an empty body by default', async () => {
+      const result = {
+        token: 'abc123',
+        url: 'http://localhost:5003/budget/abc123',
+        expiresAt: null,
+      }
+      vi.mocked(apiClient.post).mockResolvedValue({ data: { success: true, data: result } })
+
+      const res = await shareBudget('budget-1')
+
+      expect(apiClient.post).toHaveBeenCalledWith('/budgets/budget-1/share', {})
+      expect(res).toEqual(result)
+    })
+
+    it('posts expiresInDays when provided and returns a non-null expiresAt', async () => {
+      const result = {
+        token: 'def456',
+        url: 'http://localhost:5003/budget/def456',
+        expiresAt: '2027-01-01T00:00:00.000Z',
+      }
+      vi.mocked(apiClient.post).mockResolvedValue({ data: { success: true, data: result } })
+
+      const res = await shareBudget('budget-1', { expiresInDays: 14 })
+
+      expect(apiClient.post).toHaveBeenCalledWith('/budgets/budget-1/share', {
+        expiresInDays: 14,
+      })
+      expect(res.expiresAt).toBe('2027-01-01T00:00:00.000Z')
+    })
   })
 
   describe('getExecutedItemsCount', () => {

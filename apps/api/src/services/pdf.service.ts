@@ -1,10 +1,12 @@
 import ReactPDF from '@react-pdf/renderer'
 import React from 'react'
-import { prisma, AppointmentStatus } from '@dental/database'
+import { prisma, AppointmentStatus, type BudgetStatus, type BudgetItemStatus } from '@dental/database'
 import { logger } from '../utils/logger.js'
+import { getBudget } from './budget.service.js'
 
 // Re-export types for templates to use
 export { AppointmentStatus }
+export type { BudgetStatus, BudgetItemStatus }
 
 /**
  * Tenant info for PDF header
@@ -93,6 +95,42 @@ export interface PatientHistoryData {
   patient: PatientInfo
   appointments: AppointmentSummary[]
   teethNotes: Record<string, string> | null
+  generatedAt: Date
+}
+
+/**
+ * Budget item info for the budget PDF
+ */
+export interface BudgetItemPdfInfo {
+  id: string
+  description: string
+  toothNumber: string | null
+  quantity: number
+  unitPrice: string // Formatted as string for display
+  totalPrice: string // Formatted as string for display
+  status: BudgetItemStatus
+}
+
+/**
+ * Budget info for the budget PDF
+ */
+export interface BudgetPdfInfo {
+  id: string
+  status: BudgetStatus
+  notes: string | null
+  validUntil: Date | null
+  totalAmount: string // Formatted as string for display
+  createdAt: Date
+  items: BudgetItemPdfInfo[]
+}
+
+/**
+ * Data for budget PDF
+ */
+export interface BudgetPdfData {
+  tenant: TenantInfo
+  patient: PatientInfo
+  budget: BudgetPdfInfo
   generatedAt: Date
 }
 
@@ -311,6 +349,67 @@ export const PdfService = {
         },
         appointments: appointmentSummaries,
         teethNotes,
+        generatedAt: new Date(),
+      },
+    }
+  },
+
+  /**
+   * Get budget with patient and tenant data for the budget PDF
+   */
+  async getBudgetPdfData(
+    tenantId: string,
+    budgetId: string
+  ): Promise<{ data: BudgetPdfData } | { error: PdfErrorCode; message: string }> {
+    const budgetResult = await getBudget(tenantId, budgetId)
+    if (!budgetResult.success) {
+      return { error: 'NOT_FOUND', message: 'Budget not found' }
+    }
+
+    const patient = await prisma.patient.findFirst({
+      where: { id: budgetResult.data.patientId, tenantId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        dob: true,
+        gender: true,
+        address: true,
+      },
+    })
+
+    if (!patient) {
+      return { error: 'NOT_FOUND', message: 'Patient not found' }
+    }
+
+    const tenant = await this.getTenantInfo(tenantId)
+    if (!tenant) {
+      return { error: 'INVALID_TENANT', message: 'Tenant not found' }
+    }
+
+    return {
+      data: {
+        tenant,
+        patient,
+        budget: {
+          id: budgetResult.data.id,
+          status: budgetResult.data.status,
+          notes: budgetResult.data.notes,
+          validUntil: budgetResult.data.validUntil,
+          totalAmount: budgetResult.data.totalAmount.toString(),
+          createdAt: budgetResult.data.createdAt,
+          items: budgetResult.data.items.map((item) => ({
+            id: item.id,
+            description: item.description,
+            toothNumber: item.toothNumber,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice.toString(),
+            totalPrice: item.totalPrice.toString(),
+            status: item.status,
+          })),
+        },
         generatedAt: new Date(),
       },
     }

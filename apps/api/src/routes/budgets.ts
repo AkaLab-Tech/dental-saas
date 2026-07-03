@@ -1,7 +1,9 @@
 import { Router, type IRouter } from 'express'
 import { z } from 'zod'
+import React from 'react'
 import { requirePermission } from '../middleware/permissions.js'
 import { Permission } from '@dental/shared'
+import { env } from '../config/env.js'
 import {
   getBudget,
   updateBudget,
@@ -9,8 +11,11 @@ import {
   addBudgetItem,
   updateBudgetItem,
   deleteBudgetItem,
+  generateShareToken,
   type BudgetErrorCode,
 } from '../services/budget.service.js'
+import { PdfService } from '../services/pdf.service.js'
+import { BudgetPdf } from '../pdfs/BudgetPdf.js'
 
 const budgetsRouter: IRouter = Router()
 
@@ -49,6 +54,10 @@ export const updateBudgetItemSchema = budgetItemInputSchema
       .optional(),
   })
 
+export const shareBudgetSchema = z.object({
+  expiresInDays: z.number().int().min(1).max(365).optional(),
+})
+
 // ============================================================================
 // Error mapping
 // ============================================================================
@@ -82,6 +91,72 @@ budgetsRouter.get('/:id', requirePermission(Permission.BUDGETS_VIEW), async (req
     const result = await getBudget(tenantId, req.params.id)
     if (!result.success) return sendError(res, result.code)
     res.json({ success: true, data: result.data })
+  } catch (e) {
+    next(e)
+  }
+})
+
+/**
+ * GET /api/budgets/:id/pdf
+ * Download the budget as a PDF
+ */
+budgetsRouter.get('/:id/pdf', requirePermission(Permission.BUDGETS_VIEW), async (req, res, next) => {
+  try {
+    const tenantId = req.user!.tenantId!
+    const { id } = req.params
+
+    const result = await PdfService.getBudgetPdfData(tenantId, id)
+    if ('error' in result) {
+      const status = result.error === 'NOT_FOUND' ? 404 : 400
+      return res.status(status).json({
+        success: false,
+        error: { code: result.error, message: result.message },
+      })
+    }
+
+    const pdfBuffer = await PdfService.generatePdf(React.createElement(BudgetPdf, { data: result.data }))
+
+    const filename = `budget-${id}.pdf`
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.setHeader('Content-Length', pdfBuffer.length)
+    res.send(pdfBuffer)
+  } catch (e) {
+    next(e)
+  }
+})
+
+/**
+ * POST /api/budgets/:id/share
+ * Generate (or rotate) the public share link for a budget
+ */
+budgetsRouter.post('/:id/share', requirePermission(Permission.BUDGETS_SHARE), async (req, res, next) => {
+  try {
+    const tenantId = req.user!.tenantId!
+    const parsed = shareBudgetSchema.safeParse(req.body)
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        error: 'Validation error',
+        details: parsed.error.flatten().fieldErrors,
+      })
+      return
+    }
+
+    const result = await generateShareToken(tenantId, req.params.id, {
+      expiresInDays: parsed.data.expiresInDays,
+    })
+    if (!result.success) return sendError(res, result.code)
+
+    const baseUrl = env.PUBLIC_WEB_URL.replace(/\/$/, '')
+    res.json({
+      success: true,
+      data: {
+        token: result.data.token,
+        url: `${baseUrl}/budget/${result.data.token}`,
+        expiresAt: result.data.expiresAt,
+      },
+    })
   } catch (e) {
     next(e)
   }

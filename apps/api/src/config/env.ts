@@ -13,6 +13,10 @@ const envSchema = z.object({
   REDIS_URL: z.string().optional(),
   CORS_ORIGIN: z.string().default('*'),
 
+  // Public-facing origin of the apps/web app (landing + public share pages).
+  // Used to build unauthenticated share links (e.g. budget public links).
+  PUBLIC_WEB_URL: z.string().default('http://localhost:5003'),
+
   // JWT Configuration
   JWT_SECRET: z.string().min(32).default('development-secret-change-in-production-min-32-chars'),
   JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
