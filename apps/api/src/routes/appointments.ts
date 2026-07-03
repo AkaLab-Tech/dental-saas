@@ -4,6 +4,8 @@ import React from 'react'
 import { AppointmentStatus } from '@dental/database'
 import { requireMinRole } from '../middleware/auth.js'
 import { requireOwnership } from '../middleware/ownership.js'
+import { hasPermission, Permission } from '../middleware/permissions.js'
+import type { UserRole } from '@dental/shared'
 import {
   listAppointments,
   getAppointmentById,
@@ -17,6 +19,13 @@ import {
   getAppointmentsByDoctor,
   getAppointmentsByPatient,
 } from '../services/appointment.service.js'
+import {
+  setAppointmentBudgetItems,
+  confirmExecutedBudgetItems,
+  validateExecutableBudgetItems,
+  getAppointmentBudgetItems,
+  type BudgetAppointmentErrorCode,
+} from '../services/budget-appointment.service.js'
 import { PdfService } from '../services/pdf.service.js'
 import { AppointmentReceiptPdf } from '../pdfs/AppointmentReceiptPdf.js'
 
@@ -60,6 +69,8 @@ const createAppointmentSchema = z.object({
   privateNotes: z.string().max(5000).optional(),
   cost: costSchema,
   isPaid: z.boolean().optional(),
+  // Replace-set of associated budget items (SCHEDULED). Omit to leave associations untouched.
+  budgetItemIds: z.array(z.string()).optional(),
 })
 
 const updateAppointmentSchema = z.object({
@@ -74,10 +85,14 @@ const updateAppointmentSchema = z.object({
   privateNotes: z.string().max(5000).optional().nullable(),
   cost: costSchema,
   isPaid: z.boolean().optional(),
+  // Replace-set of associated budget items (SCHEDULED). Omit to leave associations untouched.
+  budgetItemIds: z.array(z.string()).optional(),
 })
 
 const markDoneSchema = z.object({
   notes: z.string().max(5000).optional(),
+  // Subset of currently SCHEDULED-linked items to confirm as executed. Omit/empty = confirm none.
+  executedBudgetItemIds: z.array(z.string()).optional(),
 })
 
 // ============================================================================
@@ -87,6 +102,8 @@ const markDoneSchema = z.object({
 function mapErrorCodeToStatus(code: string): number {
   switch (code) {
     case 'NOT_FOUND':
+    case 'APPOINTMENT_NOT_FOUND':
+    case 'ITEM_NOT_FOUND':
       return 404
     case 'INVALID_PATIENT':
     case 'INVALID_DOCTOR':
@@ -99,10 +116,29 @@ function mapErrorCodeToStatus(code: string): number {
     case 'CANNOT_UNMARK_PAID':
     case 'EXCEEDS_BALANCE':
     case 'PAYMENT_FAILED':
+    case 'ITEM_NOT_ELIGIBLE':
+    case 'ITEM_NOT_ASSOCIATED':
       return 400
     default:
       return 400
   }
+}
+
+/**
+ * Budget-item association/confirmation is gated on BUDGETS_UPDATE, layered
+ * on top of the route's existing role gate — only enforced when the caller
+ * actually attempts to touch budget-item links.
+ */
+function canManageBudgetItems(role: string): boolean {
+  return hasPermission(role as UserRole, Permission.BUDGETS_UPDATE)
+}
+
+function sendBudgetItemsError(
+  res: import('express').Response,
+  code: BudgetAppointmentErrorCode
+): void {
+  const status = mapErrorCodeToStatus(code)
+  res.status(status).json({ success: false, error: { code, message: code } })
 }
 
 // ============================================================================
@@ -277,6 +313,26 @@ appointmentsRouter.get('/:id', requireMinRole('STAFF'), async (req, res, next) =
 })
 
 /**
+ * GET /api/appointments/:id/budget-items
+ * List the budget items currently associated to an appointment (any role),
+ * for edit/completion hydration.
+ * Requires: STAFF role or higher
+ */
+appointmentsRouter.get('/:id/budget-items', requireMinRole('STAFF'), async (req, res, next) => {
+  try {
+    const tenantId = req.user!.tenantId
+    const { id } = req.params
+
+    const result = await getAppointmentBudgetItems(tenantId, id)
+    if (!result.success) return sendBudgetItemsError(res, result.code)
+
+    res.json({ success: true, data: result.data })
+  } catch (e) {
+    next(e)
+  }
+})
+
+/**
  * POST /api/appointments
  * Create a new appointment
  * Requires: ADMIN role or higher
@@ -297,9 +353,20 @@ appointmentsRouter.post('/', requireMinRole('CLINIC_ADMIN'), async (req, res, ne
       })
     }
 
+    const { budgetItemIds, ...appointmentData } = parse.data
+
+    if (budgetItemIds !== undefined && !canManageBudgetItems(req.user!.role)) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Insufficient permissions to manage budget items', code: 'FORBIDDEN' },
+      })
+    }
+
+    const userId = req.user!.profileUserId || req.user!.userId
+
     const result = await createAppointment(tenantId, {
-      ...parse.data,
-      createdBy: req.user!.profileUserId || req.user!.userId,
+      ...appointmentData,
+      createdBy: userId,
     })
 
     if (result.error) {
@@ -308,6 +375,16 @@ appointmentsRouter.post('/', requireMinRole('CLINIC_ADMIN'), async (req, res, ne
         success: false,
         error: result.error,
       })
+    }
+
+    if (budgetItemIds !== undefined) {
+      const linkResult = await setAppointmentBudgetItems(
+        tenantId,
+        result.appointment!.id,
+        budgetItemIds,
+        userId
+      )
+      if (!linkResult.success) return sendBudgetItemsError(res, linkResult.code)
     }
 
     res.status(201).json({ success: true, data: result.appointment })
@@ -353,7 +430,16 @@ appointmentsRouter.put('/:id', requireMinRole('DOCTOR'), requireOwnership('appoi
       })
     }
 
-    const result = await updateAppointment(tenantId, id, parse.data)
+    const { budgetItemIds, ...appointmentData } = parse.data
+
+    if (budgetItemIds !== undefined && !canManageBudgetItems(req.user!.role)) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Insufficient permissions to manage budget items', code: 'FORBIDDEN' },
+      })
+    }
+
+    const result = await updateAppointment(tenantId, id, appointmentData)
 
     if (result.error) {
       const status = mapErrorCodeToStatus(result.error.code)
@@ -361,6 +447,12 @@ appointmentsRouter.put('/:id', requireMinRole('DOCTOR'), requireOwnership('appoi
         success: false,
         error: result.error,
       })
+    }
+
+    if (budgetItemIds !== undefined) {
+      const userId = req.user!.profileUserId || req.user!.userId
+      const linkResult = await setAppointmentBudgetItems(tenantId, id, budgetItemIds, userId)
+      if (!linkResult.success) return sendBudgetItemsError(res, linkResult.code)
     }
 
     res.json({ success: true, data: result.appointment })
@@ -392,6 +484,27 @@ appointmentsRouter.put('/:id/mark-done', requireMinRole('CLINIC_ADMIN'), async (
       })
     }
 
+    const { executedBudgetItemIds } = parse.data
+
+    if (
+      executedBudgetItemIds !== undefined &&
+      executedBudgetItemIds.length > 0 &&
+      !canManageBudgetItems(req.user!.role)
+    ) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Insufficient permissions to manage budget items', code: 'FORBIDDEN' },
+      })
+    }
+
+    // Validate the executed-items confirmation up front (no writes) so a
+    // rejected id (e.g. ITEM_NOT_ASSOCIATED) never leaves the appointment
+    // marked done while the confirmation itself fails.
+    if (executedBudgetItemIds !== undefined && executedBudgetItemIds.length > 0) {
+      const validation = await validateExecutableBudgetItems(tenantId, id, executedBudgetItemIds)
+      if (!validation.success) return sendBudgetItemsError(res, validation.code)
+    }
+
     const result = await markAppointmentDone(tenantId, id, parse.data.notes)
 
     if (result.error) {
@@ -400,6 +513,17 @@ appointmentsRouter.put('/:id/mark-done', requireMinRole('CLINIC_ADMIN'), async (
         success: false,
         error: result.error,
       })
+    }
+
+    if (executedBudgetItemIds !== undefined && executedBudgetItemIds.length > 0) {
+      const userId = req.user!.profileUserId || req.user!.userId
+      const confirmResult = await confirmExecutedBudgetItems(
+        tenantId,
+        id,
+        executedBudgetItemIds,
+        userId
+      )
+      if (!confirmResult.success) return sendBudgetItemsError(res, confirmResult.code)
     }
 
     res.json({ success: true, data: result.appointment })

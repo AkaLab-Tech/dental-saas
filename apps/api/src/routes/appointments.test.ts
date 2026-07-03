@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import request from 'supertest'
 import { app } from '../app.js'
 import { prisma } from '@dental/database'
@@ -1688,6 +1688,562 @@ describe('Appointments API', () => {
 
       expect(response.status).toBe(400)
       expect(response.body.error.code).toBe('INVALID_DOCTOR')
+    })
+  })
+
+  // ============================================================================
+  // BUDGET ITEM ASSOCIATION TESTS (PR D-1)
+  // ============================================================================
+
+  describe('Budget item association (PR D-1)', () => {
+    let doctorUserId: string
+    let doctorToken: string
+    let linkedDoctorId: string
+    let otherTenantId: string
+    let otherTenantBudgetItemId: string
+
+    beforeAll(async () => {
+      const passwordHash = await hashPassword('DoctorPass123!')
+      const doctorUser = await prisma.user.create({
+        data: {
+          email: 'doctor-budget-appt@test.com',
+          passwordHash,
+          firstName: 'Doc',
+          lastName: 'Budget',
+          role: 'DOCTOR',
+          tenantId,
+        },
+      })
+      doctorUserId = doctorUser.id
+      // Production access tokens carry `userId` (TokenPayload) — the ownership
+      // middleware and route handlers read req.user.userId, not `sub`.
+      doctorToken = sign({ userId: doctorUserId, tenantId, role: 'DOCTOR' }, JWT_SECRET, {
+        expiresIn: '1h',
+      })
+
+      const linkedDoctor = await prisma.doctor.create({
+        data: {
+          tenantId,
+          firstName: 'Linked',
+          lastName: 'Doctor',
+          email: 'linked-doctor-budget@test.com',
+          userId: doctorUserId,
+        },
+      })
+      linkedDoctorId = linkedDoctor.id
+
+      // Second tenant, used only for the cross-tenant item guard.
+      const otherTenant = await prisma.tenant.create({
+        data: { name: 'Other Budget Clinic', slug: `other-budget-appt-clinic-${Date.now()}` },
+      })
+      otherTenantId = otherTenant.id
+      const otherPatient = await prisma.patient.create({
+        data: { tenantId: otherTenantId, firstName: 'Other', lastName: 'Patient' },
+      })
+      const otherBudget = await prisma.budget.create({
+        data: { tenantId: otherTenantId, patientId: otherPatient.id, status: 'APPROVED' },
+      })
+      const otherItem = await prisma.budgetItem.create({
+        data: {
+          budgetId: otherBudget.id,
+          description: 'Other tenant item',
+          quantity: 1,
+          unitPrice: 100,
+          totalPrice: 100,
+          status: 'PENDING',
+          order: 0,
+        },
+      })
+      otherTenantBudgetItemId = otherItem.id
+    })
+
+    afterAll(async () => {
+      await prisma.budget.deleteMany({ where: { tenantId: otherTenantId } })
+      await prisma.patient.deleteMany({ where: { tenantId: otherTenantId } })
+      await prisma.tenant.delete({ where: { id: otherTenantId } }).catch(() => {})
+
+      await prisma.doctor.delete({ where: { id: linkedDoctorId } }).catch(() => {})
+      await prisma.refreshToken.deleteMany({ where: { userId: doctorUserId } })
+      await prisma.user.delete({ where: { id: doctorUserId } }).catch(() => {})
+    })
+
+    afterEach(async () => {
+      await prisma.budget.deleteMany({ where: { tenantId } })
+    })
+
+    /** APPROVED budget with `itemCount` PENDING items, each worth 100. */
+    async function createApprovedBudget(itemCount = 2) {
+      return prisma.budget.create({
+        data: {
+          tenantId,
+          patientId,
+          status: 'APPROVED',
+          items: {
+            create: Array.from({ length: itemCount }, (_, i) => ({
+              description: `Item ${i + 1}`,
+              quantity: 1,
+              unitPrice: 100,
+              totalPrice: 100,
+              order: i,
+            })),
+          },
+        },
+        include: { items: { orderBy: { order: 'asc' } } },
+      })
+    }
+
+    it('authoritative full-flow: APPROVED budget -> SCHEDULED on create -> PARTIAL after one execution -> COMPLETED after both', async () => {
+      const budget = await createApprovedBudget(2)
+      const [itemA, itemB] = budget.items
+      const times = getFutureTime(3)
+
+      const createRes = await request(app)
+        .post('/api/appointments')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ patientId, doctorId, ...times, budgetItemIds: [itemA.id, itemB.id] })
+
+      expect(createRes.status).toBe(201)
+      const apptId = createRes.body.data.id
+
+      const scheduledLinks = await prisma.budgetItemAppointment.findMany({
+        where: { appointmentId: apptId },
+      })
+      expect(scheduledLinks).toHaveLength(2)
+      expect(scheduledLinks.every((l) => l.role === 'SCHEDULED')).toBe(true)
+
+      const itemsAfterCreate = await prisma.budgetItem.findMany({
+        where: { budgetId: budget.id },
+        orderBy: { order: 'asc' },
+      })
+      expect(itemsAfterCreate.map((i) => i.status)).toEqual(['SCHEDULED', 'SCHEDULED'])
+
+      // Confirm only item A as executed at mark-done time.
+      const markDoneRes = await request(app)
+        .put(`/api/appointments/${apptId}/mark-done`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ executedBudgetItemIds: [itemA.id] })
+
+      expect(markDoneRes.status).toBe(200)
+      expect(markDoneRes.body.data.status).toBe('COMPLETED')
+
+      const itemAAfter = await prisma.budgetItem.findUnique({ where: { id: itemA.id } })
+      const itemBAfter = await prisma.budgetItem.findUnique({ where: { id: itemB.id } })
+      expect(itemAAfter?.status).toBe('EXECUTED')
+      expect(itemBAfter?.status).toBe('SCHEDULED')
+
+      const itemALinks = await prisma.budgetItemAppointment.findMany({
+        where: { budgetItemId: itemA.id, appointmentId: apptId },
+      })
+      expect(itemALinks.map((l) => l.role).sort()).toEqual(['EXECUTED', 'SCHEDULED'])
+
+      const budgetAfterFirst = await prisma.budget.findUnique({ where: { id: budget.id } })
+      expect(budgetAfterFirst?.status).toBe('PARTIAL')
+
+      // Confirm the second item too.
+      const confirmSecond = await request(app)
+        .put(`/api/appointments/${apptId}/mark-done`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ executedBudgetItemIds: [itemB.id] })
+
+      expect(confirmSecond.status).toBe(200)
+
+      const budgetAfterSecond = await prisma.budget.findUnique({ where: { id: budget.id } })
+      expect(budgetAfterSecond?.status).toBe('COMPLETED')
+    })
+
+    it('replace-set: budgetItemIds on update links items to SCHEDULED', async () => {
+      const budget = await createApprovedBudget(1)
+      const [item] = budget.items
+      const times = getFutureTime(1)
+      const appt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          duration: 30,
+        },
+      })
+
+      const res = await request(app)
+        .put(`/api/appointments/${appt.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ budgetItemIds: [item.id] })
+
+      expect(res.status).toBe(200)
+      const updatedItem = await prisma.budgetItem.findUnique({ where: { id: item.id } })
+      expect(updatedItem?.status).toBe('SCHEDULED')
+    })
+
+    it('replace-set: omitting budgetItemIds on update leaves existing associations untouched', async () => {
+      const budget = await createApprovedBudget(1)
+      const [item] = budget.items
+      const times = getFutureTime(1)
+      const appt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          duration: 30,
+        },
+      })
+      await request(app)
+        .put(`/api/appointments/${appt.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ budgetItemIds: [item.id] })
+
+      const res = await request(app)
+        .put(`/api/appointments/${appt.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ notes: 'No budgetItemIds field in this payload' })
+
+      expect(res.status).toBe(200)
+      const item2 = await prisma.budgetItem.findUnique({ where: { id: item.id } })
+      expect(item2?.status).toBe('SCHEDULED')
+      const links = await prisma.budgetItemAppointment.findMany({ where: { budgetItemId: item.id } })
+      expect(links).toHaveLength(1)
+    })
+
+    it('replace-set: budgetItemIds=[] clears SCHEDULED associations and reverts PENDING, but not an EXECUTED item', async () => {
+      const budget = await createApprovedBudget(2)
+      const [itemA, itemB] = budget.items
+      const times = getFutureTime(1)
+      const appt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          duration: 30,
+        },
+      })
+      await request(app)
+        .put(`/api/appointments/${appt.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ budgetItemIds: [itemA.id, itemB.id] })
+      // Execute item A before clearing.
+      await request(app)
+        .put(`/api/appointments/${appt.id}/mark-done`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ executedBudgetItemIds: [itemA.id] })
+
+      const res = await request(app)
+        .put(`/api/appointments/${appt.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ budgetItemIds: [] })
+
+      expect(res.status).toBe(200)
+      const itemAAfter = await prisma.budgetItem.findUnique({ where: { id: itemA.id } })
+      const itemBAfter = await prisma.budgetItem.findUnique({ where: { id: itemB.id } })
+      // Executed item is never un-executed by unassociation.
+      expect(itemAAfter?.status).toBe('EXECUTED')
+      // Plain SCHEDULED item reverts to PENDING.
+      expect(itemBAfter?.status).toBe('PENDING')
+      const bLinks = await prisma.budgetItemAppointment.findMany({ where: { budgetItemId: itemB.id } })
+      expect(bLinks).toHaveLength(0)
+    })
+
+    it('mark-done with an omitted executedBudgetItemIds leaves associated items SCHEDULED (no auto-execution)', async () => {
+      const budget = await createApprovedBudget(1)
+      const [item] = budget.items
+      const times = getFutureTime(1)
+      const appt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          duration: 30,
+          status: 'IN_PROGRESS',
+        },
+      })
+      await request(app)
+        .put(`/api/appointments/${appt.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ budgetItemIds: [item.id] })
+
+      const res = await request(app)
+        .put(`/api/appointments/${appt.id}/mark-done`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({})
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.status).toBe('COMPLETED')
+      const itemAfter = await prisma.budgetItem.findUnique({ where: { id: item.id } })
+      expect(itemAfter?.status).toBe('SCHEDULED')
+    })
+
+    it('mark-done with executedBudgetItemIds=[] leaves associated items SCHEDULED (no auto-execution)', async () => {
+      const budget = await createApprovedBudget(1)
+      const [item] = budget.items
+      const times = getFutureTime(1)
+      const appt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          duration: 30,
+        },
+      })
+      await request(app)
+        .put(`/api/appointments/${appt.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ budgetItemIds: [item.id] })
+
+      const res = await request(app)
+        .put(`/api/appointments/${appt.id}/mark-done`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ executedBudgetItemIds: [] })
+
+      expect(res.status).toBe(200)
+      const itemAfter = await prisma.budgetItem.findUnique({ where: { id: item.id } })
+      expect(itemAfter?.status).toBe('SCHEDULED')
+    })
+
+    it('mark-done rejects an executedBudgetItemIds entry not associated to the appointment (400 ITEM_NOT_ASSOCIATED)', async () => {
+      const budget = await createApprovedBudget(1)
+      const [item] = budget.items
+      const times = getFutureTime(1)
+      const appt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          duration: 30,
+        },
+      })
+      // Never associated to this appointment.
+
+      const res = await request(app)
+        .put(`/api/appointments/${appt.id}/mark-done`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ executedBudgetItemIds: [item.id] })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error.code).toBe('ITEM_NOT_ASSOCIATED')
+      // executedBudgetItemIds is pre-validated (read-only) before
+      // markAppointmentDone runs, so a rejected id leaves the appointment
+      // entirely untouched at its prior (pre-call) status.
+      const appointment = await prisma.appointment.findUnique({ where: { id: appt.id } })
+      expect(appointment?.status).toBe('SCHEDULED')
+    })
+
+    it('mark-done with a valid executedBudgetItemIds subset still succeeds after pre-validation (happy path)', async () => {
+      const budget = await createApprovedBudget(2)
+      const [itemA, itemB] = budget.items
+      const times = getFutureTime(1)
+      const appt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          duration: 30,
+        },
+      })
+      await request(app)
+        .put(`/api/appointments/${appt.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ budgetItemIds: [itemA.id, itemB.id] })
+
+      const res = await request(app)
+        .put(`/api/appointments/${appt.id}/mark-done`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ executedBudgetItemIds: [itemA.id] })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.status).toBe('COMPLETED')
+
+      const appointment = await prisma.appointment.findUnique({ where: { id: appt.id } })
+      expect(appointment?.status).toBe('COMPLETED')
+
+      const itemAAfter = await prisma.budgetItem.findUnique({ where: { id: itemA.id } })
+      const itemBAfter = await prisma.budgetItem.findUnique({ where: { id: itemB.id } })
+      expect(itemAAfter?.status).toBe('EXECUTED')
+      expect(itemBAfter?.status).toBe('SCHEDULED')
+    })
+
+    it('associating an EXECUTED item via update is rejected (400 ITEM_NOT_ELIGIBLE)', async () => {
+      const budget = await createApprovedBudget(1)
+      const [item] = budget.items
+      await prisma.budgetItem.update({ where: { id: item.id }, data: { status: 'EXECUTED' } })
+      const times = getFutureTime(1)
+      const appt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          duration: 30,
+        },
+      })
+
+      const res = await request(app)
+        .put(`/api/appointments/${appt.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ budgetItemIds: [item.id] })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error.code).toBe('ITEM_NOT_ELIGIBLE')
+    })
+
+    it('associating an item from another tenant is rejected (404 ITEM_NOT_FOUND) and does not partially apply', async () => {
+      const budget = await createApprovedBudget(1)
+      const [validItem] = budget.items
+      const times = getFutureTime(1)
+      const appt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          duration: 30,
+        },
+      })
+
+      const res = await request(app)
+        .put(`/api/appointments/${appt.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ budgetItemIds: [validItem.id, otherTenantBudgetItemId] })
+
+      expect(res.status).toBe(404)
+      expect(res.body.error.code).toBe('ITEM_NOT_FOUND')
+
+      // Rollback: the valid id from this tenant must not have been linked either.
+      const getRes = await request(app)
+        .get(`/api/appointments/${appt.id}/budget-items`)
+        .set('Authorization', `Bearer ${adminToken}`)
+      expect(getRes.status).toBe(200)
+      expect(getRes.body.data).toEqual([])
+      const validItemAfter = await prisma.budgetItem.findUnique({ where: { id: validItem.id } })
+      expect(validItemAfter?.status).toBe('PENDING')
+    })
+
+    it('returns 404 APPOINTMENT_NOT_FOUND from GET /:id/budget-items for a non-existent appointment', async () => {
+      const res = await request(app)
+        .get('/api/appointments/does-not-exist/budget-items')
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(404)
+      expect(res.body.error.code).toBe('APPOINTMENT_NOT_FOUND')
+    })
+
+    it('GET /:id/budget-items returns the associated items with their roles', async () => {
+      const budget = await createApprovedBudget(1)
+      const [item] = budget.items
+      const times = getFutureTime(1)
+      const appt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          duration: 30,
+        },
+      })
+      await request(app)
+        .put(`/api/appointments/${appt.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ budgetItemIds: [item.id] })
+
+      const res = await request(app)
+        .get(`/api/appointments/${appt.id}/budget-items`)
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data).toHaveLength(1)
+      expect(res.body.data[0].id).toBe(item.id)
+      expect(res.body.data[0].roles).toEqual(['SCHEDULED'])
+    })
+
+    it('STAFF is 403 when supplying budgetItemIds on update (STAFF cannot reach the mutating route at all)', async () => {
+      const budget = await createApprovedBudget(1)
+      const [item] = budget.items
+      const times = getFutureTime(1)
+      const appt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          duration: 30,
+        },
+      })
+
+      const res = await request(app)
+        .put(`/api/appointments/${appt.id}`)
+        .set('Authorization', `Bearer ${staffToken}`)
+        .send({ budgetItemIds: [item.id] })
+
+      expect(res.status).toBe(403)
+      const itemAfter = await prisma.budgetItem.findUnique({ where: { id: item.id } })
+      expect(itemAfter?.status).toBe('PENDING')
+    })
+
+    it('STAFF is 403 when supplying executedBudgetItemIds on mark-done', async () => {
+      const budget = await createApprovedBudget(1)
+      const [item] = budget.items
+      const times = getFutureTime(1)
+      const appt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          duration: 30,
+        },
+      })
+      await request(app)
+        .put(`/api/appointments/${appt.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ budgetItemIds: [item.id] })
+
+      const res = await request(app)
+        .put(`/api/appointments/${appt.id}/mark-done`)
+        .set('Authorization', `Bearer ${staffToken}`)
+        .send({ executedBudgetItemIds: [item.id] })
+
+      expect(res.status).toBe(403)
+    })
+
+    it('DOCTOR with BUDGETS_UPDATE can attach budget items via PUT /:id on an appointment they are assigned to', async () => {
+      const budget = await createApprovedBudget(1)
+      const [item] = budget.items
+      const times = getFutureTime(1)
+      const appt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId: linkedDoctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          duration: 30,
+        },
+      })
+
+      const res = await request(app)
+        .put(`/api/appointments/${appt.id}`)
+        .set('Authorization', `Bearer ${doctorToken}`)
+        .send({ budgetItemIds: [item.id] })
+
+      expect(res.status).toBe(200)
+      const itemAfter = await prisma.budgetItem.findUnique({ where: { id: item.id } })
+      expect(itemAfter?.status).toBe('SCHEDULED')
     })
   })
 })

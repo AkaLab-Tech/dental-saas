@@ -156,8 +156,10 @@ function deriveBudgetStatus(
 
 /**
  * Recompute Budget.totalAmount and Budget.status atomically.
+ * Exported for reuse by services that mutate BudgetItem.status as a side
+ * effect of another entity's lifecycle (e.g. appointment↔budget-item links).
  */
-async function recalculateBudgetAggregates(
+export async function recalculateBudgetAggregates(
   tx: Prisma.TransactionClient,
   budgetId: string
 ): Promise<void> {
