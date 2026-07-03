@@ -23,9 +23,11 @@ import {
   formatCost,
   isAppointmentApiError,
   getAppointmentApiErrorMessage,
+  getAppointmentBudgetItems,
   type Appointment,
   type AppointmentStats,
   type AppointmentStatus,
+  type AppointmentBudgetItemSummary,
 } from './appointment-api'
 import { apiClient } from './api'
 
@@ -374,6 +376,24 @@ describe('appointment-api', () => {
         })
       ).rejects.toThrow('Time conflict')
     })
+
+    it('should pass budgetItemIds through to the request body', async () => {
+      vi.mocked(apiClient.post).mockResolvedValue({
+        data: { success: true, data: mockAppointment },
+      })
+
+      const createData = {
+        patientId: 'patient-789',
+        doctorId: 'doctor-012',
+        startTime: '2024-01-20T10:00:00Z',
+        endTime: '2024-01-20T10:30:00Z',
+        budgetItemIds: ['item-1', 'item-2'],
+      }
+
+      await createAppointment(createData)
+
+      expect(apiClient.post).toHaveBeenCalledWith('/appointments', createData)
+    })
   })
 
   describe('updateAppointment', () => {
@@ -407,6 +427,16 @@ describe('appointment-api', () => {
       await expect(updateAppointment('apt-123', { status: 'CONFIRMED' })).rejects.toThrow(
         'Update failed'
       )
+    })
+
+    it('should send an empty budgetItemIds array to clear associations', async () => {
+      vi.mocked(apiClient.put).mockResolvedValue({
+        data: { success: true, data: mockAppointment },
+      })
+
+      await updateAppointment('apt-123', { budgetItemIds: [] })
+
+      expect(apiClient.put).toHaveBeenCalledWith('/appointments/apt-123', { budgetItemIds: [] })
     })
   })
 
@@ -476,6 +506,66 @@ describe('appointment-api', () => {
         notes: 'Procedure completed successfully',
       })
       expect(result.notes).toBe('Procedure completed successfully')
+    })
+  })
+
+  describe('getAppointmentBudgetItems', () => {
+    const mockBudgetItems: AppointmentBudgetItemSummary[] = [
+      {
+        id: 'item-1',
+        budgetId: 'budget-1',
+        description: 'Cleaning',
+        toothNumber: null,
+        quantity: 1,
+        unitPrice: '80',
+        totalPrice: '80',
+        plannedAppointmentType: null,
+        status: 'SCHEDULED',
+        notes: null,
+        order: 0,
+        roles: ['SCHEDULED'],
+      },
+      {
+        id: 'item-2',
+        budgetId: 'budget-1',
+        description: 'Filling',
+        toothNumber: '14',
+        quantity: 1,
+        unitPrice: '120',
+        totalPrice: '120',
+        plannedAppointmentType: null,
+        status: 'EXECUTED',
+        notes: null,
+        order: 1,
+        roles: ['SCHEDULED', 'EXECUTED'],
+      },
+    ]
+
+    it('should fetch the budget items associated to an appointment', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: mockBudgetItems },
+      })
+
+      const result = await getAppointmentBudgetItems('apt-123')
+
+      expect(apiClient.get).toHaveBeenCalledWith('/appointments/apt-123/budget-items')
+      expect(result).toEqual(mockBudgetItems)
+    })
+
+    it('should return an empty array when no items are associated', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [] },
+      })
+
+      const result = await getAppointmentBudgetItems('apt-456')
+
+      expect(result).toEqual([])
+    })
+
+    it('should throw error on fetch failure', async () => {
+      vi.mocked(apiClient.get).mockRejectedValue(new Error('Not found'))
+
+      await expect(getAppointmentBudgetItems('apt-999')).rejects.toThrow('Not found')
     })
   })
 

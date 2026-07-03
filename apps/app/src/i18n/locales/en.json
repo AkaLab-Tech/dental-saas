@@ -102,6 +102,12 @@
       "isPaidHint": "When checked, a payment is recorded and applied to the patient's oldest outstanding balance.",
       "alreadyPaidHint": "To reverse the payment, delete the corresponding entry from the payments section."
     },
+    "budgetItems": {
+      "title": "Budget items",
+      "selectHint": "Select the budget items that will be addressed in this appointment.",
+      "empty": "This patient has no budget items available to associate.",
+      "loading": "Loading budget items..."
+    },
     "errors": {
       "timeConflict": "This doctor already has an appointment at this time. Please select a different time or doctor.",
       "invalidPatient": "The selected patient is not valid.",

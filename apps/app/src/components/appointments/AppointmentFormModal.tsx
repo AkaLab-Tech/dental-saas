@@ -1,14 +1,39 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { X, Loader2, Calendar, Clock, User, Stethoscope, AlertCircle } from 'lucide-react'
-import type { Appointment, CreateAppointmentData, UpdateAppointmentData, AppointmentStatus } from '../../lib/appointment-api'
-import { getStatusLabel } from '../../lib/appointment-api'
+import { useTranslation } from 'react-i18next'
+import { X, Loader2, Calendar, Clock, User, Stethoscope, AlertCircle, ClipboardList } from 'lucide-react'
+import type {
+  Appointment,
+  CreateAppointmentData,
+  UpdateAppointmentData,
+  AppointmentStatus,
+  AppointmentBudgetItemSummary,
+} from '../../lib/appointment-api'
+import { getStatusLabel, getAppointmentBudgetItems } from '../../lib/appointment-api'
 import * as patientApi from '../../lib/patient-api'
 import * as doctorApi from '../../lib/doctor-api'
-import { formatDateForInput } from '../../lib/format'
+import { listBudgetsByPatient, type BudgetItem } from '../../lib/budget-api'
+import { formatDateForInput, formatCurrency } from '../../lib/format'
 import { PatientSearchCombobox, type PatientOption } from '../ui/PatientSearchCombobox'
+import { useAuthStore } from '../../stores/auth.store'
+
+interface EligibleBudgetItem {
+  id: string
+  budgetId: string
+  description: string
+  toothNumber: string | null
+  status: 'PENDING' | 'SCHEDULED'
+  unitPrice: string
+  totalPrice: string
+  quantity: number
+}
+
+const BUDGET_ITEM_STATUS_STYLES: Record<'PENDING' | 'SCHEDULED', string> = {
+  PENDING: 'bg-gray-100 text-gray-700 border-gray-200',
+  SCHEDULED: 'bg-blue-100 text-blue-700 border-blue-200',
+}
 
 const APPOINTMENT_STATUSES: AppointmentStatus[] = [
   'SCHEDULED',
@@ -72,11 +97,13 @@ export function AppointmentFormModal({
   defaultPatientId,
   error: externalError,
 }: AppointmentFormModalProps) {
+  const { t } = useTranslation()
   const modalTitleId = useId()
   const isEditing = !!appointment
   // When editing an already-paid appointment, the checkbox must be locked:
   // the FIFO payment can only be reversed by deleting the underlying PatientPayment.
   const isAlreadyPaid = isEditing && !!appointment?.isPaid
+  const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
 
   // State for doctor options
   const [doctors, setDoctors] = useState<DoctorOption[]>([])
@@ -85,12 +112,22 @@ export function AppointmentFormModal({
   // Selected patient state for the combobox
   const [selectedPatient, setSelectedPatient] = useState<PatientOption | null>(null)
 
+  // Budget items eligible for association (patient's non-CANCELLED budgets,
+  // items in PENDING/SCHEDULED) and the current checkbox selection.
+  const [budgetItems, setBudgetItems] = useState<EligibleBudgetItem[]>([])
+  const [selectedBudgetItemIds, setSelectedBudgetItemIds] = useState<string[]>([])
+  const [loadingBudgetItems, setLoadingBudgetItems] = useState(false)
+  // Tracks the last patientId a fetch ran for, so a same-patient re-render
+  // (e.g. options finishing load) doesn't wipe out the user's selection.
+  const lastBudgetPatientIdRef = useRef<string | null>(null)
+
   const {
     register,
     handleSubmit,
     reset,
     setValue,
-    formState: { errors, isSubmitting },
+    watch,
+    formState: { errors, isSubmitting, dirtyFields },
   } = useForm<FormData>({
     resolver: zodResolver(appointmentFormSchemaInput),
     defaultValues: {
@@ -106,6 +143,8 @@ export function AppointmentFormModal({
       status: 'SCHEDULED',
     },
   })
+
+  const watchedPatientId = watch('patientId')
 
   // Fetch doctors (and resolve patient name if needed) when modal opens
   useEffect(() => {
@@ -137,42 +176,68 @@ export function AppointmentFormModal({
     }
   }
 
-  // Reset form when appointment changes or modal opens (after options are loaded)
-  useEffect(() => {
-    if (isOpen && !loadingOptions) {
-      if (appointment) {
-        const startDate = new Date(appointment.startTime)
-        const endDate = new Date(appointment.endTime)
+  // Reset form once per modal-open for a given appointment identity. Must NOT
+  // depend on loadingOptions: that flag flips true->false when getDoctors()
+  // resolves, and re-running reset() on that transition would wipe out
+  // whatever the user already typed/selected (patient, budget items) while
+  // the doctors list was still loading.
+  const resetIdentityRef = useRef<string | null>(null)
 
-        reset({
-          patientId: appointment.patientId,
-          doctorId: appointment.doctorId,
-          date: formatDateForInput(startDate),
-          startTime: formatTimeForInput(startDate),
-          endTime: formatTimeForInput(endDate),
-          type: appointment.type || '',
-          notes: appointment.notes || '',
-          cost: appointment.cost?.toString() || '',
-          isPaid: appointment.isPaid || false,
-          status: appointment.status,
-        })
-      } else {
-        const dateToUse = defaultDate || new Date()
-        reset({
-          patientId: defaultPatientId || '',
-          doctorId: '',
-          date: formatDateForInput(dateToUse),
-          startTime: '09:00',
-          endTime: '09:30',
-          type: '',
-          notes: '',
-          cost: '',
-          isPaid: false,
-          status: 'SCHEDULED',
-        })
-      }
+  useEffect(() => {
+    if (!isOpen) {
+      resetIdentityRef.current = null
+      return
     }
-  }, [appointment, isOpen, defaultDate, defaultPatientId, reset, loadingOptions])
+
+    const identity = appointment?.id ?? 'new'
+    if (resetIdentityRef.current === identity) return
+    resetIdentityRef.current = identity
+
+    if (appointment) {
+      const startDate = new Date(appointment.startTime)
+      const endDate = new Date(appointment.endTime)
+
+      reset({
+        patientId: appointment.patientId,
+        doctorId: appointment.doctorId,
+        date: formatDateForInput(startDate),
+        startTime: formatTimeForInput(startDate),
+        endTime: formatTimeForInput(endDate),
+        type: appointment.type || '',
+        notes: appointment.notes || '',
+        cost: appointment.cost?.toString() || '',
+        isPaid: appointment.isPaid || false,
+        status: appointment.status,
+      })
+    } else {
+      const dateToUse = defaultDate || new Date()
+      reset({
+        patientId: defaultPatientId || '',
+        doctorId: '',
+        date: formatDateForInput(dateToUse),
+        startTime: '09:00',
+        endTime: '09:30',
+        type: '',
+        notes: '',
+        cost: '',
+        isPaid: false,
+        status: 'SCHEDULED',
+      })
+    }
+  }, [appointment, isOpen, defaultDate, defaultPatientId, reset])
+
+  // Re-apply the doctor pre-selection once the doctors list finishes loading.
+  // On a cold edit-mount, the identity-gated reset() above can run before
+  // getDoctors() resolves, so RHF sets the <select>'s value imperatively
+  // against a DOM with no matching <option> yet and the browser drops it to
+  // ''. This only re-applies the doctorId (never other fields) and only
+  // while the user hasn't touched it themselves, so it can't clobber
+  // in-progress edits made elsewhere in the form while doctors were loading.
+  useEffect(() => {
+    if (!isOpen || loadingOptions || !appointment) return
+    if (dirtyFields.doctorId) return
+    setValue('doctorId', appointment.doctorId, { shouldDirty: false })
+  }, [isOpen, loadingOptions, appointment, dirtyFields.doctorId, setValue])
 
   // Clear selected patient when modal closes
   useEffect(() => {
@@ -180,6 +245,83 @@ export function AppointmentFormModal({
       setSelectedPatient(null)
     }
   }, [isOpen])
+
+  // Load the selected patient's eligible budget items whenever the patient
+  // changes. On the first load for an appointment being edited, also hydrate
+  // the pre-selection from the items currently SCHEDULED against it.
+  useEffect(() => {
+    if (!isOpen || !watchedPatientId) {
+      setBudgetItems([])
+      setSelectedBudgetItemIds([])
+      lastBudgetPatientIdRef.current = null
+      return
+    }
+
+    const isNewPatient = lastBudgetPatientIdRef.current !== watchedPatientId
+    let cancelled = false
+    setLoadingBudgetItems(true)
+
+    const load = async () => {
+      try {
+        const [{ data: budgets }, associated] = await Promise.all([
+          listBudgetsByPatient(watchedPatientId, { limit: 100 }),
+          isEditing && appointment && appointment.patientId === watchedPatientId
+            ? getAppointmentBudgetItems(appointment.id)
+            : Promise.resolve<AppointmentBudgetItemSummary[]>([]),
+        ])
+        if (cancelled) return
+
+        const eligible: EligibleBudgetItem[] = budgets
+          .filter((budget) => budget.status !== 'CANCELLED')
+          .flatMap((budget) =>
+            budget.items
+              .filter((item): item is BudgetItem & { status: 'PENDING' | 'SCHEDULED' } =>
+                item.status === 'PENDING' || item.status === 'SCHEDULED'
+              )
+              .map((item) => ({
+                id: item.id,
+                budgetId: budget.id,
+                description: item.description,
+                toothNumber: item.toothNumber,
+                status: item.status,
+                unitPrice: item.unitPrice,
+                totalPrice: item.totalPrice,
+                quantity: item.quantity,
+              }))
+          )
+
+        setBudgetItems(eligible)
+
+        if (isNewPatient) {
+          const preselected = associated
+            .filter((item) => item.roles.includes('SCHEDULED'))
+            .map((item) => item.id)
+          setSelectedBudgetItemIds(preselected)
+        }
+      } catch (error) {
+        console.error('Error fetching budget items:', error)
+        if (!cancelled) {
+          setBudgetItems([])
+          if (isNewPatient) setSelectedBudgetItemIds([])
+        }
+      } finally {
+        if (!cancelled) setLoadingBudgetItems(false)
+      }
+    }
+
+    load()
+    lastBudgetPatientIdRef.current = watchedPatientId
+
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, watchedPatientId, isEditing, appointment])
+
+  const toggleBudgetItem = (itemId: string) => {
+    setSelectedBudgetItemIds((prev) =>
+      prev.includes(itemId) ? prev.filter((id) => id !== itemId) : [...prev, itemId]
+    )
+  }
 
   // Handle Escape key
   useEffect(() => {
@@ -209,6 +351,13 @@ export function AppointmentFormModal({
       cost: data.cost ? parseFloat(data.cost) : undefined,
       isPaid: data.isPaid || undefined,
       status: data.status || undefined,
+      // Edit always sends the current selection as the replace-set (an empty
+      // array unassociates everything); create only sends it when non-empty.
+      budgetItemIds: isEditing
+        ? selectedBudgetItemIds
+        : selectedBudgetItemIds.length > 0
+          ? selectedBudgetItemIds
+          : undefined,
     }
 
     await onSubmit(appointmentData)
@@ -428,6 +577,56 @@ export function AppointmentFormModal({
                   )}
                 </div>
               </div>
+
+              {/* Budget items */}
+              {watchedPatientId && (
+                <div>
+                  <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
+                    <ClipboardList className="h-4 w-4" />
+                    {t('appointments.budgetItems.title')}
+                  </label>
+                  <p className="text-xs text-gray-500 mb-2">{t('appointments.budgetItems.selectHint')}</p>
+
+                  {loadingBudgetItems ? (
+                    <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {t('appointments.budgetItems.loading')}
+                    </div>
+                  ) : budgetItems.length === 0 ? (
+                    <p className="text-sm text-gray-500 italic py-1">{t('appointments.budgetItems.empty')}</p>
+                  ) : (
+                    <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-48 overflow-y-auto">
+                      {budgetItems.map((item) => (
+                        <label
+                          key={item.id}
+                          className="flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedBudgetItemIds.includes(item.id)}
+                            onChange={() => toggleBudgetItem(item.id)}
+                            className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <span className="flex-1 min-w-0">
+                            <span className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium text-gray-900">{item.description}</span>
+                              <span
+                                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${BUDGET_ITEM_STATUS_STYLES[item.status]}`}
+                              >
+                                {t(`budgets.itemStatus.${item.status}`)}
+                              </span>
+                            </span>
+                            <span className="block text-xs text-gray-500 mt-0.5">
+                              {item.toothNumber && `${t('budgets.items.toothNumber')}: ${item.toothNumber} · `}
+                              {formatCurrency(Number(item.totalPrice), currency)}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Notes */}
               <div>
