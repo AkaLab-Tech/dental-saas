@@ -18,6 +18,11 @@ RUN pnpm install --frozen-lockfile
 FROM base AS builder
 ARG VITE_APP_URL
 ENV VITE_APP_URL=$VITE_APP_URL
+# VITE_API_URL is baked into the bundle at build time; the public budget
+# share page (/budget/:token) calls the API through it. Without this, the
+# build falls back to http://localhost:5001 and the public page fails in prod.
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
 
 # NOTE: Using stage index (1) instead of name due to Coolify ARG injection issues
 COPY --from=1 /app/node_modules ./node_modules
