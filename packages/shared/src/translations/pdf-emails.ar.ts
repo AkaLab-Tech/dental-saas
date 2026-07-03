@@ -38,6 +38,38 @@ export default {
       "pending": "معلق",
       "informationalNotice": "هذا المستند للأغراض الإعلامية فقط."
     },
+    "budget": {
+      "title": "ميزانية العلاج",
+      "budgetFor": "ميزانية لـ",
+      "validUntil": "صالحة حتى",
+      "createdOn": "أُنشئت في",
+      "table": {
+        "item": "#",
+        "description": "الوصف",
+        "tooth": "السن",
+        "qty": "الكمية",
+        "unitPrice": "سعر الوحدة",
+        "lineTotal": "الإجمالي",
+        "status": "الحالة"
+      },
+      "total": "الإجمالي",
+      "notes": "ملاحظات",
+      "status": {
+        "DRAFT": "مسودة",
+        "APPROVED": "معتمدة",
+        "PARTIAL": "جزئية",
+        "COMPLETED": "مكتملة",
+        "CANCELLED": "ملغاة"
+      },
+      "itemStatus": {
+        "PENDING": "معلّق",
+        "SCHEDULED": "مجدول",
+        "IN_PROGRESS": "قيد التنفيذ",
+        "EXECUTED": "منفذ",
+        "CANCELLED": "ملغى"
+      },
+      "footer": "هذه الميزانية هي تقدير وقد تخضع للتغيير."
+    },
     "common": {
       "generatedOn": "تم الإنشاء في",
       "at": "الساعة",

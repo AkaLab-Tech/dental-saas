@@ -10,6 +10,10 @@ import {
   Plus,
   Save,
   X,
+  Download,
+  Share2,
+  Copy,
+  Check,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Permission } from '@dental/shared'
@@ -19,12 +23,14 @@ import type {
   BudgetStatus,
   BudgetItemStatus,
 } from '@/lib/budget-api'
-import { getExecutedItemsCount } from '@/lib/budget-api'
+import { getExecutedItemsCount, shareBudget } from '@/lib/budget-api'
+import { downloadBudgetPdf } from '@/lib/pdf-api'
 import { useBudgetsStore } from '@/stores/budgets.store'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAuthStore } from '@/stores/auth.store'
 import { formatCurrency } from '@/lib/format'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { Can } from '@/components/auth'
 
 const STATUS_STYLES: Record<BudgetStatus, string> = {
   DRAFT: 'bg-gray-100 text-gray-700 border-gray-200',
@@ -91,6 +97,11 @@ export default function BudgetDetailPage() {
   const [itemToDelete, setItemToDelete] = useState<BudgetItem | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
+
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
+  const [isSharing, setIsSharing] = useState(false)
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [shareCopied, setShareCopied] = useState(false)
 
   const canUpdate = can(Permission.BUDGETS_UPDATE)
 
@@ -236,6 +247,38 @@ export default function BudgetDetailPage() {
     }
   }
 
+  const handleDownloadPdf = async () => {
+    setIsDownloadingPdf(true)
+    setActionError(null)
+    try {
+      await downloadBudgetPdf(budgetId)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : t('budgets.errors.pdfDownloadFailed'))
+    } finally {
+      setIsDownloadingPdf(false)
+    }
+  }
+
+  const handleShare = async () => {
+    setIsSharing(true)
+    setActionError(null)
+    setShareCopied(false)
+    try {
+      const result = await shareBudget(budgetId)
+      setShareUrl(result.url)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : t('budgets.errors.shareFailed'))
+    } finally {
+      setIsSharing(false)
+    }
+  }
+
+  const handleCopyShareUrl = async () => {
+    if (!shareUrl) return
+    await navigator.clipboard.writeText(shareUrl)
+    setShareCopied(true)
+  }
+
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-4">
       {/* Breadcrumb */}
@@ -269,6 +312,76 @@ export default function BudgetDetailPage() {
             {t(`budgets.status.${currentBudget.status}`)}
           </span>
         </div>
+
+        <div className="flex items-center gap-2 mt-4 flex-wrap">
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={isDownloadingPdf}
+            className="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+          >
+            {isDownloadingPdf ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            {t('budgets.downloadPdf')}
+          </button>
+          <Can permission={Permission.BUDGETS_SHARE}>
+            <button
+              type="button"
+              onClick={handleShare}
+              disabled={isSharing}
+              className="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+            >
+              {isSharing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Share2 className="h-4 w-4" />
+              )}
+              {t('budgets.share.button')}
+            </button>
+          </Can>
+        </div>
+
+        {shareUrl && (
+          <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50/60 p-3">
+            <p className="text-sm font-medium text-gray-900 mb-1">{t('budgets.share.title')}</p>
+            <p className="text-xs text-gray-600 mb-2">{t('budgets.share.description')}</p>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                readOnly
+                value={shareUrl}
+                onFocus={(e) => e.currentTarget.select()}
+                className="flex-1 min-w-0 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-700"
+              />
+              <button
+                type="button"
+                onClick={handleCopyShareUrl}
+                className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                {shareCopied ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+                {shareCopied ? t('budgets.share.copied') : t('budgets.share.copy')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShareUrl(null)
+                  setShareCopied(false)
+                }}
+                className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                aria-label={t('budgets.share.close')}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {actionError && (

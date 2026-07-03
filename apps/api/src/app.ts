@@ -10,6 +10,7 @@ import { appointmentsRouter } from './routes/appointments.js'
 import { usersRouter } from './routes/users.js'
 import { labworksRouter } from './routes/labworks.js'
 import { budgetsRouter } from './routes/budgets.js'
+import { publicBudgetsRouter } from './routes/public-budgets.js'
 import { expensesRouter } from './routes/expenses.js'
 import { statsRouter } from './routes/stats.js'
 import billingRouter from './routes/billing.js'
@@ -43,6 +44,7 @@ app.use('/api/health', healthRouter)
 app.use('/api/auth', authRouter)
 app.use('/api/tenants', tenantsRouter)
 app.use('/api', billingRouter) // /api/plans is public, /api/billing/* requires auth
+app.use('/api/public/budgets', publicBudgetsRouter) // unauthenticated share-link lookup
 
 // Admin routes (super admin only)
 app.use('/api/admin', adminRouter)

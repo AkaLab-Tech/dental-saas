@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import { prisma, Prisma, BudgetStatus, BudgetItemStatus } from '@dental/database'
 import { logger } from '../utils/logger.js'
 
@@ -83,6 +84,39 @@ export interface ListBudgetsOptions {
   limit?: number
   offset?: number
   includeInactive?: boolean
+}
+
+export interface ShareTokenOptions {
+  /** Optional expiry for the generated link. Omit for no expiry. */
+  expiresInDays?: number
+}
+
+/** Tenant branding shown on the public (unauthenticated) budget page. Never includes tenantId. */
+export interface PublicBudgetTenantInfo {
+  name: string
+  email: string | null
+  phone: string | null
+  address: string | null
+  logo: string | null
+  currency: string
+  language: string
+}
+
+export interface PublicBudgetPatientInfo {
+  firstName: string
+  lastName: string
+}
+
+export interface PublicBudgetData {
+  id: string
+  status: BudgetStatus
+  notes: string | null
+  validUntil: Date | null
+  totalAmount: Prisma.Decimal
+  createdAt: Date
+  items: Prisma.BudgetItemGetPayload<{ select: typeof BUDGET_ITEM_SELECT }>[]
+  patient: PublicBudgetPatientInfo
+  tenant: PublicBudgetTenantInfo
 }
 
 function computeItemTotal(quantity: number, unitPrice: number): Prisma.Decimal {
@@ -440,4 +474,102 @@ export async function deleteBudgetItem(
 
   logger.info({ budgetId, itemId, tenantId }, 'Budget item deleted')
   return { success: true, data: result }
+}
+
+/**
+ * Generate (or rotate) the public share token for a budget.
+ * No expiry by default; pass `expiresInDays` to set one.
+ */
+export async function generateShareToken(
+  tenantId: string,
+  budgetId: string,
+  options: ShareTokenOptions = {}
+): Promise<
+  | { success: true; data: { token: string; expiresAt: Date | null } }
+  | { success: false; code: BudgetErrorCode }
+> {
+  const existing = await prisma.budget.findFirst({
+    where: { id: budgetId, tenantId, isActive: true },
+    select: { id: true },
+  })
+
+  if (!existing) return { success: false, code: 'NOT_FOUND' }
+
+  const token = crypto.randomBytes(32).toString('hex')
+  const expiresAt = options.expiresInDays
+    ? new Date(Date.now() + options.expiresInDays * 24 * 60 * 60 * 1000)
+    : null
+
+  await prisma.budget.update({
+    where: { id: budgetId },
+    data: { publicToken: token, publicTokenExpiresAt: expiresAt },
+  })
+
+  logger.info({ budgetId, tenantId }, 'Budget share token generated')
+  return { success: true, data: { token, expiresAt } }
+}
+
+/**
+ * Tenant-agnostic lookup for the public budget share page.
+ * Rejects inactive budgets and expired tokens without distinguishing
+ * between "not found" and "expired" in the response, to avoid leaking
+ * token validity to an unauthenticated caller.
+ */
+export async function getBudgetByPublicToken(
+  token: string
+): Promise<{ success: true; data: PublicBudgetData } | { success: false; code: 'NOT_FOUND' }> {
+  const budget = await prisma.budget.findUnique({
+    where: { publicToken: token },
+    select: {
+      id: true,
+      status: true,
+      notes: true,
+      validUntil: true,
+      totalAmount: true,
+      createdAt: true,
+      isActive: true,
+      publicTokenExpiresAt: true,
+      items: { select: BUDGET_ITEM_SELECT, orderBy: { order: 'asc' } },
+      patient: { select: { firstName: true, lastName: true } },
+      tenant: {
+        select: {
+          name: true,
+          email: true,
+          phone: true,
+          address: true,
+          logo: true,
+          currency: true,
+          settings: { select: { language: true } },
+        },
+      },
+    },
+  })
+
+  if (!budget || !budget.isActive) return { success: false, code: 'NOT_FOUND' }
+  if (budget.publicTokenExpiresAt && budget.publicTokenExpiresAt < new Date()) {
+    return { success: false, code: 'NOT_FOUND' }
+  }
+
+  return {
+    success: true,
+    data: {
+      id: budget.id,
+      status: budget.status,
+      notes: budget.notes,
+      validUntil: budget.validUntil,
+      totalAmount: budget.totalAmount,
+      createdAt: budget.createdAt,
+      items: budget.items,
+      patient: budget.patient,
+      tenant: {
+        name: budget.tenant.name,
+        email: budget.tenant.email,
+        phone: budget.tenant.phone,
+        address: budget.tenant.address,
+        logo: budget.tenant.logo,
+        currency: budget.tenant.currency,
+        language: budget.tenant.settings?.language || 'es',
+      },
+    },
+  }
 }

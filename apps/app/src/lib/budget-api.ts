@@ -144,6 +144,31 @@ export async function deleteBudget(budgetId: string): Promise<Budget> {
 }
 
 // ============================================================================
+// Share link
+// ============================================================================
+
+export interface ShareBudgetData {
+  expiresInDays?: number
+}
+
+export interface ShareBudgetResult {
+  token: string
+  url: string
+  expiresAt: string | null
+}
+
+export async function shareBudget(
+  budgetId: string,
+  data?: ShareBudgetData
+): Promise<ShareBudgetResult> {
+  const response = await apiClient.post<ApiResponse<ShareBudgetResult>>(
+    `/budgets/${budgetId}/share`,
+    data ?? {}
+  )
+  return response.data.data
+}
+
+// ============================================================================
 // Budget items
 // ============================================================================
 

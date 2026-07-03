@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import React from 'react'
 import { Document, Page, Text } from '@react-pdf/renderer'
 import { PdfService } from './pdf.service.js'
+import { prisma } from '@dental/database'
 import type {
   AppointmentReceiptData,
   PatientHistoryData,
@@ -23,6 +24,9 @@ vi.mock('@dental/database', () => ({
       findMany: vi.fn(),
     },
     patient: {
+      findFirst: vi.fn(),
+    },
+    budget: {
       findFirst: vi.fn(),
     },
   },
@@ -399,6 +403,173 @@ describe('PdfService', () => {
         })
         expect(data.tenant.timezone).toBe(timezone)
       })
+    })
+  })
+
+  describe('getBudgetPdfData', () => {
+    function mockBudgetRow() {
+      return {
+        id: 'budget-123',
+        tenantId: 'tenant-123',
+        patientId: 'patient-123',
+        createdById: null,
+        status: 'APPROVED' as const,
+        notes: 'Full treatment plan',
+        validUntil: new Date('2027-01-01T00:00:00Z'),
+        totalAmount: { toString: () => '380.00' },
+        publicToken: null,
+        publicTokenExpiresAt: null,
+        isActive: true,
+        createdAt: new Date('2026-01-20T10:00:00Z'),
+        updatedAt: new Date('2026-01-20T10:00:00Z'),
+        items: [
+          {
+            id: 'item-1',
+            budgetId: 'budget-123',
+            description: 'Cleaning',
+            toothNumber: null,
+            quantity: 1,
+            unitPrice: { toString: () => '80.00' },
+            totalPrice: { toString: () => '80.00' },
+            plannedAppointmentType: null,
+            status: 'PENDING' as const,
+            notes: null,
+            order: 0,
+            createdAt: new Date('2026-01-20T10:00:00Z'),
+            updatedAt: new Date('2026-01-20T10:00:00Z'),
+          },
+          {
+            id: 'item-2',
+            budgetId: 'budget-123',
+            description: 'Filling 16',
+            toothNumber: '16',
+            quantity: 2,
+            unitPrice: { toString: () => '150.00' },
+            totalPrice: { toString: () => '300.00' },
+            plannedAppointmentType: null,
+            status: 'EXECUTED' as const,
+            notes: null,
+            order: 1,
+            createdAt: new Date('2026-01-20T10:00:00Z'),
+            updatedAt: new Date('2026-01-20T10:00:00Z'),
+          },
+        ],
+      }
+    }
+
+    it('assembles tenant, patient, and budget (with formatted amounts) on the happy path', async () => {
+      vi.mocked(prisma.budget.findFirst).mockResolvedValue(
+        mockBudgetRow() as unknown as Awaited<ReturnType<typeof prisma.budget.findFirst>>
+      )
+      vi.mocked(prisma.patient.findFirst).mockResolvedValue(
+        createMockPatientInfo() as unknown as Awaited<ReturnType<typeof prisma.patient.findFirst>>
+      )
+      vi.mocked(prisma.tenant.findUnique).mockResolvedValue({
+        name: 'Test Clinic',
+        email: 'clinic@test.com',
+        phone: '+1234567890',
+        address: '123 Test Street',
+        logo: null,
+        timezone: 'America/New_York',
+        currency: 'USD',
+        settings: { language: 'en' },
+      } as unknown as Awaited<ReturnType<typeof prisma.tenant.findUnique>>)
+
+      const result = await PdfService.getBudgetPdfData('tenant-123', 'budget-123')
+
+      expect('error' in result).toBe(false)
+      if ('error' in result) return
+      expect(result.data.patient.firstName).toBe('John')
+      expect(result.data.tenant.name).toBe('Test Clinic')
+      expect(result.data.budget.id).toBe('budget-123')
+      expect(result.data.budget.status).toBe('APPROVED')
+      expect(result.data.budget.totalAmount).toBe('380.00')
+      expect(result.data.budget.items).toHaveLength(2)
+      expect(result.data.budget.items[0]).toMatchObject({
+        id: 'item-1',
+        description: 'Cleaning',
+        toothNumber: null,
+        quantity: 1,
+        unitPrice: '80.00',
+        totalPrice: '80.00',
+        status: 'PENDING',
+      })
+      expect(result.data.budget.items[1]).toMatchObject({
+        id: 'item-2',
+        description: 'Filling 16',
+        toothNumber: '16',
+        quantity: 2,
+        unitPrice: '150.00',
+        totalPrice: '300.00',
+        status: 'EXECUTED',
+      })
+      expect(prisma.patient.findFirst).toHaveBeenCalledWith({
+        where: { id: 'patient-123', tenantId: 'tenant-123' },
+        select: expect.any(Object),
+      })
+    })
+
+    it('returns NOT_FOUND when the budget does not exist for the tenant', async () => {
+      vi.mocked(prisma.budget.findFirst).mockResolvedValue(null)
+
+      const result = await PdfService.getBudgetPdfData('tenant-123', 'missing-budget')
+
+      expect(result).toEqual({ error: 'NOT_FOUND', message: 'Budget not found' })
+      expect(prisma.patient.findFirst).not.toHaveBeenCalled()
+    })
+
+    it('returns NOT_FOUND when the budget resolves but the patient record is missing', async () => {
+      vi.mocked(prisma.budget.findFirst).mockResolvedValue(
+        mockBudgetRow() as unknown as Awaited<ReturnType<typeof prisma.budget.findFirst>>
+      )
+      vi.mocked(prisma.patient.findFirst).mockResolvedValue(null)
+
+      const result = await PdfService.getBudgetPdfData('tenant-123', 'budget-123')
+
+      expect(result).toEqual({ error: 'NOT_FOUND', message: 'Patient not found' })
+    })
+
+    it('returns INVALID_TENANT when the tenant lookup fails after budget/patient resolve', async () => {
+      vi.mocked(prisma.budget.findFirst).mockResolvedValue(
+        mockBudgetRow() as unknown as Awaited<ReturnType<typeof prisma.budget.findFirst>>
+      )
+      vi.mocked(prisma.patient.findFirst).mockResolvedValue(
+        createMockPatientInfo() as unknown as Awaited<ReturnType<typeof prisma.patient.findFirst>>
+      )
+      vi.mocked(prisma.tenant.findUnique).mockResolvedValue(null)
+
+      const result = await PdfService.getBudgetPdfData('tenant-123', 'budget-123')
+
+      expect(result).toEqual({ error: 'INVALID_TENANT', message: 'Tenant not found' })
+    })
+
+    it('handles a budget with no items', async () => {
+      const row = mockBudgetRow()
+      row.items = []
+      vi.mocked(prisma.budget.findFirst).mockResolvedValue(
+        row as unknown as Awaited<ReturnType<typeof prisma.budget.findFirst>>
+      )
+      vi.mocked(prisma.patient.findFirst).mockResolvedValue(
+        createMockPatientInfo() as unknown as Awaited<ReturnType<typeof prisma.patient.findFirst>>
+      )
+      vi.mocked(prisma.tenant.findUnique).mockResolvedValue({
+        name: 'Test Clinic',
+        email: null,
+        phone: null,
+        address: null,
+        logo: null,
+        timezone: 'UTC',
+        currency: 'USD',
+        settings: null,
+      } as unknown as Awaited<ReturnType<typeof prisma.tenant.findUnique>>)
+
+      const result = await PdfService.getBudgetPdfData('tenant-123', 'budget-123')
+
+      expect('error' in result).toBe(false)
+      if ('error' in result) return
+      expect(result.data.budget.items).toEqual([])
+      // No tenant settings -> falls back to 'es'
+      expect(result.data.tenant.language).toBe('es')
     })
   })
 })

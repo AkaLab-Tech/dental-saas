@@ -275,6 +275,16 @@
       "notesPlaceholder": "Detalle opcional",
       "empty": "Agrega al menos un ítem para crear el presupuesto"
     },
+    "downloadPdf": "Descargar PDF",
+    "share": {
+      "button": "Compartir enlace",
+      "title": "Enlace público",
+      "description": "Cualquier persona con este enlace podrá ver una versión de solo lectura de este presupuesto.",
+      "generating": "Generando enlace...",
+      "copy": "Copiar",
+      "copied": "¡Copiado!",
+      "close": "Cerrar"
+    },
     "errors": {
       "loadFailed": "No se pudieron cargar los presupuestos",
       "createFailed": "No se pudo crear el presupuesto",
@@ -286,7 +296,9 @@
       "minOneItem": "El presupuesto debe tener al menos un ítem",
       "descriptionRequired": "La descripción es obligatoria",
       "quantityInvalid": "La cantidad debe ser al menos 1",
-      "unitPriceInvalid": "El precio unitario debe ser mayor o igual a 0"
+      "unitPriceInvalid": "El precio unitario debe ser mayor o igual a 0",
+      "pdfDownloadFailed": "No se pudo descargar el PDF",
+      "shareFailed": "No se pudo generar el enlace para compartir"
     }
   },
   "expenses": {
