@@ -4,6 +4,7 @@ import { Plus, AlertCircle, Calendar, Loader2, X, ChevronLeft, ChevronRight, Fil
 import { useAppointmentsStore } from '@/stores/appointments.store'
 import { AppointmentCard } from '@/components/appointments/AppointmentCard'
 import { AppointmentFormModal } from '@/components/appointments/AppointmentFormModal'
+import { AppointmentCompleteModal } from '@/components/appointments/AppointmentCompleteModal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import type { Appointment, CreateAppointmentData, UpdateAppointmentData, AppointmentStatus } from '@/lib/appointment-api'
 import { getStatusLabel } from '@/lib/appointment-api'
@@ -35,7 +36,6 @@ export function AppointmentsPage() {
     editAppointment,
     removeAppointment,
     restoreDeletedAppointment,
-    completeAppointment,
     setSelectedDoctorId,
     setSelectedStatus,
     setShowInactive,
@@ -47,6 +47,7 @@ export function AppointmentsPage() {
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
   const [appointmentToDelete, setAppointmentToDelete] = useState<Appointment | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [appointmentToComplete, setAppointmentToComplete] = useState<Appointment | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
   const [showFilters, setShowFilters] = useState(false)
@@ -137,13 +138,8 @@ export function AppointmentsPage() {
     }
   }
 
-  const handleComplete = async (appointment: Appointment) => {
-    try {
-      await completeAppointment(appointment.id)
-      setSuccessMessage(t('appointments.appointmentCompleted'))
-    } catch {
-      // Error is handled by store
-    }
+  const handleComplete = (appointment: Appointment) => {
+    setAppointmentToComplete(appointment)
   }
 
   const handleFormSubmit = useCallback(
@@ -452,6 +448,17 @@ export function AppointmentsPage() {
         cancelText={t('appointments.keep')}
         variant="danger"
         isLoading={isDeleting}
+      />
+
+      {/* Complete Confirmation */}
+      <AppointmentCompleteModal
+        isOpen={!!appointmentToComplete}
+        appointmentId={appointmentToComplete?.id ?? null}
+        onClose={() => setAppointmentToComplete(null)}
+        onCompleted={() => {
+          setSuccessMessage(t('appointments.appointmentCompleted'))
+          setAppointmentToComplete(null)
+        }}
       />
     </div>
   )

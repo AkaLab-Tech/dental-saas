@@ -108,6 +108,15 @@
       "empty": "This patient has no budget items available to associate.",
       "loading": "Loading budget items..."
     },
+    "complete": {
+      "title": "Complete appointment",
+      "itemsTitle": "Associated budget items",
+      "executedLabel": "Executed in this appointment?",
+      "alreadyExecuted": "Already executed",
+      "notesLabel": "Notes",
+      "confirm": "Mark completed",
+      "noItems": "This appointment has no associated budget items."
+    },
     "errors": {
       "timeConflict": "This doctor already has an appointment at this time. Please select a different time or doctor.",
       "invalidPatient": "The selected patient is not valid.",

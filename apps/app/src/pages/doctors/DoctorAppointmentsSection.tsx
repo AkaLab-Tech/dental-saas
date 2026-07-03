@@ -19,13 +19,13 @@ import {
   type Appointment,
   type AppointmentStatus,
   getAppointmentsByDoctor,
-  markAppointmentDone,
   deleteAppointment,
   getStatusBadgeClasses,
   formatTimeRange,
   getAppointmentPatientName,
   getStatusI18nKey,
 } from '@/lib/appointment-api'
+import { AppointmentCompleteModal } from '@/components/appointments/AppointmentCompleteModal'
 import { downloadAppointmentPdf } from '@/lib/pdf-api'
 import { formatCurrency } from '@/lib/format'
 import i18n from '@/i18n'
@@ -255,8 +255,9 @@ export function DoctorAppointmentsSection({
   const [filterTo, setFilterTo] = useState('')
 
   // Confirmation state
-  const [confirmAction, setConfirmAction] = useState<{ type: 'complete' | 'cancel'; appointment: Appointment } | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{ type: 'cancel'; appointment: Appointment } | null>(null)
   const [isActioning, setIsActioning] = useState(false)
+  const [appointmentToComplete, setAppointmentToComplete] = useState<Appointment | null>(null)
 
   const toggleCollapse = () => {
     setIsCollapsed(prev => {
@@ -319,11 +320,11 @@ export function DoctorAppointmentsSection({
     return (startTime >= now || isToday(startTime)) && a.status !== 'CANCELLED' && a.isActive
   }).length
 
-  const handleComplete = async (appointment: Appointment) => {
-    setConfirmAction({ type: 'complete', appointment })
+  const handleComplete = (appointment: Appointment) => {
+    setAppointmentToComplete(appointment)
   }
 
-  const handleCancel = async (appointment: Appointment) => {
+  const handleCancel = (appointment: Appointment) => {
     setConfirmAction({ type: 'cancel', appointment })
   }
 
@@ -331,11 +332,7 @@ export function DoctorAppointmentsSection({
     if (!confirmAction) return
     setIsActioning(true)
     try {
-      if (confirmAction.type === 'complete') {
-        await markAppointmentDone(confirmAction.appointment.id)
-      } else {
-        await deleteAppointment(confirmAction.appointment.id)
-      }
+      await deleteAppointment(confirmAction.appointment.id)
       await fetchAppointments()
       setConfirmAction(null)
     } catch (e) {
@@ -485,19 +482,15 @@ export function DoctorAppointmentsSection({
         </div>
       )}
 
-      {/* Confirmation dialog */}
+      {/* Confirmation dialog (cancel only — complete uses AppointmentCompleteModal) */}
       {confirmAction && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setConfirmAction(null)}>
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              {confirmAction.type === 'complete'
-                ? t('appointments.markCompleted')
-                : t('appointments.cancelAppointment')}
+              {t('appointments.cancelAppointment')}
             </h3>
             <p className="text-sm text-gray-600 mb-4">
-              {confirmAction.type === 'cancel'
-                ? t('appointments.confirmCancel')
-                : t('patients.appointments.confirmComplete')}
+              {t('appointments.confirmCancel')}
             </p>
             <div className="flex justify-end gap-3">
               <button
@@ -510,21 +503,26 @@ export function DoctorAppointmentsSection({
               <button
                 onClick={executeAction}
                 disabled={isActioning}
-                className={`px-4 py-2 text-sm text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2 ${
-                  confirmAction.type === 'cancel'
-                    ? 'bg-red-600 hover:bg-red-700'
-                    : 'bg-green-600 hover:bg-green-700'
-                }`}
+                className="px-4 py-2 text-sm text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2 bg-red-600 hover:bg-red-700"
               >
                 {isActioning && <Loader2 className="h-4 w-4 animate-spin" />}
-                {confirmAction.type === 'complete'
-                  ? t('appointments.markCompleted')
-                  : t('appointments.cancelAppointment')}
+                {t('appointments.cancelAppointment')}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Complete confirmation */}
+      <AppointmentCompleteModal
+        isOpen={!!appointmentToComplete}
+        appointmentId={appointmentToComplete?.id ?? null}
+        onClose={() => setAppointmentToComplete(null)}
+        onCompleted={() => {
+          setAppointmentToComplete(null)
+          fetchAppointments()
+        }}
+      />
     </div>
   )
 }

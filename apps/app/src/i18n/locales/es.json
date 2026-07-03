@@ -108,6 +108,15 @@
       "empty": "Este paciente no tiene ítems de presupuesto disponibles para asociar.",
       "loading": "Cargando ítems de presupuesto..."
     },
+    "complete": {
+      "title": "Completar cita",
+      "itemsTitle": "Ítems de presupuesto asociados",
+      "executedLabel": "¿Se ejecutó en esta cita?",
+      "alreadyExecuted": "Ya ejecutado",
+      "notesLabel": "Notas",
+      "confirm": "Marcar completada",
+      "noItems": "Esta cita no tiene ítems de presupuesto asociados."
+    },
     "errors": {
       "timeConflict": "El doctor ya tiene una cita en este horario. Por favor, selecciona otro horario o doctor.",
       "invalidPatient": "El paciente seleccionado no es válido.",

@@ -478,6 +478,19 @@ describe('appointments.store', () => {
 
       expect(useAppointmentsStore.getState().selectedAppointment?.status).toBe('COMPLETED')
     })
+
+    it('should thread executedBudgetItemIds through to markAppointmentDone', async () => {
+      const completedAppointment = { ...mockAppointment, status: 'COMPLETED' as const }
+      useAppointmentsStore.setState({ appointments: [mockAppointment] })
+      ;(markAppointmentDone as Mock).mockResolvedValue(completedAppointment)
+      ;(getAppointmentStats as Mock).mockResolvedValue(mockStats)
+
+      await useAppointmentsStore
+        .getState()
+        .completeAppointment('appointment-123', 'Done', ['item-1'])
+
+      expect(markAppointmentDone).toHaveBeenCalledWith('appointment-123', 'Done', ['item-1'])
+    })
   })
 
   describe('UI state actions', () => {
