@@ -545,24 +545,21 @@ describe('AppointmentFormModal — budget items association', () => {
     })
   })
 
-  // BUG found while writing the reset-race regression coverage above (not
-  // fixed by this change; reported to the implementer, not masked here).
+  // Regression coverage for a cold edit-mount race (now FIXED).
   //
-  // The reset effect no longer waits for `!loadingOptions`, so on a cold
-  // mount in edit mode it now calls `reset({ doctorId: appointment.doctorId,
-  // ... })` on the very first render — before getDoctors() has resolved and
-  // before the <option value="doc-1"> exists in the DOM. react-hook-form
-  // imperatively sets the underlying <select> element's `.value` at that
-  // moment; since no matching <option> exists yet, the browser drops the
-  // selection (value becomes ''). When the doctors list arrives afterwards
-  // and the matching <option> is inserted, nothing re-applies the value, so
-  // the dropdown is left on "Seleccionar doctor..." even though the
-  // appointment has a doctor assigned. (Verified: a *second* edit of a
-  // *different* appointment within the same mounted instance behaves
-  // correctly, because `doctors` is already populated from the first fetch
-  // by then — the bug is specific to editing before getDoctors() has ever
-  // resolved, e.g. the first appointment a user edits in a session.)
-  describe('regression: doctor pre-selection on a cold edit-mode mount (BUG, not fixed here)', () => {
+  // The identity-gated reset effect no longer waits for `!loadingOptions`, so
+  // on a cold mount in edit mode `reset({ doctorId: appointment.doctorId, ... })`
+  // runs on the first render — before getDoctors() has resolved and before the
+  // <option value="doc-1"> exists in the DOM. react-hook-form imperatively sets
+  // the <select>.value at that moment; with no matching <option> yet the browser
+  // drops the selection to ''. Without a fix nothing would re-apply it once the
+  // doctors list arrives, silently losing the required `doctorId`.
+  //
+  // FIX (AppointmentFormModal.tsx): a dedicated effect re-applies ONLY
+  // `doctorId` from `appointment.doctorId` once doctors finish loading, but only
+  // when the user hasn't manually changed it (`!dirtyFields.doctorId`). The test
+  // below asserts that fixed behavior — do NOT remove that effect.
+  describe('regression: doctor pre-selection on a cold edit-mode mount', () => {
     it('should show the appointment\'s assigned doctor once getDoctors() resolves, even though reset() ran before it did', async () => {
       listBudgetsByPatientMock.mockResolvedValue({ data: [], total: 0 })
       getAppointmentBudgetItemsMock.mockResolvedValue([])
