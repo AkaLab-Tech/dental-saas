@@ -25,7 +25,15 @@ import { env } from './config/env.js'
 export const app: Express = express()
 
 // Middleware
-app.use(cors({ origin: env.CORS_ORIGIN }))
+// The public budgets route below applies its own scoped CORS policy (the
+// apps/web origin, not the app-panel CORS_ORIGIN). It must be excluded here,
+// otherwise this global handler answers its OPTIONS preflights terminally
+// with the wrong Allow-Origin before the request ever reaches the route.
+const globalCors = cors({ origin: env.CORS_ORIGIN })
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/public/budgets')) return next()
+  return globalCors(req, res, next)
+})
 app.use(express.json())
 
 // Serialize BigInt values as numbers in JSON responses (e.g. storageUsedBytes)
@@ -44,7 +52,10 @@ app.use('/api/health', healthRouter)
 app.use('/api/auth', authRouter)
 app.use('/api/tenants', tenantsRouter)
 app.use('/api', billingRouter) // /api/plans is public, /api/billing/* requires auth
-app.use('/api/public/budgets', publicBudgetsRouter) // unauthenticated share-link lookup
+// Scoped CORS for the public share-link endpoint: allows the apps/web origin
+// (which the global CORS_ORIGIN, set to the app panel origin, does not cover)
+// without widening the global policy. Data behind this route is public-by-token.
+app.use('/api/public/budgets', cors({ origin: env.PUBLIC_WEB_URL }), publicBudgetsRouter)
 
 // Admin routes (super admin only)
 app.use('/api/admin', adminRouter)

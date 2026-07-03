@@ -24,6 +24,7 @@ export default [
         'warn',
         { allowConstantExport: true },
       ],
+      'react-hooks/set-state-in-effect': 'warn',
     },
   },
 ]

@@ -5,6 +5,7 @@ import { FeaturesPage } from "./pages/FeaturesPage";
 import { TermsPage } from "./pages/TermsPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { CookiesPage } from "./pages/CookiesPage";
+import { PublicBudgetPage } from "./pages/PublicBudgetPage";
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
         <Route path="/terminos" element={<TermsPage />} />
         <Route path="/privacidad" element={<PrivacyPage />} />
         <Route path="/cookies" element={<CookiesPage />} />
+        <Route path="/budget/:token" element={<PublicBudgetPage />} />
       </Routes>
     </BrowserRouter>
   );
