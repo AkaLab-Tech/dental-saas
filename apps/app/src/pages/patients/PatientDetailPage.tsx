@@ -39,6 +39,7 @@ import {
 } from '@/lib/appointment-api'
 import { PatientSidebar } from './PatientSidebar'
 import { PatientAppointmentsSection } from './PatientAppointmentsSection'
+import { PatientLabworksSection } from './PatientLabworksSection'
 import { BudgetsSection } from '@/components/budgets/BudgetsSection'
 import { remapPrimaryFdi } from './odontogram-utils'
 
@@ -676,6 +677,9 @@ export default function PatientDetailPage() {
         }}
         refreshKey={appointmentsRefreshKey}
       />
+
+      {/* Labworks Section */}
+      <PatientLabworksSection patientId={patient.id} />
 
       {/* Budgets Section */}
       <BudgetsSection patientId={patient.id} />

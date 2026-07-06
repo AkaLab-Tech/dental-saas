@@ -173,6 +173,11 @@
       "clearFilters": "Clear filters",
       "confirmComplete": "Are you sure you want to mark this appointment as completed?"
     },
+    "labworksSection": {
+      "title": "Lab work",
+      "empty": "No lab work records",
+      "error": "Error loading lab work records"
+    },
     "status": {
       "healthy": "Healthy",
       "caries": "Caries",

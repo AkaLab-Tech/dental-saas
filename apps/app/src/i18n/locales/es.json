@@ -173,6 +173,11 @@
       "clearFilters": "Limpiar filtros",
       "confirmComplete": "¿Estás seguro de que deseas marcar esta cita como completada?"
     },
+    "labworksSection": {
+      "title": "Trabajos de laboratorio",
+      "empty": "No hay trabajos de laboratorio registrados",
+      "error": "Error al cargar los trabajos de laboratorio"
+    },
     "status": {
       "healthy": "Saludable",
       "caries": "Caries",
