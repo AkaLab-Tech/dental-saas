@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { X, Loader2, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Labwork, CreateLabworkData } from '@/lib/labwork-api'
+import { getLabNames } from '@/lib/labwork-api'
 import type { Appointment } from '@/lib/appointment-api'
 import { getAppointmentsByPatient } from '@/lib/appointment-api'
 import { useAuthStore } from '@/stores/auth.store'
@@ -54,6 +55,7 @@ export function LabworkFormModal({
   const [selectedPatient, setSelectedPatient] = useState<PatientOption | null>(null)
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loadingAppointments, setLoadingAppointments] = useState(false)
+  const [labNames, setLabNames] = useState<string[]>([])
 
   const {
     register,
@@ -119,6 +121,20 @@ export function LabworkFormModal({
       }
     }
   }, [isOpen, labwork, reset])
+
+  // Fetch previously used lab names for autocomplete when the modal opens
+  useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+    getLabNames()
+      .then((res) => {
+        if (!cancelled) setLabNames(res.data)
+      })
+      .catch(() => {
+        if (!cancelled) setLabNames([])
+      })
+    return () => { cancelled = true }
+  }, [isOpen])
 
   // Fetch appointments when patient changes
   useEffect(() => {
@@ -308,10 +324,17 @@ export function LabworkFormModal({
                   {...register('lab')}
                   type="text"
                   id="lab"
+                  list="lab-name-suggestions"
                   placeholder="Ej: Lab Dental Central"
+                  autoComplete="off"
                   className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.lab ? 'border-red-300' : 'border-gray-300'
                     }`}
                 />
+                <datalist id="lab-name-suggestions">
+                  {labNames.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
                 {errors.lab && <p className="mt-1 text-sm text-red-500">{errors.lab.message}</p>}
               </div>
 

@@ -326,3 +326,193 @@ describe('Labworks Routes - Permission Tests', () => {
     })
   })
 })
+
+describe('GET /api/labworks/labs (Lab name autocomplete)', () => {
+  // Isolated tenants so seeded lab names/dedup/sort assertions aren't polluted
+  // by labworks created in the describe block above.
+  let tenantId: string
+  let otherTenantId: string
+  let staffToken: string
+  let emptyTenantStaffToken: string
+  const testSlug = `test-labworks-labs-${Date.now()}`
+  const otherSlug = `test-labworks-labs-other-${Date.now()}`
+  const emptySlug = `test-labworks-labs-empty-${Date.now()}`
+
+  function generateToken(userId: string, tenantId: string, role: string) {
+    return sign(
+      { sub: userId, tenantId, role },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    )
+  }
+
+  async function createTenant(slug: string, name: string) {
+    const tenant = await prisma.tenant.create({
+      data: {
+        name,
+        slug,
+        currency: 'USD',
+        timezone: 'America/New_York',
+      },
+    })
+
+    let freePlan = await prisma.plan.findUnique({ where: { name: 'free' } })
+    if (!freePlan) {
+      freePlan = await prisma.plan.create({
+        data: {
+          name: 'free',
+          displayName: 'Free',
+          price: 0,
+          maxAdmins: 1,
+          maxDoctors: 3,
+          maxPatients: 15,
+        },
+      })
+    }
+
+    await prisma.subscription.create({
+      data: {
+        tenantId: tenant.id,
+        planId: freePlan.id,
+        status: 'ACTIVE',
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    })
+
+    return tenant
+  }
+
+  beforeAll(async () => {
+    const hashedPassword = await hashPassword('password123')
+
+    // Main tenant: seeded with duplicate/active/inactive lab names.
+    const tenant = await createTenant(testSlug, 'Test Clinic for Lab Autocomplete')
+    tenantId = tenant.id
+
+    const staffUser = await prisma.user.create({
+      data: {
+        tenantId,
+        email: 'staff@labworks-labs-test.com',
+        firstName: 'Staff',
+        lastName: 'User',
+        passwordHash: hashedPassword,
+        role: 'STAFF',
+      },
+    })
+    staffToken = generateToken(staffUser.id, tenantId, 'STAFF')
+
+    // Duplicate active lab names -> should collapse to one entry each.
+    await prisma.labwork.create({
+      data: { tenantId, lab: 'Zeta Dental Lab', date: new Date('2026-01-01'), isActive: true },
+    })
+    await prisma.labwork.create({
+      data: { tenantId, lab: 'Zeta Dental Lab', date: new Date('2026-01-02'), isActive: true },
+    })
+    await prisma.labwork.create({
+      data: { tenantId, lab: 'Alpha Dental Lab', date: new Date('2026-01-03'), isActive: true },
+    })
+    // Soft-deleted (inactive) labwork -> its lab name must be excluded.
+    await prisma.labwork.create({
+      data: { tenantId, lab: 'Inactive Only Lab', date: new Date('2026-01-04'), isActive: false },
+    })
+
+    // Other tenant: must never leak into the main tenant's results.
+    const otherTenant = await createTenant(otherSlug, 'Other Clinic for Lab Autocomplete')
+    otherTenantId = otherTenant.id
+    await prisma.labwork.create({
+      data: { tenantId: otherTenantId, lab: 'Only In Other Tenant Lab', date: new Date('2026-01-01'), isActive: true },
+    })
+
+    // Empty tenant: no labworks at all.
+    const emptyTenant = await createTenant(emptySlug, 'Empty Clinic for Lab Autocomplete')
+    const emptyStaffUser = await prisma.user.create({
+      data: {
+        tenantId: emptyTenant.id,
+        email: 'staff@labworks-labs-empty-test.com',
+        firstName: 'Staff',
+        lastName: 'User',
+        passwordHash: hashedPassword,
+        role: 'STAFF',
+      },
+    })
+    emptyTenantStaffToken = generateToken(emptyStaffUser.id, emptyTenant.id, 'STAFF')
+  })
+
+  afterAll(async () => {
+    await prisma.labwork.deleteMany({ where: { tenantId: { in: [tenantId, otherTenantId] } } })
+    await prisma.user.deleteMany({ where: { tenantId: { in: [tenantId, otherTenantId] } } })
+    await prisma.subscription.deleteMany({ where: { tenantId: { in: [tenantId, otherTenantId] } } })
+    await prisma.tenant.deleteMany({ where: { id: { in: [tenantId, otherTenantId] } } })
+
+    // Empty tenant cleanup (no labworks were ever created for it).
+    await prisma.user.deleteMany({ where: { email: 'staff@labworks-labs-empty-test.com' } })
+    await prisma.subscription.deleteMany({ where: { tenant: { slug: emptySlug } } })
+    await prisma.tenant.deleteMany({ where: { slug: emptySlug } })
+  })
+
+  it('allows STAFF to read the endpoint (200)', async () => {
+    const response = await request(app)
+      .get('/api/labworks/labs')
+      .set('Authorization', `Bearer ${staffToken}`)
+
+    expect(response.status).toBe(200)
+    expect(response.body.success).toBe(true)
+  })
+
+  it('returns distinct, alphabetically sorted, active-only lab names for the tenant', async () => {
+    const response = await request(app)
+      .get('/api/labworks/labs')
+      .set('Authorization', `Bearer ${staffToken}`)
+
+    expect(response.status).toBe(200)
+    expect(response.body.data).toEqual(['Alpha Dental Lab', 'Zeta Dental Lab'])
+  })
+
+  it('de-duplicates a lab name that appears on multiple active labworks (only one entry)', async () => {
+    const response = await request(app)
+      .get('/api/labworks/labs')
+      .set('Authorization', `Bearer ${staffToken}`)
+
+    const occurrences = response.body.data.filter((name: string) => name === 'Zeta Dental Lab')
+    expect(occurrences).toHaveLength(1)
+  })
+
+  it('excludes lab names that only exist on inactive (soft-deleted) labworks', async () => {
+    const response = await request(app)
+      .get('/api/labworks/labs')
+      .set('Authorization', `Bearer ${staffToken}`)
+
+    expect(response.body.data).not.toContain('Inactive Only Lab')
+  })
+
+  it('does not leak lab names from another tenant', async () => {
+    const response = await request(app)
+      .get('/api/labworks/labs')
+      .set('Authorization', `Bearer ${staffToken}`)
+
+    expect(response.body.data).not.toContain('Only In Other Tenant Lab')
+  })
+
+  it('returns an empty array for a tenant with no labworks', async () => {
+    const response = await request(app)
+      .get('/api/labworks/labs')
+      .set('Authorization', `Bearer ${emptyTenantStaffToken}`)
+
+    expect(response.status).toBe(200)
+    expect(response.body).toEqual({ success: true, data: [] })
+  })
+
+  it('resolves to the /labs handler rather than being swallowed by /:id (route ordering)', async () => {
+    const response = await request(app)
+      .get('/api/labworks/labs')
+      .set('Authorization', `Bearer ${staffToken}`)
+
+    // The /:id handler would respond with `{ success: false, error: 'Labwork not found' }`
+    // (404) if "labs" were treated as an :id param. Asserting the actual /labs
+    // contract (200, array payload, no error envelope) pins the route ordering.
+    expect(response.status).toBe(200)
+    expect(Array.isArray(response.body.data)).toBe(true)
+    expect(response.body).not.toHaveProperty('error')
+  })
+})
