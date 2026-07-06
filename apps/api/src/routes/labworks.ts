@@ -10,6 +10,7 @@ import {
   deleteLabwork,
   restoreLabwork,
   getLabworkStats,
+  listLabNames,
 } from '../services/labwork.service.js'
 
 const labworksRouter: IRouter = Router()
@@ -110,6 +111,22 @@ labworksRouter.get('/stats', requireMinRole('STAFF'), async (req, res, next) => 
     })
 
     res.json({ success: true, data: stats })
+  } catch (e) {
+    next(e)
+  }
+})
+
+/**
+ * GET /api/labworks/labs
+ * List distinct laboratory names previously used by the tenant (for autocomplete)
+ */
+labworksRouter.get('/labs', requireMinRole('STAFF'), async (req, res, next) => {
+  try {
+    const tenantId = req.user!.tenantId!
+
+    const labs = await listLabNames(tenantId)
+
+    res.json({ success: true, data: labs })
   } catch (e) {
     next(e)
   }

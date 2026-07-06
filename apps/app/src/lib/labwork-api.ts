@@ -102,6 +102,11 @@ interface LabworkStatsResponse {
   data: LabworkStats
 }
 
+interface LabNamesResponse {
+  success: boolean
+  data: string[]
+}
+
 // ============================================================================
 // API Functions
 // ============================================================================
@@ -159,6 +164,11 @@ export async function getLabworkStats(params?: { from?: string; to?: string }): 
   const url = query ? `/labworks/stats?${query}` : '/labworks/stats'
 
   const response = await apiClient.get<LabworkStatsResponse>(url)
+  return response.data
+}
+
+export async function getLabNames(): Promise<LabNamesResponse> {
+  const response = await apiClient.get<LabNamesResponse>('/labworks/labs')
   return response.data
 }
 

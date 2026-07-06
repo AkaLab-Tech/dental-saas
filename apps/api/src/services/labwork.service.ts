@@ -310,6 +310,20 @@ export async function listLabworks(
 }
 
 /**
+ * List distinct laboratory names previously used by a tenant, for autocomplete
+ */
+export async function listLabNames(tenantId: string): Promise<string[]> {
+  const labworks = await prisma.labwork.findMany({
+    where: { tenantId, isActive: true },
+    distinct: ['lab'],
+    select: { lab: true },
+    orderBy: { lab: 'asc' },
+  })
+
+  return labworks.map((l) => l.lab).filter((lab) => lab.length > 0)
+}
+
+/**
  * Update a labwork
  */
 export async function updateLabwork(
