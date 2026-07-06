@@ -40,6 +40,19 @@ const envSchema = z.object({
     message: 'CORS_ORIGIN cannot be "*" in production. Please configure a specific origin.',
     path: ['CORS_ORIGIN'],
   }
+).refine(
+  (data) => {
+    // Require a real DATABASE_URL in production so a misconfigured
+    // container fails fast at startup instead of on the first query.
+    if (data.NODE_ENV === 'production' && !data.DATABASE_URL) {
+      return false
+    }
+    return true
+  },
+  {
+    message: 'DATABASE_URL is required in production. Please configure the database connection string.',
+    path: ['DATABASE_URL'],
+  }
 )
 
 const parsed = envSchema.safeParse(process.env)
