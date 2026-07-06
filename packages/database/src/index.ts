@@ -24,6 +24,7 @@ function createPrismaClient(): PrismaClient {
 
   _pool = new Pool({
     connectionString: process.env.DATABASE_URL,
+    connectionTimeoutMillis: 5000,
   })
 
   // Store pool reference for cleanup
@@ -71,6 +72,15 @@ export const prisma = new Proxy({} as PrismaClient, {
     return Reflect.getOwnPropertyDescriptor(client, prop)
   },
 })
+
+/**
+ * Eagerly opens the database connection instead of waiting for the first
+ * query. Lets the caller fail fast at startup if the DB is unreachable,
+ * bounded by the pool's connectionTimeoutMillis.
+ */
+export async function connectDatabase(): Promise<void> {
+  await getPrismaClient().$connect()
+}
 
 /**
  * Cleanup function to close database connections gracefully.
