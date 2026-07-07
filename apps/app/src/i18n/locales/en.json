@@ -27,7 +27,9 @@
     "all": "All",
     "none": "None",
     "optional": "Optional",
-    "required": "Required"
+    "required": "Required",
+    "actions": "Actions",
+    "restore": "Restore"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -212,7 +214,13 @@
       "other": "Other",
       "preferNotToSay": "Prefer not to say"
     },
-    "years": "years"
+    "years": "years",
+    "list": {
+      "name": "Name",
+      "genderAge": "Gender / Age",
+      "contact": "Contact",
+      "viewRecord": "View record"
+    }
   },
   "doctors": {
     "title": "Doctors",
@@ -228,6 +236,12 @@
       "phone": "Phone",
       "specialty": "Specialty",
       "licenseNumber": "License number"
+    },
+    "list": {
+      "name": "Name",
+      "contact": "Contact",
+      "workingDays": "Working days",
+      "viewRecord": "View detail"
     }
   },
   "labworks": {

@@ -1,12 +1,21 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useSearchParams } from 'react-router'
 import { Plus, Search, AlertCircle, Stethoscope, Loader2, X } from 'lucide-react'
 import { useDoctorsStore } from '@/stores/doctors.store'
 import { DoctorCard } from '@/components/doctors/DoctorCard'
 import { DoctorFormModal } from '@/components/doctors/DoctorFormModal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+// SPIKE #213: throwaway list-view alternatives, gated behind ?view=. See docs/spikes/213-patient-doctor-list-views.md
+import { DoctorsTableView } from './spike/DoctorsTableView'
+import { DoctorsHybridView } from './spike/DoctorsHybridView'
 import type { Doctor, CreateDoctorData } from '@/lib/doctor-api'
 
 export function DoctorsPage() {
+  // SPIKE #213: ?view=table|hybrid|cards toggles the POC renderers below.
+  // Default (no param, or ?view=cards) is unchanged production behavior.
+  const [searchParams] = useSearchParams()
+  const spikeView = searchParams.get('view')
+
   const {
     doctors,
     stats,
@@ -238,19 +247,35 @@ export function DoctorsPage() {
         </div>
       )}
 
-      {/* Doctors grid */}
+      {/* Doctors grid (default) / SPIKE #213 view alternatives */}
       {doctors.length > 0 && (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {doctors.map((doctor) => (
-            <DoctorCard
-              key={doctor.id}
-              doctor={doctor}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onRestore={handleRestore}
-            />
-          ))}
-        </div>
+        spikeView === 'table' ? (
+          <DoctorsTableView
+            doctors={doctors}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onRestore={handleRestore}
+          />
+        ) : spikeView === 'hybrid' ? (
+          <DoctorsHybridView
+            doctors={doctors}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onRestore={handleRestore}
+          />
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {doctors.map((doctor) => (
+              <DoctorCard
+                key={doctor.id}
+                doctor={doctor}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onRestore={handleRestore}
+              />
+            ))}
+          </div>
+        )
       )}
 
       {/* Form Modal */}

@@ -27,7 +27,9 @@
     "all": "Todos",
     "none": "Ninguno",
     "optional": "Opcional",
-    "required": "Requerido"
+    "required": "Requerido",
+    "actions": "Acciones",
+    "restore": "Restaurar"
   },
   "nav": {
     "dashboard": "Panel de Control",
@@ -212,7 +214,13 @@
       "other": "Otro",
       "preferNotToSay": "Prefiere no decir"
     },
-    "years": "años"
+    "years": "años",
+    "list": {
+      "name": "Nombre",
+      "genderAge": "Género / Edad",
+      "contact": "Contacto",
+      "viewRecord": "Ver ficha"
+    }
   },
   "doctors": {
     "title": "Doctores",
@@ -228,6 +236,12 @@
       "phone": "Teléfono",
       "specialty": "Especialidad",
       "licenseNumber": "Número de licencia"
+    },
+    "list": {
+      "name": "Nombre",
+      "contact": "Contacto",
+      "workingDays": "Días de trabajo",
+      "viewRecord": "Ver detalle"
     }
   },
   "labworks": {
