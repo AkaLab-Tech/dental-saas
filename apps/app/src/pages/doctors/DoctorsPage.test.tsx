@@ -45,16 +45,20 @@ vi.mock('@/stores/doctors.store', () => ({
   }),
 }))
 
-// Mock DoctorCard component
-vi.mock('@/components/doctors/DoctorCard', () => ({
-  DoctorCard: ({ doctor, onEdit, onDelete, onRestore }: any) => (
-    <div data-testid={`doctor-card-${doctor.id}`}>
-      <span>Dr. {doctor.firstName} {doctor.lastName}</span>
-      <button onClick={() => onEdit(doctor)}>Editar</button>
-      <button onClick={() => onDelete(doctor)}>Eliminar</button>
-      {doctor.isActive === false && onRestore && (
-        <button onClick={() => onRestore(doctor)}>Restaurar</button>
-      )}
+// Mock DoctorsListView component
+vi.mock('@/components/doctors/DoctorsListView', () => ({
+  DoctorsListView: ({ doctors, onEdit, onDelete, onRestore }: any) => (
+    <div data-testid="doctors-list-view">
+      {doctors.map((doctor: any) => (
+        <div key={doctor.id} data-testid={`doctor-row-${doctor.id}`}>
+          <span>Dr. {doctor.firstName} {doctor.lastName}</span>
+          <button onClick={() => onEdit(doctor)}>Editar</button>
+          <button onClick={() => onDelete(doctor)}>Eliminar</button>
+          {doctor.isActive === false && onRestore && (
+            <button onClick={() => onRestore(doctor)}>Restaurar</button>
+          )}
+        </div>
+      ))}
     </div>
   ),
 }))
@@ -322,8 +326,8 @@ describe('DoctorsPage', () => {
       mockDoctorsState.doctors = [mockDoctor1, mockDoctor2]
       renderDoctorsPage()
 
-      expect(screen.getByTestId('doctor-card-1')).toBeInTheDocument()
-      expect(screen.getByTestId('doctor-card-2')).toBeInTheDocument()
+      expect(screen.getByTestId('doctor-row-1')).toBeInTheDocument()
+      expect(screen.getByTestId('doctor-row-2')).toBeInTheDocument()
       expect(screen.getByText(/dr. juan pérez/i)).toBeInTheDocument()
       expect(screen.getByText(/dr. maría garcía/i)).toBeInTheDocument()
     })
@@ -333,7 +337,7 @@ describe('DoctorsPage', () => {
       mockDoctorsState.showInactive = true
       renderDoctorsPage()
 
-      expect(screen.getByTestId('doctor-card-3')).toBeInTheDocument()
+      expect(screen.getByTestId('doctor-row-3')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /restaurar/i })).toBeInTheDocument()
     })
   })

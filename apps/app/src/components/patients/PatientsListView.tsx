@@ -1,15 +1,10 @@
-/**
- * SPIKE POC for #213 — throwaway code, not for production.
- * Single responsive component: dense table on desktop (lg+), compact
- * list-row cards on mobile. Reached via PatientsPage `?view=hybrid`.
- * See docs/spikes/213-patient-doctor-list-views.md.
- */
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, Pencil, RotateCcw, Trash2 } from 'lucide-react'
+import { ExternalLink, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import type { Patient } from '@/lib/patient-api'
 import { calculateAge, getPatientInitials } from '@/lib/patient-api'
+import { SortableHeader, useSortState } from '@/components/list/SortableHeader'
 
 const GENDER_LABEL_KEYS: Record<string, string> = {
   male: 'patients.form.male',
@@ -21,7 +16,7 @@ const GENDER_LABEL_KEYS: Record<string, string> = {
 type SortKey = 'name' | 'gender' | 'dob'
 type SortDir = 'asc' | 'desc'
 
-interface PatientsHybridViewProps {
+interface PatientsListViewProps {
   patients: Patient[]
   onEdit: (patient: Patient) => void
   onDelete: (patient: Patient) => void
@@ -100,28 +95,15 @@ function ActionButtons({
   )
 }
 
-export function PatientsHybridView({ patients, onEdit, onDelete, onRestore }: PatientsHybridViewProps) {
-  const { t } = useTranslation()
-  const [sortKey, setSortKey] = useState<SortKey>('name')
-  const [sortDir, setSortDir] = useState<SortDir>('asc')
+export function PatientsListView({ patients, onEdit, onDelete, onRestore }: PatientsListViewProps) {
+  const { t, i18n } = useTranslation()
+  const { sortKey, sortDir, toggleSort } = useSortState<SortKey>('name')
   const sortedPatients = useSortedPatients(patients, sortKey, sortDir)
 
-  const toggleSort = (key: SortKey) => {
-    if (key === sortKey) {
-      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))
-    } else {
-      setSortKey(key)
-      setSortDir('asc')
-    }
-  }
-
-  const SortIcon = ({ column }: { column: SortKey }) => {
-    if (column !== sortKey) return <ArrowUpDown className="h-3.5 w-3.5 text-gray-300" />
-    return sortDir === 'asc' ? (
-      <ArrowUp className="h-3.5 w-3.5 text-gray-600" />
-    ) : (
-      <ArrowDown className="h-3.5 w-3.5 text-gray-600" />
-    )
+  const columnLabels: Record<SortKey, string> = {
+    name: t('patients.list.name'),
+    gender: t('patients.list.genderAge'),
+    dob: t('patients.form.dob'),
   }
 
   return (
@@ -132,27 +114,21 @@ export function PatientsHybridView({ patients, onEdit, onDelete, onRestore }: Pa
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               {(['name', 'gender', 'dob'] as SortKey[]).map((column) => (
-                <th key={column} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  <button
-                    type="button"
-                    onClick={() => toggleSort(column)}
-                    className="inline-flex items-center gap-1 hover:text-gray-700"
-                    aria-sort={sortKey === column ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                  >
-                    {column === 'name' && t('patients.list.name')}
-                    {column === 'gender' && t('patients.list.genderAge')}
-                    {column === 'dob' && t('patients.form.dob')}
-                    <SortIcon column={column} />
-                  </button>
-                </th>
+                <SortableHeader
+                  key={column}
+                  label={columnLabels[column]}
+                  active={sortKey === column}
+                  dir={sortDir}
+                  onClick={() => toggleSort(column)}
+                />
               ))}
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">
                 {t('patients.list.contact')}
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-3 text-start text-xs font-medium text-gray-500 uppercase tracking-wider">
                 {t('common.status')}
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-3 text-end text-xs font-medium text-gray-500 uppercase tracking-wider">
                 {t('common.actions')}
               </th>
             </tr>
@@ -163,7 +139,7 @@ export function PatientsHybridView({ patients, onEdit, onDelete, onRestore }: Pa
               const genderLabel = patient.gender ? t(GENDER_LABEL_KEYS[patient.gender] || patient.gender) : null
               return (
                 <tr key={patient.id} className={patient.isActive ? 'hover:bg-gray-50' : 'bg-orange-50/40 hover:bg-orange-50'}>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-start">
                     <div className="flex items-center gap-3">
                       <div className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
                         <span className="text-xs font-semibold text-white">{getPatientInitials(patient)}</span>
@@ -173,17 +149,19 @@ export function PatientsHybridView({ patients, onEdit, onDelete, onRestore }: Pa
                       </p>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                  <td className="px-4 py-3 text-start text-gray-600 whitespace-nowrap">
                     {[genderLabel, age !== null ? `${age} ${t('patients.years')}` : null].filter(Boolean).join(' · ') || '—'}
                   </td>
-                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                    {patient.dob ? new Date(patient.dob).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                  <td className="px-4 py-3 text-start text-gray-600 whitespace-nowrap">
+                    {patient.dob
+                      ? new Date(patient.dob).toLocaleDateString(i18n.language, { day: '2-digit', month: 'short', year: 'numeric' })
+                      : '—'}
                   </td>
-                  <td className="px-4 py-3 text-gray-600">
+                  <td className="px-4 py-3 text-start text-gray-600">
                     <div className="truncate max-w-[220px]">{patient.phone || '—'}</div>
                     <div className="truncate max-w-[220px] text-xs text-gray-400">{patient.email || ''}</div>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-start">
                     {patient.isActive ? (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                         {t('common.active')}
@@ -194,7 +172,7 @@ export function PatientsHybridView({ patients, onEdit, onDelete, onRestore }: Pa
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-end">
                     <div className="flex items-center justify-end gap-1">
                       <ActionButtons patient={patient} onEdit={onEdit} onDelete={onDelete} onRestore={onRestore} />
                     </div>
@@ -250,4 +228,4 @@ export function PatientsHybridView({ patients, onEdit, onDelete, onRestore }: Pa
   )
 }
 
-export default PatientsHybridView
+export default PatientsListView
