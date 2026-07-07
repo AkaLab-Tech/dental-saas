@@ -27,7 +27,9 @@
     "all": "الكل",
     "none": "لا شيء",
     "optional": "اختياري",
-    "required": "مطلوب"
+    "required": "مطلوب",
+    "actions": "الإجراءات",
+    "restore": "استعادة"
   },
   "nav": {
     "dashboard": "لوحة التحكم",
@@ -212,7 +214,13 @@
       "other": "آخر",
       "preferNotToSay": "أفضل عدم الإفصاح"
     },
-    "years": "سنة"
+    "years": "سنة",
+    "list": {
+      "name": "الاسم",
+      "genderAge": "الجنس / العمر",
+      "contact": "التواصل",
+      "viewRecord": "عرض الملف"
+    }
   },
   "doctors": {
     "title": "الأطباء",
@@ -228,6 +236,12 @@
       "phone": "الهاتف",
       "specialty": "التخصص",
       "licenseNumber": "رقم الترخيص"
+    },
+    "list": {
+      "name": "الاسم",
+      "contact": "التواصل",
+      "workingDays": "أيام العمل",
+      "viewRecord": "عرض التفاصيل"
     }
   },
   "labworks": {
