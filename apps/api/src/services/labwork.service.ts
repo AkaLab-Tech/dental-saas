@@ -102,6 +102,7 @@ export interface ListLabworksOptions {
   isDelivered?: boolean
   from?: Date
   to?: Date
+  search?: string
 }
 
 /**
@@ -287,6 +288,13 @@ export async function listLabworks(
     ...(options?.isDelivered !== undefined && { isDelivered: options.isDelivered }),
     ...(options?.from && { date: { gte: options.from } }),
     ...(options?.to && { date: { lte: options.to } }),
+    ...(options?.search && {
+      OR: [
+        { lab: { contains: options.search, mode: 'insensitive' } },
+        { patient: { firstName: { contains: options.search, mode: 'insensitive' } } },
+        { patient: { lastName: { contains: options.search, mode: 'insensitive' } } },
+      ],
+    }),
   }
 
   const [labworks, total] = await Promise.all([

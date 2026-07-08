@@ -327,6 +327,254 @@ describe('Labworks Routes - Permission Tests', () => {
   })
 })
 
+describe('GET /api/labworks?search= (server-side search by lab and patient)', () => {
+  let tenantId: string
+  let otherTenantId: string
+  let staffToken: string
+  let garciaPatientId: string
+  let smithPatientId: string
+  const testSlug = `test-labworks-search-${Date.now()}`
+  const otherSlug = `test-labworks-search-other-${Date.now()}`
+
+  function generateToken(userId: string, tenantId: string, role: string) {
+    return sign({ sub: userId, tenantId, role }, JWT_SECRET, { expiresIn: '1h' })
+  }
+
+  async function createTenant(slug: string, name: string) {
+    const tenant = await prisma.tenant.create({
+      data: { name, slug, currency: 'USD', timezone: 'America/New_York' },
+    })
+
+    let freePlan = await prisma.plan.findUnique({ where: { name: 'free' } })
+    if (!freePlan) {
+      freePlan = await prisma.plan.create({
+        data: {
+          name: 'free',
+          displayName: 'Free',
+          price: 0,
+          maxAdmins: 1,
+          maxDoctors: 3,
+          maxPatients: 15,
+        },
+      })
+    }
+
+    await prisma.subscription.create({
+      data: {
+        tenantId: tenant.id,
+        planId: freePlan.id,
+        status: 'ACTIVE',
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    })
+
+    return tenant
+  }
+
+  beforeAll(async () => {
+    const hashedPassword = await hashPassword('password123')
+
+    const tenant = await createTenant(testSlug, 'Test Clinic for Labwork Search')
+    tenantId = tenant.id
+
+    const staffUser = await prisma.user.create({
+      data: {
+        tenantId,
+        email: 'staff@labworks-search-test.com',
+        firstName: 'Staff',
+        lastName: 'User',
+        passwordHash: hashedPassword,
+        role: 'STAFF',
+      },
+    })
+    staffToken = generateToken(staffUser.id, tenantId, 'STAFF')
+
+    const garciaPatient = await prisma.patient.create({
+      data: { tenantId, firstName: 'Maria', lastName: 'Garcia' },
+    })
+    garciaPatientId = garciaPatient.id
+
+    const smithPatient = await prisma.patient.create({
+      data: { tenantId, firstName: 'John', lastName: 'Smith' },
+    })
+    smithPatientId = smithPatient.id
+
+    // Matches by lab name.
+    await prisma.labwork.create({
+      data: {
+        tenantId,
+        lab: 'Acme Dental Lab',
+        date: new Date('2026-02-01'),
+        isPaid: true,
+        isDelivered: false,
+      },
+    })
+    // Matches by patient first name ("Maria"), lab unrelated.
+    await prisma.labwork.create({
+      data: {
+        tenantId,
+        patientId: garciaPatientId,
+        lab: 'Unrelated Lab Co',
+        date: new Date('2026-02-02'),
+        isPaid: false,
+        isDelivered: false,
+      },
+    })
+    // Matches by patient last name ("Smith"), lab unrelated, isPaid=true so it
+    // can be used to prove search AND-combines with the isPaid filter.
+    await prisma.labwork.create({
+      data: {
+        tenantId,
+        patientId: smithPatientId,
+        lab: 'Other Lab',
+        date: new Date('2026-02-03'),
+        isPaid: true,
+        isDelivered: false,
+      },
+    })
+    // No match for any of the search terms used below.
+    await prisma.labwork.create({
+      data: {
+        tenantId,
+        lab: 'Zzz Nonmatching Lab',
+        date: new Date('2026-02-04'),
+        isPaid: false,
+        isDelivered: false,
+      },
+    })
+    // Soft-deleted labwork whose lab name would otherwise match "Acme" —
+    // must be excluded (search combines with the default isActive filter).
+    await prisma.labwork.create({
+      data: {
+        tenantId,
+        lab: 'Acme Deleted Lab',
+        date: new Date('2026-02-05'),
+        isActive: false,
+      },
+    })
+
+    // Other tenant: a labwork with a lab name that would match "Acme" must
+    // never leak into the first tenant's search results.
+    const otherTenant = await createTenant(otherSlug, 'Other Clinic for Labwork Search')
+    otherTenantId = otherTenant.id
+    await prisma.labwork.create({
+      data: { tenantId: otherTenantId, lab: 'Acme Other Tenant Lab', date: new Date('2026-02-01') },
+    })
+  })
+
+  afterAll(async () => {
+    await prisma.labwork.deleteMany({ where: { tenantId: { in: [tenantId, otherTenantId] } } })
+    await prisma.patient.deleteMany({ where: { tenantId: { in: [tenantId, otherTenantId] } } })
+    await prisma.user.deleteMany({ where: { tenantId: { in: [tenantId, otherTenantId] } } })
+    await prisma.subscription.deleteMany({ where: { tenantId: { in: [tenantId, otherTenantId] } } })
+    await prisma.tenant.deleteMany({ where: { id: { in: [tenantId, otherTenantId] } } })
+  })
+
+  it('filters by lab name when search matches the lab field', async () => {
+    const response = await request(app)
+      .get('/api/labworks?search=Acme')
+      .set('Authorization', `Bearer ${staffToken}`)
+
+    expect(response.status).toBe(200)
+    const labs = response.body.data.map((l: { lab: string }) => l.lab)
+    expect(labs).toEqual(['Acme Dental Lab'])
+  })
+
+  it('is case-insensitive when matching the lab field', async () => {
+    const response = await request(app)
+      .get('/api/labworks?search=aCmE')
+      .set('Authorization', `Bearer ${staffToken}`)
+
+    expect(response.status).toBe(200)
+    const labs = response.body.data.map((l: { lab: string }) => l.lab)
+    expect(labs).toEqual(['Acme Dental Lab'])
+  })
+
+  it('filters by patient first name when search matches firstName', async () => {
+    const response = await request(app)
+      .get('/api/labworks?search=Maria')
+      .set('Authorization', `Bearer ${staffToken}`)
+
+    expect(response.status).toBe(200)
+    expect(response.body.data).toHaveLength(1)
+    expect(response.body.data[0].patientId).toBe(garciaPatientId)
+    expect(response.body.data[0].lab).toBe('Unrelated Lab Co')
+  })
+
+  it('filters by patient last name when search matches lastName, case-insensitively', async () => {
+    const response = await request(app)
+      .get('/api/labworks?search=smith')
+      .set('Authorization', `Bearer ${staffToken}`)
+
+    expect(response.status).toBe(200)
+    expect(response.body.data).toHaveLength(1)
+    expect(response.body.data[0].patientId).toBe(smithPatientId)
+  })
+
+  it('returns an empty list when search matches nothing', async () => {
+    const response = await request(app)
+      .get('/api/labworks?search=NoSuchLabOrPatientAtAll')
+      .set('Authorization', `Bearer ${staffToken}`)
+
+    expect(response.status).toBe(200)
+    expect(response.body.data).toEqual([])
+    expect(response.body.pagination.total).toBe(0)
+  })
+
+  it('excludes soft-deleted labworks even when their lab name matches the search term', async () => {
+    const response = await request(app)
+      .get('/api/labworks?search=Acme')
+      .set('Authorization', `Bearer ${staffToken}`)
+
+    const labs = response.body.data.map((l: { lab: string }) => l.lab)
+    expect(labs).not.toContain('Acme Deleted Lab')
+  })
+
+  it('does not leak matches from another tenant', async () => {
+    const response = await request(app)
+      .get('/api/labworks?search=Acme')
+      .set('Authorization', `Bearer ${staffToken}`)
+
+    const labs = response.body.data.map((l: { lab: string }) => l.lab)
+    expect(labs).not.toContain('Acme Other Tenant Lab')
+  })
+
+  it('combines search with the isPaid filter (AND), not replacing it', async () => {
+    // "Other Lab" (patient Smith) has isPaid=true. search=smith + isPaid=true
+    // should return that single row; search=smith + isPaid=false should
+    // return nothing, proving isPaid keeps filtering alongside search rather
+    // than being ignored once search is present.
+    const paidResponse = await request(app)
+      .get('/api/labworks?search=smith&isPaid=true')
+      .set('Authorization', `Bearer ${staffToken}`)
+
+    expect(paidResponse.status).toBe(200)
+    expect(paidResponse.body.data).toHaveLength(1)
+    expect(paidResponse.body.data[0].patientId).toBe(smithPatientId)
+
+    // Same search term but isPaid=false must exclude that same row, proving
+    // search doesn't override/ignore the isPaid filter.
+    const unpaidResponse = await request(app)
+      .get('/api/labworks?search=smith&isPaid=false')
+      .set('Authorization', `Bearer ${staffToken}`)
+
+    expect(unpaidResponse.status).toBe(200)
+    expect(unpaidResponse.body.data).toEqual([])
+  })
+
+  it('returns the full unfiltered set when search is omitted (existing behavior unchanged)', async () => {
+    // 4 active labworks were seeded in this describe block (a 5th is
+    // soft-deleted and excluded by the default isActive filter).
+    const response = await request(app)
+      .get('/api/labworks')
+      .set('Authorization', `Bearer ${staffToken}`)
+
+    expect(response.status).toBe(200)
+    expect(response.body.data.length).toBeGreaterThanOrEqual(4)
+  })
+})
+
 describe('GET /api/labworks/labs (Lab name autocomplete)', () => {
   // Isolated tenants so seeded lab names/dedup/sort assertions aren't polluted
   // by labworks created in the describe block above.

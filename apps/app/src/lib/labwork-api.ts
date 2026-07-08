@@ -116,6 +116,7 @@ export async function getLabworks(params?: LabworkListParams): Promise<LabworkLi
 
   if (params?.limit) searchParams.set('limit', String(params.limit))
   if (params?.offset) searchParams.set('offset', String(params.offset))
+  if (params?.search) searchParams.set('search', params.search)
   if (params?.patientId) searchParams.set('patientId', params.patientId)
   if (params?.isPaid !== undefined) searchParams.set('isPaid', String(params.isPaid))
   if (params?.isDelivered !== undefined) searchParams.set('isDelivered', String(params.isDelivered))
