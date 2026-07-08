@@ -6,6 +6,7 @@ vi.mock('@dental/database', () => ({
     labwork: {
       findMany: vi.fn(),
       count: vi.fn(),
+      aggregate: vi.fn(),
     },
   },
   Prisma: {},
@@ -21,13 +22,14 @@ vi.mock('../utils/logger.js', () => ({
 }))
 
 import { prisma } from '@dental/database'
-import { listLabworks } from './labwork.service.js'
+import { listLabworks, countLabworks, getLabworkStats } from './labwork.service.js'
 
 describe('labwork.service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(prisma.labwork.findMany).mockResolvedValue([])
     vi.mocked(prisma.labwork.count).mockResolvedValue(0)
+    vi.mocked(prisma.labwork.aggregate).mockResolvedValue({ _sum: { price: null } } as never)
   })
 
   describe('listLabworks — search', () => {
@@ -98,13 +100,11 @@ describe('labwork.service', () => {
     })
 
     it('combines search with patientId, isDelivered, and a from-date filter simultaneously', async () => {
-      // Note: only `from` is exercised here (not `from` + `to` together). The
-      // service builds `date` via two separate object-spreads keyed on `date`
-      // (`{ date: { gte } }` then `{ date: { lte } }`), so when both bounds are
-      // supplied the second spread clobbers the first and `gte` is silently
-      // lost. That is a pre-existing bug in `listLabworks` unrelated to the
-      // search feature (present before this task's diff) — reported separately,
-      // not fixed here since it is out of scope for the search change.
+      // `date` is built from a single merged object spreading both `gte` (from)
+      // and `lte` (to) into the same `date: {...}` literal, so either bound can
+      // be supplied independently without clobbering the other. Here only
+      // `from` is supplied; see the "date range filtering" describe block below
+      // for the combined from+to regression coverage.
       const from = new Date('2026-01-01')
 
       await listLabworks('tenant-1', {
@@ -135,6 +135,137 @@ describe('labwork.service', () => {
       const countWhere = vi.mocked(prisma.labwork.count).mock.calls[0][0]!.where
       expect(countWhere).toHaveProperty('OR')
       expect(countWhere).toEqual(vi.mocked(prisma.labwork.findMany).mock.calls[0][0]!.where)
+    })
+  })
+
+  describe('listLabworks — date range filtering', () => {
+    it('applies only a lower bound (gte) when only `from` is given', async () => {
+      const from = new Date('2026-01-01')
+
+      await listLabworks('tenant-1', { from })
+
+      const where = vi.mocked(prisma.labwork.findMany).mock.calls[0][0]!.where
+      expect(where).toEqual({ tenantId: 'tenant-1', isActive: true, date: { gte: from } })
+    })
+
+    it('applies only an upper bound (lte) when only `to` is given', async () => {
+      const to = new Date('2026-01-31')
+
+      await listLabworks('tenant-1', { to })
+
+      const where = vi.mocked(prisma.labwork.findMany).mock.calls[0][0]!.where
+      expect(where).toEqual({ tenantId: 'tenant-1', isActive: true, date: { lte: to } })
+    })
+
+    it('omits the `date` key entirely when neither `from` nor `to` is given', async () => {
+      await listLabworks('tenant-1', {})
+
+      const where = vi.mocked(prisma.labwork.findMany).mock.calls[0][0]!.where
+      expect(where).not.toHaveProperty('date')
+    })
+
+    it('REGRESSION: applies BOTH bounds (gte and lte) when from and to are given together — would fail pre-fix (second spread used to clobber the first)', async () => {
+      const from = new Date('2026-01-01')
+      const to = new Date('2026-01-31')
+
+      await listLabworks('tenant-1', { from, to })
+
+      const where = vi.mocked(prisma.labwork.findMany).mock.calls[0][0]!.where as Record<string, unknown>
+      expect(where.date).toEqual({ gte: from, lte: to })
+    })
+
+    it('applies the combined from+to date filter to the count query used for pagination totals too', async () => {
+      const from = new Date('2026-01-01')
+      const to = new Date('2026-01-31')
+
+      await listLabworks('tenant-1', { from, to })
+
+      const countWhere = vi.mocked(prisma.labwork.count).mock.calls[0][0]!.where as Record<string, unknown>
+      expect(countWhere.date).toEqual({ gte: from, lte: to })
+    })
+  })
+
+  describe('countLabworks — date range filtering', () => {
+    it('applies only a lower bound (gte) when only `from` is given', async () => {
+      const from = new Date('2026-01-01')
+
+      await countLabworks('tenant-1', { from })
+
+      const where = vi.mocked(prisma.labwork.count).mock.calls[0][0]!.where
+      expect(where).toEqual({ tenantId: 'tenant-1', isActive: true, date: { gte: from } })
+    })
+
+    it('applies only an upper bound (lte) when only `to` is given', async () => {
+      const to = new Date('2026-01-31')
+
+      await countLabworks('tenant-1', { to })
+
+      const where = vi.mocked(prisma.labwork.count).mock.calls[0][0]!.where
+      expect(where).toEqual({ tenantId: 'tenant-1', isActive: true, date: { lte: to } })
+    })
+
+    it('omits the `date` key entirely when neither `from` nor `to` is given', async () => {
+      await countLabworks('tenant-1', {})
+
+      const where = vi.mocked(prisma.labwork.count).mock.calls[0][0]!.where
+      expect(where).not.toHaveProperty('date')
+    })
+
+    it('REGRESSION: applies BOTH bounds (gte and lte) when from and to are given together — would fail pre-fix (second spread used to clobber the first)', async () => {
+      const from = new Date('2026-01-01')
+      const to = new Date('2026-01-31')
+
+      await countLabworks('tenant-1', { from, to })
+
+      const where = vi.mocked(prisma.labwork.count).mock.calls[0][0]!.where as Record<string, unknown>
+      expect(where.date).toEqual({ gte: from, lte: to })
+    })
+  })
+
+  describe('getLabworkStats — date range filtering', () => {
+    it('applies only a lower bound (gte) when only `from` is given', async () => {
+      const from = new Date('2026-01-01')
+
+      await getLabworkStats('tenant-1', { from })
+
+      const where = vi.mocked(prisma.labwork.count).mock.calls[0][0]!.where
+      expect(where).toEqual({ tenantId: 'tenant-1', isActive: true, date: { gte: from } })
+    })
+
+    it('applies only an upper bound (lte) when only `to` is given', async () => {
+      const to = new Date('2026-01-31')
+
+      await getLabworkStats('tenant-1', { to })
+
+      const where = vi.mocked(prisma.labwork.count).mock.calls[0][0]!.where
+      expect(where).toEqual({ tenantId: 'tenant-1', isActive: true, date: { lte: to } })
+    })
+
+    it('omits the `date` key entirely when neither `from` nor `to` is given', async () => {
+      await getLabworkStats('tenant-1', {})
+
+      const where = vi.mocked(prisma.labwork.count).mock.calls[0][0]!.where
+      expect(where).not.toHaveProperty('date')
+    })
+
+    it('REGRESSION: applies BOTH bounds (gte and lte) when from and to are given together — would fail pre-fix (second spread used to clobber the first)', async () => {
+      const from = new Date('2026-01-01')
+      const to = new Date('2026-01-31')
+
+      await getLabworkStats('tenant-1', { from, to })
+
+      const where = vi.mocked(prisma.labwork.count).mock.calls[0][0]!.where as Record<string, unknown>
+      expect(where.date).toEqual({ gte: from, lte: to })
+    })
+
+    it('applies the same combined from+to date filter to the price aggregate query', async () => {
+      const from = new Date('2026-01-01')
+      const to = new Date('2026-01-31')
+
+      await getLabworkStats('tenant-1', { from, to })
+
+      const aggregateWhere = vi.mocked(prisma.labwork.aggregate).mock.calls[0][0]!.where as Record<string, unknown>
+      expect(aggregateWhere.date).toEqual({ gte: from, lte: to })
     })
   })
 })
