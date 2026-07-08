@@ -91,6 +91,7 @@ describe('labwork-api', () => {
       const result = await getLabworks({
         limit: 10,
         offset: 5,
+        search: 'Acme',
         patientId: 'patient-789',
         isPaid: true,
         isDelivered: false,
@@ -100,9 +101,39 @@ describe('labwork-api', () => {
       })
 
       expect(apiClient.get).toHaveBeenCalledWith(
-        '/labworks?limit=10&offset=5&patientId=patient-789&isPaid=true&isDelivered=false&from=2024-01-01&to=2024-01-31&includeInactive=true'
+        '/labworks?limit=10&offset=5&search=Acme&patientId=patient-789&isPaid=true&isDelivered=false&from=2024-01-01&to=2024-01-31&includeInactive=true'
       )
       expect(result.data).toEqual([mockLabwork])
+    })
+
+    it('should include the search param in the query string when provided', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [mockLabwork], pagination: mockPagination },
+      })
+
+      await getLabworks({ search: 'Garcia' })
+
+      expect(apiClient.get).toHaveBeenCalledWith('/labworks?search=Garcia')
+    })
+
+    it('should omit the search param when it is an empty string', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [], pagination: mockPagination },
+      })
+
+      await getLabworks({ search: '' })
+
+      expect(apiClient.get).toHaveBeenCalledWith('/labworks')
+    })
+
+    it('should omit the search param when it is undefined', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [], pagination: mockPagination },
+      })
+
+      await getLabworks({ search: undefined, isPaid: true })
+
+      expect(apiClient.get).toHaveBeenCalledWith('/labworks?isPaid=true')
     })
 
     it('should fetch labworks with boolean false values', async () => {
