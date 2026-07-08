@@ -152,8 +152,12 @@ export async function countLabworks(
     isActive: true,
     ...(options?.isPaid !== undefined && { isPaid: options.isPaid }),
     ...(options?.isDelivered !== undefined && { isDelivered: options.isDelivered }),
-    ...(options?.from && { date: { gte: options.from } }),
-    ...(options?.to && { date: { lte: options.to } }),
+    ...((options?.from || options?.to) && {
+      date: {
+        ...(options.from && { gte: options.from }),
+        ...(options.to && { lte: options.to }),
+      },
+    }),
   }
 
   return prisma.labwork.count({ where })
@@ -286,8 +290,12 @@ export async function listLabworks(
     ...(options?.patientId && { patientId: options.patientId }),
     ...(options?.isPaid !== undefined && { isPaid: options.isPaid }),
     ...(options?.isDelivered !== undefined && { isDelivered: options.isDelivered }),
-    ...(options?.from && { date: { gte: options.from } }),
-    ...(options?.to && { date: { lte: options.to } }),
+    ...((options?.from || options?.to) && {
+      date: {
+        ...(options.from && { gte: options.from }),
+        ...(options.to && { lte: options.to }),
+      },
+    }),
     ...(options?.search && {
       OR: [
         { lab: { contains: options.search, mode: 'insensitive' } },
@@ -487,8 +495,12 @@ export async function getLabworkStats(
   const where: Prisma.LabworkWhereInput = {
     tenantId,
     isActive: true,
-    ...(options?.from && { date: { gte: options.from } }),
-    ...(options?.to && { date: { lte: options.to } }),
+    ...((options?.from || options?.to) && {
+      date: {
+        ...(options.from && { gte: options.from }),
+        ...(options.to && { lte: options.to }),
+      },
+    }),
   }
 
   const [total, paid, delivered, aggregate, paidAggregate] = await Promise.all([
