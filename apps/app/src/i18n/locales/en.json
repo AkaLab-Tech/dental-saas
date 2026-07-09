@@ -162,6 +162,13 @@
     "collapseSidebar": "Hide panel",
     "expandSidebar": "Show panel",
     "saving": "Saving...",
+    "tabs": {
+      "patient": "Patient",
+      "appointments": "Appointments",
+      "budgets": "Budgets",
+      "payments": "Payments",
+      "images": "Images"
+    },
     "appointments": {
       "sectionTitle": "Appointments",
       "upcoming": "Upcoming",
