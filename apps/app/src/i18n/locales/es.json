@@ -166,6 +166,7 @@
       "patient": "Paciente",
       "appointments": "Citas",
       "budgets": "Presupuestos",
+      "labworks": "Laboratorio",
       "payments": "Entregas",
       "images": "Imágenes"
     },
