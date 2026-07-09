@@ -172,7 +172,7 @@ describe('PatientDetailPage — tabs', () => {
   })
 
   describe('tab rendering (with PAYMENTS_VIEW)', () => {
-    it('renders all five tabs when the user has PAYMENTS_VIEW', async () => {
+    it('renders all six tabs when the user has PAYMENTS_VIEW', async () => {
       await renderLoadedPage()
 
       const tabs = screen.getByRole('navigation', { name: 'Tabs' })
@@ -181,18 +181,38 @@ describe('PatientDetailPage — tabs', () => {
       expect(screen.getByRole('button', { name: /patients\.tabs\.patient/ })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /patients\.tabs\.appointments/ })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /patients\.tabs\.budgets/ })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /patients\.tabs\.labworks/ })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /patients\.tabs\.payments/ })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /patients\.tabs\.images/ })).toBeInTheDocument()
     })
 
-    it('defaults to the Patient tab active with contact info visible', async () => {
+    it('renders the tab buttons in order: Patient, Appointments, Budgets, Labworks, Payments, Images', async () => {
+      await renderLoadedPage()
+
+      const tabs = screen.getByRole('navigation', { name: 'Tabs' })
+      const labels = Array.from(tabs.querySelectorAll('button')).map((button) =>
+        button.textContent?.trim()
+      )
+      expect(labels).toEqual([
+        'patients.tabs.patient',
+        'patients.tabs.appointments',
+        'patients.tabs.budgets',
+        'patients.tabs.labworks',
+        'patients.tabs.payments',
+        'patients.tabs.images',
+      ])
+    })
+
+    it('defaults to the Patient tab active with contact info and the odontogram visible', async () => {
       await renderLoadedPage()
 
       const patientTabButton = screen.getByRole('button', { name: /patients\.tabs\.patient/ })
       expect(patientTabButton).toHaveAttribute('aria-selected', 'true')
 
       expect(isHidden(screen.getByText('juan@example.com'))).toBe(false)
+      expect(isHidden(screen.getByTestId('odontogram-chart'))).toBe(false)
       expect(isHidden(screen.getByTestId('appointments-section'))).toBe(true)
+      expect(isHidden(screen.getByTestId('labworks-section'))).toBe(true)
     })
   })
 
@@ -209,9 +229,11 @@ describe('PatientDetailPage — tabs', () => {
       expect(isHidden(screen.getByTestId('appointments-section'))).toBe(false)
       expect(screen.getByTestId('appointments-section')).toHaveTextContent('appointments-section:p1')
 
-      // Patient tab panel (contact info) is now hidden
+      // Patient tab panel (contact info + odontogram) is now hidden
       expect(isHidden(screen.getByText('juan@example.com'))).toBe(true)
+      expect(isHidden(screen.getByTestId('odontogram-chart'))).toBe(true)
       expect(isHidden(screen.getByTestId('budgets-section'))).toBe(true)
+      expect(isHidden(screen.getByTestId('labworks-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('payments-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('image-upload'))).toBe(true)
     })
@@ -223,7 +245,27 @@ describe('PatientDetailPage — tabs', () => {
 
       expect(isHidden(screen.getByTestId('budgets-section'))).toBe(false)
       expect(screen.getByTestId('budgets-section')).toHaveTextContent('budgets-section:p1')
+      expect(isHidden(screen.getByTestId('odontogram-chart'))).toBe(true)
       expect(isHidden(screen.getByTestId('appointments-section'))).toBe(true)
+      expect(isHidden(screen.getByTestId('labworks-section'))).toBe(true)
+      expect(isHidden(screen.getByTestId('payments-section'))).toBe(true)
+      expect(isHidden(screen.getByTestId('image-upload'))).toBe(true)
+    })
+
+    it('shows labworks content and hides others when clicking the Laboratorio tab', async () => {
+      await renderLoadedPage()
+
+      fireEvent.click(screen.getByRole('button', { name: /patients\.tabs\.labworks/ }))
+
+      expect(screen.getByRole('button', { name: /patients\.tabs\.labworks/ })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
+      expect(isHidden(screen.getByTestId('labworks-section'))).toBe(false)
+      expect(screen.getByTestId('labworks-section')).toHaveTextContent('labworks-section:p1')
+      expect(isHidden(screen.getByTestId('odontogram-chart'))).toBe(true)
+      expect(isHidden(screen.getByTestId('appointments-section'))).toBe(true)
+      expect(isHidden(screen.getByTestId('budgets-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('payments-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('image-upload'))).toBe(true)
     })
@@ -235,8 +277,10 @@ describe('PatientDetailPage — tabs', () => {
 
       expect(isHidden(screen.getByTestId('payments-section'))).toBe(false)
       expect(screen.getByTestId('payments-section')).toHaveTextContent('payments-section:p1')
+      expect(isHidden(screen.getByTestId('odontogram-chart'))).toBe(true)
       expect(isHidden(screen.getByTestId('appointments-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('budgets-section'))).toBe(true)
+      expect(isHidden(screen.getByTestId('labworks-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('image-upload'))).toBe(true)
     })
 
@@ -249,8 +293,10 @@ describe('PatientDetailPage — tabs', () => {
       expect(isHidden(screen.getByTestId('image-gallery'))).toBe(false)
       expect(screen.getByTestId('image-upload')).toHaveTextContent('image-upload:p1')
       expect(screen.getByTestId('image-gallery')).toHaveTextContent('image-gallery:p1')
+      expect(isHidden(screen.getByTestId('odontogram-chart'))).toBe(true)
       expect(isHidden(screen.getByTestId('appointments-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('budgets-section'))).toBe(true)
+      expect(isHidden(screen.getByTestId('labworks-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('payments-section'))).toBe(true)
     })
 
@@ -268,34 +314,44 @@ describe('PatientDetailPage — tabs', () => {
     })
   })
 
-  describe('odontogram stays outside the tab system', () => {
-    it('is present and not inside any hidden tab panel on the Patient tab', async () => {
+  describe('odontogram lives inside the Patient tab', () => {
+    it('is present and visible under the Patient tab (not unconditionally rendered)', async () => {
       await renderLoadedPage()
-      const odontogram = screen.getAllByTestId('odontogram-chart')[0]
+      const odontogram = screen.getByTestId('odontogram-chart')
       expect(odontogram).toBeInTheDocument()
       expect(isHidden(odontogram)).toBe(false)
     })
 
-    it('remains present and unaffected by the `hidden` toggling after switching to the Appointments tab', async () => {
+    it('is hidden after switching away to the Appointments tab', async () => {
       await renderLoadedPage()
 
       fireEvent.click(screen.getByRole('button', { name: /patients\.tabs\.appointments/ }))
 
-      // The appointments panel itself is now visible, but the odontogram is
-      // unrelated to that toggle — it lives outside the tab panel tree.
-      const odontogram = screen.getAllByTestId('odontogram-chart')[0]
+      // The appointments panel is now visible; the odontogram (inside the
+      // Patient tab panel) must be hidden along with the rest of that panel.
+      const odontogram = screen.getByTestId('odontogram-chart')
       expect(odontogram).toBeInTheDocument()
-      expect(isHidden(odontogram)).toBe(false)
+      expect(isHidden(odontogram)).toBe(true)
     })
 
-    it('remains present and unaffected by the `hidden` toggling after switching to the Images tab', async () => {
+    it('is hidden after switching away to the Images tab', async () => {
       await renderLoadedPage()
 
       fireEvent.click(screen.getByRole('button', { name: /patients\.tabs\.images/ }))
 
-      const odontogram = screen.getAllByTestId('odontogram-chart')[0]
+      const odontogram = screen.getByTestId('odontogram-chart')
       expect(odontogram).toBeInTheDocument()
-      expect(isHidden(odontogram)).toBe(false)
+      expect(isHidden(odontogram)).toBe(true)
+    })
+
+    it('is visible again after switching back to the Patient tab', async () => {
+      await renderLoadedPage()
+
+      fireEvent.click(screen.getByRole('button', { name: /patients\.tabs\.appointments/ }))
+      expect(isHidden(screen.getByTestId('odontogram-chart'))).toBe(true)
+
+      fireEvent.click(screen.getByRole('button', { name: /patients\.tabs\.patient/ }))
+      expect(isHidden(screen.getByTestId('odontogram-chart'))).toBe(false)
     })
   })
 
@@ -315,13 +371,20 @@ describe('PatientDetailPage — tabs', () => {
       expect(screen.getByRole('button', { name: /patients\.tabs\.payments/ })).toBeInTheDocument()
     })
 
-    it('renders exactly four tab buttons when the Payments tab is gated out', async () => {
+    it('renders exactly five tab buttons when the Payments tab is gated out', async () => {
       mockPermissions(false)
       await renderLoadedPage()
 
       const tabs = screen.getByRole('navigation', { name: 'Tabs' })
       const buttons = tabs.querySelectorAll('button')
-      expect(buttons).toHaveLength(4)
+      expect(buttons).toHaveLength(5)
+    })
+
+    it('still renders the Laboratorio tab button when Payments is gated out', async () => {
+      mockPermissions(false)
+      await renderLoadedPage()
+
+      expect(screen.getByRole('button', { name: /patients\.tabs\.labworks/ })).toBeInTheDocument()
     })
   })
 })

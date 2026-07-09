@@ -9,6 +9,7 @@ import {
   Calendar,
   CalendarDays,
   Wallet,
+  FlaskConical,
   DollarSign,
   Image as ImageIcon,
   Edit2,
@@ -50,7 +51,7 @@ import { PatientLabworksSection } from './PatientLabworksSection'
 import { BudgetsSection } from '@/components/budgets/BudgetsSection'
 import { remapPrimaryFdi } from './odontogram-utils'
 
-type PatientDetailTabId = 'patient' | 'appointments' | 'budgets' | 'payments' | 'images'
+type PatientDetailTabId = 'patient' | 'appointments' | 'budgets' | 'labworks' | 'payments' | 'images'
 
 // ============================================================================
 // Types
@@ -533,6 +534,7 @@ export default function PatientDetailPage() {
     { id: 'patient', label: t('patients.tabs.patient'), icon: User },
     { id: 'appointments', label: t('patients.tabs.appointments'), icon: CalendarDays },
     { id: 'budgets', label: t('patients.tabs.budgets'), icon: Wallet },
+    { id: 'labworks', label: t('patients.tabs.labworks'), icon: FlaskConical },
     ...(canViewPayments
       ? [{ id: 'payments' as const, label: t('patients.tabs.payments'), icon: DollarSign }]
       : []),
@@ -698,6 +700,178 @@ export default function PatientDetailPage() {
                 </div>
               )}
             </div>
+
+            {/* Dental Chart Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-4">
+              <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+                <h2 className="text-lg font-semibold text-gray-900">Odontograma</h2>
+                <div className="flex flex-col items-end gap-1">
+                  <label className="flex items-center gap-2 text-sm text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={showPrimaryTeeth}
+                      disabled={isSavingShowPrimaryTeeth}
+                      onChange={(e) => handleShowPrimaryTeethToggle(e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-60"
+                    />
+                    {t('patients.showPrimaryTeeth')}
+                    {isSavingShowPrimaryTeeth && (
+                      <Loader2
+                        aria-label={t('common.saving')}
+                        className="w-4 h-4 animate-spin text-blue-500"
+                      />
+                    )}
+                  </label>
+                  {showPrimaryTeethError && (
+                    <span role="alert" className="text-xs text-red-600">
+                      {showPrimaryTeethError}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Dynamic per-tooth status colors */}
+              {teethStyleRules.length > 0 && (
+                <style dangerouslySetInnerHTML={{ __html: teethStyleRules.join('') }} />
+              )}
+
+              {/* Two-column layout: Odontogram left, teeth cards right */}
+              <div className="flex flex-col xl:flex-row gap-4">
+                {/* Left column - Odontogram + Legend */}
+                <div className="flex-1 min-w-0">
+                  {/* Combined Dental Chart - Permanent with Primary overlaid */}
+                  <div className="relative flex flex-col items-center">
+                    {/* Permanent Teeth (base layer) */}
+                    <div className="odontogram-permanent">
+                      <Odontogram
+                        key={`permanent-${odontogramKey}`}
+                        onChange={handleOdontogramChange}
+                        theme="light"
+                        colors={{}}
+                        notation="FDI"
+                        maxTeeth={8}
+                        showTooltip={true}
+                        tooltip={{ placement: 'bottom', margin: 8, content: renderToothTooltip }}
+                      />
+                    </div>
+
+                    {/* Primary Teeth (overlaid, smaller, centered) */}
+                    {showPrimaryTeeth && (
+                      <div
+                        className="odontogram-primary absolute inset-0 flex items-center justify-center pointer-events-none [&_.Odontogram_g]:pointer-events-auto"
+                      >
+                        <Odontogram
+                          key={`primary-${odontogramKey}`}
+                          onChange={handlePrimaryOdontogramChange}
+                          theme="light"
+                          colors={{}}
+                          notation="FDI"
+                          maxTeeth={5}
+                          showTooltip={true}
+                          tooltip={{ placement: 'bottom', margin: 8, content: renderPrimaryToothTooltip }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+
+                {/* Right column - Teeth data summary (chips) */}
+                {Object.keys(teeth).length > 0 && (
+                  <div className="xl:w-64 xl:shrink-0">
+                    <h3 className="text-xs font-medium text-gray-500 mb-2">
+                      {t('patients.registeredTeeth')} ({Object.keys(teeth).length})
+                    </h3>
+                    <div className="flex flex-wrap gap-1.5 xl:max-h-[400px] xl:overflow-y-auto xl:pr-1">
+                      {Object.entries(teeth).map(([toothNumber, toothData]) => (
+                        <div
+                          key={toothNumber}
+                          className={`group inline-flex items-center gap-1 px-2 py-1 border rounded-full text-xs font-medium ${getStatusColorClass(toothData.status)}`}
+                        >
+                          <button
+                            onClick={() => {
+                              setSelectedTooth(toothNumber)
+                              setSelectedToothType('')
+                              setIsToothModalOpen(true)
+                            }}
+                            className="inline-flex items-center gap-1 hover:opacity-80 transition-opacity"
+                          >
+                            <span className={`font-semibold ${getStatusTextColorClass(toothData.status)}`}>
+                              #{toothNumber}
+                            </span>
+                            <span className={`${getStatusTextColorClass(toothData.status)} opacity-75`}>
+                              {t(`patients.status.${toothData.status}`)}
+                            </span>
+                          </button>
+                          <div className="w-3 h-3 flex items-center justify-center">
+                            {toothData.note && (
+                              <FileText className={`h-3 w-3 ${getStatusTextColorClass(toothData.status)} opacity-50 group-hover:hidden`} />
+                            )}
+                            <button
+                              onClick={async () => {
+                                setIsSavingTooth(true)
+                                try {
+                                  const updated = await deleteToothData(patient.id, toothNumber)
+                                  setPatient(updated)
+                                } catch (e) {
+                                  setError(e instanceof Error ? e.message : 'Error')
+                                } finally {
+                                  setIsSavingTooth(false)
+                                }
+                              }}
+                              disabled={isSavingTooth}
+                              className="hidden group-hover:inline-flex p-0 rounded-full hover:bg-black/10 transition-opacity disabled:opacity-50"
+                              title={t('common.delete')}
+                            >
+                              <X className="h-3 w-3 text-gray-500" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Status Color Legend - full width */}
+              <div className="mt-4 pt-3 border-t border-gray-100">
+                <h3 className="text-xs font-medium text-gray-500 mb-2">{t('patients.statusLegend')}</h3>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#ef4444' }} />
+                    <span className="text-gray-600">{t('patients.status.caries')}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#3b82f6' }} />
+                    <span className="text-gray-600">{t('patients.status.filled')}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#06b6d4' }} />
+                    <span className="text-gray-600">{t('patients.status.crown')}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#6366f1' }} />
+                    <span className="text-gray-600">{t('patients.status.root_canal')}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#9ca3af' }} />
+                    <span className="text-gray-600">{t('patients.missingExtracted')}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#8b5cf6' }} />
+                    <span className="text-gray-600">{t('patients.status.implant')}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#ec4899' }} />
+                    <span className="text-gray-600">{t('patients.status.bridge')}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#f59e0b' }} />
+                    <span className="text-gray-600">{t('patients.withNotes')}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Appointments tab */}
@@ -721,6 +895,11 @@ export default function PatientDetailPage() {
           {/* Budgets tab */}
           <div className={activeTab === 'budgets' ? '' : 'hidden'}>
             <BudgetsSection patientId={patient.id} />
+          </div>
+
+          {/* Labworks tab */}
+          <div className={activeTab === 'labworks' ? '' : 'hidden'}>
+            <PatientLabworksSection patientId={patient.id} />
           </div>
 
           {/* Payments tab */}
@@ -747,181 +926,6 @@ export default function PatientDetailPage() {
                 entityId={patient.id}
                 refreshKey={imageRefreshKey}
               />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Labworks Section */}
-      <PatientLabworksSection patientId={patient.id} />
-
-      {/* Dental Chart Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
-          <h2 className="text-lg font-semibold text-gray-900">Odontograma</h2>
-          <div className="flex flex-col items-end gap-1">
-            <label className="flex items-center gap-2 text-sm text-gray-600">
-              <input
-                type="checkbox"
-                checked={showPrimaryTeeth}
-                disabled={isSavingShowPrimaryTeeth}
-                onChange={(e) => handleShowPrimaryTeethToggle(e.target.checked)}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-60"
-              />
-              {t('patients.showPrimaryTeeth')}
-              {isSavingShowPrimaryTeeth && (
-                <Loader2
-                  aria-label={t('common.saving')}
-                  className="w-4 h-4 animate-spin text-blue-500"
-                />
-              )}
-            </label>
-            {showPrimaryTeethError && (
-              <span role="alert" className="text-xs text-red-600">
-                {showPrimaryTeethError}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Dynamic per-tooth status colors */}
-        {teethStyleRules.length > 0 && (
-          <style dangerouslySetInnerHTML={{ __html: teethStyleRules.join('') }} />
-        )}
-
-        {/* Two-column layout: Odontogram left, teeth cards right */}
-        <div className="flex flex-col xl:flex-row gap-4">
-          {/* Left column - Odontogram + Legend */}
-          <div className="flex-1 min-w-0">
-            {/* Combined Dental Chart - Permanent with Primary overlaid */}
-            <div className="relative flex flex-col items-center">
-              {/* Permanent Teeth (base layer) */}
-              <div className="odontogram-permanent">
-                <Odontogram
-                  key={`permanent-${odontogramKey}`}
-                  onChange={handleOdontogramChange}
-                  theme="light"
-                  colors={{}}
-                  notation="FDI"
-                  maxTeeth={8}
-                  showTooltip={true}
-                  tooltip={{ placement: 'bottom', margin: 8, content: renderToothTooltip }}
-                />
-              </div>
-
-              {/* Primary Teeth (overlaid, smaller, centered) */}
-              {showPrimaryTeeth && (
-                <div
-                  className="odontogram-primary absolute inset-0 flex items-center justify-center pointer-events-none [&_.Odontogram_g]:pointer-events-auto"
-                >
-                  <Odontogram
-                    key={`primary-${odontogramKey}`}
-                    onChange={handlePrimaryOdontogramChange}
-                    theme="light"
-                    colors={{}}
-                    notation="FDI"
-                    maxTeeth={5}
-                    showTooltip={true}
-                    tooltip={{ placement: 'bottom', margin: 8, content: renderPrimaryToothTooltip }}
-                  />
-                </div>
-              )}
-            </div>
-
-          </div>
-
-          {/* Right column - Teeth data summary (chips) */}
-          {Object.keys(teeth).length > 0 && (
-            <div className="xl:w-64 xl:shrink-0">
-              <h3 className="text-xs font-medium text-gray-500 mb-2">
-                {t('patients.registeredTeeth')} ({Object.keys(teeth).length})
-              </h3>
-              <div className="flex flex-wrap gap-1.5 xl:max-h-[400px] xl:overflow-y-auto xl:pr-1">
-                {Object.entries(teeth).map(([toothNumber, toothData]) => (
-                  <div
-                    key={toothNumber}
-                    className={`group inline-flex items-center gap-1 px-2 py-1 border rounded-full text-xs font-medium ${getStatusColorClass(toothData.status)}`}
-                  >
-                    <button
-                      onClick={() => {
-                        setSelectedTooth(toothNumber)
-                        setSelectedToothType('')
-                        setIsToothModalOpen(true)
-                      }}
-                      className="inline-flex items-center gap-1 hover:opacity-80 transition-opacity"
-                    >
-                      <span className={`font-semibold ${getStatusTextColorClass(toothData.status)}`}>
-                        #{toothNumber}
-                      </span>
-                      <span className={`${getStatusTextColorClass(toothData.status)} opacity-75`}>
-                        {t(`patients.status.${toothData.status}`)}
-                      </span>
-                    </button>
-                    <div className="w-3 h-3 flex items-center justify-center">
-                      {toothData.note && (
-                        <FileText className={`h-3 w-3 ${getStatusTextColorClass(toothData.status)} opacity-50 group-hover:hidden`} />
-                      )}
-                      <button
-                        onClick={async () => {
-                          setIsSavingTooth(true)
-                          try {
-                            const updated = await deleteToothData(patient.id, toothNumber)
-                            setPatient(updated)
-                          } catch (e) {
-                            setError(e instanceof Error ? e.message : 'Error')
-                          } finally {
-                            setIsSavingTooth(false)
-                          }
-                        }}
-                        disabled={isSavingTooth}
-                        className="hidden group-hover:inline-flex p-0 rounded-full hover:bg-black/10 transition-opacity disabled:opacity-50"
-                        title={t('common.delete')}
-                      >
-                        <X className="h-3 w-3 text-gray-500" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Status Color Legend - full width */}
-        <div className="mt-4 pt-3 border-t border-gray-100">
-          <h3 className="text-xs font-medium text-gray-500 mb-2">{t('patients.statusLegend')}</h3>
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-            <div className="flex items-center gap-1">
-              <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#ef4444' }} />
-              <span className="text-gray-600">{t('patients.status.caries')}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#3b82f6' }} />
-              <span className="text-gray-600">{t('patients.status.filled')}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#06b6d4' }} />
-              <span className="text-gray-600">{t('patients.status.crown')}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#6366f1' }} />
-              <span className="text-gray-600">{t('patients.status.root_canal')}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#9ca3af' }} />
-              <span className="text-gray-600">{t('patients.missingExtracted')}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#8b5cf6' }} />
-              <span className="text-gray-600">{t('patients.status.implant')}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#ec4899' }} />
-              <span className="text-gray-600">{t('patients.status.bridge')}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#f59e0b' }} />
-              <span className="text-gray-600">{t('patients.withNotes')}</span>
             </div>
           </div>
         </div>
