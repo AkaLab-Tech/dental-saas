@@ -162,6 +162,13 @@
     "collapseSidebar": "إخفاء اللوحة",
     "expandSidebar": "إظهار اللوحة",
     "saving": "جاري الحفظ...",
+    "tabs": {
+      "patient": "المريض",
+      "appointments": "المواعيد",
+      "budgets": "الميزانيات",
+      "payments": "المدفوعات",
+      "images": "الصور"
+    },
     "appointments": {
       "sectionTitle": "المواعيد",
       "upcoming": "القادمة",

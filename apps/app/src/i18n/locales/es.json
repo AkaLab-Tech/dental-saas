@@ -162,6 +162,13 @@
     "collapseSidebar": "Ocultar panel",
     "expandSidebar": "Mostrar panel",
     "saving": "Guardando...",
+    "tabs": {
+      "patient": "Paciente",
+      "appointments": "Citas",
+      "budgets": "Presupuestos",
+      "payments": "Entregas",
+      "images": "Imágenes"
+    },
     "appointments": {
       "sectionTitle": "Citas",
       "upcoming": "Próximas",

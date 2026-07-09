@@ -7,6 +7,10 @@ import {
   Phone,
   MapPin,
   Calendar,
+  CalendarDays,
+  Wallet,
+  DollarSign,
+  Image as ImageIcon,
   Edit2,
   AlertCircle,
   Loader2,
@@ -27,7 +31,11 @@ import {
   getPatientInitials,
 } from '@/lib/patient-api'
 import { downloadPatientHistoryPdf } from '@/lib/pdf-api'
-import { ToothStatus, type ToothData } from '@dental/shared'
+import { AttachmentModule, Permission, ToothStatus, type ToothData } from '@dental/shared'
+import { usePermissions } from '@/hooks/usePermissions'
+import { ImageUpload } from '@/components/ui/ImageUpload'
+import { ImageGallery } from '@/components/ui/ImageGallery'
+import { PaymentSection } from '@/components/payments/PaymentSection'
 import { AppointmentFormModal } from '@/components/appointments/AppointmentFormModal'
 import {
   createAppointment,
@@ -37,11 +45,12 @@ import {
   type UpdateAppointmentData,
   type Appointment,
 } from '@/lib/appointment-api'
-import { PatientSidebar } from './PatientSidebar'
 import { PatientAppointmentsSection } from './PatientAppointmentsSection'
 import { PatientLabworksSection } from './PatientLabworksSection'
 import { BudgetsSection } from '@/components/budgets/BudgetsSection'
 import { remapPrimaryFdi } from './odontogram-utils'
+
+type PatientDetailTabId = 'patient' | 'appointments' | 'budgets' | 'payments' | 'images'
 
 // ============================================================================
 // Types
@@ -265,6 +274,8 @@ export default function PatientDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const { can } = usePermissions()
+  const [activeTab, setActiveTab] = useState<PatientDetailTabId>('patient')
   const [patient, setPatient] = useState<Patient | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -286,21 +297,6 @@ export default function PatientDetailPage() {
   const [appointmentFormError, setAppointmentFormError] = useState<string | null>(null)
   const [appointmentsRefreshKey, setAppointmentsRefreshKey] = useState(0)
   const [paymentsRefreshKey, setPaymentsRefreshKey] = useState(0)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem('patient-sidebar-collapsed') === 'true'
-    } catch {
-      return false
-    }
-  })
-
-  const toggleSidebar = () => {
-    setIsSidebarCollapsed(prev => {
-      const next = !prev
-      try { localStorage.setItem('patient-sidebar-collapsed', String(next)) } catch { /* ignore */ }
-      return next
-    })
-  }
 
   // Fetch patient data
   useEffect(() => {
@@ -531,6 +527,18 @@ export default function PatientDetailPage() {
   const renderToothTooltip = buildToothTooltipRenderer((fdi) => fdi)
   const renderPrimaryToothTooltip = buildToothTooltipRenderer(remapPrimaryFdi)
 
+  const canViewPayments = can(Permission.PAYMENTS_VIEW)
+
+  const tabs: { id: PatientDetailTabId; label: string; icon: typeof User }[] = [
+    { id: 'patient', label: t('patients.tabs.patient'), icon: User },
+    { id: 'appointments', label: t('patients.tabs.appointments'), icon: CalendarDays },
+    { id: 'budgets', label: t('patients.tabs.budgets'), icon: Wallet },
+    ...(canViewPayments
+      ? [{ id: 'payments' as const, label: t('patients.tabs.payments'), icon: DollarSign }]
+      : []),
+    { id: 'images', label: t('patients.tabs.images'), icon: ImageIcon },
+  ]
+
   return (
     <div className="p-6 space-y-6">
       {/* Breadcrumb */}
@@ -615,91 +623,140 @@ export default function PatientDetailPage() {
             </Link>
           </div>
         </div>
-
-        {/* Contact info */}
-        <div className="grid grid-cols-1 md:grid-cols-2 min-[1180px]:grid-cols-4 gap-4 mt-6 pt-6 border-t border-gray-100">
-          {patient.email && (
-            <div className="flex items-center gap-3 text-gray-600">
-              <Mail className="h-5 w-5 text-gray-400" />
-              <span className="text-sm">{patient.email}</span>
-            </div>
-          )}
-          {patient.phone && (
-            <div className="flex items-center gap-3 text-gray-600">
-              <Phone className="h-5 w-5 text-gray-400" />
-              <span className="text-sm">{patient.phone}</span>
-            </div>
-          )}
-          {patient.dob && (
-            <div className="flex items-center gap-3 text-gray-600">
-              <Calendar className="h-5 w-5 text-gray-400" />
-              <span className="text-sm">
-                {new Date(patient.dob).toLocaleDateString('es-MX', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                })}
-              </span>
-            </div>
-          )}
-          {patient.address && (
-            <div className="flex items-center gap-3 text-gray-600">
-              <MapPin className="h-5 w-5 text-gray-400" />
-              <span className="text-sm">{patient.address}</span>
-            </div>
-          )}
-          {patient.gender && (
-            <div className="flex items-center gap-3 text-gray-600">
-              <User className="h-5 w-5 text-gray-400" />
-              <span className="text-sm capitalize">
-                {patient.gender === 'male' && 'Masculino'}
-                {patient.gender === 'female' && 'Femenino'}
-                {patient.gender === 'other' && 'Otro'}
-                {patient.gender === 'prefer_not_to_say' && 'Prefiere no decir'}
-              </span>
-            </div>
-          )}
-        </div>
       </div>
 
-      {/* Appointments Section */}
-      <PatientAppointmentsSection
-        patientId={patient.id}
-        onNewAppointment={() => {
-          setEditingAppointment(null)
-          setAppointmentFormError(null)
-          setIsAppointmentFormOpen(true)
-        }}
-        onEditAppointment={(appointment) => {
-          setEditingAppointment(appointment)
-          setAppointmentFormError(null)
-          setIsAppointmentFormOpen(true)
-        }}
-        refreshKey={appointmentsRefreshKey}
-      />
+      {/* Tabs */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+        <div className="border-b border-gray-200">
+          <nav className="flex -mb-px overflow-x-auto" aria-label="Tabs">
+            {tabs.map((tab) => {
+              const Icon = tab.icon
+              const isActive = activeTab === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  aria-selected={isActive}
+                  className={`flex-1 py-4 px-4 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
+                    isActive
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Icon className={`h-5 w-5 mx-auto mb-1 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
+                  <span>{tab.label}</span>
+                </button>
+              )
+            })}
+          </nav>
+        </div>
+
+        <div className="p-6">
+          {/* Patient tab */}
+          <div className={activeTab === 'patient' ? '' : 'hidden'}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {patient.email && (
+                <div className="flex items-center gap-3 text-gray-600">
+                  <Mail className="h-5 w-5 text-gray-400" />
+                  <span className="text-sm">{patient.email}</span>
+                </div>
+              )}
+              {patient.phone && (
+                <div className="flex items-center gap-3 text-gray-600">
+                  <Phone className="h-5 w-5 text-gray-400" />
+                  <span className="text-sm">{patient.phone}</span>
+                </div>
+              )}
+              {patient.dob && (
+                <div className="flex items-center gap-3 text-gray-600">
+                  <Calendar className="h-5 w-5 text-gray-400" />
+                  <span className="text-sm">
+                    {new Date(patient.dob).toLocaleDateString('es-MX', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })}
+                  </span>
+                </div>
+              )}
+              {patient.address && (
+                <div className="flex items-center gap-3 text-gray-600">
+                  <MapPin className="h-5 w-5 text-gray-400" />
+                  <span className="text-sm">{patient.address}</span>
+                </div>
+              )}
+              {patient.gender && (
+                <div className="flex items-center gap-3 text-gray-600">
+                  <User className="h-5 w-5 text-gray-400" />
+                  <span className="text-sm capitalize">
+                    {patient.gender === 'male' && 'Masculino'}
+                    {patient.gender === 'female' && 'Femenino'}
+                    {patient.gender === 'other' && 'Otro'}
+                    {patient.gender === 'prefer_not_to_say' && 'Prefiere no decir'}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Appointments tab */}
+          <div className={activeTab === 'appointments' ? '' : 'hidden'}>
+            <PatientAppointmentsSection
+              patientId={patient.id}
+              onNewAppointment={() => {
+                setEditingAppointment(null)
+                setAppointmentFormError(null)
+                setIsAppointmentFormOpen(true)
+              }}
+              onEditAppointment={(appointment) => {
+                setEditingAppointment(appointment)
+                setAppointmentFormError(null)
+                setIsAppointmentFormOpen(true)
+              }}
+              refreshKey={appointmentsRefreshKey}
+            />
+          </div>
+
+          {/* Budgets tab */}
+          <div className={activeTab === 'budgets' ? '' : 'hidden'}>
+            <BudgetsSection patientId={patient.id} />
+          </div>
+
+          {/* Payments tab */}
+          {canViewPayments && (
+            <div className={activeTab === 'payments' ? '' : 'hidden'}>
+              <PaymentSection
+                patientId={patient.id}
+                refreshKey={paymentsRefreshKey}
+                onPaymentsChange={() => setAppointmentsRefreshKey((k) => k + 1)}
+              />
+            </div>
+          )}
+
+          {/* Images tab */}
+          <div className={activeTab === 'images' ? '' : 'hidden'}>
+            <ImageUpload
+              module={AttachmentModule.PATIENTS}
+              entityId={patient.id}
+              onUploadComplete={() => setImageRefreshKey((k) => k + 1)}
+            />
+            <div className="mt-4">
+              <ImageGallery
+                module={AttachmentModule.PATIENTS}
+                entityId={patient.id}
+                refreshKey={imageRefreshKey}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Labworks Section */}
       <PatientLabworksSection patientId={patient.id} />
 
-      {/* Budgets Section */}
-      <BudgetsSection patientId={patient.id} />
-
-      {/* Two-column layout: Sidebar (Images + Payments) | Odontogram */}
-      <div className="flex flex-col min-[1180px]:flex-row gap-6">
-        {/* Sidebar */}
-        <PatientSidebar
-          patientId={patient.id}
-          isCollapsed={isSidebarCollapsed}
-          onToggle={toggleSidebar}
-          imageRefreshKey={imageRefreshKey}
-          onImageUploadComplete={() => setImageRefreshKey((k) => k + 1)}
-          paymentsRefreshKey={paymentsRefreshKey}
-          onPaymentsChange={() => setAppointmentsRefreshKey((k) => k + 1)}
-        />
-
-        {/* Dental Chart Section */}
-        <div className="flex-1 min-w-0 order-1 min-[1180px]:order-2">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+      {/* Dental Chart Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
           <h2 className="text-lg font-semibold text-gray-900">Odontograma</h2>
           <div className="flex flex-col items-end gap-1">
@@ -868,8 +925,6 @@ export default function PatientDetailPage() {
             </div>
           </div>
         </div>
-      </div>
-      </div>
       </div>
 
       {/* Appointment Form Modal */}
