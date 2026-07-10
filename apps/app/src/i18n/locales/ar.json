@@ -269,7 +269,10 @@
     "noAppointments": "لا توجد مواعيد لهذا المريض",
     "priceIncludedInAppointment": "السعر مشمول في الموعد",
     "priceIncludedHint": "لن يُضاف سعر هذا العمل إلى ديون المريض",
-    "includedInAppointment": "مشمول في الموعد"
+    "includedInAppointment": "مشمول في الموعد",
+    "dateRange": "النطاق الزمني",
+    "dateFrom": "من",
+    "dateTo": "إلى"
   },
   "budgets": {
     "title": "الميزانيات",

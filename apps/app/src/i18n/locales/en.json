@@ -269,7 +269,10 @@
     "noAppointments": "No appointments for this patient",
     "priceIncludedInAppointment": "Price included in appointment",
     "priceIncludedHint": "The price of this work will not be added to the patient's debt",
-    "includedInAppointment": "Included in appointment"
+    "includedInAppointment": "Included in appointment",
+    "dateRange": "Date Range",
+    "dateFrom": "From",
+    "dateTo": "To"
   },
   "budgets": {
     "title": "Budgets",
