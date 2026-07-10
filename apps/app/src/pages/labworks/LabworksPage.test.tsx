@@ -20,7 +20,12 @@ const mockLabworksState = {
   total: 0,
   loading: false,
   error: null as string | null,
-  filters: { isPaid: undefined as boolean | undefined, isDelivered: undefined as boolean | undefined },
+  filters: {
+    isPaid: undefined as boolean | undefined,
+    isDelivered: undefined as boolean | undefined,
+    from: undefined as string | undefined,
+    to: undefined as string | undefined,
+  },
 }
 
 // Mock the store
@@ -186,7 +191,7 @@ describe('LabworksPage', () => {
     mockLabworksState.total = 0
     mockLabworksState.loading = false
     mockLabworksState.error = null
-    mockLabworksState.filters = { isPaid: undefined, isDelivered: undefined }
+    mockLabworksState.filters = { isPaid: undefined, isDelivered: undefined, from: undefined, to: undefined }
   })
 
   afterEach(() => {
@@ -298,6 +303,95 @@ describe('LabworksPage', () => {
       fireEvent.click(allButton)
 
       expect(mockSetFilters).toHaveBeenCalledWith({ isPaid: undefined })
+    })
+
+    it('should render date range inputs with labeled fields', () => {
+      renderLabworksPage()
+
+      fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
+
+      expect(screen.getByText('labworks.dateRange')).toBeInTheDocument()
+      expect(screen.getByLabelText('labworks.dateFrom')).toBeInTheDocument()
+      expect(screen.getByLabelText('labworks.dateTo')).toBeInTheDocument()
+    })
+
+    it('should filter by "from" date', () => {
+      renderLabworksPage()
+
+      fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
+
+      const fromInput = screen.getByLabelText('labworks.dateFrom')
+      fireEvent.change(fromInput, { target: { value: '2024-01-01' } })
+
+      expect(mockSetFilters).toHaveBeenCalledWith({ from: '2024-01-01' })
+    })
+
+    it('should filter by "to" date', () => {
+      renderLabworksPage()
+
+      fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
+
+      const toInput = screen.getByLabelText('labworks.dateTo')
+      fireEvent.change(toInput, { target: { value: '2024-01-31' } })
+
+      expect(mockSetFilters).toHaveBeenCalledWith({ to: '2024-01-31' })
+    })
+
+    it('should clear the "from" date filter when the input is emptied', () => {
+      mockLabworksState.filters = { isPaid: undefined, isDelivered: undefined, from: '2024-01-01', to: undefined }
+      renderLabworksPage()
+
+      fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
+
+      const fromInput = screen.getByLabelText('labworks.dateFrom')
+      expect(fromInput).toHaveValue('2024-01-01')
+      fireEvent.change(fromInput, { target: { value: '' } })
+
+      expect(mockSetFilters).toHaveBeenCalledWith({ from: undefined })
+    })
+
+    it('should clear the "to" date filter when the input is emptied', () => {
+      mockLabworksState.filters = { isPaid: undefined, isDelivered: undefined, from: undefined, to: '2024-01-31' }
+      renderLabworksPage()
+
+      fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
+
+      const toInput = screen.getByLabelText('labworks.dateTo')
+      expect(toInput).toHaveValue('2024-01-31')
+      fireEvent.change(toInput, { target: { value: '' } })
+
+      expect(mockSetFilters).toHaveBeenCalledWith({ to: undefined })
+    })
+
+    it('should combine date range filter with existing isPaid/isDelivered filters without clobbering them', () => {
+      mockLabworksState.filters = { isPaid: true, isDelivered: false, from: undefined, to: undefined }
+      renderLabworksPage()
+
+      fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
+
+      const fromInput = screen.getByLabelText('labworks.dateFrom')
+      fireEvent.change(fromInput, { target: { value: '2024-01-01' } })
+
+      // setFilters is called with only the changed key; the store itself
+      // is responsible for merging it with the pre-existing isPaid/isDelivered
+      // state (mirrored by mockSetFilters below since we mock the store).
+      expect(mockSetFilters).toHaveBeenCalledWith({ from: '2024-01-01' })
+      expect(mockSetFilters).not.toHaveBeenCalledWith(
+        expect.objectContaining({ isPaid: expect.anything() })
+      )
+      expect(mockSetFilters).not.toHaveBeenCalledWith(
+        expect.objectContaining({ isDelivered: expect.anything() })
+      )
+    })
+
+    it('should highlight the "Filtros" button and show filtered empty-state copy when only a date range is active', () => {
+      mockLabworksState.filters = { isPaid: undefined, isDelivered: undefined, from: '2024-01-01', to: undefined }
+      mockLabworksState.labworks = []
+      renderLabworksPage()
+
+      const filterButton = screen.getByRole('button', { name: /filtros/i })
+      expect(filterButton.className).toMatch(/bg-blue-50/)
+      expect(screen.getByText(/no se encontraron trabajos con los filtros aplicados/i)).toBeInTheDocument()
     })
   })
 

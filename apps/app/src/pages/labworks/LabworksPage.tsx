@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Plus,
   Search,
@@ -21,6 +22,7 @@ import { Can } from '@/components/auth'
 import type { Labwork, CreateLabworkData, UpdateLabworkData } from '@/lib/labwork-api'
 
 export function LabworksPage() {
+  const { t } = useTranslation()
   const {
     labworks,
     stats,
@@ -154,6 +156,16 @@ export function LabworksPage() {
     setFilters({ [key]: value })
   }
 
+  const handleDateFilterChange = (key: 'from' | 'to', value: string) => {
+    setFilters({ [key]: value || undefined })
+  }
+
+  const hasActiveFilters =
+    filters.isPaid !== undefined ||
+    filters.isDelivered !== undefined ||
+    filters.from !== undefined ||
+    filters.to !== undefined
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -261,7 +273,7 @@ export function LabworksPage() {
         {/* Filter toggle */}
         <button
           onClick={() => setShowFilters(!showFilters)}
-          className={`inline-flex items-center gap-2 px-4 py-2.5 border rounded-lg transition-colors ${showFilters || filters.isPaid !== undefined || filters.isDelivered !== undefined
+          className={`inline-flex items-center gap-2 px-4 py-2.5 border rounded-lg transition-colors ${showFilters || hasActiveFilters
               ? 'bg-blue-50 border-blue-200 text-blue-700'
               : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
             }`}
@@ -339,6 +351,31 @@ export function LabworksPage() {
               </button>
             </div>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {t('labworks.dateRange')}
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={filters.from ?? ''}
+                onChange={(e) => handleDateFilterChange('from', e.target.value)}
+                placeholder={t('labworks.dateFrom')}
+                aria-label={t('labworks.dateFrom')}
+                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-400">—</span>
+              <input
+                type="date"
+                value={filters.to ?? ''}
+                onChange={(e) => handleDateFilterChange('to', e.target.value)}
+                placeholder={t('labworks.dateTo')}
+                aria-label={t('labworks.dateTo')}
+                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
         </div>
       )}
 
@@ -376,11 +413,11 @@ export function LabworksPage() {
           <FlaskConical className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No hay trabajos de laboratorio</h3>
           <p className="text-gray-600 mb-4">
-            {searchQuery || filters.isPaid !== undefined || filters.isDelivered !== undefined
+            {searchQuery || hasActiveFilters
               ? 'No se encontraron trabajos con los filtros aplicados'
               : 'Comienza creando tu primer trabajo de laboratorio'}
           </p>
-          {!searchQuery && filters.isPaid === undefined && filters.isDelivered === undefined && (
+          {!searchQuery && !hasActiveFilters && (
             <Can permission={Permission.LABWORKS_CREATE}>
               <button
                 onClick={handleOpenCreate}
