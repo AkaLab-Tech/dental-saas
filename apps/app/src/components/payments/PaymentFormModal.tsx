@@ -11,12 +11,13 @@ import { formatDateForInput } from '@/lib/format'
 // Validation Schema
 // ============================================================================
 
-function createPaymentSchema(maxAmount: number) {
+function createPaymentSchema(maxAmount?: number) {
+  let amount = z.coerce.number().min(0.01, 'El monto debe ser mayor a 0')
+  if (maxAmount !== undefined) {
+    amount = amount.max(maxAmount, `El monto no puede exceder ${maxAmount}`)
+  }
   return z.object({
-    amount: z.coerce
-      .number()
-      .min(0.01, 'El monto debe ser mayor a 0')
-      .max(maxAmount, `El monto no puede exceder ${maxAmount}`),
+    amount,
     date: z.string().min(1, 'La fecha es requerida'),
     note: z.string().max(1000).optional(),
   })
@@ -32,7 +33,7 @@ interface PaymentFormModalProps {
   isOpen: boolean
   onClose: () => void
   onSubmit: (data: CreatePaymentData) => Promise<void>
-  maxAmount: number
+  maxAmount?: number
   formatCurrency: (amount: number) => string
   isLoading?: boolean
 }
@@ -144,7 +145,7 @@ export function PaymentFormModal({
                     type="number"
                     id="payment-amount"
                     min="0.01"
-                    max={maxAmount}
+                    {...(maxAmount !== undefined ? { max: maxAmount } : {})}
                     step="0.01"
                     placeholder="0.00"
                     className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
@@ -155,7 +156,9 @@ export function PaymentFormModal({
                     <p className="mt-1 text-sm text-red-500">{errors.amount.message}</p>
                   ) : (
                     <p className="mt-1 text-xs text-gray-500">
-                      {t('payments.form.amountHint', { max: formatCurrency(maxAmount) })}
+                      {maxAmount !== undefined
+                        ? t('payments.form.amountHint', { max: formatCurrency(maxAmount) })
+                        : t('payments.form.advanceHint')}
                     </p>
                   )}
                 </div>

@@ -21,6 +21,7 @@ export interface PatientBalance {
   totalDebt: number
   totalPaid: number
   outstanding: number
+  credit: number
 }
 
 export interface CreatePaymentData {

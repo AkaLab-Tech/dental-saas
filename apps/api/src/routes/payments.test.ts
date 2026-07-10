@@ -109,7 +109,7 @@ describe('Patient Payments Routes', () => {
         .set('Authorization', `Bearer ${staffToken}`)
 
       expect(res.status).toBe(200)
-      expect(res.body.data).toEqual({ totalDebt: 0, totalPaid: 0, outstanding: 0 })
+      expect(res.body.data).toEqual({ totalDebt: 0, totalPaid: 0, outstanding: 0, credit: 0 })
     })
 
     it('should return 404 for non-existent patient', async () => {
@@ -156,14 +156,36 @@ describe('Patient Payments Routes', () => {
       expect(res.body.data.note).toBe('First payment')
     })
 
-    it('should reject payment exceeding outstanding balance', async () => {
+    it('should accept a payment exceeding the outstanding balance and record it as an advance', async () => {
+      // At this point: totalDebt=100 (appointment), totalPaid=50 (prior payment),
+      // outstanding=50. Paying 99999 is a deliberate overpayment/advance.
       const res = await request(app)
         .post(`/api/patients/${patientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({ amount: 99999, date: new Date().toISOString() })
+        .send({ amount: 99999, date: new Date().toISOString(), note: 'Advance payment' })
 
-      expect(res.status).toBe(400)
-      expect(res.body.error).toContain('exceeds')
+      expect(res.status).toBe(201)
+      expect(res.body.data).toHaveProperty('id')
+      expect(Number(res.body.data.amount)).toBe(99999)
+
+      // Persisted: fetch the payment back via the list endpoint.
+      const listRes = await request(app)
+        .get(`/api/patients/${patientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+      const persisted = listRes.body.data.find((p: { id: string }) => p.id === res.body.data.id)
+      expect(persisted).toBeDefined()
+      expect(Number(persisted.amount)).toBe(99999)
+
+      // Balance now reports a credit: totalPaid (50 + 99999) - totalDebt (100) = 99949.
+      const balanceRes = await request(app)
+        .get(`/api/patients/${patientId}/balance`)
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(balanceRes.status).toBe(200)
+      expect(balanceRes.body.data.totalDebt).toBe(100)
+      expect(balanceRes.body.data.totalPaid).toBe(100049)
+      expect(balanceRes.body.data.outstanding).toBe(0)
+      expect(balanceRes.body.data.credit).toBe(99949)
     })
 
     it('should reject payment with invalid amount', async () => {
@@ -173,6 +195,25 @@ describe('Patient Payments Routes', () => {
         .send({ amount: 0, date: new Date().toISOString() })
 
       expect(res.status).toBe(400)
+    })
+
+    it('should reject a negative amount (the 0.01 floor is the only rejection reason left)', async () => {
+      const res = await request(app)
+        .post(`/api/patients/${patientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: -10, date: new Date().toISOString() })
+
+      expect(res.status).toBe(400)
+    })
+
+    it('should accept the smallest valid amount (0.01)', async () => {
+      const res = await request(app)
+        .post(`/api/patients/${patientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 0.01, date: new Date().toISOString() })
+
+      expect(res.status).toBe(201)
+      expect(Number(res.body.data.amount)).toBe(0.01)
     })
 
     it('should return 404 for non-existent patient', async () => {
@@ -590,6 +631,127 @@ describe('Patient Payments Routes', () => {
       // Standalone labwork: $100 paid - $100 appointment = $0 remaining < $60
       const standaloneLw = labworks.find((l) => !l.priceIncludedInAppointment)
       expect(standaloneLw?.isPaid).toBe(false)
+    })
+  })
+
+  describe('Advance payments (credit balance)', () => {
+    let creditPatientId: string
+
+    beforeAll(async () => {
+      const patient = await prisma.patient.create({
+        data: { tenantId, firstName: 'Credit', lastName: 'Test' },
+      })
+      creditPatientId = patient.id
+    })
+
+    it('reports credit=0 when the patient is underpaid', async () => {
+      await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId: creditPatientId,
+          doctorId,
+          startTime: new Date('2025-08-01T10:00:00Z'),
+          endTime: new Date('2025-08-01T10:30:00Z'),
+          cost: 100,
+          status: 'COMPLETED',
+        },
+      })
+
+      const res = await request(app)
+        .post(`/api/patients/${creditPatientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 40, date: '2025-08-02' })
+
+      expect(res.status).toBe(201)
+
+      const balanceRes = await request(app)
+        .get(`/api/patients/${creditPatientId}/balance`)
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(balanceRes.body.data.totalDebt).toBe(100)
+      expect(balanceRes.body.data.totalPaid).toBe(40)
+      expect(balanceRes.body.data.outstanding).toBe(60)
+      expect(balanceRes.body.data.credit).toBe(0)
+    })
+
+    it('reports credit=0 when totalPaid exactly equals totalDebt (boundary)', async () => {
+      const res = await request(app)
+        .post(`/api/patients/${creditPatientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 60, date: '2025-08-03' })
+
+      expect(res.status).toBe(201)
+
+      const balanceRes = await request(app)
+        .get(`/api/patients/${creditPatientId}/balance`)
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(balanceRes.body.data.totalDebt).toBe(100)
+      expect(balanceRes.body.data.totalPaid).toBe(100)
+      expect(balanceRes.body.data.outstanding).toBe(0)
+      expect(balanceRes.body.data.credit).toBe(0)
+    })
+
+    it('reports a positive credit once payments exceed debt, and outstanding stays clamped at 0', async () => {
+      const res = await request(app)
+        .post(`/api/patients/${creditPatientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 25, date: '2025-08-04', note: 'Advance for next visit' })
+
+      expect(res.status).toBe(201)
+
+      const balanceRes = await request(app)
+        .get(`/api/patients/${creditPatientId}/balance`)
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(balanceRes.body.data.totalDebt).toBe(100)
+      expect(balanceRes.body.data.totalPaid).toBe(125)
+      expect(balanceRes.body.data.outstanding).toBe(0)
+      expect(balanceRes.body.data.credit).toBe(25)
+    })
+
+    it('auto-applies standing credit (via FIFO) to a new charge added after the advance payment', async () => {
+      // creditPatientId currently has a $25 credit (see previous test) and no
+      // other outstanding debt. Adding a new $20 appointment should be
+      // immediately reflected as paid by the existing credit, with no new
+      // payment required.
+      const times = { startTime: '2025-08-10T10:00:00Z', endTime: '2025-08-10T10:30:00Z' }
+      const newAppointment = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId: creditPatientId,
+          doctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          cost: 20,
+          status: 'COMPLETED',
+        },
+      })
+
+      // The balance endpoint aggregates live (not from the stored isPaid
+      // column), so it reflects the new debt against existing credit
+      // immediately.
+      const balanceRes = await request(app)
+        .get(`/api/patients/${creditPatientId}/balance`)
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(balanceRes.body.data.totalDebt).toBe(120) // 100 + 20
+      expect(balanceRes.body.data.totalPaid).toBe(125)
+      expect(balanceRes.body.data.outstanding).toBe(0)
+      expect(balanceRes.body.data.credit).toBe(5) // 125 - 120
+
+      // The per-appointment FIFO allocation (exposed via the appointments
+      // list) shows the new appointment as fully paid by the existing
+      // credit without a dedicated payment for it.
+      const listRes = await request(app)
+        .get(`/api/appointments/by-patient/${creditPatientId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      const found = listRes.body.data.find((a: { id: string }) => a.id === newAppointment.id)
+      expect(found).toBeDefined()
+      expect(found.isPaid).toBe(true)
+      expect(found.paidAmount).toBe(20)
+      expect(found.outstanding).toBe(0)
     })
   })
 })
