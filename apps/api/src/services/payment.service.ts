@@ -233,7 +233,10 @@ export async function getPatientBalance(
   tenantId: string,
   patientId: string
 ): Promise<
-  | { success: true; data: { totalDebt: number; totalPaid: number; outstanding: number } }
+  | {
+      success: true
+      data: { totalDebt: number; totalPaid: number; outstanding: number; credit: number }
+    }
   | { success: false; code: PaymentErrorCode }
 > {
   const patient = await prisma.patient.findFirst({
@@ -264,8 +267,9 @@ export async function getPatientBalance(
     (appointmentsAgg._sum.cost?.toNumber() || 0) + (labworksAgg._sum.price?.toNumber() || 0)
   const totalPaid = paymentsAgg._sum.amount?.toNumber() || 0
   const outstanding = Math.max(0, totalDebt - totalPaid)
+  const credit = Math.max(0, totalPaid - totalDebt)
 
-  return { success: true, data: { totalDebt, totalPaid, outstanding } }
+  return { success: true, data: { totalDebt, totalPaid, outstanding, credit } }
 }
 
 /**
@@ -286,14 +290,11 @@ export async function createPayment(
     return { success: false, code: 'PATIENT_NOT_FOUND' }
   }
 
-  // Check balance
+  // Verify patient still exists before writing (balance no longer caps the amount:
+  // overpayment is allowed and becomes credit, applied via FIFO on the next charge)
   const balanceResult = await getPatientBalance(tenantId, patientId)
   if (!balanceResult.success) {
     return { success: false, code: balanceResult.code }
-  }
-
-  if (input.amount > balanceResult.data.outstanding) {
-    return { success: false, code: 'EXCEEDS_BALANCE' }
   }
 
   // Create payment

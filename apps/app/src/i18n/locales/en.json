@@ -461,6 +461,7 @@
     "totalDebt": "Total debt",
     "totalPaid": "Total paid",
     "outstanding": "Outstanding balance",
+    "credit": "Credit balance",
     "amount": "Amount",
     "date": "Date",
     "note": "Note",
@@ -471,6 +472,7 @@
     "form": {
       "amount": "Amount",
       "amountHint": "Maximum: {{max}}",
+      "advanceHint": "May exceed the outstanding balance; the surplus becomes patient credit",
       "date": "Date",
       "note": "Note (optional)",
       "notePlaceholder": "E.g.: Partial cash payment..."

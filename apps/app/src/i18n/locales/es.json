@@ -470,6 +470,7 @@
     "totalDebt": "Total adeudado",
     "totalPaid": "Total pagado",
     "outstanding": "Saldo pendiente",
+    "credit": "Saldo a favor",
     "amount": "Monto",
     "date": "Fecha",
     "note": "Nota",
@@ -480,6 +481,7 @@
     "form": {
       "amount": "Monto",
       "amountHint": "Máximo: {{max}}",
+      "advanceHint": "Puede exceder el saldo pendiente; el excedente queda como saldo a favor del paciente",
       "date": "Fecha",
       "note": "Nota (opcional)",
       "notePlaceholder": "Ej: Pago parcial en efectivo..."

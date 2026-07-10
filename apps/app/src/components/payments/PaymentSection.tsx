@@ -119,7 +119,7 @@ export function PaymentSection({
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-900">{t('payments.title')}</h2>
         <div className="flex items-center gap-1.5">
-          {can(Permission.PAYMENTS_CREATE) && balance && balance.outstanding > 0 && (
+          {can(Permission.PAYMENTS_CREATE) && balance && (
             <button
               onClick={() => setIsFormOpen(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
@@ -159,12 +159,21 @@ export function PaymentSection({
             <p className="text-xs text-gray-500 mb-1">{t('payments.totalPaid')}</p>
             <p className="text-base font-bold text-green-600 leading-tight">{fmtCurrency(balance.totalPaid)}</p>
           </div>
-          <div className="bg-gray-50 px-2 py-3 rounded-lg">
-            <p className="text-xs text-gray-500 mb-1">{t('payments.outstanding')}</p>
-            <p className={`text-base font-bold leading-tight ${balance.outstanding > 0 ? 'text-amber-600' : 'text-green-600'}`}>
-              {fmtCurrency(balance.outstanding)}
-            </p>
-          </div>
+          {balance.credit > 0 ? (
+            <div className="bg-green-50 px-2 py-3 rounded-lg">
+              <p className="text-xs text-gray-500 mb-1">{t('payments.credit')}</p>
+              <p className="text-base font-bold leading-tight text-green-600">
+                {fmtCurrency(balance.credit)}
+              </p>
+            </div>
+          ) : (
+            <div className="bg-gray-50 px-2 py-3 rounded-lg">
+              <p className="text-xs text-gray-500 mb-1">{t('payments.outstanding')}</p>
+              <p className={`text-base font-bold leading-tight ${balance.outstanding > 0 ? 'text-amber-600' : 'text-green-600'}`}>
+                {fmtCurrency(balance.outstanding)}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -224,7 +233,6 @@ export function PaymentSection({
           isOpen={isFormOpen}
           onClose={() => setIsFormOpen(false)}
           onSubmit={handleCreatePayment}
-          maxAmount={balance.outstanding}
           formatCurrency={fmtCurrency}
           isLoading={isSaving}
         />
