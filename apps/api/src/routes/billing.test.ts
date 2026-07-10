@@ -33,7 +33,7 @@ describe('Billing API', () => {
         price: 0,
         maxAdmins: 1,
         maxDoctors: 3,
-        maxPatients: 15,
+        maxPatients: 50,
         features: ['Basic features'],
       },
     })
