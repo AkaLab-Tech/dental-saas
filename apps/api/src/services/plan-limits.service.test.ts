@@ -16,7 +16,7 @@ describe('PlanLimitsService', () => {
         price: 0,
         maxAdmins: 1,
         maxDoctors: 3,
-        maxPatients: 15,
+        maxPatients: 50,
         features: ['Basic features'],
       },
     })
@@ -141,7 +141,7 @@ describe('PlanLimitsService', () => {
 
       expect(result.allowed).toBe(true)
       expect(result.current).toBe(0)
-      expect(result.limit).toBe(15)
+      expect(result.limit).toBe(50)
     })
   })
 
@@ -154,7 +154,7 @@ describe('PlanLimitsService', () => {
       expect(status!.doctors.current).toBe(3)
       expect(status!.doctors.limit).toBe(3)
       expect(status!.doctors.remaining).toBe(0)
-      expect(status!.patients.limit).toBe(15)
+      expect(status!.patients.limit).toBe(50)
     })
   })
 })

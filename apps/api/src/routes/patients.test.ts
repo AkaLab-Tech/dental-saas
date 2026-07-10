@@ -44,7 +44,7 @@ describe('Patients API', () => {
           price: 0,
           maxAdmins: 1,
           maxDoctors: 3,
-          maxPatients: 15,
+          maxPatients: 50,
         },
       })
     }
@@ -303,8 +303,8 @@ describe('Patients API', () => {
     })
 
     it('should return 403 when plan limit is exceeded', async () => {
-      // Create 15 patients (free plan limit)
-      for (let i = 1; i <= 15; i++) {
+      // Create 50 patients (free plan limit)
+      for (let i = 1; i <= 50; i++) {
         await prisma.patient.create({
           data: {
             tenantId,
@@ -314,7 +314,7 @@ describe('Patients API', () => {
         })
       }
 
-      // Try to create 16th patient
+      // Try to create 51st patient
       const response = await request(app)
         .post('/api/patients')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -326,8 +326,8 @@ describe('Patients API', () => {
       expect(response.status).toBe(403)
       expect(response.body.success).toBe(false)
       expect(response.body.error.code).toBe('PLAN_LIMIT_EXCEEDED')
-      expect(response.body.error.currentCount).toBe(15)
-      expect(response.body.error.limit).toBe(15)
+      expect(response.body.error.currentCount).toBe(50)
+      expect(response.body.error.limit).toBe(50)
     })
   })
 
@@ -674,8 +674,8 @@ describe('Patients API', () => {
     })
 
     it('should return 403 when restoring would exceed plan limit', async () => {
-      // Create 15 active patients (free plan limit)
-      for (let i = 1; i <= 15; i++) {
+      // Create 50 active patients (free plan limit)
+      for (let i = 1; i <= 50; i++) {
         await prisma.patient.create({
           data: {
             tenantId,
@@ -726,8 +726,8 @@ describe('Patients API', () => {
       expect(response.body.data.active).toBe(2)
       expect(response.body.data.inactive).toBe(1)
       expect(response.body.data.total).toBe(3)
-      expect(response.body.data.limit).toBe(15) // free plan
-      expect(response.body.data.remaining).toBe(13) // 15 - 2 active = 13
+      expect(response.body.data.limit).toBe(50) // free plan
+      expect(response.body.data.remaining).toBe(48) // 50 - 2 active = 48
     })
 
     it('should return 403 for STAFF trying to get stats', async () => {
