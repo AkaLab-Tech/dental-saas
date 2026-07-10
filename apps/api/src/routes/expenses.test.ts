@@ -45,7 +45,7 @@ describe('Expenses Routes - Permission Tests', () => {
           price: 0,
           maxAdmins: 1,
           maxDoctors: 3,
-          maxPatients: 15,
+          maxPatients: 50,
         },
       })
     }

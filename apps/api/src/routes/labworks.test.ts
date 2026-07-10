@@ -45,7 +45,7 @@ describe('Labworks Routes - Permission Tests', () => {
           price: 0,
           maxAdmins: 1,
           maxDoctors: 3,
-          maxPatients: 15,
+          maxPatients: 50,
         },
       })
     }
@@ -354,7 +354,7 @@ describe('GET /api/labworks?search= (server-side search by lab and patient)', ()
           price: 0,
           maxAdmins: 1,
           maxDoctors: 3,
-          maxPatients: 15,
+          maxPatients: 50,
         },
       })
     }
@@ -613,7 +613,7 @@ describe('GET /api/labworks/labs (Lab name autocomplete)', () => {
           price: 0,
           maxAdmins: 1,
           maxDoctors: 3,
-          maxPatients: 15,
+          maxPatients: 50,
         },
       })
     }
