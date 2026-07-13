@@ -247,7 +247,7 @@ describe('LabworkFormModal — lab contact phone', () => {
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('phoneNumber')
   })
 
-  it('omits phoneNumber from the submit payload when editing clears a previously set phone', async () => {
+  it('sends phoneNumber: null when editing clears a previously set phone', async () => {
     const { onSubmit } = renderModal({ labwork: makeLabwork({ phoneNumber: '+598 99 123 456' }) })
 
     await waitFor(() => expect(getPhoneInput().value).toBe('+598 99 123 456'))
@@ -257,6 +257,6 @@ describe('LabworkFormModal — lab contact phone', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Guardar Cambios' }))
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalled())
-    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('phoneNumber')
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ phoneNumber: null })
   })
 })

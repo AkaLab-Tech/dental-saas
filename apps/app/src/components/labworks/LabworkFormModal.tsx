@@ -169,10 +169,14 @@ export function LabworkFormModal({
   }, [appointments, labwork, setValue])
 
   const handleFormSubmit = async (data: LabworkFormData) => {
-    const submitData: CreateLabworkData = {
+    const submitData = {
       patientId: data.patientId,
       lab: data.lab,
-      ...(data.phoneNumber && { phoneNumber: data.phoneNumber }),
+      // Editing must be able to clear a previously-set phone (send `null`);
+      // creating has no prior value to clear, so an empty field is simply omitted.
+      ...(isEditing
+        ? { phoneNumber: data.phoneNumber || null }
+        : data.phoneNumber && { phoneNumber: data.phoneNumber }),
       date: data.date,
       price: data.price,
       isPaid: data.isPaid ?? false,
@@ -180,7 +184,7 @@ export function LabworkFormModal({
       ...(data.notes && { notes: data.notes }),
       ...(data.appointmentId && { appointmentId: data.appointmentId }),
       priceIncludedInAppointment: data.appointmentId ? (data.priceIncludedInAppointment ?? false) : false,
-    }
+    } as CreateLabworkData
 
     await onSubmit(submitData)
   }
