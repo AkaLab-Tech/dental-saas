@@ -267,6 +267,8 @@
     "linkedAppointment": "Linked appointment",
     "selectAppointment": "Select appointment (optional)",
     "noAppointments": "No appointments for this patient",
+    "phone": "Lab phone",
+    "phonePlaceholder": "e.g.: +598 99 123 456",
     "priceIncludedInAppointment": "Price included in appointment",
     "priceIncludedHint": "The price of this work will not be added to the patient's debt",
     "includedInAppointment": "Included in appointment",

@@ -267,6 +267,8 @@
     "linkedAppointment": "الموعد المرتبط",
     "selectAppointment": "اختر موعدًا (اختياري)",
     "noAppointments": "لا توجد مواعيد لهذا المريض",
+    "phone": "هاتف المختبر",
+    "phonePlaceholder": "مثال: +598 99 123 456",
     "priceIncludedInAppointment": "السعر مشمول في الموعد",
     "priceIncludedHint": "لن يُضاف سعر هذا العمل إلى ديون المريض",
     "includedInAppointment": "مشمول في الموعد",

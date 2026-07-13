@@ -21,6 +21,7 @@ const labworkFormSchema = z.object({
   appointmentId: z.string().optional(),
   priceIncludedInAppointment: z.boolean().optional(),
   lab: z.string().min(1, 'El nombre del laboratorio es requerido'),
+  phoneNumber: z.string().optional(),
   date: z.string().min(1, 'La fecha es requerida'),
   price: z.coerce.number().min(0, 'El precio debe ser 0 o mayor'),
   isPaid: z.boolean().optional(),
@@ -71,6 +72,7 @@ export function LabworkFormModal({
       appointmentId: '',
       priceIncludedInAppointment: false,
       lab: '',
+      phoneNumber: '',
       date: formatDateForInput(new Date()),
       price: 0,
       isPaid: false,
@@ -90,6 +92,7 @@ export function LabworkFormModal({
           appointmentId: labwork.appointmentId || '',
           priceIncludedInAppointment: labwork.priceIncludedInAppointment,
           lab: labwork.lab,
+          phoneNumber: labwork.phoneNumber || '',
           date: labwork.date.split('T')[0],
           price: labwork.price,
           isPaid: labwork.isPaid,
@@ -110,6 +113,7 @@ export function LabworkFormModal({
           appointmentId: '',
           priceIncludedInAppointment: false,
           lab: '',
+          phoneNumber: '',
           date: formatDateForInput(new Date()),
           price: 0,
           isPaid: false,
@@ -168,6 +172,7 @@ export function LabworkFormModal({
     const submitData: CreateLabworkData = {
       patientId: data.patientId,
       lab: data.lab,
+      ...(data.phoneNumber && { phoneNumber: data.phoneNumber }),
       date: data.date,
       price: data.price,
       isPaid: data.isPaid ?? false,
@@ -336,6 +341,22 @@ export function LabworkFormModal({
                   ))}
                 </datalist>
                 {errors.lab && <p className="mt-1 text-sm text-red-500">{errors.lab.message}</p>}
+              </div>
+
+              {/* Lab phone */}
+              <div>
+                <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('labworks.phone')}
+                </label>
+                <input
+                  {...register('phoneNumber')}
+                  type="tel"
+                  id="phoneNumber"
+                  placeholder={t('labworks.phonePlaceholder')}
+                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.phoneNumber ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                />
+                {errors.phoneNumber && <p className="mt-1 text-sm text-red-500">{errors.phoneNumber.message}</p>}
               </div>
 
               {/* Date and Price row */}

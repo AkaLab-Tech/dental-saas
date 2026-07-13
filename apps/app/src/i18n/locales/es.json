@@ -267,6 +267,8 @@
     "linkedAppointment": "Consulta vinculada",
     "selectAppointment": "Seleccionar consulta (opcional)",
     "noAppointments": "No hay consultas para este paciente",
+    "phone": "Teléfono del laboratorio",
+    "phonePlaceholder": "Ej: +598 99 123 456",
     "priceIncludedInAppointment": "Precio incluido en la consulta",
     "priceIncludedHint": "El precio de este trabajo no se sumará a la deuda del paciente",
     "includedInAppointment": "Incluido en consulta",
