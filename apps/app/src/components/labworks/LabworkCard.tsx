@@ -13,6 +13,7 @@ import {
   ImageIcon,
   ChevronDown,
   ChevronUp,
+  Phone,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Permission, AttachmentModule } from '@dental/shared'
@@ -78,6 +79,16 @@ export function LabworkCard({
                 <Calendar className="h-4 w-4 text-gray-400" />
                 <span>{formatDate(labwork.date)}</span>
               </div>
+              {labwork.phoneNumber && (
+                <a
+                  href={`tel:${labwork.phoneNumber}`}
+                  className="flex items-center gap-1.5 mt-0.5 text-sm text-blue-600 hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Phone className="h-4 w-4 text-gray-400" />
+                  <span>{labwork.phoneNumber}</span>
+                </a>
+              )}
             </div>
           </div>
 
