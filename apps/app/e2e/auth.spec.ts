@@ -11,8 +11,9 @@ test.describe('Authentication Flows', () => {
       await page.goto('/login')
 
       await expect(page.getByRole('heading', { name: /iniciar sesión/i })).toBeVisible()
-      await expect(page.getByPlaceholderText(/email/i)).toBeVisible()
-      await expect(page.getByPlaceholderText(/contraseña/i)).toBeVisible()
+      await expect(page.getByPlaceholder(/email/i)).toBeVisible()
+      // Password placeholder is masked dots ("••••••••"), not readable text — use the label.
+      await expect(page.getByLabel(/^contraseña$/i)).toBeVisible()
       await expect(page.getByRole('button', { name: /iniciar sesión/i })).toBeVisible()
     })
 
@@ -22,15 +23,23 @@ test.describe('Authentication Flows', () => {
       const loginButton = page.getByRole('button', { name: /iniciar sesión/i })
       await loginButton.click()
 
-      await expect(page.getByText(/email es requerido/i)).toBeVisible()
+      // Login schema only has an .email() check (no .min(1)), so an empty
+      // email renders "Email inválido", not a "requerido" message.
+      await expect(page.getByText(/email inválido/i)).toBeVisible()
       await expect(page.getByText(/contraseña es requerida/i)).toBeVisible()
     })
 
     test('should show error for invalid email format', async ({ page }) => {
       await page.goto('/login')
 
-      await page.getByPlaceholderText(/email/i).fill('invalid-email')
-      await page.getByPlaceholderText(/contraseña/i).fill('password123')
+      // The <input type="email"> intercepts obviously-malformed values (e.g.
+      // "invalid-email", missing "@") via native HTML5 constraint validation
+      // before the form's submit handler ever runs, so zod never gets a
+      // chance to render its own message. "test@localhost" passes native
+      // validation but fails zod's stricter .email() check, so it reaches
+      // the app's validation error as intended.
+      await page.getByPlaceholder(/email/i).fill('test@localhost')
+      await page.getByLabel(/^contraseña$/i).fill('password123')
       await page.getByRole('button', { name: /iniciar sesión/i }).click()
 
       await expect(page.getByText(/email inválido/i)).toBeVisible()
@@ -48,7 +57,7 @@ test.describe('Authentication Flows', () => {
     test('should navigate to register page', async ({ page }) => {
       await page.goto('/login')
 
-      await page.getByRole('link', { name: /crear una cuenta/i }).click()
+      await page.getByRole('link', { name: /regístrate aquí/i }).click()
 
       await expect(page).toHaveURL(/\/register/)
       await expect(page.getByRole('heading', { name: /crear cuenta/i })).toBeVisible()
@@ -60,11 +69,12 @@ test.describe('Authentication Flows', () => {
       await page.goto('/register')
 
       await expect(page.getByRole('heading', { name: /crear cuenta/i })).toBeVisible()
-      await expect(page.getByPlaceholderText(/nombre de la clínica/i)).toBeVisible()
-      await expect(page.getByPlaceholderText(/slug único/i)).toBeVisible()
-      await expect(page.getByPlaceholderText(/nombre/i)).toBeVisible()
-      await expect(page.getByPlaceholderText(/apellido/i)).toBeVisible()
-      await expect(page.getByPlaceholderText(/email/i)).toBeVisible()
+      // These fields use <label> text, not placeholders — assert by label.
+      await expect(page.getByLabel(/nombre de la clínica/i)).toBeVisible()
+      await expect(page.getByLabel(/identificador de clínica/i)).toBeVisible()
+      await expect(page.getByLabel(/^nombre$/i)).toBeVisible()
+      await expect(page.getByLabel(/^apellido$/i)).toBeVisible()
+      await expect(page.getByPlaceholder(/email/i)).toBeVisible()
       await expect(page.getByRole('button', { name: /crear cuenta/i })).toBeVisible()
     })
 
@@ -73,14 +83,15 @@ test.describe('Authentication Flows', () => {
 
       await page.getByRole('button', { name: /crear cuenta/i }).click()
 
-      await expect(page.getByText(/nombre de la clínica es requerido/i)).toBeVisible()
-      await expect(page.getByText(/slug es requerido/i)).toBeVisible()
+      // clinicName is .optional() in the current schema, so no "requerido"
+      // error fires for it — only the slug's min-length message does.
+      await expect(page.getByText(/identificador debe tener al menos 3 caracteres/i)).toBeVisible()
     })
 
     test('should navigate to login page', async ({ page }) => {
       await page.goto('/register')
 
-      await page.getByRole('link', { name: /ya tienes una cuenta/i }).click()
+      await page.getByRole('link', { name: /inicia sesión/i }).click()
 
       await expect(page).toHaveURL(/\/login/)
     })
@@ -91,7 +102,7 @@ test.describe('Authentication Flows', () => {
       await page.goto('/forgot-password')
 
       await expect(page.getByRole('heading', { name: /recuperar contraseña/i })).toBeVisible()
-      await expect(page.getByPlaceholderText(/email/i)).toBeVisible()
+      await expect(page.getByPlaceholder(/email/i)).toBeVisible()
       await expect(page.getByRole('button', { name: /enviar enlace/i })).toBeVisible()
     })
 
@@ -100,7 +111,9 @@ test.describe('Authentication Flows', () => {
 
       await page.getByRole('button', { name: /enviar enlace/i }).click()
 
-      await expect(page.getByText(/email es requerido/i)).toBeVisible()
+      // Same as login: the .email() check renders "Email inválido" for an
+      // empty field, not a "requerido" message.
+      await expect(page.getByText(/email inválido/i)).toBeVisible()
     })
 
     test('should navigate back to login', async ({ page }) => {
