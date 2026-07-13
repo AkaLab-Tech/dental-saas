@@ -1,51 +1,33 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures/authed'
 
 test.describe('Settings and Profile', () => {
-  // Note: These tests assume the user is authenticated
-
   test.describe('Settings Page', () => {
-    test('should display settings page when authenticated', async ({ page }) => {
+    test('should display settings page when authenticated', async ({ authedPage: page }) => {
       await page.goto('/settings')
 
-      const url = page.url()
-
-      if (url.includes('/login')) {
-        await expect(page.getByRole('heading', { name: /iniciar sesión/i })).toBeVisible()
-      } else {
-        await expect(page.getByRole('heading', { name: /configuración/i })).toBeVisible()
-      }
+      await expect(page.getByRole('heading', { name: /configuración/i })).toBeVisible()
     })
 
-    test('should have clinic settings section', async ({ page }) => {
+    test('should have clinic settings section', async ({ authedPage: page }) => {
       await page.goto('/settings')
 
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
-
-      await expect(page.getByText(/información de la clínica/i)).toBeVisible()
+      // 'Información de la Clínica' is an unused i18n key — the actual
+      // section heading is the 'Perfil de Clínica' tab, active by default.
+      await expect(page.getByRole('button', { name: /perfil de clínica/i })).toBeVisible()
     })
 
-    test('should have language selector', async ({ page }) => {
+    test('should have language selector', async ({ authedPage: page }) => {
       await page.goto('/settings')
 
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
+      // The language selector only renders on the Preferences tab, not the
+      // default Profile tab this test lands on.
+      await page.getByRole('button', { name: /preferencias/i }).click()
 
-      // Should have language selector (either dropdown or buttons)
-      const hasLanguageDropdown = await page.getByRole('combobox').isVisible().catch(() => false)
-      const hasLanguageButtons = await page.getByRole('button', { name: /ES|EN|AR/i }).isVisible().catch(() => false)
-
-      expect(hasLanguageDropdown || hasLanguageButtons).toBeTruthy()
+      await expect(page.getByLabel(/idioma/i)).toBeVisible()
     })
 
-    test('should display clinic information fields', async ({ page }) => {
+    test('should display clinic information fields', async ({ authedPage: page }) => {
       await page.goto('/settings')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       // Should have input fields for clinic info
       await expect(page.getByText(/nombre de la clínica/i)).toBeVisible()
@@ -53,12 +35,8 @@ test.describe('Settings and Profile', () => {
   })
 
   test.describe('Language Switching', () => {
-    test('should be able to change language from dropdown', async ({ page }) => {
+    test('should be able to change language from dropdown', async ({ authedPage: page }) => {
       await page.goto('/settings')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       // Try to find language dropdown
       const languageSelect = page.getByRole('combobox').first()
@@ -82,12 +60,8 @@ test.describe('Settings and Profile', () => {
       }
     })
 
-    test('should be able to change language from buttons', async ({ page }) => {
+    test('should be able to change language from buttons', async ({ authedPage: page }) => {
       await page.goto('/settings')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       // Try to find language buttons
       const enButton = page.getByRole('button', { name: /EN/i })
@@ -109,22 +83,14 @@ test.describe('Settings and Profile', () => {
   })
 
   test.describe('Clinic Information Update', () => {
-    test('should have save button for clinic settings', async ({ page }) => {
+    test('should have save button for clinic settings', async ({ authedPage: page }) => {
       await page.goto('/settings')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       await expect(page.getByRole('button', { name: /guardar/i })).toBeVisible()
     })
 
-    test('should allow editing clinic name', async ({ page }) => {
+    test('should allow editing clinic name', async ({ authedPage: page }) => {
       await page.goto('/settings')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       // Find clinic name input
       const nameInput = page.getByRole('textbox').first()
@@ -143,36 +109,24 @@ test.describe('Settings and Profile', () => {
   })
 
   test.describe('Navigation', () => {
-    test('should have navigation menu visible', async ({ page }) => {
+    test('should have navigation menu visible', async ({ authedPage: page }) => {
       await page.goto('/settings')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       // Should have links to other pages
       await expect(page.getByRole('link', { name: /pacientes/i })).toBeVisible()
       await expect(page.getByRole('link', { name: /citas/i })).toBeVisible()
     })
 
-    test('should navigate to patients page from menu', async ({ page }) => {
+    test('should navigate to patients page from menu', async ({ authedPage: page }) => {
       await page.goto('/settings')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       await page.getByRole('link', { name: /pacientes/i }).click()
 
       await expect(page).toHaveURL(/\/patients/)
     })
 
-    test('should navigate to appointments page from menu', async ({ page }) => {
+    test('should navigate to appointments page from menu', async ({ authedPage: page }) => {
       await page.goto('/settings')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       await page.getByRole('link', { name: /citas/i }).click()
 
@@ -181,12 +135,8 @@ test.describe('Settings and Profile', () => {
   })
 
   test.describe('User Profile', () => {
-    test('should display user profile section', async ({ page }) => {
+    test('should display user profile section', async ({ authedPage: page }) => {
       await page.goto('/settings')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       // Should have user profile information
       const hasUserSection = await page.getByText(/perfil/i).isVisible().catch(() => false)

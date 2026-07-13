@@ -1,13 +1,11 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures/authed'
 
 /**
  * Budget ↔ Appointment integration (Patient Budgets epic, Story 5).
  *
- * These are UI-level smoke checks that follow this repo's established e2e
- * convention: they run against the local dev server and gracefully `test.skip()`
- * when the session is unauthenticated (no auth bootstrap / storageState exists
- * in this suite, and e2e is not run in CI). They document the end-to-end flow at
- * the UI seam:
+ * These are UI-level smoke checks that run against an authenticated session
+ * (see e2e/fixtures/authed.ts and e2e/global-setup.ts) and document the
+ * end-to-end flow at the UI seam:
  *   1. Associate budget items to an appointment on create/edit  (PR D-2)
  *   2. Confirm which associated items were EXECUTED on completion (PR D-3)
  *
@@ -21,12 +19,8 @@ import { test, expect } from '@playwright/test'
  */
 test.describe('Budget ↔ Appointment integration (Story 5)', () => {
   test.describe('Associate budget items on the appointment form (D-2)', () => {
-    test('the new-appointment modal can show the budget-items section', async ({ page }) => {
+    test('the new-appointment modal can show the budget-items section', async ({ authedPage: page }) => {
       await page.goto('/appointments')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       await page.getByRole('button', { name: /nueva cita/i }).click()
       await expect(page.getByRole('dialog')).toBeVisible()
@@ -41,16 +35,12 @@ test.describe('Budget ↔ Appointment integration (Story 5)', () => {
   })
 
   test.describe('Confirm executed items on completion (D-3)', () => {
-    test('completing an appointment opens the confirmation modal', async ({ page }) => {
+    test('completing an appointment opens the confirmation modal', async ({ authedPage: page }) => {
       await page.goto('/appointments')
 
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
-
       // Switch to the list view where per-appointment actions (incl. "Completar")
-      // are reachable. If there are no completable appointments in the seed data,
-      // this is a no-op smoke check that the page is interactive.
+      // are reachable. If there are no completable appointments for this freshly
+      // registered tenant, this is a no-op smoke check that the page is interactive.
       const completeButton = page.getByRole('button', { name: /completar/i }).first()
       const hasCompletable = await completeButton.isVisible().catch(() => false)
 

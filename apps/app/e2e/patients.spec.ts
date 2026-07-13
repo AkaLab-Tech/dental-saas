@@ -1,83 +1,52 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures/authed'
 
 test.describe('Patients Management', () => {
-  // Note: These tests assume the user is authenticated
-  // In a real scenario, you would use a setup helper to log in before tests
-
   test.describe('Patients List Page', () => {
-    test('should display patients page when authenticated', async ({ page }) => {
-      // This test will redirect to login if not authenticated
+    test('should display patients page when authenticated', async ({ authedPage: page }) => {
       await page.goto('/patients')
 
-      // If authenticated, should see the patients page
-      // If not authenticated, will be at login page
-      const url = page.url()
-
-      if (url.includes('/login')) {
-        // User is not authenticated, which is expected behavior
-        await expect(page.getByRole('heading', { name: /iniciar sesión/i })).toBeVisible()
-      } else {
-        // User is authenticated
-        await expect(page.getByRole('heading', { name: /pacientes/i })).toBeVisible()
-      }
+      // Exact match: a freshly-registered tenant has no patients, so the
+      // empty state's "No hay pacientes" heading also renders and would
+      // otherwise collide with a loose /pacientes/i match (strict mode).
+      await expect(page.getByRole('heading', { name: 'Pacientes', exact: true })).toBeVisible()
     })
 
-    test('should have search functionality visible', async ({ page }) => {
+    test('should have search functionality visible', async ({ authedPage: page }) => {
       await page.goto('/patients')
 
-      // Skip if redirected to login
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
-
-      await expect(page.getByPlaceholderText(/buscar/i)).toBeVisible()
+      await expect(page.getByPlaceholder(/buscar/i)).toBeVisible()
     })
 
-    test('should have new patient button visible', async ({ page }) => {
+    test('should have new patient button visible', async ({ authedPage: page }) => {
       await page.goto('/patients')
-
-      // Skip if redirected to login
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       await expect(page.getByRole('button', { name: /nuevo paciente/i })).toBeVisible()
     })
 
-    test('should have filters button visible', async ({ page }) => {
+    test('should have inactive-patients toggle visible', async ({ authedPage: page }) => {
       await page.goto('/patients')
 
-      // Skip if redirected to login
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
-
-      await expect(page.getByRole('button', { name: /filtros/i })).toBeVisible()
+      // PatientsPage no longer has a 'Filtros' button or gender filter — the
+      // only filter control is this "Mostrar inactivos" checkbox.
+      await expect(page.getByText(/mostrar inactivos/i)).toBeVisible()
     })
   })
 
   test.describe('Patient Form Modal', () => {
-    test('should open create patient modal when clicking new patient button', async ({ page }) => {
+    test('should open create patient modal when clicking new patient button', async ({ authedPage: page }) => {
       await page.goto('/patients')
-
-      // Skip if redirected to login
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       await page.getByRole('button', { name: /nuevo paciente/i }).click()
 
-      await expect(page.getByRole('dialog')).toBeVisible()
-      await expect(page.getByText(/nuevo paciente/i)).toBeVisible()
+      const dialog = page.getByRole('dialog')
+      await expect(dialog).toBeVisible()
+      // Scoped to the dialog: the trigger button behind it also matches
+      // /nuevo paciente/i, which would otherwise violate Playwright's strict mode.
+      await expect(dialog.getByText(/nuevo paciente/i)).toBeVisible()
     })
 
-    test('should close modal when clicking cancel', async ({ page }) => {
+    test('should close modal when clicking cancel', async ({ authedPage: page }) => {
       await page.goto('/patients')
-
-      // Skip if redirected to login
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       await page.getByRole('button', { name: /nuevo paciente/i }).click()
       await expect(page.getByRole('dialog')).toBeVisible()
@@ -87,13 +56,8 @@ test.describe('Patients Management', () => {
       await expect(page.getByRole('dialog')).not.toBeVisible()
     })
 
-    test('should show validation errors in create form', async ({ page }) => {
+    test('should show validation errors in create form', async ({ authedPage: page }) => {
       await page.goto('/patients')
-
-      // Skip if redirected to login
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       await page.getByRole('button', { name: /nuevo paciente/i }).click()
 
@@ -108,55 +72,41 @@ test.describe('Patients Management', () => {
   })
 
   test.describe('Search and Filter', () => {
-    test('should allow typing in search field', async ({ page }) => {
+    test('should allow typing in search field', async ({ authedPage: page }) => {
       await page.goto('/patients')
 
-      // Skip if redirected to login
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
-
-      const searchInput = page.getByPlaceholderText(/buscar/i)
+      const searchInput = page.getByPlaceholder(/buscar/i)
       await searchInput.fill('John Doe')
 
       await expect(searchInput).toHaveValue('John Doe')
     })
 
-    test('should toggle filters panel', async ({ page }) => {
+    test('should toggle the inactive-patients checkbox', async ({ authedPage: page }) => {
       await page.goto('/patients')
 
-      // Skip if redirected to login
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
+      // No gender filter / filters panel exists anymore — the "Mostrar
+      // inactivos" checkbox is the only filter to toggle.
+      const inactiveCheckbox = page.getByRole('checkbox', { name: /mostrar inactivos/i })
 
-      const filtersButton = page.getByRole('button', { name: /filtros/i })
-      await filtersButton.click()
+      await expect(inactiveCheckbox).not.toBeChecked()
 
-      // Should show filter options (gender filter)
-      await expect(page.getByText(/género/i)).toBeVisible()
+      await inactiveCheckbox.check()
+      await expect(inactiveCheckbox).toBeChecked()
 
-      // Click again to close
-      await filtersButton.click()
-
-      // Filters should be hidden
-      await expect(page.getByText(/género/i)).not.toBeVisible()
+      await inactiveCheckbox.uncheck()
+      await expect(inactiveCheckbox).not.toBeChecked()
     })
   })
 
   test.describe('Patient Details', () => {
-    test('should navigate to patient detail when clicking on patient card', async ({ page }) => {
+    test('should navigate to patient detail when clicking on patient card', async ({ authedPage: page }) => {
       await page.goto('/patients')
-
-      // Skip if redirected to login or no patients
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       // Wait for any patient cards to load
       await page.waitForTimeout(1000)
 
-      // Try to find a patient card (they have testid)
+      // Try to find a patient card (they have testid). A freshly registered
+      // tenant has no patients, so this is a no-op smoke check in that case.
       const patientCard = page.locator('[data-testid^="patient-card-"]').first()
 
       const isVisible = await patientCard.isVisible().catch(() => false)

@@ -1,63 +1,37 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures/authed'
 
 test.describe('Appointments Management', () => {
-  // Note: These tests assume the user is authenticated
-
   test.describe('Appointments Page', () => {
-    test('should display appointments page when authenticated', async ({ page }) => {
+    test('should display appointments page when authenticated', async ({ authedPage: page }) => {
       await page.goto('/appointments')
 
-      // If authenticated, should see the appointments page
-      // If not authenticated, will be at login page
-      const url = page.url()
-
-      if (url.includes('/login')) {
-        await expect(page.getByRole('heading', { name: /iniciar sesión/i })).toBeVisible()
-      } else {
-        await expect(page.getByRole('heading', { name: /citas/i })).toBeVisible()
-      }
+      await expect(page.getByRole('heading', { name: /citas/i })).toBeVisible()
     })
 
-    test('should have calendar navigation visible', async ({ page }) => {
+    test('should have calendar navigation visible', async ({ authedPage: page }) => {
       await page.goto('/appointments')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       // Should have previous/next month buttons
       await expect(page.getByRole('button', { name: /anterior/i })).toBeVisible()
       await expect(page.getByRole('button', { name: /siguiente/i })).toBeVisible()
     })
 
-    test('should have new appointment button visible', async ({ page }) => {
+    test('should have new appointment button visible', async ({ authedPage: page }) => {
       await page.goto('/appointments')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       await expect(page.getByRole('button', { name: /nueva cita/i })).toBeVisible()
     })
 
-    test('should have filter controls visible', async ({ page }) => {
+    test('should have filter controls visible', async ({ authedPage: page }) => {
       await page.goto('/appointments')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       await expect(page.getByRole('button', { name: /filtros/i })).toBeVisible()
     })
   })
 
   test.describe('Calendar Navigation', () => {
-    test('should navigate to next month', async ({ page }) => {
+    test('should navigate to next month', async ({ authedPage: page }) => {
       await page.goto('/appointments')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       // Get current month text
       const currentMonth = await page.locator('text=/enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre/i').first().textContent()
@@ -74,12 +48,8 @@ test.describe('Appointments Management', () => {
       expect(newMonth).not.toBe(currentMonth)
     })
 
-    test('should navigate to previous month', async ({ page }) => {
+    test('should navigate to previous month', async ({ authedPage: page }) => {
       await page.goto('/appointments')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       // Get current month text
       const currentMonth = await page.locator('text=/enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre/i').first().textContent()
@@ -98,25 +68,20 @@ test.describe('Appointments Management', () => {
   })
 
   test.describe('Appointment Form Modal', () => {
-    test('should open create appointment modal', async ({ page }) => {
+    test('should open create appointment modal', async ({ authedPage: page }) => {
       await page.goto('/appointments')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       await page.getByRole('button', { name: /nueva cita/i }).click()
 
-      await expect(page.getByRole('dialog')).toBeVisible()
-      await expect(page.getByText(/nueva cita/i)).toBeVisible()
+      const dialog = page.getByRole('dialog')
+      await expect(dialog).toBeVisible()
+      // Scoped to the dialog: the trigger button behind it also matches
+      // /nueva cita/i, which would otherwise violate Playwright's strict mode.
+      await expect(dialog.getByText(/nueva cita/i)).toBeVisible()
     })
 
-    test('should close modal when clicking cancel', async ({ page }) => {
+    test('should close modal when clicking cancel', async ({ authedPage: page }) => {
       await page.goto('/appointments')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       await page.getByRole('button', { name: /nueva cita/i }).click()
       await expect(page.getByRole('dialog')).toBeVisible()
@@ -126,12 +91,8 @@ test.describe('Appointments Management', () => {
       await expect(page.getByRole('dialog')).not.toBeVisible()
     })
 
-    test('should show validation errors in create form', async ({ page }) => {
+    test('should show validation errors in create form', async ({ authedPage: page }) => {
       await page.goto('/appointments')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       await page.getByRole('button', { name: /nueva cita/i }).click()
 
@@ -146,18 +107,18 @@ test.describe('Appointments Management', () => {
   })
 
   test.describe('Filters', () => {
-    test('should toggle filters panel', async ({ page }) => {
+    test('should toggle filters panel', async ({ authedPage: page }) => {
       await page.goto('/appointments')
 
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
-
-      const filtersButton = page.getByRole('button', { name: /filtros/i })
+      // Exact match: once open, a "Limpiar filtros" button also appears and
+      // would otherwise violate strict mode on the second (close) click.
+      const filtersButton = page.getByRole('button', { name: 'Filtros', exact: true })
       await filtersButton.click()
 
-      // Should show filter options
-      await expect(page.getByText(/estado/i)).toBeVisible()
+      // Should show filter options. Exact match: the "Estado" label and the
+      // "Todos los estados" <option> both match /estado/i loosely, which
+      // would violate Playwright's strict mode.
+      await expect(page.getByText('Estado', { exact: true })).toBeVisible()
 
       // Click again to close
       await filtersButton.click()
@@ -168,12 +129,8 @@ test.describe('Appointments Management', () => {
   })
 
   test.describe('View Options', () => {
-    test('should have list view button', async ({ page }) => {
+    test('should have list view button', async ({ authedPage: page }) => {
       await page.goto('/appointments')
-
-      if (page.url().includes('/login')) {
-        test.skip()
-      }
 
       // Should have a button to toggle between views
       const listButton = page.getByRole('button', { name: /lista/i })

@@ -35,6 +35,7 @@ coverage/
 playwright-report/
 test-results/
 .playwright-mcp/
+apps/app/e2e/.auth/
 
 # Turbo
 .turbo/
