@@ -275,7 +275,8 @@
     "includedInAppointment": "Included in appointment",
     "dateRange": "Date Range",
     "dateFrom": "From",
-    "dateTo": "To"
+    "dateTo": "To",
+    "downloadPdf": "Download order"
   },
   "budgets": {
     "title": "Budgets",

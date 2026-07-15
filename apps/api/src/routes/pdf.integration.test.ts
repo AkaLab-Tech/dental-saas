@@ -14,6 +14,7 @@ describe('PDF Endpoints Integration', () => {
   let patientId: string
   let doctorId: string
   let appointmentId: string
+  let labworkId: string
   const testSlug = `test-clinic-pdf-${Date.now()}`
 
   // Helper to generate JWT token
@@ -145,10 +146,28 @@ describe('PDF Endpoints Integration', () => {
       },
     })
     appointmentId = appointment.id
+
+    // Create labwork linked to the patient and doctor
+    const labwork = await prisma.labwork.create({
+      data: {
+        tenantId,
+        patientId,
+        lab: 'Acme Dental Lab',
+        phoneNumber: '+1298765432',
+        date: new Date(),
+        note: 'Rush order — crown for tooth 16',
+        price: 250.0,
+        isPaid: false,
+        isDelivered: false,
+        doctorIds: [doctorId],
+      },
+    })
+    labworkId = labwork.id
   })
 
   afterAll(async () => {
     // Clean up in correct order
+    await prisma.labwork.deleteMany({ where: { tenantId } })
     await prisma.appointment.deleteMany({ where: { tenantId } })
     await prisma.patient.deleteMany({ where: { tenantId } })
     await prisma.doctor.deleteMany({ where: { tenantId } })
@@ -228,6 +247,86 @@ describe('PDF Endpoints Integration', () => {
         .set('Authorization', `Bearer ${otherToken}`)
 
       expect(response.status).toBe(404) // Should not find it in their tenant
+
+      // Cleanup
+      await prisma.user.delete({ where: { id: otherUser.id } })
+      await prisma.tenant.delete({ where: { id: otherTenant.id } })
+    })
+  })
+
+  // ============================================================================
+  // LABWORK ORDER PDF TESTS
+  // ============================================================================
+
+  describe('GET /api/labworks/:id/pdf', () => {
+    it('should download labwork order PDF as ADMIN', async () => {
+      const response = await request(app)
+        .get(`/api/labworks/${labworkId}/pdf`)
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(response.status).toBe(200)
+      expect(response.headers['content-type']).toBe('application/pdf')
+      expect(response.headers['content-disposition']).toContain('attachment')
+      expect(response.headers['content-disposition']).toContain(`labwork-${labworkId}.pdf`)
+      expect(response.body).toBeInstanceOf(Buffer)
+      // PDF header check
+      expect(response.body.toString('utf8', 0, 5)).toBe('%PDF-')
+    })
+
+    it('should download labwork order PDF as STAFF', async () => {
+      const response = await request(app)
+        .get(`/api/labworks/${labworkId}/pdf`)
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(200)
+      expect(response.headers['content-type']).toBe('application/pdf')
+    })
+
+    it('should return 404 for non-existent labwork', async () => {
+      const response = await request(app)
+        .get('/api/labworks/non-existent-id/pdf')
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(response.status).toBe(404)
+      expect(response.body.success).toBe(false)
+      expect(response.body.error.code).toBe('NOT_FOUND')
+    })
+
+    it('should return 401 without authentication', async () => {
+      const response = await request(app)
+        .get(`/api/labworks/${labworkId}/pdf`)
+
+      expect(response.status).toBe(401)
+    })
+
+    it('should not allow access from another tenant', async () => {
+      // Create a user in a different tenant
+      const otherTenant = await prisma.tenant.create({
+        data: {
+          name: 'Other Clinic Labwork',
+          slug: `other-clinic-labwork-pdf-${Date.now()}`,
+        },
+      })
+      const passwordHash = await hashPassword('OtherPass123!')
+      const otherUser = await prisma.user.create({
+        data: {
+          email: 'other-labwork-pdf@test.com',
+          passwordHash,
+          firstName: 'Other',
+          lastName: 'User',
+          role: 'ADMIN',
+          tenantId: otherTenant.id,
+        },
+      })
+      const otherToken = generateToken(otherUser.id, otherTenant.id, 'ADMIN')
+
+      const response = await request(app)
+        .get(`/api/labworks/${labworkId}/pdf`)
+        .set('Authorization', `Bearer ${otherToken}`)
+
+      expect(response.status).toBe(404) // Should not find it in their tenant
+      expect(response.body.success).toBe(false)
+      expect(response.body.error.code).toBe('NOT_FOUND')
 
       // Cleanup
       await prisma.user.delete({ where: { id: otherUser.id } })

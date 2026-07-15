@@ -38,6 +38,17 @@ export default {
       "pending": "معلق",
       "informationalNotice": "هذا المستند للأغراض الإعلامية فقط."
     },
+    "labwork": {
+      "title": "طلب المختبر",
+      "labName": "المختبر",
+      "orderDetails": "تفاصيل الطلب",
+      "patient": "المريض",
+      "assignedDoctors": "الطبيب (الأطباء) المعين(ون)",
+      "price": "السعر",
+      "notes": "ملاحظات",
+      "delivered": "تم التسليم",
+      "pendingDelivery": "بانتظار التسليم"
+    },
     "budget": {
       "title": "ميزانية العلاج",
       "budgetFor": "ميزانية لـ",

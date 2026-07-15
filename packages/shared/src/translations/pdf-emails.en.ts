@@ -38,6 +38,17 @@ export default {
       "pending": "PENDING",
       "informationalNotice": "This document is for informational purposes only."
     },
+    "labwork": {
+      "title": "Labwork Order",
+      "labName": "Laboratory",
+      "orderDetails": "Order Details",
+      "patient": "Patient",
+      "assignedDoctors": "Assigned Doctor(s)",
+      "price": "Price",
+      "notes": "Notes",
+      "delivered": "DELIVERED",
+      "pendingDelivery": "PENDING DELIVERY"
+    },
     "budget": {
       "title": "Treatment Budget",
       "budgetFor": "Budget for",

@@ -1,4 +1,5 @@
 import { Router, type IRouter } from 'express'
+import React from 'react'
 import { z } from 'zod'
 import { requireMinRole } from '../middleware/auth.js'
 import { requireOwnership } from '../middleware/ownership.js'
@@ -12,6 +13,8 @@ import {
   getLabworkStats,
   listLabNames,
 } from '../services/labwork.service.js'
+import { PdfService } from '../services/pdf.service.js'
+import { LabworkOrderPdf } from '../pdfs/LabworkOrderPdf.js'
 
 const labworksRouter: IRouter = Router()
 
@@ -154,6 +157,38 @@ labworksRouter.get('/:id', requireMinRole('STAFF'), async (req, res, next) => {
     }
 
     res.json({ success: true, data: result.data })
+  } catch (e) {
+    next(e)
+  }
+})
+
+/**
+ * GET /api/labworks/:id/pdf
+ * Download labwork order as PDF
+ * Requires: STAFF role or higher
+ */
+labworksRouter.get('/:id/pdf', requireMinRole('STAFF'), async (req, res, next) => {
+  try {
+    const tenantId = req.user!.tenantId!
+    const { id } = req.params
+
+    const result = await PdfService.getLabworkOrderData(tenantId, id)
+
+    if ('error' in result) {
+      const status = result.error === 'NOT_FOUND' ? 404 : 400
+      return res.status(status).json({
+        success: false,
+        error: { code: result.error, message: result.message },
+      })
+    }
+
+    const pdfBuffer = await PdfService.generatePdf(React.createElement(LabworkOrderPdf, { data: result.data }))
+
+    const filename = `labwork-${id}.pdf`
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.setHeader('Content-Length', pdfBuffer.length)
+    res.send(pdfBuffer)
   } catch (e) {
     next(e)
   }
