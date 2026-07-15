@@ -112,6 +112,16 @@ vi.mock('@/components/ui/ConfirmDialog', () => ({
   },
 }))
 
+// Mock exportLabworks so the export button test doesn't hit apiClient/the DOM download path
+const mockExportLabworks = vi.fn()
+vi.mock('@/lib/labwork-api', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/labwork-api')>('@/lib/labwork-api')
+  return {
+    ...actual,
+    exportLabworks: (...args: unknown[]) => mockExportLabworks(...args),
+  }
+})
+
 // Import after mocks
 import { LabworksPage } from './LabworksPage'
 
@@ -515,6 +525,76 @@ describe('LabworksPage', () => {
 
       expect(screen.getByTestId('labwork-card-1')).toBeInTheDocument()
       expect(screen.getByTestId('labwork-card-2')).toBeInTheDocument()
+    })
+  })
+
+  describe('export', () => {
+    it('renders the export button', () => {
+      renderLabworksPage()
+
+      expect(screen.getByRole('button', { name: 'labworks.exportCsv' })).toBeInTheDocument()
+    })
+
+    it('calls exportLabworks with the current filters and search query when clicked', async () => {
+      vi.useRealTimers()
+      mockLabworksState.filters = { isPaid: true, isDelivered: undefined, overdue: undefined, from: '2024-01-01', to: undefined }
+      mockExportLabworks.mockResolvedValue(undefined)
+      renderLabworksPage()
+
+      const searchInput = screen.getByPlaceholderText(/buscar por laboratorio o paciente/i)
+      fireEvent.change(searchInput, { target: { value: 'Premium' } })
+
+      const exportButton = screen.getByRole('button', { name: 'labworks.exportCsv' })
+      await act(async () => {
+        fireEvent.click(exportButton)
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      })
+
+      expect(mockExportLabworks).toHaveBeenCalledWith({
+        isPaid: true,
+        isDelivered: undefined,
+        overdue: undefined,
+        from: '2024-01-01',
+        to: undefined,
+        search: 'Premium',
+      })
+
+      vi.useFakeTimers()
+    })
+
+    it('omits search from the exportLabworks call when the search box is empty', async () => {
+      vi.useRealTimers()
+      mockExportLabworks.mockResolvedValue(undefined)
+      renderLabworksPage()
+
+      const exportButton = screen.getByRole('button', { name: 'labworks.exportCsv' })
+      await act(async () => {
+        fireEvent.click(exportButton)
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      })
+
+      expect(mockExportLabworks).toHaveBeenCalledWith(
+        expect.objectContaining({ search: undefined })
+      )
+
+      vi.useFakeTimers()
+    })
+
+    it('does not throw or crash the page when exportLabworks rejects', async () => {
+      vi.useRealTimers()
+      mockExportLabworks.mockRejectedValue(new Error('Network error'))
+      renderLabworksPage()
+
+      const exportButton = screen.getByRole('button', { name: 'labworks.exportCsv' })
+      await act(async () => {
+        fireEvent.click(exportButton)
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      })
+
+      expect(mockExportLabworks).toHaveBeenCalled()
+      expect(exportButton).toBeInTheDocument()
+
+      vi.useFakeTimers()
     })
   })
 

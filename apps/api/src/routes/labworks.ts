@@ -11,6 +11,7 @@ import {
   restoreLabwork,
   getLabworkStats,
   listLabNames,
+  exportLabworksCsv,
 } from '../services/labwork.service.js'
 
 const labworksRouter: IRouter = Router()
@@ -129,6 +130,36 @@ labworksRouter.get('/labs', requireMinRole('STAFF'), async (req, res, next) => {
     const labs = await listLabNames(tenantId)
 
     res.json({ success: true, data: labs })
+  } catch (e) {
+    next(e)
+  }
+})
+
+/**
+ * GET /api/labworks/export
+ * Export labworks matching the current filters as CSV
+ * Must be registered before /:id so "export" is not captured as an id
+ */
+labworksRouter.get('/export', requireMinRole('STAFF'), async (req, res, next) => {
+  try {
+    const tenantId = req.user!.tenantId!
+    const { patientId, isPaid, isDelivered, overdue, from, to, search } = req.query
+
+    const csv = await exportLabworksCsv(tenantId, {
+      patientId: patientId ? String(patientId) : undefined,
+      isPaid: isPaid !== undefined ? isPaid === 'true' : undefined,
+      isDelivered: isDelivered !== undefined ? isDelivered === 'true' : undefined,
+      overdue: overdue !== undefined ? overdue === 'true' : undefined,
+      from: from ? new Date(String(from)) : undefined,
+      to: to ? new Date(String(to)) : undefined,
+      search: search ? String(search) : undefined,
+    })
+
+    const filename = `labworks-${new Date().toISOString().split('T')[0]}.csv`
+    const csvBom = String.fromCharCode(0xfeff)
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.send(csvBom + csv)
   } catch (e) {
     next(e)
   }

@@ -10,6 +10,7 @@ import {
   Filter,
   DollarSign,
   Package,
+  Download,
 } from 'lucide-react'
 import { Permission } from '@dental/shared'
 import { useLabworksStore } from '@/stores/labworks.store'
@@ -19,6 +20,7 @@ import { LabworkCard } from '@/components/labworks/LabworkCard'
 import { LabworkFormModal } from '@/components/labworks/LabworkFormModal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Can } from '@/components/auth'
+import { exportLabworks } from '@/lib/labwork-api'
 import type { Labwork, CreateLabworkData, UpdateLabworkData } from '@/lib/labwork-api'
 
 export function LabworksPage() {
@@ -49,6 +51,7 @@ export function LabworksPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [showFilters, setShowFilters] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
 
   // Fetch labworks on mount
   useEffect(() => {
@@ -168,6 +171,17 @@ export function LabworksPage() {
     setFilters({ [key]: value || undefined })
   }
 
+  const handleExport = async () => {
+    setIsExporting(true)
+    try {
+      await exportLabworks({ ...filters, search: searchQuery || undefined })
+    } catch {
+      // Error is non-critical for the export button; list errors are surfaced elsewhere
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   const hasActiveFilters =
     filters.isPaid !== undefined ||
     filters.isDelivered !== undefined ||
@@ -191,15 +205,30 @@ export function LabworksPage() {
           </p>
         </div>
 
-        <Can permission={Permission.LABWORKS_CREATE}>
+        <div className="flex items-center gap-2">
           <button
-            onClick={handleOpenCreate}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            onClick={handleExport}
+            disabled={isExporting}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-medium rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
-            <Plus className="h-5 w-5" />
-            Nuevo Trabajo
+            {isExporting ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Download className="h-5 w-5" />
+            )}
+            {t('labworks.exportCsv')}
           </button>
-        </Can>
+
+          <Can permission={Permission.LABWORKS_CREATE}>
+            <button
+              onClick={handleOpenCreate}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="h-5 w-5" />
+              Nuevo Trabajo
+            </button>
+          </Can>
+        </div>
       </div>
 
       {/* Stats cards */}

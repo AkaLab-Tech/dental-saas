@@ -289,12 +289,13 @@ export async function getLabworkById(
 }
 
 /**
- * List labworks for a tenant
+ * Build the shared Prisma where-clause for filtering labworks, used by both
+ * the paginated list and the unpaginated CSV export.
  */
-export async function listLabworks(
+function buildLabworksWhere(
   tenantId: string,
-  options?: ListLabworksOptions
-): Promise<{ data: SafeLabwork[]; total: number }> {
+  options?: Omit<ListLabworksOptions, 'limit' | 'offset'>
+): Prisma.LabworkWhereInput {
   const dateFilter = (options?.from || options?.to || options?.overdue)
     ? {
         ...(options.from && { gte: options.from }),
@@ -303,7 +304,7 @@ export async function listLabworks(
       }
     : undefined
 
-  const where: Prisma.LabworkWhereInput = {
+  return {
     tenantId,
     ...(options?.includeInactive ? {} : { isActive: true }),
     ...(options?.patientId && { patientId: options.patientId }),
@@ -320,6 +321,16 @@ export async function listLabworks(
       ],
     }),
   }
+}
+
+/**
+ * List labworks for a tenant
+ */
+export async function listLabworks(
+  tenantId: string,
+  options?: ListLabworksOptions
+): Promise<{ data: SafeLabwork[]; total: number }> {
+  const where = buildLabworksWhere(tenantId, options)
 
   const [labworks, total] = await Promise.all([
     prisma.labwork.findMany({
@@ -339,6 +350,71 @@ export async function listLabworks(
     data: labworks.map(transformLabwork),
     total,
   }
+}
+
+const CSV_HEADERS = ['Fecha', 'Laboratorio', 'Teléfono', 'Paciente', 'Doctor(es)', 'Precio', 'Pagado', 'Entregado', 'Nota']
+
+function csvEscape(value: string): string {
+  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
+}
+
+/**
+ * Serialize labworks to CSV rows (header included). Pure function so tests can
+ * exercise it directly without a database.
+ */
+export function labworksToCsv(labworks: SafeLabwork[], doctorNamesById: Record<string, string>): string {
+  const rows = labworks.map((labwork) => {
+    const patientName = labwork.patient ? `${labwork.patient.firstName} ${labwork.patient.lastName}` : ''
+    const doctorNames = labwork.doctorIds.map((id) => doctorNamesById[id] || id).join('; ')
+
+    return [
+      labwork.date.toISOString().split('T')[0],
+      labwork.lab,
+      labwork.phoneNumber || '',
+      patientName,
+      doctorNames,
+      labwork.price.toString(),
+      labwork.isPaid ? 'Sí' : 'No',
+      labwork.isDelivered ? 'Sí' : 'No',
+      labwork.note || '',
+    ]
+      .map(csvEscape)
+      .join(',')
+  })
+
+  return [CSV_HEADERS.join(','), ...rows].join('\n')
+}
+
+/**
+ * Export labworks matching the given filters as a CSV string, with no pagination cap.
+ */
+export async function exportLabworksCsv(
+  tenantId: string,
+  options?: Omit<ListLabworksOptions, 'limit' | 'offset'>
+): Promise<string> {
+  const where = buildLabworksWhere(tenantId, options)
+
+  const labworks = await prisma.labwork.findMany({
+    where,
+    select: {
+      ...LABWORK_SELECT,
+      patient: { select: PATIENT_INCLUDE },
+    },
+    orderBy: { date: 'desc' },
+  })
+
+  const safeLabworks = labworks.map(transformLabwork)
+
+  const doctorIds = Array.from(new Set(safeLabworks.flatMap((l) => l.doctorIds)))
+  const doctors = doctorIds.length
+    ? await prisma.doctor.findMany({
+        where: { id: { in: doctorIds }, tenantId },
+        select: { id: true, firstName: true, lastName: true },
+      })
+    : []
+  const doctorNamesById = Object.fromEntries(doctors.map((d) => [d.id, `${d.firstName} ${d.lastName}`]))
+
+  return labworksToCsv(safeLabworks, doctorNamesById)
 }
 
 /**

@@ -176,6 +176,35 @@ export async function getLabNames(): Promise<LabNamesResponse> {
   return response.data
 }
 
+/**
+ * Download labworks matching the given filters as a CSV file
+ */
+export async function exportLabworks(params?: LabworkListParams): Promise<void> {
+  const searchParams = new URLSearchParams()
+
+  if (params?.search) searchParams.set('search', params.search)
+  if (params?.patientId) searchParams.set('patientId', params.patientId)
+  if (params?.isPaid !== undefined) searchParams.set('isPaid', String(params.isPaid))
+  if (params?.isDelivered !== undefined) searchParams.set('isDelivered', String(params.isDelivered))
+  if (params?.overdue !== undefined) searchParams.set('overdue', String(params.overdue))
+  if (params?.from) searchParams.set('from', params.from)
+  if (params?.to) searchParams.set('to', params.to)
+
+  const query = searchParams.toString()
+  const url = query ? `/labworks/export?${query}` : '/labworks/export'
+
+  const response = await apiClient.get(url, { responseType: 'blob' })
+  const blob = new Blob([response.data], { type: 'text/csv' })
+
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = `labworks-${new Date().toISOString().split('T')[0]}.csv`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(link.href)
+}
+
 // ============================================================================
 // Utility Functions
 // ============================================================================
