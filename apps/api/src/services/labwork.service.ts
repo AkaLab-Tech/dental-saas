@@ -100,9 +100,20 @@ export interface ListLabworksOptions {
   patientId?: string
   isPaid?: boolean
   isDelivered?: boolean
+  overdue?: boolean
   from?: Date
   to?: Date
   search?: string
+}
+
+/**
+ * Server-local start of today, used as the boundary for the "overdue" derived state.
+ * A labwork due today is not overdue; only strictly-past dates are.
+ */
+function getStartOfToday(): Date {
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  return startOfToday
 }
 
 /**
@@ -284,18 +295,23 @@ export async function listLabworks(
   tenantId: string,
   options?: ListLabworksOptions
 ): Promise<{ data: SafeLabwork[]; total: number }> {
+  const dateFilter = (options?.from || options?.to || options?.overdue)
+    ? {
+        ...(options.from && { gte: options.from }),
+        ...(options.to && { lte: options.to }),
+        ...(options.overdue && { lt: getStartOfToday() }),
+      }
+    : undefined
+
   const where: Prisma.LabworkWhereInput = {
     tenantId,
     ...(options?.includeInactive ? {} : { isActive: true }),
     ...(options?.patientId && { patientId: options.patientId }),
     ...(options?.isPaid !== undefined && { isPaid: options.isPaid }),
-    ...(options?.isDelivered !== undefined && { isDelivered: options.isDelivered }),
-    ...((options?.from || options?.to) && {
-      date: {
-        ...(options.from && { gte: options.from }),
-        ...(options.to && { lte: options.to }),
-      },
-    }),
+    ...(options?.isDelivered !== undefined
+      ? { isDelivered: options.isDelivered }
+      : options?.overdue && { isDelivered: false }),
+    ...(dateFilter && { date: dateFilter }),
     ...(options?.search && {
       OR: [
         { lab: { contains: options.search, mode: 'insensitive' } },
@@ -488,25 +504,31 @@ export async function getLabworkStats(
   unpaid: number
   delivered: number
   pending: number
+  overdue: number
   totalValue: number
   paidValue: number
   unpaidValue: number
 }> {
+  const dateFilter = (options?.from || options?.to)
+    ? {
+        ...(options.from && { gte: options.from }),
+        ...(options.to && { lte: options.to }),
+      }
+    : undefined
+
   const where: Prisma.LabworkWhereInput = {
     tenantId,
     isActive: true,
-    ...((options?.from || options?.to) && {
-      date: {
-        ...(options.from && { gte: options.from }),
-        ...(options.to && { lte: options.to }),
-      },
-    }),
+    ...(dateFilter && { date: dateFilter }),
   }
 
-  const [total, paid, delivered, aggregate, paidAggregate] = await Promise.all([
+  const [total, paid, delivered, overdue, aggregate, paidAggregate] = await Promise.all([
     prisma.labwork.count({ where }),
     prisma.labwork.count({ where: { ...where, isPaid: true } }),
     prisma.labwork.count({ where: { ...where, isDelivered: true } }),
+    prisma.labwork.count({
+      where: { ...where, isDelivered: false, date: { ...dateFilter, lt: getStartOfToday() } },
+    }),
     prisma.labwork.aggregate({
       where,
       _sum: { price: true },
@@ -526,6 +548,7 @@ export async function getLabworkStats(
     unpaid: total - paid,
     delivered,
     pending: total - delivered,
+    overdue,
     totalValue,
     paidValue,
     unpaidValue: totalValue - paidValue,

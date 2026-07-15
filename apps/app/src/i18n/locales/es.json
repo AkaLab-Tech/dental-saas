@@ -262,7 +262,8 @@
       "pending": "Pendiente",
       "inProgress": "En Progreso",
       "completed": "Completado",
-      "delivered": "Entregado"
+      "delivered": "Entregado",
+      "overdue": "Atrasado"
     },
     "linkedAppointment": "Consulta vinculada",
     "selectAppointment": "Seleccionar consulta (opcional)",

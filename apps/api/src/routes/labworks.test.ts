@@ -764,3 +764,242 @@ describe('GET /api/labworks/labs (Lab name autocomplete)', () => {
     expect(response.body).not.toHaveProperty('error')
   })
 })
+
+describe('GET /api/labworks?overdue= (overdue filter & stats)', () => {
+  // Isolated tenant so the overdue counts/results aren't polluted by
+  // labworks seeded in the describe blocks above.
+  let tenantId: string
+  let staffToken: string
+  const testSlug = `test-labworks-overdue-${Date.now()}`
+
+  // Boundaries computed the same way the service computes them
+  // (getStartOfToday: local "now" truncated to local midnight), so this
+  // suite is correct regardless of which timezone/date it runs on.
+  function daysFromToday(offsetDays: number): Date {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    d.setDate(d.getDate() + offsetDays)
+    return d
+  }
+
+  function generateToken(userId: string, tenantId: string, role: string) {
+    return sign({ sub: userId, tenantId, role }, JWT_SECRET, { expiresIn: '1h' })
+  }
+
+  let overdueLabworkId: string
+
+  beforeAll(async () => {
+    const tenant = await prisma.tenant.create({
+      data: { name: 'Test Clinic for Labwork Overdue', slug: testSlug, currency: 'USD', timezone: 'America/New_York' },
+    })
+    tenantId = tenant.id
+
+    let freePlan = await prisma.plan.findUnique({ where: { name: 'free' } })
+    if (!freePlan) {
+      freePlan = await prisma.plan.create({
+        data: { name: 'free', displayName: 'Free', price: 0, maxAdmins: 1, maxDoctors: 3, maxPatients: 50 },
+      })
+    }
+
+    await prisma.subscription.create({
+      data: {
+        tenantId: tenant.id,
+        planId: freePlan.id,
+        status: 'ACTIVE',
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    })
+
+    const hashedPassword = await hashPassword('password123')
+    const staffUser = await prisma.user.create({
+      data: {
+        tenantId,
+        email: 'staff@labworks-overdue-test.com',
+        firstName: 'Staff',
+        lastName: 'User',
+        passwordHash: hashedPassword,
+        role: 'STAFF',
+      },
+    })
+    staffToken = generateToken(staffUser.id, tenantId, 'STAFF')
+
+    // Active, undelivered, due yesterday -> the only labwork that should be
+    // considered overdue.
+    const overdue = await prisma.labwork.create({
+      data: { tenantId, lab: 'Overdue Lab', date: daysFromToday(-1), isDelivered: false, isActive: true, price: 100 },
+    })
+    overdueLabworkId = overdue.id
+
+    // Active, undelivered, due today -> NOT overdue (boundary: due today is
+    // not yet overdue).
+    await prisma.labwork.create({
+      data: { tenantId, lab: 'Due Today Lab', date: daysFromToday(0), isDelivered: false, isActive: true, price: 100 },
+    })
+
+    // Active, undelivered, due tomorrow -> NOT overdue (future).
+    await prisma.labwork.create({
+      data: { tenantId, lab: 'Future Lab', date: daysFromToday(1), isDelivered: false, isActive: true, price: 100 },
+    })
+
+    // Active, DELIVERED, due yesterday -> NOT overdue (delivered).
+    await prisma.labwork.create({
+      data: { tenantId, lab: 'Delivered Past Lab', date: daysFromToday(-1), isDelivered: true, isActive: true, price: 100 },
+    })
+
+    // Inactive (soft-deleted), undelivered, due yesterday -> NOT overdue and
+    // excluded from the default active-only listing regardless of the
+    // overdue filter.
+    await prisma.labwork.create({
+      data: { tenantId, lab: 'Deleted Past Lab', date: daysFromToday(-1), isDelivered: false, isActive: false, price: 100 },
+    })
+  })
+
+  afterAll(async () => {
+    await prisma.labwork.deleteMany({ where: { tenantId } })
+    await prisma.user.deleteMany({ where: { tenantId } })
+    await prisma.subscription.deleteMany({ where: { tenantId } })
+    await prisma.tenant.delete({ where: { id: tenantId } })
+  })
+
+  describe('GET /api/labworks?overdue=true', () => {
+    it('returns only the active, undelivered, strictly-past labwork', async () => {
+      const response = await request(app)
+        .get('/api/labworks?overdue=true')
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(200)
+      const labs = response.body.data.map((l: { lab: string }) => l.lab)
+      expect(labs).toEqual(['Overdue Lab'])
+    })
+
+    it('excludes a labwork due today (boundary: due today is not overdue)', async () => {
+      const response = await request(app)
+        .get('/api/labworks?overdue=true')
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      const labs = response.body.data.map((l: { lab: string }) => l.lab)
+      expect(labs).not.toContain('Due Today Lab')
+    })
+
+    it('excludes a future-dated labwork', async () => {
+      const response = await request(app)
+        .get('/api/labworks?overdue=true')
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      const labs = response.body.data.map((l: { lab: string }) => l.lab)
+      expect(labs).not.toContain('Future Lab')
+    })
+
+    it('excludes a delivered labwork even if its date is in the past', async () => {
+      const response = await request(app)
+        .get('/api/labworks?overdue=true')
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      const labs = response.body.data.map((l: { lab: string }) => l.lab)
+      expect(labs).not.toContain('Delivered Past Lab')
+    })
+
+    it('excludes a soft-deleted (inactive) labwork even if its date is in the past', async () => {
+      const response = await request(app)
+        .get('/api/labworks?overdue=true')
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      const labs = response.body.data.map((l: { lab: string }) => l.lab)
+      expect(labs).not.toContain('Deleted Past Lab')
+    })
+
+    it('returns the correct pagination total for the overdue-filtered set', async () => {
+      const response = await request(app)
+        .get('/api/labworks?overdue=true')
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.body.pagination.total).toBe(1)
+    })
+  })
+
+  describe('GET /api/labworks?overdue=false / omitted (route parsing regression)', () => {
+    it('returns the full unfiltered active set when overdue is explicitly false', async () => {
+      const response = await request(app)
+        .get('/api/labworks?overdue=false')
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(200)
+      const labs = response.body.data.map((l: { lab: string }) => l.lab)
+      // All 4 active labworks (the 5th is soft-deleted and excluded by the
+      // default isActive filter), regardless of delivery/date.
+      expect(labs.sort()).toEqual(['Due Today Lab', 'Future Lab', 'Overdue Lab', 'Delivered Past Lab'].sort())
+    })
+
+    it('returns the same full unfiltered active set when overdue is omitted entirely', async () => {
+      const response = await request(app)
+        .get('/api/labworks')
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(200)
+      const labs = response.body.data.map((l: { lab: string }) => l.lab)
+      expect(labs.sort()).toEqual(['Due Today Lab', 'Future Lab', 'Overdue Lab', 'Delivered Past Lab'].sort())
+    })
+  })
+
+  describe('GET /api/labworks/stats — overdue count', () => {
+    it('reports the overdue count alongside the other stats fields', async () => {
+      const response = await request(app)
+        .get('/api/labworks/stats')
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(200)
+      expect(response.body.data.overdue).toBe(1)
+      expect(response.body.data.total).toBe(4)
+    })
+
+    it('excludes the overdue labwork from the count once it is marked delivered (respects live state, not a cached flag)', async () => {
+      // STAFF cannot update labworks; use a fresh ADMIN token scoped to this tenant.
+      const hashedPassword = await hashPassword('password123')
+      const adminUser = await prisma.user.create({
+        data: {
+          tenantId,
+          email: 'admin@labworks-overdue-test.com',
+          firstName: 'Admin',
+          lastName: 'User',
+          passwordHash: hashedPassword,
+          role: 'ADMIN',
+        },
+      })
+      const adminToken = generateToken(adminUser.id, tenantId, 'ADMIN')
+
+      const updateResponse = await request(app)
+        .put(`/api/labworks/${overdueLabworkId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ isDelivered: true })
+      expect(updateResponse.status).toBe(200)
+
+      const statsResponse = await request(app)
+        .get('/api/labworks/stats')
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(statsResponse.body.data.overdue).toBe(0)
+
+      // Restore state for any tests that might run after this one in the
+      // same describe block (none currently do, but keeps this test
+      // self-contained rather than leaking mutated state).
+      await request(app)
+        .put(`/api/labworks/${overdueLabworkId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ isDelivered: false })
+    })
+
+    it('intersects the overdue count with an explicit from/to window', async () => {
+      // The seeded "Overdue Lab" is dated yesterday. A `to` window that ends
+      // before yesterday must exclude it from the overdue count.
+      const farPastTo = daysFromToday(-10).toISOString().slice(0, 10)
+
+      const response = await request(app)
+        .get(`/api/labworks/stats?to=${farPastTo}`)
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(200)
+      expect(response.body.data.overdue).toBe(0)
+    })
+  })
+})

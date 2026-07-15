@@ -72,10 +72,17 @@ function makeLabwork(overrides: Partial<Labwork> = {}): Labwork {
   }
 }
 
+// `date` is built from "now" rather than a hardcoded past calendar string:
+// getLabworkStatusBadge now derives an "Atrasado" (overdue) badge for any
+// active, undelivered labwork whose date is strictly before today, which
+// would otherwise shadow the "Pendiente" badge asserted below once the fixed
+// 2026-03-15 date rolls into the past.
+const futureDateStr = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+
 const labworkPending = makeLabwork({
   id: 'lw1',
   lab: 'Lab Dental Sur',
-  date: '2026-03-15T00:00:00.000Z',
+  date: futureDateStr,
   price: 1500,
   isPaid: false,
   isDelivered: false,

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Mock prisma
 vi.mock('@dental/database', () => ({
@@ -266,6 +266,146 @@ describe('labwork.service', () => {
 
       const aggregateWhere = vi.mocked(prisma.labwork.aggregate).mock.calls[0][0]!.where as Record<string, unknown>
       expect(aggregateWhere.date).toEqual({ gte: from, lte: to })
+    })
+  })
+
+  describe('listLabworks — overdue filter', () => {
+    beforeEach(() => {
+      // Fix "now" so the start-of-today boundary computed inside the service
+      // (getStartOfToday) is deterministic and doesn't depend on the machine
+      // running the suite. Local time is used deliberately (setSystemTime
+      // supplies a UTC instant; getStartOfToday truncates in local time, same
+      // as the expected value we compute below).
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-06-15T12:00:00.000Z'))
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    function expectedStartOfToday(): Date {
+      const d = new Date()
+      d.setHours(0, 0, 0, 0)
+      return d
+    }
+
+    it('adds isDelivered:false and a strictly-before-today date bound when overdue is true and isDelivered is not explicitly set', async () => {
+      await listLabworks('tenant-1', { overdue: true })
+
+      const where = vi.mocked(prisma.labwork.findMany).mock.calls[0][0]!.where
+      expect(where).toEqual({
+        tenantId: 'tenant-1',
+        isActive: true,
+        isDelivered: false,
+        date: { lt: expectedStartOfToday() },
+      })
+    })
+
+    it('applies the same overdue where clause to the count query used for pagination totals', async () => {
+      await listLabworks('tenant-1', { overdue: true })
+
+      const countWhere = vi.mocked(prisma.labwork.count).mock.calls[0][0]!.where
+      expect(countWhere).toEqual(vi.mocked(prisma.labwork.findMany).mock.calls[0][0]!.where)
+    })
+
+    it('does not force isDelivered:false when isDelivered is explicitly provided alongside overdue (explicit isDelivered wins)', async () => {
+      await listLabworks('tenant-1', { overdue: true, isDelivered: true })
+
+      const where = vi.mocked(prisma.labwork.findMany).mock.calls[0][0]!.where as Record<string, unknown>
+      expect(where.isDelivered).toBe(true)
+      // The strictly-before-today date bound is still applied even though
+      // isDelivered:true is a contradictory combination — overdue only
+      // controls the date bound here, isDelivered is a separate branch.
+      expect(where.date).toEqual({ lt: expectedStartOfToday() })
+    })
+
+    it('merges overdue with an existing `from` bound into a single date filter object (gte + lt)', async () => {
+      const from = new Date('2026-01-01')
+
+      await listLabworks('tenant-1', { overdue: true, from })
+
+      const where = vi.mocked(prisma.labwork.findMany).mock.calls[0][0]!.where as Record<string, unknown>
+      expect(where.date).toEqual({ gte: from, lt: expectedStartOfToday() })
+    })
+
+    it('merges overdue with existing from+to bounds into a single date filter object (gte + lte + lt)', async () => {
+      const from = new Date('2026-01-01')
+      const to = new Date('2026-12-31')
+
+      await listLabworks('tenant-1', { overdue: true, from, to })
+
+      const where = vi.mocked(prisma.labwork.findMany).mock.calls[0][0]!.where as Record<string, unknown>
+      expect(where.date).toEqual({ gte: from, lte: to, lt: expectedStartOfToday() })
+    })
+
+    it('does not add isDelivered or a date bound when overdue is explicitly false (falsy, not treated as active)', async () => {
+      await listLabworks('tenant-1', { overdue: false })
+
+      const where = vi.mocked(prisma.labwork.findMany).mock.calls[0][0]!.where
+      expect(where).toEqual({ tenantId: 'tenant-1', isActive: true })
+      expect(where).not.toHaveProperty('isDelivered')
+      expect(where).not.toHaveProperty('date')
+    })
+
+    it('omits isDelivered and the date bound entirely when overdue is undefined (existing behavior unchanged)', async () => {
+      await listLabworks('tenant-1', {})
+
+      const where = vi.mocked(prisma.labwork.findMany).mock.calls[0][0]!.where
+      expect(where).not.toHaveProperty('isDelivered')
+      expect(where).not.toHaveProperty('date')
+    })
+  })
+
+  describe('getLabworkStats — overdue count', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-06-15T12:00:00.000Z'))
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    function expectedStartOfToday(): Date {
+      const d = new Date()
+      d.setHours(0, 0, 0, 0)
+      return d
+    }
+
+    it('queries the overdue count with isDelivered:false and date strictly before start-of-today', async () => {
+      await getLabworkStats('tenant-1', {})
+
+      // Promise.all order in getLabworkStats: [total, paid, delivered, overdue, aggregate, paidAggregate]
+      const overdueWhere = vi.mocked(prisma.labwork.count).mock.calls[3][0]!.where as Record<string, unknown>
+      expect(overdueWhere).toEqual({
+        tenantId: 'tenant-1',
+        isActive: true,
+        isDelivered: false,
+        date: { lt: expectedStartOfToday() },
+      })
+    })
+
+    it('intersects the overdue date bound with an existing from/to window instead of replacing it', async () => {
+      const from = new Date('2026-01-01')
+      const to = new Date('2026-12-31')
+
+      await getLabworkStats('tenant-1', { from, to })
+
+      const overdueWhere = vi.mocked(prisma.labwork.count).mock.calls[3][0]!.where as Record<string, unknown>
+      expect(overdueWhere.date).toEqual({ gte: from, lte: to, lt: expectedStartOfToday() })
+    })
+
+    it('surfaces the overdue count returned by prisma on the `overdue` field of the result', async () => {
+      vi.mocked(prisma.labwork.count)
+        .mockResolvedValueOnce(10) // total
+        .mockResolvedValueOnce(6) // paid
+        .mockResolvedValueOnce(4) // delivered
+        .mockResolvedValueOnce(3) // overdue
+
+      const result = await getLabworkStats('tenant-1', {})
+
+      expect(result.overdue).toBe(3)
     })
   })
 })

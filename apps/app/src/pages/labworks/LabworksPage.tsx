@@ -153,7 +153,15 @@ export function LabworksPage() {
   }
 
   const handleFilterChange = (key: 'isPaid' | 'isDelivered', value: boolean | undefined) => {
+    if (key === 'isDelivered') {
+      setFilters({ isDelivered: value, overdue: undefined })
+      return
+    }
     setFilters({ [key]: value })
+  }
+
+  const handleOverdueFilterChange = (value: boolean | undefined) => {
+    setFilters({ overdue: value, isDelivered: undefined })
   }
 
   const handleDateFilterChange = (key: 'from' | 'to', value: string) => {
@@ -163,6 +171,7 @@ export function LabworksPage() {
   const hasActiveFilters =
     filters.isPaid !== undefined ||
     filters.isDelivered !== undefined ||
+    filters.overdue !== undefined ||
     filters.from !== undefined ||
     filters.to !== undefined
 
@@ -195,7 +204,7 @@ export function LabworksPage() {
 
       {/* Stats cards */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-purple-100 rounded-lg">
@@ -242,6 +251,18 @@ export function LabworksPage() {
                 <p className="text-xl font-semibold text-gray-900">
                   {formatCurrency(stats.totalValue || 0, currency)}
                 </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-100 rounded-lg">
+                <AlertCircle className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">{t('labworks.status.overdue')}</p>
+                <p className="text-xl font-semibold text-gray-900">{stats.overdue}</p>
               </div>
             </div>
           </div>
@@ -324,7 +345,7 @@ export function LabworksPage() {
             <div className="flex gap-2">
               <button
                 onClick={() => handleFilterChange('isDelivered', undefined)}
-                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${filters.isDelivered === undefined
+                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${filters.isDelivered === undefined && filters.overdue === undefined
                     ? 'bg-blue-50 border-blue-200 text-blue-700'
                     : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                   }`}
@@ -348,6 +369,15 @@ export function LabworksPage() {
                   }`}
               >
                 Por Entregar
+              </button>
+              <button
+                onClick={() => handleOverdueFilterChange(filters.overdue ? undefined : true)}
+                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${filters.overdue === true
+                    ? 'bg-red-50 border-red-200 text-red-700'
+                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+              >
+                {t('labworks.status.overdue')}
               </button>
             </div>
           </div>

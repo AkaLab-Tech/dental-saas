@@ -37,6 +37,7 @@ export interface LabworkStats {
   unpaid: number
   delivered: number
   pending: number
+  overdue: number
   totalValue: number
   paidValue: number
   unpaidValue: number
@@ -77,6 +78,7 @@ export interface LabworkListParams {
   patientId?: string
   isPaid?: boolean
   isDelivered?: boolean
+  overdue?: boolean
   from?: string
   to?: string
   includeInactive?: boolean
@@ -120,6 +122,7 @@ export async function getLabworks(params?: LabworkListParams): Promise<LabworkLi
   if (params?.patientId) searchParams.set('patientId', params.patientId)
   if (params?.isPaid !== undefined) searchParams.set('isPaid', String(params.isPaid))
   if (params?.isDelivered !== undefined) searchParams.set('isDelivered', String(params.isDelivered))
+  if (params?.overdue !== undefined) searchParams.set('overdue', String(params.overdue))
   if (params?.from) searchParams.set('from', params.from)
   if (params?.to) searchParams.set('to', params.to)
   if (params?.includeInactive) searchParams.set('includeInactive', 'true')
@@ -185,9 +188,28 @@ export function formatLabworkDate(dateStr: string): string {
   })
 }
 
+/**
+ * A labwork is overdue when it is active, not yet delivered, and its date
+ * is strictly before today (date-only, client-local). A labwork due today
+ * is NOT overdue.
+ */
+export function isLabworkOverdue(labwork: Labwork): boolean {
+  if (!labwork.isActive || labwork.isDelivered) {
+    return false
+  }
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const labworkDate = new Date(labwork.date)
+  labworkDate.setHours(0, 0, 0, 0)
+  return labworkDate.getTime() < today.getTime()
+}
+
 export function getLabworkStatusBadge(labwork: Labwork): { label: string; variant: 'default' | 'success' | 'warning' | 'destructive' } {
   if (!labwork.isActive) {
     return { label: 'Eliminado', variant: 'destructive' }
+  }
+  if (isLabworkOverdue(labwork)) {
+    return { label: 'Atrasado', variant: 'destructive' }
   }
   if (labwork.isDelivered && labwork.isPaid) {
     return { label: 'Completado', variant: 'success' }

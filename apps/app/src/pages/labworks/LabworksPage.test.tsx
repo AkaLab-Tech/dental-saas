@@ -23,6 +23,7 @@ const mockLabworksState = {
   filters: {
     isPaid: undefined as boolean | undefined,
     isDelivered: undefined as boolean | undefined,
+    overdue: undefined as boolean | undefined,
     from: undefined as string | undefined,
     to: undefined as string | undefined,
   },
@@ -179,6 +180,7 @@ const mockStats: LabworksStats = {
   pending: 2,
   delivered: 1,
   unpaid: 2,
+  overdue: 1,
   totalValue: 1800,
 }
 
@@ -191,7 +193,13 @@ describe('LabworksPage', () => {
     mockLabworksState.total = 0
     mockLabworksState.loading = false
     mockLabworksState.error = null
-    mockLabworksState.filters = { isPaid: undefined, isDelivered: undefined, from: undefined, to: undefined }
+    mockLabworksState.filters = {
+      isPaid: undefined,
+      isDelivered: undefined,
+      overdue: undefined,
+      from: undefined,
+      to: undefined,
+    }
   })
 
   afterEach(() => {
@@ -232,6 +240,20 @@ describe('LabworksPage', () => {
       expect(screen.getByText(/por pagar/i)).toBeInTheDocument()
       expect(screen.getByText(/por entregar/i)).toBeInTheDocument()
       expect(screen.getByText(/valor total/i)).toBeInTheDocument()
+    })
+
+    it('should render the overdue stat card with the count from stats.overdue', () => {
+      mockLabworksState.stats = mockStats
+      mockLabworksState.labworks = [mockLabwork1]
+      renderLabworksPage()
+
+      expect(screen.getByText('labworks.status.overdue')).toBeInTheDocument()
+      // mockStats.overdue is 1; scope to the stat card value next to the label
+      // to avoid ambiguity with the (unrelated) "1" that could appear elsewhere.
+      const overdueLabel = screen.getByText('labworks.status.overdue')
+      const overdueCard = overdueLabel.closest('div.bg-white')
+      expect(overdueCard).not.toBeNull()
+      expect(overdueCard).toHaveTextContent('1')
     })
   })
 
@@ -294,6 +316,76 @@ describe('LabworksPage', () => {
       expect(mockSetFilters).toHaveBeenCalledWith({ isDelivered: true })
     })
 
+    it('should clear the overdue filter when the delivery status filter is changed (mutually exclusive)', () => {
+      mockLabworksState.filters = {
+        isPaid: undefined,
+        isDelivered: undefined,
+        overdue: true,
+        from: undefined,
+        to: undefined,
+      }
+      renderLabworksPage()
+
+      fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
+
+      const deliveredButton = screen.getByRole('button', { name: /^entregados$/i })
+      fireEvent.click(deliveredButton)
+
+      expect(mockSetFilters).toHaveBeenCalledWith({ isDelivered: true, overdue: undefined })
+    })
+
+    it('should activate the overdue filter and clear the delivery status filter when "Atrasados" is clicked', () => {
+      mockLabworksState.filters = {
+        isPaid: undefined,
+        isDelivered: true,
+        overdue: undefined,
+        from: undefined,
+        to: undefined,
+      }
+      renderLabworksPage()
+
+      fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
+
+      const overdueButton = screen.getByRole('button', { name: 'labworks.status.overdue' })
+      fireEvent.click(overdueButton)
+
+      expect(mockSetFilters).toHaveBeenCalledWith({ overdue: true, isDelivered: undefined })
+    })
+
+    it('should toggle the overdue filter off when "Atrasados" is clicked while already active', () => {
+      mockLabworksState.filters = {
+        isPaid: undefined,
+        isDelivered: undefined,
+        overdue: true,
+        from: undefined,
+        to: undefined,
+      }
+      renderLabworksPage()
+
+      fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
+
+      const overdueButton = screen.getByRole('button', { name: 'labworks.status.overdue' })
+      fireEvent.click(overdueButton)
+
+      expect(mockSetFilters).toHaveBeenCalledWith({ overdue: undefined, isDelivered: undefined })
+    })
+
+    it('should highlight the "Filtros" button and count as an active filter when only overdue is set', () => {
+      mockLabworksState.filters = {
+        isPaid: undefined,
+        isDelivered: undefined,
+        overdue: true,
+        from: undefined,
+        to: undefined,
+      }
+      mockLabworksState.labworks = []
+      renderLabworksPage()
+
+      const filterButton = screen.getByRole('button', { name: /filtros/i })
+      expect(filterButton.className).toMatch(/bg-blue-50/)
+      expect(screen.getByText(/no se encontraron trabajos con los filtros aplicados/i)).toBeInTheDocument()
+    })
+
     it('should clear all filters', () => {
       renderLabworksPage()
 
@@ -338,7 +430,7 @@ describe('LabworksPage', () => {
     })
 
     it('should clear the "from" date filter when the input is emptied', () => {
-      mockLabworksState.filters = { isPaid: undefined, isDelivered: undefined, from: '2024-01-01', to: undefined }
+      mockLabworksState.filters = { isPaid: undefined, isDelivered: undefined, overdue: undefined, from: '2024-01-01', to: undefined }
       renderLabworksPage()
 
       fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
@@ -351,7 +443,7 @@ describe('LabworksPage', () => {
     })
 
     it('should clear the "to" date filter when the input is emptied', () => {
-      mockLabworksState.filters = { isPaid: undefined, isDelivered: undefined, from: undefined, to: '2024-01-31' }
+      mockLabworksState.filters = { isPaid: undefined, isDelivered: undefined, overdue: undefined, from: undefined, to: '2024-01-31' }
       renderLabworksPage()
 
       fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
@@ -364,7 +456,7 @@ describe('LabworksPage', () => {
     })
 
     it('should combine date range filter with existing isPaid/isDelivered filters without clobbering them', () => {
-      mockLabworksState.filters = { isPaid: true, isDelivered: false, from: undefined, to: undefined }
+      mockLabworksState.filters = { isPaid: true, isDelivered: false, overdue: undefined, from: undefined, to: undefined }
       renderLabworksPage()
 
       fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
@@ -385,7 +477,7 @@ describe('LabworksPage', () => {
     })
 
     it('should highlight the "Filtros" button and show filtered empty-state copy when only a date range is active', () => {
-      mockLabworksState.filters = { isPaid: undefined, isDelivered: undefined, from: '2024-01-01', to: undefined }
+      mockLabworksState.filters = { isPaid: undefined, isDelivered: undefined, overdue: undefined, from: '2024-01-01', to: undefined }
       mockLabworksState.labworks = []
       renderLabworksPage()
 

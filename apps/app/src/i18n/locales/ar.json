@@ -262,7 +262,8 @@
       "pending": "معلق",
       "inProgress": "قيد التنفيذ",
       "completed": "مكتمل",
-      "delivered": "تم التسليم"
+      "delivered": "تم التسليم",
+      "overdue": "متأخر"
     },
     "linkedAppointment": "الموعد المرتبط",
     "selectAppointment": "اختر موعدًا (اختياري)",

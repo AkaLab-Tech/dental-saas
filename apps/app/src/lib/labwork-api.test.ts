@@ -9,6 +9,7 @@ import {
   getLabworkStats,
   formatLabworkDate,
   getLabworkStatusBadge,
+  isLabworkOverdue,
   type Labwork,
   type LabworkStats,
 } from './labwork-api'
@@ -54,10 +55,31 @@ const mockLabworkStats: LabworkStats = {
   unpaid: 10,
   delivered: 15,
   pending: 15,
+  overdue: 4,
   totalValue: 10500,
   paidValue: 7000,
   unpaidValue: 3500,
 }
+
+// ============================================================================
+// Date helpers for overdue boundary tests
+// ============================================================================
+//
+// isLabworkOverdue compares `new Date(labwork.date)` (truncated to local
+// midnight) against `new Date()` (also truncated to local midnight). Building
+// the fixture dates as an offset in milliseconds from `Date.now()` — instead
+// of a hardcoded calendar string — guarantees the "today" / "yesterday" /
+// "tomorrow" fixtures always land on the correct local calendar day no matter
+// which timezone the test runner is in (a hardcoded date-only string like
+// "2026-07-15" parses as UTC midnight and can shift a day in negative-offset
+// timezones).
+function isoDaysFromNow(offsetDays: number): string {
+  return new Date(Date.now() + offsetDays * 24 * 60 * 60 * 1000).toISOString()
+}
+
+const todayStr = isoDaysFromNow(0)
+const yesterdayStr = isoDaysFromNow(-1)
+const tomorrowStr = isoDaysFromNow(1)
 
 const mockPagination = {
   total: 30,
@@ -132,6 +154,36 @@ describe('labwork-api', () => {
       })
 
       await getLabworks({ search: undefined, isPaid: true })
+
+      expect(apiClient.get).toHaveBeenCalledWith('/labworks?isPaid=true')
+    })
+
+    it('should include the overdue param in the query string when true', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [], pagination: mockPagination },
+      })
+
+      await getLabworks({ overdue: true })
+
+      expect(apiClient.get).toHaveBeenCalledWith('/labworks?overdue=true')
+    })
+
+    it('should include the overdue param in the query string when explicitly false', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [], pagination: mockPagination },
+      })
+
+      await getLabworks({ overdue: false })
+
+      expect(apiClient.get).toHaveBeenCalledWith('/labworks?overdue=false')
+    })
+
+    it('should omit the overdue param when it is undefined', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [], pagination: mockPagination },
+      })
+
+      await getLabworks({ overdue: undefined, isPaid: true })
 
       expect(apiClient.get).toHaveBeenCalledWith('/labworks?isPaid=true')
     })
@@ -379,7 +431,11 @@ describe('labwork-api', () => {
       })
 
       it('should return warning badge for paid but not delivered labwork', () => {
-        const paidLabwork = { ...mockLabwork, isPaid: true, isDelivered: false }
+        // date is overridden to a future (non-overdue) day: mockLabwork's
+        // fixed 2024-01-20 date is in the past relative to "now" and would
+        // otherwise be caught by the overdue check first (isActive: true,
+        // isDelivered: false, date < today), masking the branch under test.
+        const paidLabwork = { ...mockLabwork, isPaid: true, isDelivered: false, date: tomorrowStr }
         const badge = getLabworkStatusBadge(paidLabwork)
 
         expect(badge.label).toBe('Pagado')
@@ -387,11 +443,69 @@ describe('labwork-api', () => {
       })
 
       it('should return warning badge for pending labwork', () => {
-        const pendingLabwork = { ...mockLabwork, isPaid: false, isDelivered: false }
+        // Same reasoning as above: force a non-overdue date so this exercises
+        // the "Pendiente" branch rather than the overdue branch.
+        const pendingLabwork = { ...mockLabwork, isPaid: false, isDelivered: false, date: tomorrowStr }
         const badge = getLabworkStatusBadge(pendingLabwork)
 
         expect(badge.label).toBe('Pendiente')
         expect(badge.variant).toBe('warning')
+      })
+
+      it('should return destructive "Atrasado" badge for an active, undelivered, strictly-past labwork', () => {
+        const overdueLabwork = { ...mockLabwork, isActive: true, isDelivered: false, date: yesterdayStr }
+        const badge = getLabworkStatusBadge(overdueLabwork)
+
+        expect(badge.label).toBe('Atrasado')
+        expect(badge.variant).toBe('destructive')
+      })
+
+      it('should prioritize the overdue badge over the paid/pending badges when a labwork is both overdue and paid', () => {
+        const overduePaidLabwork = { ...mockLabwork, isActive: true, isPaid: true, isDelivered: false, date: yesterdayStr }
+        const badge = getLabworkStatusBadge(overduePaidLabwork)
+
+        expect(badge.label).toBe('Atrasado')
+        expect(badge.variant).toBe('destructive')
+      })
+
+      it('should prioritize the deleted badge over the overdue badge for an inactive, strictly-past labwork', () => {
+        const deletedPastLabwork = { ...mockLabwork, isActive: false, isDelivered: false, date: yesterdayStr }
+        const badge = getLabworkStatusBadge(deletedPastLabwork)
+
+        expect(badge.label).toBe('Eliminado')
+        expect(badge.variant).toBe('destructive')
+      })
+    })
+
+    describe('isLabworkOverdue', () => {
+      it('returns false for a labwork due today (boundary: not strictly in the past)', () => {
+        const labwork = { ...mockLabwork, isActive: true, isDelivered: false, date: todayStr }
+
+        expect(isLabworkOverdue(labwork)).toBe(false)
+      })
+
+      it('returns true for a labwork due yesterday (strictly in the past)', () => {
+        const labwork = { ...mockLabwork, isActive: true, isDelivered: false, date: yesterdayStr }
+
+        expect(isLabworkOverdue(labwork)).toBe(true)
+      })
+
+      it('returns false for a delivered labwork whose date is in the past', () => {
+        const labwork = { ...mockLabwork, isActive: true, isDelivered: true, date: yesterdayStr }
+
+        expect(isLabworkOverdue(labwork)).toBe(false)
+      })
+
+      it('returns false for a labwork due in the future', () => {
+        const labwork = { ...mockLabwork, isActive: true, isDelivered: false, date: tomorrowStr }
+
+        expect(isLabworkOverdue(labwork)).toBe(false)
+      })
+
+      it('returns false for an inactive (soft-deleted) labwork whose date is in the past', () => {
+        const labwork = { ...mockLabwork, isActive: false, isDelivered: false, date: yesterdayStr }
+
+        expect(isLabworkOverdue(labwork)).toBe(false)
       })
     })
   })
