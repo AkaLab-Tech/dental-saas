@@ -1008,13 +1008,20 @@ describe('GET /api/labworks/export (CSV export)', () => {
   let tenantId: string
   let otherTenantId: string
   let staffToken: string
+  let doctorToken: string
+  let clinicAdminToken: string
+  let adminToken: string
+  let ownerToken: string
   let doctorId: string
   let garciaPatientId: string
   const testSlug = `test-labworks-export-${Date.now()}`
   const otherSlug = `test-labworks-export-other-${Date.now()}`
 
+  // Mirrors export.test.ts's token-signing approach: this project's API
+  // reads req.user.userId (not req.user.sub), so test tokens are signed
+  // with `userId`.
   function generateToken(userId: string, tenantId: string, role: string) {
-    return sign({ sub: userId, tenantId, role }, JWT_SECRET, { expiresIn: '1h' })
+    return sign({ userId, tenantId, role }, JWT_SECRET, { expiresIn: '1h' })
   }
 
   async function createTenant(slug: string, name: string) {
@@ -1066,6 +1073,54 @@ describe('GET /api/labworks/export (CSV export)', () => {
       },
     })
     staffToken = generateToken(staffUser.id, tenantId, 'STAFF')
+
+    const doctorUser = await prisma.user.create({
+      data: {
+        tenantId,
+        email: 'doctor@labworks-export-test.com',
+        firstName: 'Doctor',
+        lastName: 'User',
+        passwordHash: hashedPassword,
+        role: 'DOCTOR',
+      },
+    })
+    doctorToken = generateToken(doctorUser.id, tenantId, 'DOCTOR')
+
+    const clinicAdminUser = await prisma.user.create({
+      data: {
+        tenantId,
+        email: 'clinic-admin@labworks-export-test.com',
+        firstName: 'Clinic',
+        lastName: 'Admin',
+        passwordHash: hashedPassword,
+        role: 'CLINIC_ADMIN',
+      },
+    })
+    clinicAdminToken = generateToken(clinicAdminUser.id, tenantId, 'CLINIC_ADMIN')
+
+    const adminUser = await prisma.user.create({
+      data: {
+        tenantId,
+        email: 'admin@labworks-export-test.com',
+        firstName: 'Admin',
+        lastName: 'User',
+        passwordHash: hashedPassword,
+        role: 'ADMIN',
+      },
+    })
+    adminToken = generateToken(adminUser.id, tenantId, 'ADMIN')
+
+    const ownerUser = await prisma.user.create({
+      data: {
+        tenantId,
+        email: 'owner@labworks-export-test.com',
+        firstName: 'Owner',
+        lastName: 'User',
+        passwordHash: hashedPassword,
+        role: 'OWNER',
+      },
+    })
+    ownerToken = generateToken(ownerUser.id, tenantId, 'OWNER')
 
     const doctor = await prisma.doctor.create({
       data: { tenantId, firstName: 'Dr. Jane', lastName: 'Root', email: 'dr-jane-root@labworks-export-test.com' },
@@ -1148,18 +1203,55 @@ describe('GET /api/labworks/export (CSV export)', () => {
     expect(response.status).toBe(401)
   })
 
-  it('allows STAFF to reach the endpoint (200), same minimum role as GET /', async () => {
-    const response = await request(app)
-      .get('/api/labworks/export')
-      .set('Authorization', `Bearer ${staffToken}`)
+  describe('permission boundary (requires Permission.DATA_EXPORT, ADMIN+ only)', () => {
+    it('denies STAFF (403)', async () => {
+      const response = await request(app)
+        .get('/api/labworks/export')
+        .set('Authorization', `Bearer ${staffToken}`)
 
-    expect(response.status).toBe(200)
+      expect(response.status).toBe(403)
+      expect(response.body).toHaveProperty('error')
+    })
+
+    it('denies DOCTOR (403)', async () => {
+      const response = await request(app)
+        .get('/api/labworks/export')
+        .set('Authorization', `Bearer ${doctorToken}`)
+
+      expect(response.status).toBe(403)
+      expect(response.body).toHaveProperty('error')
+    })
+
+    it('denies CLINIC_ADMIN (403)', async () => {
+      const response = await request(app)
+        .get('/api/labworks/export')
+        .set('Authorization', `Bearer ${clinicAdminToken}`)
+
+      expect(response.status).toBe(403)
+      expect(response.body).toHaveProperty('error')
+    })
+
+    it('allows ADMIN (200)', async () => {
+      const response = await request(app)
+        .get('/api/labworks/export')
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(response.status).toBe(200)
+    })
+
+    it('allows OWNER (200)', async () => {
+      const response = await request(app)
+        .get('/api/labworks/export')
+        .set('Authorization', `Bearer ${ownerToken}`)
+
+      expect(response.status).toBe(200)
+    })
   })
 
   it('responds with a text/csv content type (charset=utf-8)', async () => {
     const response = await request(app)
       .get('/api/labworks/export')
-      .set('Authorization', `Bearer ${staffToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
 
     expect(response.headers['content-type']).toBe('text/csv; charset=utf-8')
   })
@@ -1167,7 +1259,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   it('responds with a Content-Disposition attachment header naming a .csv file', async () => {
     const response = await request(app)
       .get('/api/labworks/export')
-      .set('Authorization', `Bearer ${staffToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
 
     expect(response.headers['content-disposition']).toMatch(
       /^attachment; filename="labworks-\d{4}-\d{2}-\d{2}\.csv"$/
@@ -1177,7 +1269,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   it('resolves to the /export handler rather than being swallowed by /:id (route ordering)', async () => {
     const response = await request(app)
       .get('/api/labworks/export')
-      .set('Authorization', `Bearer ${staffToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
 
     // The /:id handler would respond 404 with `{ success: false, error: 'Labwork not found' }`
     // (treating "export" as an :id param) instead of a 200 CSV payload.
@@ -1189,7 +1281,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   it('prepends a UTF-8 BOM before the header row', async () => {
     const response = await request(app)
       .get('/api/labworks/export')
-      .set('Authorization', `Bearer ${staffToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
 
     expect(response.text.charCodeAt(0)).toBe(0xfeff)
     expect(response.text.slice(1)).toMatch(/^Fecha,Laboratorio,Teléfono,Paciente,Doctor\(es\),Precio,Pagado,Entregado,Nota/)
@@ -1198,7 +1290,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   it('includes all active labworks for the tenant when no filters are applied', async () => {
     const response = await request(app)
       .get('/api/labworks/export')
-      .set('Authorization', `Bearer ${staffToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
 
     const body = response.text.replace(/^\uFEFF/, '')
     const dataRows = body.split('\n').slice(1)
@@ -1213,7 +1305,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   it('escapes the comma in a lab name and the embedded quote in a note (RFC4180)', async () => {
     const response = await request(app)
       .get('/api/labworks/export')
-      .set('Authorization', `Bearer ${staffToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
 
     const body = response.text.replace(/^\uFEFF/, '')
     expect(body).toContain('"Acme, Dental Lab"')
@@ -1223,7 +1315,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   it('resolves the assigned doctor name and patient name into their respective columns', async () => {
     const response = await request(app)
       .get('/api/labworks/export')
-      .set('Authorization', `Bearer ${staffToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
 
     const body = response.text.replace(/^\uFEFF/, '')
     const row = body.split('\n').find((line) => line.includes('Acme, Dental Lab'))
@@ -1234,7 +1326,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   it('renders Sí/No for isPaid/isDelivered and leaves empty columns for a labwork with no patient/doctor/phone/note', async () => {
     const response = await request(app)
       .get('/api/labworks/export')
-      .set('Authorization', `Bearer ${staffToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
 
     const body = response.text.replace(/^\uFEFF/, '')
     const budgetRow = body.split('\n').find((line) => line.includes('Budget Lab'))
@@ -1247,7 +1339,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   it('applies the search filter, returning only labworks matching the lab or patient name', async () => {
     const response = await request(app)
       .get('/api/labworks/export?search=Budget')
-      .set('Authorization', `Bearer ${staffToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
 
     const body = response.text.replace(/^\uFEFF/, '')
     const dataRows = body.split('\n').slice(1)
@@ -1258,7 +1350,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   it('applies the isPaid filter', async () => {
     const response = await request(app)
       .get('/api/labworks/export?isPaid=true')
-      .set('Authorization', `Bearer ${staffToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
 
     const body = response.text.replace(/^\uFEFF/, '')
     const dataRows = body.split('\n').slice(1)
@@ -1270,7 +1362,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   it('applies the isDelivered filter', async () => {
     const response = await request(app)
       .get('/api/labworks/export?isDelivered=false')
-      .set('Authorization', `Bearer ${staffToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
 
     const body = response.text.replace(/^\uFEFF/, '')
     expect(body).not.toContain('Acme, Dental Lab')
@@ -1281,7 +1373,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   it('applies the patientId filter', async () => {
     const response = await request(app)
       .get(`/api/labworks/export?patientId=${garciaPatientId}`)
-      .set('Authorization', `Bearer ${staffToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
 
     const body = response.text.replace(/^\uFEFF/, '')
     const dataRows = body.split('\n').slice(1)
@@ -1292,7 +1384,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   it('applies the from/to date-range filter', async () => {
     const response = await request(app)
       .get('/api/labworks/export?from=2026-02-01&to=2026-02-28')
-      .set('Authorization', `Bearer ${staffToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
 
     const body = response.text.replace(/^\uFEFF/, '')
     expect(body).toContain('Acme, Dental Lab')
@@ -1303,7 +1395,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   it('applies the overdue filter (active, undelivered, strictly-past labworks only)', async () => {
     const response = await request(app)
       .get('/api/labworks/export?overdue=true')
-      .set('Authorization', `Bearer ${staffToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
 
     const body = response.text.replace(/^\uFEFF/, '')
     // Both "Budget Lab" (2026-02-10) and "Out Of Range Lab" (2025-01-01) are
@@ -1318,7 +1410,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   it('never leaks another tenant\'s labworks into the export', async () => {
     const response = await request(app)
       .get('/api/labworks/export')
-      .set('Authorization', `Bearer ${staffToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
 
     const body = response.text.replace(/^\uFEFF/, '')
     const dataRows = body.split('\n').slice(1)
@@ -1328,7 +1420,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   it('returns just the header row (no data rows) when filters match nothing', async () => {
     const response = await request(app)
       .get('/api/labworks/export?search=NoSuchLabAtAll')
-      .set('Authorization', `Bearer ${staffToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
 
     const body = response.text.replace(/^\uFEFF/, '')
     expect(body).toBe('Fecha,Laboratorio,Teléfono,Paciente,Doctor(es),Precio,Pagado,Entregado,Nota')

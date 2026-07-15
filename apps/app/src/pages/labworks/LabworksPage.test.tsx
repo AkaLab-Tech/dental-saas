@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
+import { Permission } from '@dental/shared'
 import type { Labwork, LabworksStats } from '@/lib/labwork-api'
 
 // Mock functions
@@ -49,10 +50,15 @@ vi.mock('@/stores/labworks.store', () => ({
   }),
 }))
 
-// Mock usePermissions hook to grant all permissions
+// Mock usePermissions hook. Defaults to granting every permission; individual
+// tests can override `mockPermissionsState.deniedPermissions` to simulate a
+// user who lacks a specific permission (e.g. Permission.DATA_EXPORT).
+const mockPermissionsState = {
+  deniedPermissions: [] as string[],
+}
 vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: () => ({
-    can: () => true,
+    can: (permission: string) => !mockPermissionsState.deniedPermissions.includes(permission),
     canAny: () => true,
     canAll: () => true,
   }),
@@ -210,6 +216,7 @@ describe('LabworksPage', () => {
       from: undefined,
       to: undefined,
     }
+    mockPermissionsState.deniedPermissions = []
   })
 
   afterEach(() => {
@@ -529,10 +536,20 @@ describe('LabworksPage', () => {
   })
 
   describe('export', () => {
-    it('renders the export button', () => {
+    it('renders the export button when the user has Permission.DATA_EXPORT', () => {
       renderLabworksPage()
 
       expect(screen.getByRole('button', { name: 'labworks.exportCsv' })).toBeInTheDocument()
+    })
+
+    it('does not render the export button when the user lacks Permission.DATA_EXPORT', () => {
+      mockPermissionsState.deniedPermissions = [Permission.DATA_EXPORT]
+      renderLabworksPage()
+
+      expect(screen.queryByRole('button', { name: 'labworks.exportCsv' })).not.toBeInTheDocument()
+      // Sanity check: other permission-gated content (e.g. "Nuevo Trabajo",
+      // gated on Permission.LABWORKS_CREATE) is unaffected by this denial.
+      expect(screen.getByRole('button', { name: /nuevo trabajo/i })).toBeInTheDocument()
     })
 
     it('calls exportLabworks with the current filters and search query when clicked', async () => {

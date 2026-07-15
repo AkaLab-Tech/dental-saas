@@ -2,6 +2,8 @@ import { Router, type IRouter } from 'express'
 import { z } from 'zod'
 import { requireMinRole } from '../middleware/auth.js'
 import { requireOwnership } from '../middleware/ownership.js'
+import { requirePermission } from '../middleware/permissions.js'
+import { Permission } from '@dental/shared'
 import {
   createLabwork,
   getLabworkById,
@@ -140,7 +142,7 @@ labworksRouter.get('/labs', requireMinRole('STAFF'), async (req, res, next) => {
  * Export labworks matching the current filters as CSV
  * Must be registered before /:id so "export" is not captured as an id
  */
-labworksRouter.get('/export', requireMinRole('STAFF'), async (req, res, next) => {
+labworksRouter.get('/export', requirePermission(Permission.DATA_EXPORT), async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId!
     const { patientId, isPaid, isDelivered, overdue, from, to, search } = req.query

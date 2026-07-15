@@ -206,18 +206,20 @@ export function LabworksPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleExport}
-            disabled={isExporting}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-medium rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-50"
-          >
-            {isExporting ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <Download className="h-5 w-5" />
-            )}
-            {t('labworks.exportCsv')}
-          </button>
+          <Can permission={Permission.DATA_EXPORT}>
+            <button
+              onClick={handleExport}
+              disabled={isExporting}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-medium rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              {isExporting ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Download className="h-5 w-5" />
+              )}
+              {t('labworks.exportCsv')}
+            </button>
+          </Can>
 
           <Can permission={Permission.LABWORKS_CREATE}>
             <button
