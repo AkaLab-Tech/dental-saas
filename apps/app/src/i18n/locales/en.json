@@ -262,7 +262,8 @@
       "pending": "Pending",
       "inProgress": "In Progress",
       "completed": "Completed",
-      "delivered": "Delivered"
+      "delivered": "Delivered",
+      "overdue": "Overdue"
     },
     "linkedAppointment": "Linked appointment",
     "selectAppointment": "Select appointment (optional)",

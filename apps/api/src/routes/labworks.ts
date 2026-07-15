@@ -69,7 +69,7 @@ const errorMessageMap: Record<string, string> = {
 labworksRouter.get('/', requireMinRole('STAFF'), async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId!
-    const { limit, offset, patientId, isPaid, isDelivered, from, to, includeInactive, search } = req.query
+    const { limit, offset, patientId, isPaid, isDelivered, overdue, from, to, includeInactive, search } = req.query
 
     const result = await listLabworks(tenantId, {
       limit: limit ? Math.min(parseInt(String(limit), 10), 100) : undefined,
@@ -77,6 +77,7 @@ labworksRouter.get('/', requireMinRole('STAFF'), async (req, res, next) => {
       patientId: patientId ? String(patientId) : undefined,
       isPaid: isPaid !== undefined ? isPaid === 'true' : undefined,
       isDelivered: isDelivered !== undefined ? isDelivered === 'true' : undefined,
+      overdue: overdue !== undefined ? overdue === 'true' : undefined,
       from: from ? new Date(String(from)) : undefined,
       to: to ? new Date(String(to)) : undefined,
       includeInactive: includeInactive === 'true',
