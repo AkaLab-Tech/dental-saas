@@ -275,7 +275,8 @@
     "includedInAppointment": "مشمول في الموعد",
     "dateRange": "النطاق الزمني",
     "dateFrom": "من",
-    "dateTo": "إلى"
+    "dateTo": "إلى",
+    "downloadPdf": "تحميل الطلب"
   },
   "budgets": {
     "title": "الميزانيات",

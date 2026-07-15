@@ -275,7 +275,8 @@
     "includedInAppointment": "Incluido en consulta",
     "dateRange": "Rango de Fechas",
     "dateFrom": "Desde",
-    "dateTo": "Hasta"
+    "dateTo": "Hasta",
+    "downloadPdf": "Descargar orden"
   },
   "budgets": {
     "title": "Presupuestos",

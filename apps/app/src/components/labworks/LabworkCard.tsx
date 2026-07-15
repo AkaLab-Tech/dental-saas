@@ -14,6 +14,8 @@ import {
   ChevronDown,
   ChevronUp,
   Phone,
+  Download,
+  Loader2,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Permission, AttachmentModule } from '@dental/shared'
@@ -22,6 +24,7 @@ import { getLabworkStatusBadge } from '@/lib/labwork-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAuthStore } from '@/stores/auth.store'
 import { formatCurrency } from '@/lib/format'
+import { downloadLabworkPdf } from '@/lib/pdf-api'
 import { ImageUpload } from '@/components/ui/ImageUpload'
 import { ImageGallery } from '@/components/ui/ImageGallery'
 
@@ -47,8 +50,20 @@ export function LabworkCard({
   const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
   const [showImages, setShowImages] = useState(false)
   const [imageRefreshKey, setImageRefreshKey] = useState(0)
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
   const statusBadge = getLabworkStatusBadge(labwork)
   const isDeleted = !!labwork.deletedAt
+
+  const handleDownloadPdf = async () => {
+    setIsDownloadingPdf(true)
+    try {
+      await downloadLabworkPdf(labwork.id)
+    } catch {
+      // Download failures are non-blocking; the user can retry.
+    } finally {
+      setIsDownloadingPdf(false)
+    }
+  }
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('es-ES', {
@@ -206,6 +221,20 @@ export function LabworkCard({
             )
           ) : (
             <>
+              {can(Permission.LABWORKS_VIEW) && (
+                <button
+                  onClick={handleDownloadPdf}
+                  disabled={isDownloadingPdf}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {isDownloadingPdf ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  {t('labworks.downloadPdf')}
+                </button>
+              )}
               {can(Permission.LABWORKS_UPDATE) && (
                 <button
                   onClick={() => onEdit(labwork)}

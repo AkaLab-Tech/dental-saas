@@ -77,3 +77,10 @@ export async function downloadPatientHistoryPdf(patientId: string): Promise<void
 export async function downloadBudgetPdf(budgetId: string): Promise<void> {
   await downloadPdf(`/budgets/${budgetId}/pdf`, `budget-${budgetId}.pdf`)
 }
+
+/**
+ * Download a labwork order as PDF
+ */
+export async function downloadLabworkPdf(labworkId: string): Promise<void> {
+  await downloadPdf(`/labworks/${labworkId}/pdf`, `labwork-${labworkId}.pdf`)
+}

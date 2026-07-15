@@ -1,9 +1,11 @@
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import i18n from 'i18next'
 import '@/i18n'
 import { LabworkCard } from './LabworkCard'
 import type { Labwork } from '@/lib/labwork-api'
+import { downloadLabworkPdf } from '@/lib/pdf-api'
+import { Permission } from '@dental/shared'
 
 beforeAll(async () => {
   await i18n.changeLanguage('es')
@@ -26,6 +28,10 @@ vi.mock('@/hooks/usePermissions', () => ({
 vi.mock('@/stores/auth.store', () => ({
   useAuthStore: (selector: (s: unknown) => unknown) =>
     selector({ user: { tenant: { currency: 'USD' } } }),
+}))
+
+vi.mock('@/lib/pdf-api', () => ({
+  downloadLabworkPdf: vi.fn(),
 }))
 
 // ============================================================================
@@ -100,5 +106,80 @@ describe('LabworkCard — lab phone', () => {
     fireEvent.click(screen.getByRole('link', { name: '+598 99 123 456' }))
 
     expect(parentClick).not.toHaveBeenCalled()
+  })
+})
+
+describe('LabworkCard — download order (PDF)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    canMock.mockReturnValue(true)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('renders the "Descargar orden" action when the user can view labworks', () => {
+    renderCard(makeLabwork())
+
+    expect(screen.getByRole('button', { name: 'Descargar orden' })).toBeInTheDocument()
+  })
+
+  it('does not render the download action when the user lacks LABWORKS_VIEW permission (other permissions unaffected)', () => {
+    canMock.mockImplementation((perm: unknown) => perm !== Permission.LABWORKS_VIEW)
+
+    renderCard(makeLabwork())
+
+    expect(screen.queryByRole('button', { name: 'Descargar orden' })).not.toBeInTheDocument()
+    // Sanity check: the mock only gates LABWORKS_VIEW — edit/delete remain visible.
+    expect(screen.getByRole('button', { name: 'Editar' })).toBeInTheDocument()
+  })
+
+  it('calls downloadLabworkPdf with the labwork id when clicked', async () => {
+    vi.mocked(downloadLabworkPdf).mockResolvedValue(undefined)
+    renderCard(makeLabwork({ id: 'labwork-42' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Descargar orden' }))
+
+    await waitFor(() => {
+      expect(downloadLabworkPdf).toHaveBeenCalledWith('labwork-42')
+    })
+    expect(downloadLabworkPdf).toHaveBeenCalledTimes(1)
+  })
+
+  it('disables the button while the download is in flight and re-enables it after completion', async () => {
+    let resolveDownload: () => void = () => {}
+    vi.mocked(downloadLabworkPdf).mockReturnValue(
+      new Promise((resolve) => {
+        resolveDownload = () => resolve(undefined)
+      })
+    )
+    renderCard(makeLabwork())
+
+    const button = screen.getByRole('button', { name: 'Descargar orden' })
+    fireEvent.click(button)
+
+    await waitFor(() => {
+      expect(button).toBeDisabled()
+    })
+
+    resolveDownload()
+
+    await waitFor(() => {
+      expect(button).not.toBeDisabled()
+    })
+  })
+
+  it('does not throw and re-enables the button when the download rejects', async () => {
+    vi.mocked(downloadLabworkPdf).mockRejectedValue(new Error('network error'))
+    renderCard(makeLabwork())
+
+    const button = screen.getByRole('button', { name: 'Descargar orden' })
+    fireEvent.click(button)
+
+    await waitFor(() => {
+      expect(button).not.toBeDisabled()
+    })
+    expect(downloadLabworkPdf).toHaveBeenCalledTimes(1)
   })
 })
