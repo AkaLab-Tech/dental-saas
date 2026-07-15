@@ -29,6 +29,12 @@ vi.mock('@dental/database', () => ({
     budget: {
       findFirst: vi.fn(),
     },
+    labwork: {
+      findFirst: vi.fn(),
+    },
+    doctor: {
+      findMany: vi.fn(),
+    },
   },
   AppointmentStatus: {
     SCHEDULED: 'SCHEDULED',
@@ -570,6 +576,173 @@ describe('PdfService', () => {
       expect(result.data.budget.items).toEqual([])
       // No tenant settings -> falls back to 'es'
       expect(result.data.tenant.language).toBe('es')
+    })
+  })
+
+  describe('getLabworkOrderData', () => {
+    function mockLabworkRow(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'labwork-123',
+        tenantId: 'tenant-123',
+        patientId: 'patient-123',
+        appointmentId: null,
+        priceIncludedInAppointment: false,
+        lab: 'Acme Dental Lab',
+        phoneNumber: '+1234567890',
+        date: new Date('2026-01-20T10:00:00Z'),
+        note: 'Rush order',
+        price: { toString: () => '250.00' },
+        isPaid: false,
+        isDelivered: false,
+        doctorIds: ['doctor-1', 'doctor-2'],
+        isActive: true,
+        createdBy: null,
+        createdAt: new Date('2026-01-10T10:00:00Z'),
+        updatedAt: new Date('2026-01-10T10:00:00Z'),
+        patient: {
+          id: 'patient-123',
+          firstName: 'John',
+          lastName: 'Doe',
+          email: 'john@test.com',
+          phone: '+1234567890',
+        },
+        ...overrides,
+      }
+    }
+
+    function mockTenantRow(overrides: Record<string, unknown> = {}) {
+      return {
+        name: 'Test Clinic',
+        email: 'clinic@test.com',
+        phone: '+1234567890',
+        address: '123 Test Street',
+        logo: null,
+        timezone: 'America/New_York',
+        currency: 'USD',
+        settings: { language: 'en' },
+        ...overrides,
+      }
+    }
+
+    it('assembles tenant, patient and resolved doctor names on the happy path', async () => {
+      vi.mocked(prisma.labwork.findFirst).mockResolvedValue(
+        mockLabworkRow() as unknown as Awaited<ReturnType<typeof prisma.labwork.findFirst>>
+      )
+      vi.mocked(prisma.tenant.findUnique).mockResolvedValue(
+        mockTenantRow() as unknown as Awaited<ReturnType<typeof prisma.tenant.findUnique>>
+      )
+      vi.mocked(prisma.doctor.findMany).mockResolvedValue([
+        { id: 'doctor-1', firstName: 'Jane', lastName: 'Smith' },
+        { id: 'doctor-2', firstName: 'Bob', lastName: 'Lee' },
+      ] as unknown as Awaited<ReturnType<typeof prisma.doctor.findMany>>)
+
+      const result = await PdfService.getLabworkOrderData('tenant-123', 'labwork-123')
+
+      expect('error' in result).toBe(false)
+      if ('error' in result) return
+      expect(result.data.tenant.name).toBe('Test Clinic')
+      expect(result.data.patient).toEqual({ id: 'patient-123', firstName: 'John', lastName: 'Doe' })
+      expect(result.data.doctors).toEqual([
+        { id: 'doctor-1', firstName: 'Jane', lastName: 'Smith' },
+        { id: 'doctor-2', firstName: 'Bob', lastName: 'Lee' },
+      ])
+      expect(result.data.labwork).toMatchObject({
+        id: 'labwork-123',
+        lab: 'Acme Dental Lab',
+        phoneNumber: '+1234567890',
+        note: 'Rush order',
+        price: '250.00',
+        isPaid: false,
+        isDelivered: false,
+      })
+      expect(prisma.doctor.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ['doctor-1', 'doctor-2'] }, tenantId: 'tenant-123' },
+        select: { id: true, firstName: true, lastName: true },
+      })
+    })
+
+    it('returns NOT_FOUND when the labwork does not exist for the tenant', async () => {
+      vi.mocked(prisma.labwork.findFirst).mockResolvedValue(null)
+
+      const result = await PdfService.getLabworkOrderData('tenant-123', 'missing-labwork')
+
+      expect(result).toEqual({ error: 'NOT_FOUND', message: 'Labwork not found' })
+      expect(prisma.doctor.findMany).not.toHaveBeenCalled()
+    })
+
+    it('returns NOT_FOUND when the labwork belongs to another tenant (row scoped by tenantId in the query)', async () => {
+      // getLabworkById queries with { id, tenantId } so a cross-tenant row
+      // never resolves — prisma returns null exactly as the "missing" case.
+      vi.mocked(prisma.labwork.findFirst).mockResolvedValue(null)
+
+      const result = await PdfService.getLabworkOrderData('other-tenant', 'labwork-123')
+
+      expect(result).toEqual({ error: 'NOT_FOUND', message: 'Labwork not found' })
+    })
+
+    it('returns INVALID_TENANT when the tenant lookup fails after the labwork resolves', async () => {
+      vi.mocked(prisma.labwork.findFirst).mockResolvedValue(
+        mockLabworkRow() as unknown as Awaited<ReturnType<typeof prisma.labwork.findFirst>>
+      )
+      vi.mocked(prisma.tenant.findUnique).mockResolvedValue(null)
+
+      const result = await PdfService.getLabworkOrderData('tenant-123', 'labwork-123')
+
+      expect(result).toEqual({ error: 'INVALID_TENANT', message: 'Tenant not found' })
+    })
+
+    it('renders blank doctors with no crash when doctorIds point at deleted/missing doctors', async () => {
+      vi.mocked(prisma.labwork.findFirst).mockResolvedValue(
+        mockLabworkRow({ doctorIds: ['deleted-doctor-1'] }) as unknown as Awaited<
+          ReturnType<typeof prisma.labwork.findFirst>
+        >
+      )
+      vi.mocked(prisma.tenant.findUnique).mockResolvedValue(
+        mockTenantRow() as unknown as Awaited<ReturnType<typeof prisma.tenant.findUnique>>
+      )
+      // The doctor row was deleted after the labwork was assigned to it.
+      vi.mocked(prisma.doctor.findMany).mockResolvedValue(
+        [] as unknown as Awaited<ReturnType<typeof prisma.doctor.findMany>>
+      )
+
+      const result = await PdfService.getLabworkOrderData('tenant-123', 'labwork-123')
+
+      expect('error' in result).toBe(false)
+      if ('error' in result) return
+      expect(result.data.doctors).toEqual([])
+    })
+
+    it('skips the doctor lookup entirely and returns an empty array when doctorIds is empty', async () => {
+      vi.mocked(prisma.labwork.findFirst).mockResolvedValue(
+        mockLabworkRow({ doctorIds: [] }) as unknown as Awaited<ReturnType<typeof prisma.labwork.findFirst>>
+      )
+      vi.mocked(prisma.tenant.findUnique).mockResolvedValue(
+        mockTenantRow() as unknown as Awaited<ReturnType<typeof prisma.tenant.findUnique>>
+      )
+
+      const result = await PdfService.getLabworkOrderData('tenant-123', 'labwork-123')
+
+      expect('error' in result).toBe(false)
+      if ('error' in result) return
+      expect(result.data.doctors).toEqual([])
+      expect(prisma.doctor.findMany).not.toHaveBeenCalled()
+    })
+
+    it('returns a null patient when the labwork has no linked patient', async () => {
+      vi.mocked(prisma.labwork.findFirst).mockResolvedValue(
+        mockLabworkRow({ patientId: null, patient: null, doctorIds: [] }) as unknown as Awaited<
+          ReturnType<typeof prisma.labwork.findFirst>
+        >
+      )
+      vi.mocked(prisma.tenant.findUnique).mockResolvedValue(
+        mockTenantRow() as unknown as Awaited<ReturnType<typeof prisma.tenant.findUnique>>
+      )
+
+      const result = await PdfService.getLabworkOrderData('tenant-123', 'labwork-123')
+
+      expect('error' in result).toBe(false)
+      if ('error' in result) return
+      expect(result.data.patient).toBeNull()
     })
   })
 })

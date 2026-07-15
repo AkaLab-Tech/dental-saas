@@ -3,6 +3,7 @@ import React from 'react'
 import { prisma, AppointmentStatus, type BudgetStatus, type BudgetItemStatus } from '@dental/database'
 import { logger } from '../utils/logger.js'
 import { getBudget } from './budget.service.js'
+import { getLabworkById } from './labwork.service.js'
 
 // Re-export types for templates to use
 export { AppointmentStatus }
@@ -131,6 +132,35 @@ export interface BudgetPdfData {
   tenant: TenantInfo
   patient: PatientInfo
   budget: BudgetPdfInfo
+  generatedAt: Date
+}
+
+/**
+ * Doctor name info for the labwork order PDF
+ */
+export interface LabworkOrderDoctorInfo {
+  id: string
+  firstName: string
+  lastName: string
+}
+
+/**
+ * Data for labwork order PDF
+ */
+export interface LabworkOrderData {
+  tenant: TenantInfo
+  patient: { id: string; firstName: string; lastName: string } | null
+  doctors: LabworkOrderDoctorInfo[]
+  labwork: {
+    id: string
+    lab: string
+    phoneNumber: string | null
+    date: Date
+    note: string | null
+    price: string
+    isPaid: boolean
+    isDelivered: boolean
+  }
   generatedAt: Date
 }
 
@@ -409,6 +439,53 @@ export const PdfService = {
             totalPrice: item.totalPrice.toString(),
             status: item.status,
           })),
+        },
+        generatedAt: new Date(),
+      },
+    }
+  },
+
+  /**
+   * Get labwork with tenant, patient and doctor data for the labwork order PDF
+   */
+  async getLabworkOrderData(
+    tenantId: string,
+    labworkId: string
+  ): Promise<{ data: LabworkOrderData } | { error: PdfErrorCode; message: string }> {
+    const labworkResult = await getLabworkById(tenantId, labworkId)
+    if (!labworkResult.success) {
+      return { error: 'NOT_FOUND', message: 'Labwork not found' }
+    }
+
+    const tenant = await this.getTenantInfo(tenantId)
+    if (!tenant) {
+      return { error: 'INVALID_TENANT', message: 'Tenant not found' }
+    }
+
+    const labwork = labworkResult.data
+    const doctors = labwork.doctorIds.length
+      ? await prisma.doctor.findMany({
+          where: { id: { in: labwork.doctorIds }, tenantId },
+          select: { id: true, firstName: true, lastName: true },
+        })
+      : []
+
+    return {
+      data: {
+        tenant,
+        patient: labwork.patient
+          ? { id: labwork.patient.id, firstName: labwork.patient.firstName, lastName: labwork.patient.lastName }
+          : null,
+        doctors,
+        labwork: {
+          id: labwork.id,
+          lab: labwork.lab,
+          phoneNumber: labwork.phoneNumber,
+          date: labwork.date,
+          note: labwork.note,
+          price: labwork.price.toString(),
+          isPaid: labwork.isPaid,
+          isDelivered: labwork.isDelivered,
         },
         generatedAt: new Date(),
       },

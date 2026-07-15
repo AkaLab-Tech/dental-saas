@@ -276,7 +276,8 @@
     "dateRange": "النطاق الزمني",
     "dateFrom": "من",
     "dateTo": "إلى",
-    "exportCsv": "تصدير CSV"
+    "exportCsv": "تصدير CSV",
+    "downloadPdf": "تحميل الطلب"
   },
   "budgets": {
     "title": "الميزانيات",

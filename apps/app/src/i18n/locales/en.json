@@ -276,7 +276,8 @@
     "dateRange": "Date Range",
     "dateFrom": "From",
     "dateTo": "To",
-    "exportCsv": "Export CSV"
+    "exportCsv": "Export CSV",
+    "downloadPdf": "Download order"
   },
   "budgets": {
     "title": "Budgets",

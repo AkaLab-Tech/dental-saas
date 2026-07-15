@@ -38,6 +38,17 @@ export default {
       "pending": "PENDIENTE",
       "informationalNotice": "Este documento es solo con fines informativos."
     },
+    "labwork": {
+      "title": "Orden de Laboratorio",
+      "labName": "Laboratorio",
+      "orderDetails": "Detalles de la Orden",
+      "patient": "Paciente",
+      "assignedDoctors": "Doctor(es) Asignado(s)",
+      "price": "Precio",
+      "notes": "Notas",
+      "delivered": "ENTREGADO",
+      "pendingDelivery": "PENDIENTE DE ENTREGA"
+    },
     "budget": {
       "title": "Presupuesto de Tratamiento",
       "budgetFor": "Presupuesto para",
