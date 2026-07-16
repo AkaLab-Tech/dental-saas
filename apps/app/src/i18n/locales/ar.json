@@ -276,6 +276,7 @@
     "dateRange": "النطاق الزمني",
     "dateFrom": "من",
     "dateTo": "إلى",
+    "exportCsv": "تصدير CSV",
     "downloadPdf": "تحميل الطلب"
   },
   "budgets": {

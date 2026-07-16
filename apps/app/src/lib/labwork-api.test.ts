@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   getLabworks,
   getLabworkById,
@@ -7,6 +7,7 @@ import {
   deleteLabwork,
   restoreLabwork,
   getLabworkStats,
+  exportLabworks,
   formatLabworkDate,
   getLabworkStatusBadge,
   isLabworkOverdue,
@@ -23,6 +24,12 @@ vi.mock('./api', () => ({
     delete: vi.fn(),
   },
 }))
+
+// Mock URL.createObjectURL / revokeObjectURL — jsdom doesn't implement them.
+const mockCreateObjectURL = vi.fn(() => 'blob:mock-url')
+const mockRevokeObjectURL = vi.fn()
+global.URL.createObjectURL = mockCreateObjectURL
+global.URL.revokeObjectURL = mockRevokeObjectURL
 
 const mockLabwork: Labwork = {
   id: 'labwork-123',
@@ -385,6 +392,90 @@ describe('labwork-api', () => {
       vi.mocked(apiClient.get).mockRejectedValue(new Error('Failed to fetch stats'))
 
       await expect(getLabworkStats()).rejects.toThrow('Failed to fetch stats')
+    })
+  })
+
+  describe('exportLabworks', () => {
+    let mockLink: { href: string; download: string; click: ReturnType<typeof vi.fn> }
+    let appendChildSpy: ReturnType<typeof vi.spyOn>
+    let removeChildSpy: ReturnType<typeof vi.spyOn>
+
+    beforeEach(() => {
+      mockLink = { href: '', download: '', click: vi.fn() }
+      vi.spyOn(document, 'createElement').mockReturnValue(mockLink as unknown as HTMLElement)
+      appendChildSpy = vi.spyOn(document.body, 'appendChild').mockImplementation(() => mockLink as unknown as Node)
+      removeChildSpy = vi.spyOn(document.body, 'removeChild').mockImplementation(() => mockLink as unknown as Node)
+    })
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('requests /labworks/export with no query string and responseType blob when no params are given', async () => {
+      const mockBlob = new Blob(['Fecha,Laboratorio'], { type: 'text/csv' })
+      vi.mocked(apiClient.get).mockResolvedValue({ data: mockBlob })
+
+      await exportLabworks()
+
+      expect(apiClient.get).toHaveBeenCalledWith('/labworks/export', { responseType: 'blob' })
+    })
+
+    it('builds the same filter query params as getLabworks (search, patientId, isPaid, isDelivered, overdue, from, to)', async () => {
+      const mockBlob = new Blob(['Fecha,Laboratorio'], { type: 'text/csv' })
+      vi.mocked(apiClient.get).mockResolvedValue({ data: mockBlob })
+
+      await exportLabworks({
+        search: 'Acme',
+        patientId: 'patient-789',
+        isPaid: true,
+        isDelivered: false,
+        overdue: true,
+        from: '2024-01-01',
+        to: '2024-01-31',
+      })
+
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/labworks/export?search=Acme&patientId=patient-789&isPaid=true&isDelivered=false&overdue=true&from=2024-01-01&to=2024-01-31',
+        { responseType: 'blob' }
+      )
+    })
+
+    it('omits the search param when it is an empty string', async () => {
+      const mockBlob = new Blob(['Fecha,Laboratorio'], { type: 'text/csv' })
+      vi.mocked(apiClient.get).mockResolvedValue({ data: mockBlob })
+
+      await exportLabworks({ search: '', isPaid: true })
+
+      expect(apiClient.get).toHaveBeenCalledWith('/labworks/export?isPaid=true', { responseType: 'blob' })
+    })
+
+    it('creates a download link, clicks it, and revokes the object URL', async () => {
+      const mockBlob = new Blob(['Fecha,Laboratorio'], { type: 'text/csv' })
+      vi.mocked(apiClient.get).mockResolvedValue({ data: mockBlob })
+
+      await exportLabworks()
+
+      expect(mockCreateObjectURL).toHaveBeenCalled()
+      expect(mockLink.click).toHaveBeenCalled()
+      expect(appendChildSpy).toHaveBeenCalled()
+      expect(removeChildSpy).toHaveBeenCalled()
+      expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:mock-url')
+    })
+
+    it('names the downloaded file labworks-<today>.csv', async () => {
+      const mockBlob = new Blob(['Fecha,Laboratorio'], { type: 'text/csv' })
+      vi.mocked(apiClient.get).mockResolvedValue({ data: mockBlob })
+
+      await exportLabworks()
+
+      expect(mockLink.download).toMatch(/^labworks-\d{4}-\d{2}-\d{2}\.csv$/)
+    })
+
+    it('propagates a rejection from the API call without downloading anything', async () => {
+      vi.mocked(apiClient.get).mockRejectedValue(new Error('Network error'))
+
+      await expect(exportLabworks()).rejects.toThrow('Network error')
+      expect(mockLink.click).not.toHaveBeenCalled()
     })
   })
 

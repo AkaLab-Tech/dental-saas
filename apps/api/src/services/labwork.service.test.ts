@@ -8,6 +8,9 @@ vi.mock('@dental/database', () => ({
       count: vi.fn(),
       aggregate: vi.fn(),
     },
+    doctor: {
+      findMany: vi.fn(),
+    },
   },
   Prisma: {},
 }))
@@ -22,7 +25,45 @@ vi.mock('../utils/logger.js', () => ({
 }))
 
 import { prisma } from '@dental/database'
-import { listLabworks, countLabworks, getLabworkStats } from './labwork.service.js'
+import {
+  listLabworks,
+  countLabworks,
+  getLabworkStats,
+  labworksToCsv,
+  exportLabworksCsv,
+  type SafeLabwork,
+} from './labwork.service.js'
+
+// A minimal fake Decimal — labworksToCsv only ever calls `.toString()` on the
+// price, so a plain object with that method is sufficient without pulling in
+// the real Prisma.Decimal implementation (Prisma itself is mocked in this file).
+function fakeDecimal(value: string) {
+  return { toString: () => value } as unknown as SafeLabwork['price']
+}
+
+function makeSafeLabwork(overrides: Partial<SafeLabwork> = {}): SafeLabwork {
+  return {
+    id: 'labwork-1',
+    tenantId: 'tenant-1',
+    patientId: null,
+    appointmentId: null,
+    priceIncludedInAppointment: false,
+    lab: 'Acme Dental Lab',
+    phoneNumber: null,
+    date: new Date('2026-03-15T00:00:00.000Z'),
+    note: null,
+    price: fakeDecimal('100'),
+    isPaid: false,
+    isDelivered: false,
+    doctorIds: [],
+    isActive: true,
+    createdBy: null,
+    createdAt: new Date('2026-03-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-03-01T00:00:00.000Z'),
+    patient: null,
+    ...overrides,
+  }
+}
 
 describe('labwork.service', () => {
   beforeEach(() => {
@@ -30,6 +71,7 @@ describe('labwork.service', () => {
     vi.mocked(prisma.labwork.findMany).mockResolvedValue([])
     vi.mocked(prisma.labwork.count).mockResolvedValue(0)
     vi.mocked(prisma.labwork.aggregate).mockResolvedValue({ _sum: { price: null } } as never)
+    vi.mocked(prisma.doctor.findMany).mockResolvedValue([])
   })
 
   describe('listLabworks — search', () => {
@@ -406,6 +448,254 @@ describe('labwork.service', () => {
       const result = await getLabworkStats('tenant-1', {})
 
       expect(result.overdue).toBe(3)
+    })
+  })
+
+  describe('labworksToCsv', () => {
+    it('returns only the header row (in the exact expected column order) when given an empty array', () => {
+      const csv = labworksToCsv([], {})
+
+      expect(csv).toBe('Fecha,Laboratorio,Teléfono,Paciente,Doctor(es),Precio,Pagado,Entregado,Nota')
+    })
+
+    it('serializes a fully-populated row with the exact expected field order and values', () => {
+      const labwork = makeSafeLabwork({
+        date: new Date('2026-03-15T00:00:00.000Z'),
+        lab: 'Acme Dental Lab',
+        phoneNumber: '+1 555-0100',
+        patient: { id: 'p1', firstName: 'Maria', lastName: 'Garcia', email: null, phone: null },
+        doctorIds: ['doc-1'],
+        price: fakeDecimal('150.5'),
+        isPaid: true,
+        isDelivered: true,
+        note: 'Crown, tooth 14',
+      })
+
+      const csv = labworksToCsv([labwork], { 'doc-1': 'Dr. John Smith' })
+      const rows = csv.split('\n')
+
+      expect(rows).toHaveLength(2)
+      expect(rows[1]).toBe(
+        '2026-03-15,Acme Dental Lab,+1 555-0100,Maria Garcia,Dr. John Smith,150.5,Sí,Sí,"Crown, tooth 14"'
+      )
+    })
+
+    it('renders isPaid/isDelivered false as "No" and true as "Sí"', () => {
+      const unpaidUndelivered = makeSafeLabwork({ isPaid: false, isDelivered: false })
+      const paidDelivered = makeSafeLabwork({ isPaid: true, isDelivered: true })
+
+      const csv = labworksToCsv([unpaidUndelivered, paidDelivered], {})
+      const rows = csv.split('\n')
+
+      expect(rows[1]).toContain(',No,No,')
+      expect(rows[2]).toContain(',Sí,Sí,')
+    })
+
+    it('renders an empty patient column when patient is null', () => {
+      const labwork = makeSafeLabwork({ patient: null })
+
+      const csv = labworksToCsv([labwork], {})
+      const rows = csv.split('\n')
+
+      // Fecha,Laboratorio,Teléfono,Paciente,... — Paciente is the 4th column and
+      // should be empty (no patient name), not "null"/"undefined".
+      const columns = rows[1].split(',')
+      expect(columns[3]).toBe('')
+    })
+
+    it('renders an empty phone column when phoneNumber is null', () => {
+      const labwork = makeSafeLabwork({ phoneNumber: null })
+
+      const csv = labworksToCsv([labwork], {})
+      const columns = csv.split('\n')[1].split(',')
+
+      expect(columns[2]).toBe('')
+    })
+
+    it('renders an empty note column when note is null', () => {
+      const labwork = makeSafeLabwork({ note: null })
+
+      const csv = labworksToCsv([labwork], {})
+      const lastColumn = csv.split('\n')[1].split(',').at(-1)
+
+      expect(lastColumn).toBe('')
+    })
+
+    it('renders an empty doctors column when doctorIds is empty', () => {
+      const labwork = makeSafeLabwork({ doctorIds: [] })
+
+      const csv = labworksToCsv([labwork], {})
+      const columns = csv.split('\n')[1].split(',')
+
+      expect(columns[4]).toBe('')
+    })
+
+    it('joins multiple doctor names with "; "', () => {
+      const labwork = makeSafeLabwork({ doctorIds: ['doc-1', 'doc-2', 'doc-3'] })
+
+      const csv = labworksToCsv([labwork], {
+        'doc-1': 'Dr. Alice',
+        'doc-2': 'Dr. Bob',
+        'doc-3': 'Dr. Carol',
+      })
+      const columns = csv.split('\n')[1].split(',')
+
+      expect(columns[4]).toBe('Dr. Alice; Dr. Bob; Dr. Carol')
+    })
+
+    it('falls back to the raw doctor id when it has no entry in doctorNamesById', () => {
+      const labwork = makeSafeLabwork({ doctorIds: ['unknown-doc-id'] })
+
+      const csv = labworksToCsv([labwork], {})
+      const columns = csv.split('\n')[1].split(',')
+
+      expect(columns[4]).toBe('unknown-doc-id')
+    })
+
+    it('wraps a field containing a comma in quotes without altering its content', () => {
+      const labwork = makeSafeLabwork({ lab: 'Acme, Dental & Lab Co' })
+
+      const csv = labworksToCsv([labwork], {})
+      const row = csv.split('\n')[1]
+
+      expect(row).toContain('"Acme, Dental & Lab Co"')
+    })
+
+    it('wraps a field containing embedded double quotes in quotes and doubles the embedded quotes (RFC4180)', () => {
+      const labwork = makeSafeLabwork({ note: 'Patient said "ouch" during procedure' })
+
+      const csv = labworksToCsv([labwork], {})
+      const row = csv.split('\n')[1]
+
+      expect(row).toContain('"Patient said ""ouch"" during procedure"')
+    })
+
+    it('wraps a field containing an embedded newline in quotes, keeping the newline inside a single logical row', () => {
+      const labwork = makeSafeLabwork({ note: 'Line one\nLine two' })
+
+      const csv = labworksToCsv([labwork], {})
+
+      // Splitting the whole CSV output on '\n' must still yield exactly 2
+      // rows (header + 1 data row) even though the data row's own field
+      // contains a literal newline — proof the newline was quoted/escaped
+      // rather than treated as a row separator.
+      expect(csv).toContain('"Line one\nLine two"')
+    })
+
+    it('does not quote a field that contains none of comma, quote, or newline', () => {
+      const labwork = makeSafeLabwork({ lab: 'Plain Lab Name' })
+
+      const csv = labworksToCsv([labwork], {})
+      const row = csv.split('\n')[1]
+
+      expect(row).toContain(',Plain Lab Name,')
+    })
+
+    it('serializes the date as an ISO calendar date (YYYY-MM-DD), dropping the time component', () => {
+      const labwork = makeSafeLabwork({ date: new Date('2026-12-25T23:59:59.999Z') })
+
+      const csv = labworksToCsv([labwork], {})
+      const columns = csv.split('\n')[1].split(',')
+
+      expect(columns[0]).toBe('2026-12-25')
+    })
+
+    it('serializes multiple labworks as separate rows in the given order', () => {
+      const first = makeSafeLabwork({ lab: 'First Lab' })
+      const second = makeSafeLabwork({ lab: 'Second Lab' })
+
+      const csv = labworksToCsv([first, second], {})
+      const rows = csv.split('\n')
+
+      expect(rows).toHaveLength(3)
+      expect(rows[1]).toContain('First Lab')
+      expect(rows[2]).toContain('Second Lab')
+    })
+  })
+
+  describe('exportLabworksCsv', () => {
+    it('queries with the same where-clause shape buildLabworksWhere produces for listLabworks (filter passthrough)', async () => {
+      const from = new Date('2026-01-01')
+      const to = new Date('2026-01-31')
+
+      await exportLabworksCsv('tenant-1', {
+        search: 'Acme',
+        isPaid: true,
+        isDelivered: false,
+        patientId: 'patient-1',
+        from,
+        to,
+      })
+
+      const where = vi.mocked(prisma.labwork.findMany).mock.calls[0][0]!.where
+      expect(where).toEqual({
+        tenantId: 'tenant-1',
+        isActive: true,
+        patientId: 'patient-1',
+        isPaid: true,
+        isDelivered: false,
+        date: { gte: from, lte: to },
+        OR: [
+          { lab: { contains: 'Acme', mode: 'insensitive' } },
+          { patient: { firstName: { contains: 'Acme', mode: 'insensitive' } } },
+          { patient: { lastName: { contains: 'Acme', mode: 'insensitive' } } },
+        ],
+      })
+    })
+
+    it('applies the overdue filter (isDelivered:false + strictly-before-today date bound) the same way listLabworks does', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-06-15T12:00:00.000Z'))
+
+      await exportLabworksCsv('tenant-1', { overdue: true })
+
+      const startOfToday = new Date()
+      startOfToday.setHours(0, 0, 0, 0)
+
+      const where = vi.mocked(prisma.labwork.findMany).mock.calls[0][0]!.where as Record<string, unknown>
+      expect(where.isDelivered).toBe(false)
+      expect(where.date).toEqual({ lt: startOfToday })
+
+      vi.useRealTimers()
+    })
+
+    it('does not pass take/skip to prisma.labwork.findMany (no pagination cap on export)', async () => {
+      await exportLabworksCsv('tenant-1', {})
+
+      const callArgs = vi.mocked(prisma.labwork.findMany).mock.calls[0][0]!
+      expect(callArgs).not.toHaveProperty('take')
+      expect(callArgs).not.toHaveProperty('skip')
+    })
+
+    it('skips the doctor lookup entirely when no returned labwork has any doctorIds', async () => {
+      vi.mocked(prisma.labwork.findMany).mockResolvedValue([
+        makeSafeLabwork({ doctorIds: [] }),
+      ] as never)
+
+      await exportLabworksCsv('tenant-1', {})
+
+      expect(prisma.doctor.findMany).not.toHaveBeenCalled()
+    })
+
+    it('resolves doctor names via a single deduplicated bulk lookup and feeds them into the CSV output', async () => {
+      vi.mocked(prisma.labwork.findMany).mockResolvedValue([
+        makeSafeLabwork({ id: 'lw-1', doctorIds: ['doc-1', 'doc-2'] }),
+        makeSafeLabwork({ id: 'lw-2', doctorIds: ['doc-1'] }),
+      ] as never)
+      vi.mocked(prisma.doctor.findMany).mockResolvedValue([
+        { id: 'doc-1', firstName: 'Alice', lastName: 'Smith' },
+        { id: 'doc-2', firstName: 'Bob', lastName: 'Jones' },
+      ] as never)
+
+      const csv = await exportLabworksCsv('tenant-1', {})
+
+      // Deduplicated: 2 distinct doctor ids across both labworks, looked up once.
+      expect(prisma.doctor.findMany).toHaveBeenCalledTimes(1)
+      const doctorWhere = vi.mocked(prisma.doctor.findMany).mock.calls[0][0]!.where as Record<string, unknown>
+      expect(doctorWhere).toEqual({ id: { in: ['doc-1', 'doc-2'] }, tenantId: 'tenant-1' })
+
+      expect(csv).toContain('Alice Smith; Bob Jones')
+      expect(csv).toContain('Alice Smith')
     })
   })
 })

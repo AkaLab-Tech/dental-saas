@@ -276,6 +276,7 @@
     "dateRange": "Rango de Fechas",
     "dateFrom": "Desde",
     "dateTo": "Hasta",
+    "exportCsv": "Exportar CSV",
     "downloadPdf": "Descargar orden"
   },
   "budgets": {

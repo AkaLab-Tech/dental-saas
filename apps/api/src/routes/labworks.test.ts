@@ -1003,3 +1003,426 @@ describe('GET /api/labworks?overdue= (overdue filter & stats)', () => {
     })
   })
 })
+
+describe('GET /api/labworks/export (CSV export)', () => {
+  let tenantId: string
+  let otherTenantId: string
+  let staffToken: string
+  let doctorToken: string
+  let clinicAdminToken: string
+  let adminToken: string
+  let ownerToken: string
+  let doctorId: string
+  let garciaPatientId: string
+  const testSlug = `test-labworks-export-${Date.now()}`
+  const otherSlug = `test-labworks-export-other-${Date.now()}`
+
+  // Mirrors export.test.ts's token-signing approach: this project's API
+  // reads req.user.userId (not req.user.sub), so test tokens are signed
+  // with `userId`.
+  function generateToken(userId: string, tenantId: string, role: string) {
+    return sign({ userId, tenantId, role }, JWT_SECRET, { expiresIn: '1h' })
+  }
+
+  async function createTenant(slug: string, name: string) {
+    const tenant = await prisma.tenant.create({
+      data: { name, slug, currency: 'USD', timezone: 'America/New_York' },
+    })
+
+    let freePlan = await prisma.plan.findUnique({ where: { name: 'free' } })
+    if (!freePlan) {
+      freePlan = await prisma.plan.create({
+        data: {
+          name: 'free',
+          displayName: 'Free',
+          price: 0,
+          maxAdmins: 1,
+          maxDoctors: 3,
+          maxPatients: 50,
+        },
+      })
+    }
+
+    await prisma.subscription.create({
+      data: {
+        tenantId: tenant.id,
+        planId: freePlan.id,
+        status: 'ACTIVE',
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    })
+
+    return tenant
+  }
+
+  beforeAll(async () => {
+    const hashedPassword = await hashPassword('password123')
+
+    const tenant = await createTenant(testSlug, 'Test Clinic for Labwork Export')
+    tenantId = tenant.id
+
+    const staffUser = await prisma.user.create({
+      data: {
+        tenantId,
+        email: 'staff@labworks-export-test.com',
+        firstName: 'Staff',
+        lastName: 'User',
+        passwordHash: hashedPassword,
+        role: 'STAFF',
+      },
+    })
+    staffToken = generateToken(staffUser.id, tenantId, 'STAFF')
+
+    const doctorUser = await prisma.user.create({
+      data: {
+        tenantId,
+        email: 'doctor@labworks-export-test.com',
+        firstName: 'Doctor',
+        lastName: 'User',
+        passwordHash: hashedPassword,
+        role: 'DOCTOR',
+      },
+    })
+    doctorToken = generateToken(doctorUser.id, tenantId, 'DOCTOR')
+
+    const clinicAdminUser = await prisma.user.create({
+      data: {
+        tenantId,
+        email: 'clinic-admin@labworks-export-test.com',
+        firstName: 'Clinic',
+        lastName: 'Admin',
+        passwordHash: hashedPassword,
+        role: 'CLINIC_ADMIN',
+      },
+    })
+    clinicAdminToken = generateToken(clinicAdminUser.id, tenantId, 'CLINIC_ADMIN')
+
+    const adminUser = await prisma.user.create({
+      data: {
+        tenantId,
+        email: 'admin@labworks-export-test.com',
+        firstName: 'Admin',
+        lastName: 'User',
+        passwordHash: hashedPassword,
+        role: 'ADMIN',
+      },
+    })
+    adminToken = generateToken(adminUser.id, tenantId, 'ADMIN')
+
+    const ownerUser = await prisma.user.create({
+      data: {
+        tenantId,
+        email: 'owner@labworks-export-test.com',
+        firstName: 'Owner',
+        lastName: 'User',
+        passwordHash: hashedPassword,
+        role: 'OWNER',
+      },
+    })
+    ownerToken = generateToken(ownerUser.id, tenantId, 'OWNER')
+
+    const doctor = await prisma.doctor.create({
+      data: { tenantId, firstName: 'Dr. Jane', lastName: 'Root', email: 'dr-jane-root@labworks-export-test.com' },
+    })
+    doctorId = doctor.id
+
+    const garciaPatient = await prisma.patient.create({
+      data: { tenantId, firstName: 'Maria', lastName: 'Garcia' },
+    })
+    garciaPatientId = garciaPatient.id
+
+    // Paid, delivered, has a doctor assigned, lab name contains a comma (CSV escaping).
+    await prisma.labwork.create({
+      data: {
+        tenantId,
+        patientId: garciaPatientId,
+        lab: 'Acme, Dental Lab',
+        phoneNumber: '+1 555-0100',
+        date: new Date('2026-02-01'),
+        note: 'Said "ready" on pickup',
+        price: 150,
+        isPaid: true,
+        isDelivered: true,
+        doctorIds: [doctorId],
+      },
+    })
+    // Unpaid, undelivered, no patient/doctor/phone/note.
+    await prisma.labwork.create({
+      data: {
+        tenantId,
+        lab: 'Budget Lab',
+        date: new Date('2026-02-10'),
+        price: 75,
+        isPaid: false,
+        isDelivered: false,
+      },
+    })
+    // Outside the from/to window used below, for date-range filter coverage.
+    await prisma.labwork.create({
+      data: {
+        tenantId,
+        lab: 'Out Of Range Lab',
+        date: new Date('2025-01-01'),
+        price: 50,
+        isPaid: false,
+        isDelivered: false,
+      },
+    })
+    // Soft-deleted — must never appear in the export regardless of filters.
+    await prisma.labwork.create({
+      data: {
+        tenantId,
+        lab: 'Deleted Lab',
+        date: new Date('2026-02-05'),
+        price: 20,
+        isActive: false,
+      },
+    })
+
+    // Other tenant: a labwork that would match filters below must never leak in.
+    const otherTenant = await createTenant(otherSlug, 'Other Clinic for Labwork Export')
+    otherTenantId = otherTenant.id
+    await prisma.labwork.create({
+      data: { tenantId: otherTenantId, lab: 'Acme, Dental Lab', date: new Date('2026-02-01'), price: 999 },
+    })
+  })
+
+  afterAll(async () => {
+    await prisma.labwork.deleteMany({ where: { tenantId: { in: [tenantId, otherTenantId] } } })
+    await prisma.patient.deleteMany({ where: { tenantId: { in: [tenantId, otherTenantId] } } })
+    await prisma.doctor.deleteMany({ where: { tenantId: { in: [tenantId, otherTenantId] } } })
+    await prisma.user.deleteMany({ where: { tenantId: { in: [tenantId, otherTenantId] } } })
+    await prisma.subscription.deleteMany({ where: { tenantId: { in: [tenantId, otherTenantId] } } })
+    await prisma.tenant.deleteMany({ where: { id: { in: [tenantId, otherTenantId] } } })
+  })
+
+  it('rejects an unauthenticated request (401), same as GET /', async () => {
+    const response = await request(app).get('/api/labworks/export')
+
+    expect(response.status).toBe(401)
+  })
+
+  describe('permission boundary (requires Permission.DATA_EXPORT, ADMIN+ only)', () => {
+    it('denies STAFF (403)', async () => {
+      const response = await request(app)
+        .get('/api/labworks/export')
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(403)
+      expect(response.body).toHaveProperty('error')
+    })
+
+    it('denies DOCTOR (403)', async () => {
+      const response = await request(app)
+        .get('/api/labworks/export')
+        .set('Authorization', `Bearer ${doctorToken}`)
+
+      expect(response.status).toBe(403)
+      expect(response.body).toHaveProperty('error')
+    })
+
+    it('denies CLINIC_ADMIN (403)', async () => {
+      const response = await request(app)
+        .get('/api/labworks/export')
+        .set('Authorization', `Bearer ${clinicAdminToken}`)
+
+      expect(response.status).toBe(403)
+      expect(response.body).toHaveProperty('error')
+    })
+
+    it('allows ADMIN (200)', async () => {
+      const response = await request(app)
+        .get('/api/labworks/export')
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(response.status).toBe(200)
+    })
+
+    it('allows OWNER (200)', async () => {
+      const response = await request(app)
+        .get('/api/labworks/export')
+        .set('Authorization', `Bearer ${ownerToken}`)
+
+      expect(response.status).toBe(200)
+    })
+  })
+
+  it('responds with a text/csv content type (charset=utf-8)', async () => {
+    const response = await request(app)
+      .get('/api/labworks/export')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    expect(response.headers['content-type']).toBe('text/csv; charset=utf-8')
+  })
+
+  it('responds with a Content-Disposition attachment header naming a .csv file', async () => {
+    const response = await request(app)
+      .get('/api/labworks/export')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    expect(response.headers['content-disposition']).toMatch(
+      /^attachment; filename="labworks-\d{4}-\d{2}-\d{2}\.csv"$/
+    )
+  })
+
+  it('resolves to the /export handler rather than being swallowed by /:id (route ordering)', async () => {
+    const response = await request(app)
+      .get('/api/labworks/export')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    // The /:id handler would respond 404 with `{ success: false, error: 'Labwork not found' }`
+    // (treating "export" as an :id param) instead of a 200 CSV payload.
+    expect(response.status).toBe(200)
+    expect(response.body).not.toHaveProperty('error')
+    expect(response.headers['content-type']).toContain('text/csv')
+  })
+
+  it('prepends a UTF-8 BOM before the header row', async () => {
+    const response = await request(app)
+      .get('/api/labworks/export')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    expect(response.text.charCodeAt(0)).toBe(0xfeff)
+    expect(response.text.slice(1)).toMatch(/^Fecha,Laboratorio,Teléfono,Paciente,Doctor\(es\),Precio,Pagado,Entregado,Nota/)
+  })
+
+  it('includes all active labworks for the tenant when no filters are applied', async () => {
+    const response = await request(app)
+      .get('/api/labworks/export')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    const body = response.text.replace(/^\uFEFF/, '')
+    const dataRows = body.split('\n').slice(1)
+    expect(dataRows).toHaveLength(3) // 4 seeded minus 1 soft-deleted
+
+    expect(body).toContain('"Acme, Dental Lab"')
+    expect(body).toContain('Budget Lab')
+    expect(body).toContain('Out Of Range Lab')
+    expect(body).not.toContain('Deleted Lab')
+  })
+
+  it('escapes the comma in a lab name and the embedded quote in a note (RFC4180)', async () => {
+    const response = await request(app)
+      .get('/api/labworks/export')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    const body = response.text.replace(/^\uFEFF/, '')
+    expect(body).toContain('"Acme, Dental Lab"')
+    expect(body).toContain('"Said ""ready"" on pickup"')
+  })
+
+  it('resolves the assigned doctor name and patient name into their respective columns', async () => {
+    const response = await request(app)
+      .get('/api/labworks/export')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    const body = response.text.replace(/^\uFEFF/, '')
+    const row = body.split('\n').find((line) => line.includes('Acme, Dental Lab'))
+    expect(row).toContain('Maria Garcia')
+    expect(row).toContain('Dr. Jane Root')
+  })
+
+  it('renders Sí/No for isPaid/isDelivered and leaves empty columns for a labwork with no patient/doctor/phone/note', async () => {
+    const response = await request(app)
+      .get('/api/labworks/export')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    const body = response.text.replace(/^\uFEFF/, '')
+    const budgetRow = body.split('\n').find((line) => line.includes('Budget Lab'))
+    expect(budgetRow).toBe('2026-02-10,Budget Lab,,,,75,No,No,')
+
+    const acmeRow = body.split('\n').find((line) => line.includes('Acme, Dental Lab'))
+    expect(acmeRow).toContain(',Sí,Sí,')
+  })
+
+  it('applies the search filter, returning only labworks matching the lab or patient name', async () => {
+    const response = await request(app)
+      .get('/api/labworks/export?search=Budget')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    const body = response.text.replace(/^\uFEFF/, '')
+    const dataRows = body.split('\n').slice(1)
+    expect(dataRows).toHaveLength(1)
+    expect(body).toContain('Budget Lab')
+  })
+
+  it('applies the isPaid filter', async () => {
+    const response = await request(app)
+      .get('/api/labworks/export?isPaid=true')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    const body = response.text.replace(/^\uFEFF/, '')
+    const dataRows = body.split('\n').slice(1)
+    expect(dataRows).toHaveLength(1)
+    expect(body).toContain('Acme, Dental Lab')
+    expect(body).not.toContain('Budget Lab')
+  })
+
+  it('applies the isDelivered filter', async () => {
+    const response = await request(app)
+      .get('/api/labworks/export?isDelivered=false')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    const body = response.text.replace(/^\uFEFF/, '')
+    expect(body).not.toContain('Acme, Dental Lab')
+    expect(body).toContain('Budget Lab')
+    expect(body).toContain('Out Of Range Lab')
+  })
+
+  it('applies the patientId filter', async () => {
+    const response = await request(app)
+      .get(`/api/labworks/export?patientId=${garciaPatientId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    const body = response.text.replace(/^\uFEFF/, '')
+    const dataRows = body.split('\n').slice(1)
+    expect(dataRows).toHaveLength(1)
+    expect(body).toContain('Acme, Dental Lab')
+  })
+
+  it('applies the from/to date-range filter', async () => {
+    const response = await request(app)
+      .get('/api/labworks/export?from=2026-02-01&to=2026-02-28')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    const body = response.text.replace(/^\uFEFF/, '')
+    expect(body).toContain('Acme, Dental Lab')
+    expect(body).toContain('Budget Lab')
+    expect(body).not.toContain('Out Of Range Lab')
+  })
+
+  it('applies the overdue filter (active, undelivered, strictly-past labworks only)', async () => {
+    const response = await request(app)
+      .get('/api/labworks/export?overdue=true')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    const body = response.text.replace(/^\uFEFF/, '')
+    // Both "Budget Lab" (2026-02-10) and "Out Of Range Lab" (2025-01-01) are
+    // undelivered and in the past relative to "now" in this test suite's era
+    // (seeded dates are far in the past relative to any real run date), so
+    // both are overdue; "Acme, Dental Lab" is delivered and must be excluded.
+    expect(body).not.toContain('Acme, Dental Lab')
+    expect(body).toContain('Budget Lab')
+    expect(body).toContain('Out Of Range Lab')
+  })
+
+  it('never leaks another tenant\'s labworks into the export', async () => {
+    const response = await request(app)
+      .get('/api/labworks/export')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    const body = response.text.replace(/^\uFEFF/, '')
+    const dataRows = body.split('\n').slice(1)
+    expect(dataRows).toHaveLength(3)
+  })
+
+  it('returns just the header row (no data rows) when filters match nothing', async () => {
+    const response = await request(app)
+      .get('/api/labworks/export?search=NoSuchLabAtAll')
+      .set('Authorization', `Bearer ${adminToken}`)
+
+    const body = response.text.replace(/^\uFEFF/, '')
+    expect(body).toBe('Fecha,Laboratorio,Teléfono,Paciente,Doctor(es),Precio,Pagado,Entregado,Nota')
+  })
+})
