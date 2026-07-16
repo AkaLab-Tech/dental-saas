@@ -564,7 +564,7 @@ export default function PatientDetailPage() {
 
       {/* Patient Header */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between flex-wrap gap-3">
           <div className="flex items-center gap-4">
             {/* Avatar */}
             <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center">
@@ -640,10 +640,10 @@ export default function PatientDetailPage() {
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
                   aria-selected={isActive}
-                  className={`flex-1 py-4 px-4 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
+                  className={`flex-1 py-4 px-4 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
                     isActive
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-blue-500 text-blue-600 bg-blue-50/50'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50'
                   }`}
                 >
                   <Icon className={`h-5 w-5 mx-auto mb-1 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
@@ -657,48 +657,54 @@ export default function PatientDetailPage() {
         <div className="p-6">
           {/* Patient tab */}
           <div className={activeTab === 'patient' ? '' : 'hidden'}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {patient.email && (
-                <div className="flex items-center gap-3 text-gray-600">
-                  <Mail className="h-5 w-5 text-gray-400" />
-                  <span className="text-sm">{patient.email}</span>
-                </div>
-              )}
-              {patient.phone && (
-                <div className="flex items-center gap-3 text-gray-600">
-                  <Phone className="h-5 w-5 text-gray-400" />
-                  <span className="text-sm">{patient.phone}</span>
-                </div>
-              )}
-              {patient.dob && (
-                <div className="flex items-center gap-3 text-gray-600">
-                  <Calendar className="h-5 w-5 text-gray-400" />
-                  <span className="text-sm">
-                    {new Date(patient.dob).toLocaleDateString('es-MX', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                  </span>
-                </div>
-              )}
-              {patient.address && (
-                <div className="flex items-center gap-3 text-gray-600">
-                  <MapPin className="h-5 w-5 text-gray-400" />
-                  <span className="text-sm">{patient.address}</span>
-                </div>
-              )}
-              {patient.gender && (
-                <div className="flex items-center gap-3 text-gray-600">
-                  <User className="h-5 w-5 text-gray-400" />
-                  <span className="text-sm capitalize">
-                    {patient.gender === 'male' && 'Masculino'}
-                    {patient.gender === 'female' && 'Femenino'}
-                    {patient.gender === 'other' && 'Otro'}
-                    {patient.gender === 'prefer_not_to_say' && 'Prefiere no decir'}
-                  </span>
-                </div>
-              )}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <User className="h-5 w-5 text-blue-600" />
+                {t('patients.patientDetails')}
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {patient.email && (
+                  <div className="flex items-center gap-3 text-gray-600 bg-gray-50 rounded-lg px-3 py-2.5">
+                    <Mail className="h-5 w-5 text-gray-400 shrink-0" />
+                    <span className="text-sm truncate">{patient.email}</span>
+                  </div>
+                )}
+                {patient.phone && (
+                  <div className="flex items-center gap-3 text-gray-600 bg-gray-50 rounded-lg px-3 py-2.5">
+                    <Phone className="h-5 w-5 text-gray-400 shrink-0" />
+                    <span className="text-sm truncate">{patient.phone}</span>
+                  </div>
+                )}
+                {patient.dob && (
+                  <div className="flex items-center gap-3 text-gray-600 bg-gray-50 rounded-lg px-3 py-2.5">
+                    <Calendar className="h-5 w-5 text-gray-400 shrink-0" />
+                    <span className="text-sm truncate">
+                      {new Date(patient.dob).toLocaleDateString('es-MX', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      })}
+                    </span>
+                  </div>
+                )}
+                {patient.address && (
+                  <div className="flex items-center gap-3 text-gray-600 bg-gray-50 rounded-lg px-3 py-2.5">
+                    <MapPin className="h-5 w-5 text-gray-400 shrink-0" />
+                    <span className="text-sm truncate">{patient.address}</span>
+                  </div>
+                )}
+                {patient.gender && (
+                  <div className="flex items-center gap-3 text-gray-600 bg-gray-50 rounded-lg px-3 py-2.5">
+                    <User className="h-5 w-5 text-gray-400 shrink-0" />
+                    <span className="text-sm capitalize truncate">
+                      {patient.gender === 'male' && 'Masculino'}
+                      {patient.gender === 'female' && 'Femenino'}
+                      {patient.gender === 'other' && 'Otro'}
+                      {patient.gender === 'prefer_not_to_say' && 'Prefiere no decir'}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Dental Chart Section */}
@@ -915,17 +921,23 @@ export default function PatientDetailPage() {
 
           {/* Images tab */}
           <div className={activeTab === 'images' ? '' : 'hidden'}>
-            <ImageUpload
-              module={AttachmentModule.PATIENTS}
-              entityId={patient.id}
-              onUploadComplete={() => setImageRefreshKey((k) => k + 1)}
-            />
-            <div className="mt-4">
-              <ImageGallery
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <ImageIcon className="h-5 w-5 text-blue-600" />
+                {t('patients.tabs.images')}
+              </h2>
+              <ImageUpload
                 module={AttachmentModule.PATIENTS}
                 entityId={patient.id}
-                refreshKey={imageRefreshKey}
+                onUploadComplete={() => setImageRefreshKey((k) => k + 1)}
               />
+              <div className="mt-4">
+                <ImageGallery
+                  module={AttachmentModule.PATIENTS}
+                  entityId={patient.id}
+                  refreshKey={imageRefreshKey}
+                />
+              </div>
             </div>
           </div>
         </div>

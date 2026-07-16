@@ -79,6 +79,29 @@ describe('ImageGallery', () => {
     })
   })
 
+  // Task #218: thumbnail grid widened to make better use of large screens.
+  it('renders the thumbnail grid with the widened responsive column classes', async () => {
+    const mockAttachments = [
+      { id: '1', module: 'PATIENTS', entityId: 'p1', filename: 'img1.png', mimeType: 'image/png', sizeBytes: 1024, description: null, createdAt: '2024-01-01' },
+    ]
+    vi.mocked(attachmentApi.listAttachments).mockResolvedValue(mockAttachments as never)
+
+    render(
+      <ImageGallery
+        module={AttachmentModule.PATIENTS}
+        entityId="p1"
+      />
+    )
+
+    await waitFor(() => {
+      expect(document.querySelectorAll('img')).toHaveLength(1)
+    })
+
+    const grid = document.querySelector('img')?.closest('.grid')
+    expect(grid).not.toBeNull()
+    expect(grid).toHaveClass('grid-cols-3', 'sm:grid-cols-4', 'md:grid-cols-6', 'lg:grid-cols-8', 'gap-3')
+  })
+
   it('should re-fetch when refreshKey changes', async () => {
     vi.mocked(attachmentApi.listAttachments).mockResolvedValue([])
 

@@ -184,11 +184,11 @@ export function PaymentSection({
           <p className="text-sm">{t('payments.noPayments')}</p>
         </div>
       ) : (
-        <div className="space-y-1.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {payments.map((payment) => (
             <div
               key={payment.id}
-              className="flex items-center justify-between p-3 border border-gray-100 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex items-center justify-between p-3 border border-gray-100 rounded-lg hover:bg-gray-50 hover:border-gray-200 transition-colors"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className="flex items-center justify-center w-8 h-8 rounded-full bg-green-100 shrink-0">
