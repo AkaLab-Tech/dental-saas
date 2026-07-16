@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Mock } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router'
-import { Permission } from '@dental/shared'
+import { Permission, ToothStatus, type TeethData } from '@dental/shared'
 import PatientDetailPage from './PatientDetailPage'
-import { getPatientById } from '@/lib/patient-api'
+import { getPatientById, deleteToothData } from '@/lib/patient-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import type { Patient } from '@/lib/patient-api'
 
@@ -121,6 +121,12 @@ function makePatient(overrides: Partial<Patient> = {}): Patient {
     updatedAt: '2024-01-01T00:00:00Z',
     ...overrides,
   }
+}
+
+const sampleTeeth: TeethData = {
+  '11': { status: ToothStatus.CARIES, note: 'Necesita relleno' },
+  '21': { status: ToothStatus.CROWN, note: '' },
+  '36': { status: ToothStatus.IMPLANT, note: '' },
 }
 
 function mockPermissions(canViewPayments: boolean) {
@@ -386,5 +392,147 @@ describe('PatientDetailPage — tabs', () => {
 
       expect(screen.getByRole('button', { name: /patients\.tabs\.labworks/ })).toBeInTheDocument()
     })
+  })
+})
+
+describe('PatientDetailPage — odontogram 1/3/1 layout', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPermissions(true)
+  })
+
+  // Locates the left-rail legend heading, the odontogram chart marker, and
+  // the right-rail registered-teeth heading, in that order — the three
+  // regions the 1/3/1 grid is built from.
+  function getRegions() {
+    const legendHeading = screen.getByRole('heading', { name: 'patients.statusLegend', level: 3 })
+    const odontogram = screen.getByTestId('odontogram-chart')
+    const registeredHeading = screen.getByRole('heading', { name: /patients\.registeredTeeth/ })
+    return { legendHeading, odontogram, registeredHeading }
+  }
+
+  it('renders all three regions: the legend, the odontogram chart, and the registered-teeth list', async () => {
+    ;(getPatientById as unknown as Mock).mockResolvedValue(makePatient({ teeth: sampleTeeth }))
+    await renderLoadedPage()
+
+    const { legendHeading, odontogram, registeredHeading } = getRegions()
+    expect(legendHeading).toBeInTheDocument()
+    expect(odontogram).toBeInTheDocument()
+    expect(registeredHeading).toBeInTheDocument()
+    expect(registeredHeading.textContent).toContain('(3)')
+  })
+
+  it('renders the three regions in source order: legend, then odontogram, then registered-teeth list', async () => {
+    ;(getPatientById as unknown as Mock).mockResolvedValue(makePatient({ teeth: sampleTeeth }))
+    await renderLoadedPage()
+
+    const { legendHeading, odontogram, registeredHeading } = getRegions()
+
+    // DOCUMENT_POSITION_FOLLOWING (4): the argument node comes after the
+    // node compareDocumentPosition was called on, in document order.
+    expect(legendHeading.compareDocumentPosition(odontogram) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(
+      odontogram.compareDocumentPosition(registeredHeading) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+  })
+
+  it('gives the center odontogram column the wide xl:col-span-3 span and both side rails the narrow xl:col-span-1 span', async () => {
+    ;(getPatientById as unknown as Mock).mockResolvedValue(makePatient({ teeth: sampleTeeth }))
+    await renderLoadedPage()
+
+    const { legendHeading, odontogram, registeredHeading } = getRegions()
+
+    const legendColumn = legendHeading.closest('.xl\\:col-span-1')
+    const centerColumn = odontogram.closest('.xl\\:col-span-3')
+    const registeredColumn = registeredHeading.closest('.xl\\:col-span-1')
+
+    expect(legendColumn).not.toBeNull()
+    expect(centerColumn).not.toBeNull()
+    expect(registeredColumn).not.toBeNull()
+    // The narrow rails are distinct elements from the wide center column.
+    expect(legendColumn).not.toBe(centerColumn)
+    expect(registeredColumn).not.toBe(centerColumn)
+
+    // All three columns share the same 1/3/1 grid parent.
+    const grid = centerColumn?.parentElement
+    expect(grid).toHaveClass('grid', 'xl:grid-cols-5')
+    expect(grid).toContainElement(legendColumn as HTMLElement)
+    expect(grid).toContainElement(registeredColumn as HTMLElement)
+  })
+
+  it('renders all eight condition keys in the left-rail legend', async () => {
+    ;(getPatientById as unknown as Mock).mockResolvedValue(makePatient({ teeth: sampleTeeth }))
+    await renderLoadedPage()
+
+    const { legendHeading } = getRegions()
+    const legendColumn = legendHeading.closest('.xl\\:col-span-1') as HTMLElement
+    const legend = within(legendColumn)
+
+    expect(legend.getByText('patients.status.caries')).toBeInTheDocument()
+    expect(legend.getByText('patients.status.filled')).toBeInTheDocument()
+    expect(legend.getByText('patients.status.crown')).toBeInTheDocument()
+    expect(legend.getByText('patients.status.root_canal')).toBeInTheDocument()
+    expect(legend.getByText('patients.missingExtracted')).toBeInTheDocument()
+    expect(legend.getByText('patients.status.implant')).toBeInTheDocument()
+    expect(legend.getByText('patients.status.bridge')).toBeInTheDocument()
+    expect(legend.getByText('patients.withNotes')).toBeInTheDocument()
+  })
+
+  it('reflects the number of registered teeth in the right-rail count heading', async () => {
+    ;(getPatientById as unknown as Mock).mockResolvedValue(
+      makePatient({ teeth: { '11': { status: ToothStatus.CARIES, note: '' } } })
+    )
+    await renderLoadedPage()
+
+    const registeredHeading = screen.getByRole('heading', { name: /patients\.registeredTeeth/ })
+    expect(registeredHeading.textContent).toContain('(1)')
+    expect(registeredHeading.textContent).not.toContain('(3)')
+  })
+
+  it('does not render the registered-teeth rail when the patient has no registered teeth', async () => {
+    ;(getPatientById as unknown as Mock).mockResolvedValue(makePatient({ teeth: null }))
+    await renderLoadedPage()
+
+    expect(screen.queryByRole('heading', { name: /patients\.registeredTeeth/ })).not.toBeInTheDocument()
+    // The other two regions are unaffected by the absence of registered teeth.
+    expect(screen.getByRole('heading', { name: 'patients.statusLegend', level: 3 })).toBeInTheDocument()
+    expect(screen.getByTestId('odontogram-chart')).toBeInTheDocument()
+  })
+
+  it('still opens the tooth details modal (click-to-edit) when a registered-tooth chip is clicked', async () => {
+    ;(getPatientById as unknown as Mock).mockResolvedValue(makePatient({ teeth: sampleTeeth }))
+    await renderLoadedPage()
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /#11/ }))
+
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByRole('heading', { name: 'patients.tooth #11' })).toBeInTheDocument()
+  })
+
+  it('still wires the hover-to-delete chip button to deleteToothData', async () => {
+    ;(getPatientById as unknown as Mock).mockResolvedValue(makePatient({ teeth: sampleTeeth }))
+    ;(deleteToothData as unknown as Mock).mockResolvedValue(
+      makePatient({
+        teeth: { '21': sampleTeeth['21'], '36': sampleTeeth['36'] },
+      })
+    )
+    await renderLoadedPage()
+
+    const chip = screen.getByRole('button', { name: /#11/ }).closest('.group') as HTMLElement
+    fireEvent.click(within(chip).getByTitle('common.delete'))
+
+    await waitFor(() => {
+      expect(deleteToothData).toHaveBeenCalledWith('p1', '11')
+    })
+
+    // Once the delete resolves, the deleted tooth's chip is gone and the
+    // count heading reflects the two remaining teeth.
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /#11/ })).not.toBeInTheDocument()
+    })
+    expect(screen.getByRole('heading', { name: /patients\.registeredTeeth/ }).textContent).toContain('(2)')
   })
 })
