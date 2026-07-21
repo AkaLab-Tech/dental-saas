@@ -58,12 +58,14 @@ export function BudgetCard({ budget, patientId, onDelete }: BudgetCardProps) {
   const canDelete = can(Permission.BUDGETS_DELETE)
 
   const handleDownloadPdf = async () => {
-    setMenuOpen(false)
     setIsDownloadingPdf(true)
     try {
       await downloadBudgetPdf(budget.id)
+    } catch (error) {
+      console.error('Failed to download budget PDF', error)
     } finally {
       setIsDownloadingPdf(false)
+      setMenuOpen(false)
     }
   }
 
