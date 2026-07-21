@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import i18n from 'i18next'
 import '@/i18n'
@@ -12,6 +12,7 @@ beforeAll(async () => {
 })
 
 const canMock = vi.fn()
+const downloadBudgetPdfMock = vi.fn()
 
 vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: () => ({
@@ -24,6 +25,10 @@ vi.mock('@/hooks/usePermissions', () => ({
 vi.mock('@/stores/auth.store', () => ({
   useAuthStore: (selector: (s: unknown) => unknown) =>
     selector({ user: { tenant: { currency: 'USD' } } }),
+}))
+
+vi.mock('@/lib/pdf-api', () => ({
+  downloadBudgetPdf: (budgetId: string) => downloadBudgetPdfMock(budgetId),
 }))
 
 function makeBudget(overrides: Partial<Budget> = {}): Budget {
@@ -112,5 +117,32 @@ describe('BudgetCard', () => {
     fireEvent.click(screen.getByLabelText('Actions'))
     fireEvent.click(screen.getByText('Eliminar presupuesto'))
     expect(onDelete).toHaveBeenCalledWith(b)
+  })
+
+  it('shows the "Download PDF" action when user has BUDGETS_VIEW', () => {
+    canMock.mockImplementation((p) => p === Permission.BUDGETS_VIEW)
+    renderCard(makeBudget())
+    fireEvent.click(screen.getByLabelText('Actions'))
+    expect(screen.getByText('Descargar PDF')).toBeInTheDocument()
+  })
+
+  it('hides the "Download PDF" action when user lacks BUDGETS_VIEW', () => {
+    canMock.mockImplementation((p) => p !== Permission.BUDGETS_VIEW)
+    renderCard(makeBudget())
+    fireEvent.click(screen.getByLabelText('Actions'))
+    expect(screen.queryByText('Descargar PDF')).not.toBeInTheDocument()
+  })
+
+  it('calls downloadBudgetPdf with the budget id when "Download PDF" is clicked', async () => {
+    canMock.mockReturnValue(true)
+    downloadBudgetPdfMock.mockResolvedValue(undefined)
+    const b = makeBudget({ id: 'budget-42' })
+    renderCard(b)
+    fireEvent.click(screen.getByLabelText('Actions'))
+    fireEvent.click(screen.getByText('Descargar PDF'))
+    await waitFor(() => {
+      expect(downloadBudgetPdfMock).toHaveBeenCalledWith('budget-42')
+    })
+    expect(downloadBudgetPdfMock).toHaveBeenCalledTimes(1)
   })
 })
