@@ -363,7 +363,7 @@
   },
   "labworks": {
     "title": "Trabajos de Laboratorio",
-    "subtitle": "Gestiona los trabajos de laboratorio",
+    "subtitle": "Gestiona los trabajos enviados a laboratorio",
     "newLabwork": "Nuevo Trabajo",
     "editLabwork": "Editar Trabajo",
     "noLabworks": "No hay trabajos de laboratorio",
@@ -386,7 +386,47 @@
     "dateFrom": "Desde",
     "dateTo": "Hasta",
     "exportCsv": "Exportar CSV",
-    "downloadPdf": "Descargar orden"
+    "downloadPdf": "Descargar orden",
+    "searchPlaceholder": "Buscar por laboratorio o paciente...",
+    "paymentStatus": "Estado de Pago",
+    "deliveryStatus": "Estado de Entrega",
+    "paidFilter": "Pagados",
+    "unpaidFilter": "Pendientes",
+    "filterDelivered": "Entregados",
+    "pendingDelivery": "Por Entregar",
+    "notDelivered": "Por entregar",
+    "stats": {
+      "total": "Total",
+      "unpaid": "Por Pagar",
+      "totalValue": "Valor Total"
+    },
+    "emptyState": {
+      "filtered": "No se encontraron trabajos con los filtros aplicados",
+      "hint": "Comienza creando tu primer trabajo de laboratorio"
+    },
+    "createLabwork": "Crear Trabajo",
+    "pagination": "Mostrando {{shown}} de {{total}} trabajos",
+    "deleteLabwork": "Eliminar Trabajo de Laboratorio",
+    "deleteConfirmMessage": "¿Estás seguro de que deseas eliminar el trabajo de \"{{lab}}\"? Esta acción puede deshacerse.",
+    "toast": {
+      "restored": "Trabajo de laboratorio restaurado",
+      "updated": "Trabajo de laboratorio actualizado exitosamente",
+      "created": "Trabajo de laboratorio creado exitosamente",
+      "deleted": "Trabajo de laboratorio eliminado"
+    },
+    "form": {
+      "editTitle": "Editar Trabajo de Laboratorio",
+      "createTitle": "Nuevo Trabajo de Laboratorio",
+      "patientLabel": "Paciente",
+      "labLabel": "Laboratorio",
+      "labPlaceholder": "Ej: Lab Dental Central",
+      "dateLabel": "Fecha",
+      "priceLabel": "Precio",
+      "pricePlaceholder": "0.00",
+      "notesLabel": "Notas",
+      "notesPlaceholder": "Notas adicionales sobre el trabajo...",
+      "saveChanges": "Guardar Cambios"
+    }
   },
   "budgets": {
     "title": "Presupuestos",
@@ -465,8 +505,44 @@
     "subtitle": "Gestiona los gastos de tu clínica",
     "newExpense": "Nuevo Gasto",
     "editExpense": "Editar Gasto",
-    "noExpenses": "No hay gastos registrados",
-    "totalExpenses": "Total de gastos"
+    "noExpenses": "No hay gastos",
+    "totalExpenses": "Total de gastos",
+    "searchPlaceholder": "Buscar por proveedor o artículos...",
+    "paymentStatus": "Estado de Pago",
+    "pendingFilter": "Pendientes",
+    "stats": {
+      "total": "Total",
+      "unpaid": "Por Pagar",
+      "paid": "Pagados",
+      "totalAmount": "Monto Total"
+    },
+    "emptyState": {
+      "filtered": "No se encontraron gastos con los filtros aplicados",
+      "hint": "Comienza registrando tu primer gasto"
+    },
+    "createExpense": "Crear Gasto",
+    "pagination": "Mostrando {{shown}} de {{total}} gastos",
+    "deleteExpense": "Eliminar Gasto",
+    "deleteConfirmMessage": "¿Estás seguro de que deseas eliminar el gasto de \"{{issuer}}\"? Esta acción puede deshacerse.",
+    "toast": {
+      "restored": "Gasto restaurado",
+      "updated": "Gasto actualizado exitosamente",
+      "created": "Gasto creado exitosamente",
+      "deleted": "Gasto eliminado"
+    },
+    "issuerLabel": "Proveedor",
+    "issuerPlaceholder": "Ej: Dental Supply Co.",
+    "dateLabel": "Fecha",
+    "amountLabel": "Monto",
+    "amountPlaceholder": "0.00",
+    "itemsLabel": "Artículos",
+    "itemPlaceholder": "Descripción del artículo",
+    "addItem": "Agregar artículo",
+    "tagsLabel": "Etiquetas",
+    "newTagPlaceholder": "Nueva etiqueta...",
+    "notesLabel": "Notas",
+    "notesPlaceholder": "Notas adicionales...",
+    "saveChanges": "Guardar Cambios"
   },
   "settings": {
     "title": "Configuración",

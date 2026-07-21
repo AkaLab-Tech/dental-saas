@@ -100,7 +100,7 @@ export function LabworksPage() {
   const handleRestore = async (labwork: Labwork) => {
     try {
       await restoreLabwork(labwork.id)
-      setSuccessMessage(`Trabajo de laboratorio restaurado`)
+      setSuccessMessage(t('labworks.toast.restored'))
     } catch {
       // Error is handled by store
     }
@@ -127,10 +127,10 @@ export function LabworksPage() {
       try {
         if (selectedLabwork) {
           await updateLabwork(selectedLabwork.id, data as UpdateLabworkData)
-          setSuccessMessage(`Trabajo de laboratorio actualizado exitosamente`)
+          setSuccessMessage(t('labworks.toast.updated'))
         } else {
           await createLabwork(data)
-          setSuccessMessage(`Trabajo de laboratorio creado exitosamente`)
+          setSuccessMessage(t('labworks.toast.created'))
         }
         setIsFormOpen(false)
         setSelectedLabwork(null)
@@ -138,7 +138,7 @@ export function LabworksPage() {
         // Error is handled by store
       }
     },
-    [selectedLabwork, createLabwork, updateLabwork]
+    [selectedLabwork, createLabwork, updateLabwork, t]
   )
 
   const handleConfirmDelete = async () => {
@@ -146,7 +146,7 @@ export function LabworksPage() {
     setIsDeleting(true)
     try {
       await deleteLabwork(labworkToDelete.id)
-      setSuccessMessage(`Trabajo de laboratorio eliminado`)
+      setSuccessMessage(t('labworks.toast.deleted'))
       setLabworkToDelete(null)
     } catch {
       // Error is handled by store
@@ -194,9 +194,9 @@ export function LabworksPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Trabajos de Laboratorio</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('labworks.title')}</h1>
           <p className="text-gray-600 mt-1">
-            Gestiona los trabajos enviados a laboratorio
+            {t('labworks.subtitle')}
             {stats && (
               <span className="text-gray-500 ml-1">
                 ({stats.total} trabajos, {formatCurrency(stats.totalValue || 0, currency)})
@@ -227,7 +227,7 @@ export function LabworksPage() {
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="h-5 w-5" />
-              Nuevo Trabajo
+              {t('labworks.newLabwork')}
             </button>
           </Can>
         </div>
@@ -242,7 +242,7 @@ export function LabworksPage() {
                 <FlaskConical className="h-5 w-5 text-purple-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">Total</p>
+                <p className="text-sm text-gray-500">{t('labworks.stats.total')}</p>
                 <p className="text-xl font-semibold text-gray-900">{stats.total}</p>
               </div>
             </div>
@@ -254,7 +254,7 @@ export function LabworksPage() {
                 <DollarSign className="h-5 w-5 text-amber-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">Por Pagar</p>
+                <p className="text-sm text-gray-500">{t('labworks.stats.unpaid')}</p>
                 <p className="text-xl font-semibold text-gray-900">{stats.unpaid}</p>
               </div>
             </div>
@@ -266,7 +266,7 @@ export function LabworksPage() {
                 <Package className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">Por Entregar</p>
+                <p className="text-sm text-gray-500">{t('labworks.pendingDelivery')}</p>
                 <p className="text-xl font-semibold text-gray-900">{stats.pending}</p>
               </div>
             </div>
@@ -278,7 +278,7 @@ export function LabworksPage() {
                 <DollarSign className="h-5 w-5 text-green-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">Valor Total</p>
+                <p className="text-sm text-gray-500">{t('labworks.stats.totalValue')}</p>
                 <p className="text-xl font-semibold text-gray-900">
                   {formatCurrency(stats.totalValue || 0, currency)}
                 </p>
@@ -309,7 +309,7 @@ export function LabworksPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar por laboratorio o paciente..."
+            placeholder={t('labworks.searchPlaceholder')}
             className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           {searchQuery && (
@@ -331,7 +331,7 @@ export function LabworksPage() {
             }`}
         >
           <Filter className="h-5 w-5" />
-          Filtros
+          {t('common.filter')}
         </button>
       </div>
 
@@ -339,7 +339,7 @@ export function LabworksPage() {
       {showFilters && (
         <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex flex-wrap gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Estado de Pago</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{t('labworks.paymentStatus')}</label>
             <div className="flex gap-2">
               <button
                 onClick={() => handleFilterChange('isPaid', undefined)}
@@ -348,7 +348,7 @@ export function LabworksPage() {
                     : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                   }`}
               >
-                Todos
+                {t('common.all')}
               </button>
               <button
                 onClick={() => handleFilterChange('isPaid', true)}
@@ -357,7 +357,7 @@ export function LabworksPage() {
                     : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                   }`}
               >
-                Pagados
+                {t('labworks.paidFilter')}
               </button>
               <button
                 onClick={() => handleFilterChange('isPaid', false)}
@@ -366,13 +366,13 @@ export function LabworksPage() {
                     : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                   }`}
               >
-                Pendientes
+                {t('labworks.unpaidFilter')}
               </button>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Estado de Entrega</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{t('labworks.deliveryStatus')}</label>
             <div className="flex gap-2">
               <button
                 onClick={() => handleFilterChange('isDelivered', undefined)}
@@ -381,7 +381,7 @@ export function LabworksPage() {
                     : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                   }`}
               >
-                Todos
+                {t('common.all')}
               </button>
               <button
                 onClick={() => handleFilterChange('isDelivered', true)}
@@ -390,7 +390,7 @@ export function LabworksPage() {
                     : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                   }`}
               >
-                Entregados
+                {t('labworks.filterDelivered')}
               </button>
               <button
                 onClick={() => handleFilterChange('isDelivered', false)}
@@ -399,7 +399,7 @@ export function LabworksPage() {
                     : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                   }`}
               >
-                Por Entregar
+                {t('labworks.pendingDelivery')}
               </button>
               <button
                 onClick={() => handleOverdueFilterChange(filters.overdue ? undefined : true)}
@@ -455,7 +455,7 @@ export function LabworksPage() {
           <div className="flex-1">
             <p className="text-red-800">{error}</p>
             <button onClick={clearError} className="text-sm text-red-600 hover:underline mt-1">
-              Cerrar
+              {t('common.close')}
             </button>
           </div>
         </div>
@@ -472,11 +472,11 @@ export function LabworksPage() {
       {!loading && labworks.length === 0 && (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <FlaskConical className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No hay trabajos de laboratorio</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">{t('labworks.noLabworks')}</h3>
           <p className="text-gray-600 mb-4">
             {searchQuery || hasActiveFilters
-              ? 'No se encontraron trabajos con los filtros aplicados'
-              : 'Comienza creando tu primer trabajo de laboratorio'}
+              ? t('labworks.emptyState.filtered')
+              : t('labworks.emptyState.hint')}
           </p>
           {!searchQuery && !hasActiveFilters && (
             <Can permission={Permission.LABWORKS_CREATE}>
@@ -485,7 +485,7 @@ export function LabworksPage() {
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <Plus className="h-5 w-5" />
-                Crear Trabajo
+                {t('labworks.createLabwork')}
               </button>
             </Can>
           )}
@@ -512,7 +512,7 @@ export function LabworksPage() {
       {/* Pagination info */}
       {total > labworks.length && (
         <div className="text-center text-sm text-gray-500">
-          Mostrando {labworks.length} de {total} trabajos
+          {t('labworks.pagination', { shown: labworks.length, total })}
         </div>
       )}
 
@@ -533,9 +533,10 @@ export function LabworksPage() {
         isOpen={!!labworkToDelete}
         onClose={() => setLabworkToDelete(null)}
         onConfirm={handleConfirmDelete}
-        title="Eliminar Trabajo de Laboratorio"
-        message={`¿Estás seguro de que deseas eliminar el trabajo de "${labworkToDelete?.lab}"? Esta acción puede deshacerse.`}
-        confirmText="Eliminar"
+        title={t('labworks.deleteLabwork')}
+        message={t('labworks.deleteConfirmMessage', { lab: labworkToDelete?.lab })}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
         variant="danger"
         isLoading={isDeleting}
       />

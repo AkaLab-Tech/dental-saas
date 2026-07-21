@@ -363,7 +363,7 @@
   },
   "labworks": {
     "title": "أعمال المختبر",
-    "subtitle": "إدارة أعمال المختبر",
+    "subtitle": "إدارة الأعمال المُرسلة إلى المختبر",
     "newLabwork": "عمل مختبر جديد",
     "editLabwork": "تعديل عمل المختبر",
     "noLabworks": "لا توجد أعمال مختبر",
@@ -386,7 +386,47 @@
     "dateFrom": "من",
     "dateTo": "إلى",
     "exportCsv": "تصدير CSV",
-    "downloadPdf": "تحميل الطلب"
+    "downloadPdf": "تحميل الطلب",
+    "searchPlaceholder": "البحث حسب المختبر أو المريض...",
+    "paymentStatus": "حالة الدفع",
+    "deliveryStatus": "حالة التسليم",
+    "paidFilter": "مدفوعة",
+    "unpaidFilter": "معلقة",
+    "filterDelivered": "تم التسليم",
+    "pendingDelivery": "قيد التسليم",
+    "notDelivered": "قيد التسليم",
+    "stats": {
+      "total": "الإجمالي",
+      "unpaid": "غير مدفوع",
+      "totalValue": "القيمة الإجمالية"
+    },
+    "emptyState": {
+      "filtered": "لم يتم العثور على أعمال مختبر بالفلاتر المطبقة",
+      "hint": "ابدأ بإنشاء أول عمل مختبر"
+    },
+    "createLabwork": "إنشاء عمل مختبر",
+    "pagination": "عرض {{shown}} من {{total}} عمل مختبر",
+    "deleteLabwork": "حذف عمل المختبر",
+    "deleteConfirmMessage": "هل أنت متأكد أنك تريد حذف العمل الخاص بـ \"{{lab}}\"؟ يمكن التراجع عن هذا الإجراء.",
+    "toast": {
+      "restored": "تم استعادة عمل المختبر",
+      "updated": "تم تحديث عمل المختبر بنجاح",
+      "created": "تم إنشاء عمل المختبر بنجاح",
+      "deleted": "تم حذف عمل المختبر"
+    },
+    "form": {
+      "editTitle": "تعديل عمل المختبر",
+      "createTitle": "عمل مختبر جديد",
+      "patientLabel": "المريض",
+      "labLabel": "المختبر",
+      "labPlaceholder": "مثال: مختبر الأسنان المركزي",
+      "dateLabel": "التاريخ",
+      "priceLabel": "السعر",
+      "pricePlaceholder": "0.00",
+      "notesLabel": "ملاحظات",
+      "notesPlaceholder": "ملاحظات إضافية حول العمل...",
+      "saveChanges": "حفظ التغييرات"
+    }
   },
   "budgets": {
     "title": "الميزانيات",
@@ -465,8 +505,44 @@
     "subtitle": "إدارة مصروفات عيادتك",
     "newExpense": "مصروف جديد",
     "editExpense": "تعديل المصروف",
-    "noExpenses": "لا توجد مصروفات مسجلة",
-    "totalExpenses": "إجمالي المصروفات"
+    "noExpenses": "لا توجد مصروفات",
+    "totalExpenses": "إجمالي المصروفات",
+    "searchPlaceholder": "البحث حسب المورد أو الأصناف...",
+    "paymentStatus": "حالة الدفع",
+    "pendingFilter": "معلقة",
+    "stats": {
+      "total": "الإجمالي",
+      "unpaid": "غير مدفوع",
+      "paid": "مدفوعة",
+      "totalAmount": "المبلغ الإجمالي"
+    },
+    "emptyState": {
+      "filtered": "لم يتم العثور على مصروفات بالفلاتر المطبقة",
+      "hint": "ابدأ بتسجيل أول مصروف لك"
+    },
+    "createExpense": "إنشاء مصروف",
+    "pagination": "عرض {{shown}} من {{total}} مصروف",
+    "deleteExpense": "حذف المصروف",
+    "deleteConfirmMessage": "هل أنت متأكد أنك تريد حذف المصروف الخاص بـ \"{{issuer}}\"؟ يمكن التراجع عن هذا الإجراء.",
+    "toast": {
+      "restored": "تم استعادة المصروف",
+      "updated": "تم تحديث المصروف بنجاح",
+      "created": "تم إنشاء المصروف بنجاح",
+      "deleted": "تم حذف المصروف"
+    },
+    "issuerLabel": "المورد",
+    "issuerPlaceholder": "مثال: شركة دنتال سبلاي",
+    "dateLabel": "التاريخ",
+    "amountLabel": "المبلغ",
+    "amountPlaceholder": "0.00",
+    "itemsLabel": "الأصناف",
+    "itemPlaceholder": "وصف الصنف",
+    "addItem": "إضافة صنف",
+    "tagsLabel": "الوسوم",
+    "newTagPlaceholder": "وسم جديد...",
+    "notesLabel": "ملاحظات",
+    "notesPlaceholder": "ملاحظات إضافية...",
+    "saveChanges": "حفظ التغييرات"
   },
   "settings": {
     "title": "الإعدادات",
