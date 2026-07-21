@@ -270,19 +270,95 @@
     "editDoctor": "تعديل الطبيب",
     "noDoctors": "لا يوجد أطباء مسجلين",
     "addDoctor": "إضافة طبيب",
+    "deleteDoctor": "حذف الطبيب",
+    "deleteConfirmMessage": "هل أنت متأكد من أنك تريد حذف د. {{name}}؟ يمكن التراجع عن هذا الإجراء لاحقًا عن طريق استعادة الطبيب.",
+    "availableCount": "({{active}} من {{limit}} متاح)",
+    "searchPlaceholder": "ابحث بالاسم أو البريد الإلكتروني أو التخصص...",
+    "showInactiveFilter": "إظهار غير النشطين",
+    "bio": "السيرة الذاتية",
+    "limitBanner": {
+      "title": "تم الوصول إلى حد الأطباء",
+      "body": "تسمح خطتك الحالية بما يصل إلى {{limit}} طبيب. لإضافة المزيد من الأطباء، قم بالترقية إلى خطة أعلى.",
+      "viewPlans": "عرض الخطط المتاحة"
+    },
+    "emptyState": {
+      "noDoctors": "لا يوجد أطباء",
+      "noDoctorsHint": "ابدأ بإضافة أول طبيب لديك",
+      "noResults": "لم يتم العثور على أطباء",
+      "noResultsHint": "جرّب مصطلحات بحث أخرى"
+    },
+    "toast": {
+      "created": "تم إنشاء د. {{name}} بنجاح",
+      "updated": "تم تحديث د. {{name}} بنجاح",
+      "deleted": "تم حذف د. {{name}}",
+      "restored": "تمت استعادة د. {{name}}"
+    },
+    "days": {
+      "mon": "الاثنين",
+      "tue": "الثلاثاء",
+      "wed": "الأربعاء",
+      "thu": "الخميس",
+      "fri": "الجمعة",
+      "sat": "السبت",
+      "sun": "الأحد",
+      "short": {
+        "mon": "ن",
+        "tue": "ث",
+        "wed": "ر",
+        "thu": "خ",
+        "fri": "ج",
+        "sat": "س",
+        "sun": "ح"
+      }
+    },
     "form": {
       "firstName": "الاسم الأول",
       "lastName": "الاسم الأخير",
       "email": "البريد الإلكتروني",
       "phone": "الهاتف",
       "specialty": "التخصص",
-      "licenseNumber": "رقم الترخيص"
+      "licenseNumber": "رقم الترخيص",
+      "consultingRoom": "العيادة",
+      "hourlyRate": "الأجر بالساعة",
+      "workingHoursStart": "وقت البدء",
+      "workingHoursEnd": "وقت الانتهاء",
+      "closeForm": "إغلاق النموذج",
+      "saveChanges": "حفظ التغييرات",
+      "createDoctor": "إنشاء طبيب",
+      "placeholders": {
+        "firstName": "أحمد",
+        "lastName": "محمد",
+        "email": "doctor@clinic.com",
+        "phone": "+1 234 567 890",
+        "specialty": "طب الأسنان العام",
+        "licenseNumber": "LIC-12345",
+        "consultingRoom": "العيادة 101",
+        "hourlyRate": "100.00",
+        "bio": "وصف مهني موجز..."
+      },
+      "validation": {
+        "firstNameRequired": "الاسم الأول مطلوب",
+        "lastNameRequired": "الاسم الأخير مطلوب",
+        "invalidEmail": "بريد إلكتروني غير صالح",
+        "bioMaxLength": "لا يمكن أن تتجاوز السيرة الذاتية 5000 حرف",
+        "hourlyRatePositive": "يجب أن يكون رقمًا موجبًا"
+      }
     },
     "list": {
       "name": "الاسم",
       "contact": "التواصل",
       "workingDays": "أيام العمل",
       "viewRecord": "عرض التفاصيل"
+    },
+    "detail": {
+      "backToDoctors": "العودة إلى الأطباء",
+      "loadError": "خطأ في تحميل الطبيب",
+      "saveError": "خطأ في حفظ التغييرات",
+      "workSchedule": "جدول العمل",
+      "schedule": "الجدول",
+      "license": "رقم الترخيص: {{license}}",
+      "consultingRoom": "العيادة: {{room}}",
+      "hourlyRate": "الأجر: ${{rate}}/ساعة"
     }
   },
   "labworks": {

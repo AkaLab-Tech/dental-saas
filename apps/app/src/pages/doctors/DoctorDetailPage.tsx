@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
   Loader2,
@@ -29,33 +30,24 @@ import { DoctorAppointmentsSection } from './DoctorAppointmentsSection'
 // Constants
 // ============================================================================
 
-const DAYS_MAP: Record<string, string> = {
-  MON: 'Lunes',
-  TUE: 'Martes',
-  WED: 'Miércoles',
-  THU: 'Jueves',
-  FRI: 'Viernes',
-  SAT: 'Sábado',
-  SUN: 'Domingo',
-}
-
-const DAYS_SHORT: Record<string, string> = {
-  MON: 'L',
-  TUE: 'M',
-  WED: 'X',
-  THU: 'J',
-  FRI: 'V',
-  SAT: 'S',
-  SUN: 'D',
-}
-
 const DAYS_ORDER = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
+
+const DAY_KEY_MAP: Record<string, string> = {
+  MON: 'mon',
+  TUE: 'tue',
+  WED: 'wed',
+  THU: 'thu',
+  FRI: 'fri',
+  SAT: 'sat',
+  SUN: 'sun',
+}
 
 // ============================================================================
 // DoctorDetailPage
 // ============================================================================
 
 export default function DoctorDetailPage() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [doctor, setDoctor] = useState<Doctor | null>(null)
@@ -79,14 +71,14 @@ export default function DoctorDetailPage() {
         const data = await getDoctorById(id)
         setDoctor(data)
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Error al cargar el doctor')
+        setError(e instanceof Error ? e.message : t('doctors.detail.loadError'))
       } finally {
         setIsLoading(false)
       }
     }
 
     fetchDoctor()
-  }, [id])
+  }, [id, t])
 
   const handleEditSubmit = async (data: UpdateDoctorData) => {
     if (!id) return
@@ -96,7 +88,7 @@ export default function DoctorDetailPage() {
       setDoctor(updated)
       setIsEditModalOpen(false)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al guardar los cambios')
+      setError(e instanceof Error ? e.message : t('doctors.detail.saveError'))
     } finally {
       setIsSaving(false)
     }
@@ -120,12 +112,12 @@ export default function DoctorDetailPage() {
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
         >
           <ArrowLeft className="h-5 w-5" />
-          Volver a doctores
+          {t('doctors.detail.backToDoctors')}
         </button>
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 flex items-start gap-3">
           <AlertCircle className="h-6 w-6 text-red-500 shrink-0" />
           <div>
-            <h3 className="font-medium text-red-800">Error</h3>
+            <h3 className="font-medium text-red-800">{t('common.error')}</h3>
             <p className="text-red-700 mt-1">{error}</p>
           </div>
         </div>
@@ -139,13 +131,19 @@ export default function DoctorDetailPage() {
   const sortedWorkingDays = [...(doctor.workingDays || [])].sort(
     (a, b) => DAYS_ORDER.indexOf(a) - DAYS_ORDER.indexOf(b)
   )
+  const DAYS_MAP = Object.fromEntries(
+    DAYS_ORDER.map((day) => [day, t(`doctors.days.${DAY_KEY_MAP[day]}`)])
+  )
+  const DAYS_SHORT = Object.fromEntries(
+    DAYS_ORDER.map((day) => [day, t(`doctors.days.short.${DAY_KEY_MAP[day]}`)])
+  )
 
   return (
     <div className="p-6 space-y-6">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-sm text-gray-500">
         <Link to="/doctors" className="hover:text-gray-700">
-          Doctores
+          {t('doctors.title')}
         </Link>
         <ChevronRight className="h-4 w-4" />
         <span className="text-gray-900 font-medium">
@@ -191,7 +189,7 @@ export default function DoctorDetailPage() {
                       : 'bg-orange-100 text-orange-800'
                   }`}
                 >
-                  {doctor.isActive ? 'Activo' : 'Inactivo'}
+                  {doctor.isActive ? t('common.active') : t('common.inactive')}
                 </span>
                 {doctor.specialty && (
                   <span className="flex items-center gap-1 text-sm text-gray-500">
@@ -209,7 +207,7 @@ export default function DoctorDetailPage() {
             className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
           >
             <Edit2 className="h-4 w-4" />
-            Editar
+            {t('common.edit')}
           </button>
         </div>
 
@@ -230,19 +228,19 @@ export default function DoctorDetailPage() {
           {doctor.licenseNumber && (
             <div className="flex items-center gap-3 text-gray-600">
               <BadgeCheck className="h-5 w-5 text-gray-400" />
-              <span className="text-sm">Matrícula: {doctor.licenseNumber}</span>
+              <span className="text-sm">{t('doctors.detail.license', { license: doctor.licenseNumber })}</span>
             </div>
           )}
           {doctor.consultingRoom && (
             <div className="flex items-center gap-3 text-gray-600">
               <Building2 className="h-5 w-5 text-gray-400" />
-              <span className="text-sm">Consultorio: {doctor.consultingRoom}</span>
+              <span className="text-sm">{t('doctors.detail.consultingRoom', { room: doctor.consultingRoom })}</span>
             </div>
           )}
           {doctor.hourlyRate != null && (
             <div className="flex items-center gap-3 text-gray-600">
               <FileText className="h-5 w-5 text-gray-400" />
-              <span className="text-sm">Tarifa: ${doctor.hourlyRate}/hr</span>
+              <span className="text-sm">{t('doctors.detail.hourlyRate', { rate: doctor.hourlyRate })}</span>
             </div>
           )}
         </div>
@@ -253,14 +251,14 @@ export default function DoctorDetailPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-4">
             <Clock className="h-5 w-5 text-blue-600" />
-            Horario de Trabajo
+            {t('doctors.detail.workSchedule')}
           </h2>
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-6">
             {/* Working days */}
             {sortedWorkingDays.length > 0 && (
               <div>
-                <p className="text-xs text-gray-500 mb-2">Días de trabajo</p>
+                <p className="text-xs text-gray-500 mb-2">{t('doctors.list.workingDays')}</p>
                 <div className="flex gap-1.5">
                   {DAYS_ORDER.map((day) => {
                     const isWorking = sortedWorkingDays.includes(day)
@@ -285,7 +283,7 @@ export default function DoctorDetailPage() {
             {/* Working hours */}
             {doctor.workingHours && (
               <div>
-                <p className="text-xs text-gray-500 mb-2">Horario</p>
+                <p className="text-xs text-gray-500 mb-2">{t('doctors.detail.schedule')}</p>
                 <p className="text-sm text-gray-700 font-medium">
                   {doctor.workingHours.start} — {doctor.workingHours.end}
                 </p>
@@ -298,7 +296,7 @@ export default function DoctorDetailPage() {
       {/* Bio */}
       {doctor.bio && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">Biografía</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">{t('doctors.bio')}</h2>
           <p className="text-sm text-gray-600 whitespace-pre-line">{doctor.bio}</p>
         </div>
       )}

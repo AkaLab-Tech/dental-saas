@@ -270,19 +270,95 @@
     "editDoctor": "Edit Doctor",
     "noDoctors": "No doctors registered",
     "addDoctor": "Add Doctor",
+    "deleteDoctor": "Delete Doctor",
+    "deleteConfirmMessage": "Are you sure you want to delete Dr. {{name}}? This action can be reverted by restoring the doctor afterwards.",
+    "availableCount": "({{active}} of {{limit}} available)",
+    "searchPlaceholder": "Search by name, email or specialty...",
+    "showInactiveFilter": "Show inactive",
+    "bio": "Biography",
+    "limitBanner": {
+      "title": "Doctor limit reached",
+      "body": "Your current plan allows up to {{limit}} doctors. To add more doctors, upgrade to a higher plan.",
+      "viewPlans": "View available plans"
+    },
+    "emptyState": {
+      "noDoctors": "No doctors",
+      "noDoctorsHint": "Start by adding your first doctor",
+      "noResults": "No doctors found",
+      "noResultsHint": "Try other search terms"
+    },
+    "toast": {
+      "created": "Dr. {{name}} created successfully",
+      "updated": "Dr. {{name}} updated successfully",
+      "deleted": "Dr. {{name}} deleted",
+      "restored": "Dr. {{name}} has been restored"
+    },
+    "days": {
+      "mon": "Monday",
+      "tue": "Tuesday",
+      "wed": "Wednesday",
+      "thu": "Thursday",
+      "fri": "Friday",
+      "sat": "Saturday",
+      "sun": "Sunday",
+      "short": {
+        "mon": "M",
+        "tue": "T",
+        "wed": "W",
+        "thu": "T",
+        "fri": "F",
+        "sat": "S",
+        "sun": "S"
+      }
+    },
     "form": {
       "firstName": "First name",
       "lastName": "Last name",
       "email": "Email",
       "phone": "Phone",
       "specialty": "Specialty",
-      "licenseNumber": "License number"
+      "licenseNumber": "License number",
+      "consultingRoom": "Consulting room",
+      "hourlyRate": "Hourly Rate",
+      "workingHoursStart": "Start Time",
+      "workingHoursEnd": "End Time",
+      "closeForm": "Close form",
+      "saveChanges": "Save Changes",
+      "createDoctor": "Create Doctor",
+      "placeholders": {
+        "firstName": "John",
+        "lastName": "Smith",
+        "email": "doctor@clinic.com",
+        "phone": "+1 234 567 890",
+        "specialty": "General Dentistry",
+        "licenseNumber": "LIC-12345",
+        "consultingRoom": "Room 101",
+        "hourlyRate": "100.00",
+        "bio": "Brief professional description..."
+      },
+      "validation": {
+        "firstNameRequired": "First name is required",
+        "lastNameRequired": "Last name is required",
+        "invalidEmail": "Invalid email",
+        "bioMaxLength": "Biography cannot exceed 5000 characters",
+        "hourlyRatePositive": "Must be a positive number"
+      }
     },
     "list": {
       "name": "Name",
       "contact": "Contact",
       "workingDays": "Working days",
       "viewRecord": "View detail"
+    },
+    "detail": {
+      "backToDoctors": "Back to doctors",
+      "loadError": "Error loading the doctor",
+      "saveError": "Error saving the changes",
+      "workSchedule": "Work Schedule",
+      "schedule": "Schedule",
+      "license": "License: {{license}}",
+      "consultingRoom": "Consulting room: {{room}}",
+      "hourlyRate": "Rate: ${{rate}}/hr"
     }
   },
   "labworks": {

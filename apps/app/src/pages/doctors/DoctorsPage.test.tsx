@@ -1,7 +1,17 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
+import i18n from 'i18next'
+import '@/i18n'
 import type { Doctor, DoctorsStats } from '@/lib/doctor-api'
+
+// DoctorsPage now renders every user-facing string through t(). Initialize
+// the real i18n instance (Spanish, the app default) so assertions exercise
+// the actual translated/interpolated output rather than raw keys — mirrors
+// the pattern used by PatientsPage.test.tsx for the same reason (task #324).
+beforeAll(async () => {
+  await i18n.changeLanguage('es')
+})
 
 // Mock functions defined before vi.mock
 const mockFetchDoctors = vi.fn()
@@ -87,11 +97,12 @@ vi.mock('@/components/doctors/DoctorFormModal', () => ({
 
 // Mock ConfirmDialog component
 vi.mock('@/components/ui/ConfirmDialog', () => ({
-  ConfirmDialog: ({ isOpen, onClose, onConfirm, title }: any) => {
+  ConfirmDialog: ({ isOpen, onClose, onConfirm, title, message }: any) => {
     if (!isOpen) return null
     return (
       <div data-testid="confirm-dialog" role="dialog">
         <h2>{title}</h2>
+        <p>{message}</p>
         <button onClick={onClose}>Cancelar</button>
         <button onClick={onConfirm}>Confirmar</button>
       </div>
@@ -419,6 +430,24 @@ describe('DoctorsPage', () => {
 
       vi.useFakeTimers() // Restore fake timers
     })
+
+    it('should show the translated "Dr. {name} creado exitosamente" toast after a successful create', async () => {
+      vi.useRealTimers() // Use real timers for async test
+      mockDoctorsState.stats = mockStats
+      mockDoctorsState.doctors = [mockDoctor1]
+      mockAddDoctor.mockResolvedValue(undefined)
+      renderDoctorsPage()
+
+      fireEvent.click(screen.getAllByRole('button', { name: /nuevo doctor/i })[0])
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /guardar/i }))
+        await new Promise(resolve => setTimeout(resolve, 50))
+      })
+
+      expect(screen.getByText('Dr. Test Doctor creado exitosamente')).toBeInTheDocument()
+
+      vi.useFakeTimers() // Restore fake timers
+    })
   })
 
   describe('edit doctor', () => {
@@ -458,6 +487,23 @@ describe('DoctorsPage', () => {
 
       vi.useFakeTimers() // Restore fake timers
     })
+
+    it('should show the translated "Dr. {name} actualizado exitosamente" toast after a successful edit', async () => {
+      vi.useRealTimers() // Use real timers for async test
+      mockDoctorsState.doctors = [mockDoctor1]
+      mockEditDoctor.mockResolvedValue(undefined)
+      renderDoctorsPage()
+
+      fireEvent.click(screen.getAllByRole('button', { name: /editar/i })[0])
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /guardar/i }))
+        await new Promise(resolve => setTimeout(resolve, 50))
+      })
+
+      expect(screen.getByText('Dr. Test Doctor actualizado exitosamente')).toBeInTheDocument()
+
+      vi.useFakeTimers() // Restore fake timers
+    })
   })
 
   describe('delete doctor', () => {
@@ -470,6 +516,20 @@ describe('DoctorsPage', () => {
 
       expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument()
       expect(screen.getByText(/eliminar doctor/i)).toBeInTheDocument()
+    })
+
+    it('should show the translated confirmation message with the doctor\'s name interpolated', () => {
+      mockDoctorsState.doctors = [mockDoctor1]
+      renderDoctorsPage()
+
+      const deleteButton = screen.getAllByRole('button', { name: /eliminar/i })[0]
+      fireEvent.click(deleteButton)
+
+      expect(
+        screen.getByText(
+          '¿Estás seguro de que deseas eliminar a Dr. Juan Pérez? Esta acción se puede revertir restaurando el doctor posteriormente.'
+        )
+      ).toBeInTheDocument()
     })
 
     it('should call removeDoctor when confirming deletion', async () => {
@@ -490,6 +550,23 @@ describe('DoctorsPage', () => {
       })
 
       expect(mockRemoveDoctor).toHaveBeenCalledWith('1')
+
+      vi.useFakeTimers() // Restore fake timers
+    })
+
+    it('should show the translated "Dr. {name} eliminado" toast after a successful deletion', async () => {
+      vi.useRealTimers() // Use real timers for async test
+      mockDoctorsState.doctors = [mockDoctor1]
+      mockRemoveDoctor.mockResolvedValue(undefined)
+      renderDoctorsPage()
+
+      fireEvent.click(screen.getAllByRole('button', { name: /eliminar/i })[0])
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /confirmar/i }))
+        await new Promise(resolve => setTimeout(resolve, 50))
+      })
+
+      expect(screen.getByText('Dr. Juan Pérez eliminado')).toBeInTheDocument()
 
       vi.useFakeTimers() // Restore fake timers
     })
@@ -523,6 +600,23 @@ describe('DoctorsPage', () => {
       })
 
       expect(mockRestoreDeletedDoctor).toHaveBeenCalledWith('3')
+
+      vi.useFakeTimers() // Restore fake timers
+    })
+
+    it('should show the translated "Dr. {name} ha sido restaurado" toast after a successful restore', async () => {
+      vi.useRealTimers() // Use real timers for async test
+      mockDoctorsState.doctors = [mockInactiveDoctor]
+      mockDoctorsState.showInactive = true
+      mockRestoreDeletedDoctor.mockResolvedValue(undefined)
+      renderDoctorsPage()
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /restaurar/i }))
+        await new Promise(resolve => setTimeout(resolve, 50))
+      })
+
+      expect(screen.getByText('Dr. Carlos López ha sido restaurado')).toBeInTheDocument()
 
       vi.useFakeTimers() // Restore fake timers
     })
