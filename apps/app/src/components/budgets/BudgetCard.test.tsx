@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import i18n from 'i18next'
 import '@/i18n'
@@ -12,6 +12,7 @@ beforeAll(async () => {
 })
 
 const canMock = vi.fn()
+const downloadBudgetPdfMock = vi.fn()
 
 vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: () => ({
@@ -24,6 +25,10 @@ vi.mock('@/hooks/usePermissions', () => ({
 vi.mock('@/stores/auth.store', () => ({
   useAuthStore: (selector: (s: unknown) => unknown) =>
     selector({ user: { tenant: { currency: 'USD' } } }),
+}))
+
+vi.mock('@/lib/pdf-api', () => ({
+  downloadBudgetPdf: (budgetId: string) => downloadBudgetPdfMock(budgetId),
 }))
 
 function makeBudget(overrides: Partial<Budget> = {}): Budget {
@@ -112,5 +117,65 @@ describe('BudgetCard', () => {
     fireEvent.click(screen.getByLabelText('Actions'))
     fireEvent.click(screen.getByText('Eliminar presupuesto'))
     expect(onDelete).toHaveBeenCalledWith(b)
+  })
+
+  it('shows the "Download PDF" action when user has BUDGETS_VIEW', () => {
+    canMock.mockImplementation((p) => p === Permission.BUDGETS_VIEW)
+    renderCard(makeBudget())
+    fireEvent.click(screen.getByLabelText('Actions'))
+    expect(screen.getByText('Descargar PDF')).toBeInTheDocument()
+  })
+
+  it('hides the "Download PDF" action when user lacks BUDGETS_VIEW', () => {
+    canMock.mockImplementation((p) => p !== Permission.BUDGETS_VIEW)
+    renderCard(makeBudget())
+    fireEvent.click(screen.getByLabelText('Actions'))
+    expect(screen.queryByText('Descargar PDF')).not.toBeInTheDocument()
+  })
+
+  it('calls downloadBudgetPdf with the budget id when "Download PDF" is clicked', async () => {
+    canMock.mockReturnValue(true)
+    downloadBudgetPdfMock.mockResolvedValue(undefined)
+    const b = makeBudget({ id: 'budget-42' })
+    renderCard(b)
+    fireEvent.click(screen.getByLabelText('Actions'))
+    fireEvent.click(screen.getByText('Descargar PDF'))
+    await waitFor(() => {
+      expect(downloadBudgetPdfMock).toHaveBeenCalledWith('budget-42')
+    })
+    expect(downloadBudgetPdfMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows a disabled spinner while the PDF download is in flight, then returns to idle and closes the menu', async () => {
+    canMock.mockReturnValue(true)
+    let releaseDownload: () => void = () => {}
+    const deferred = new Promise<void>((resolve) => {
+      releaseDownload = resolve
+    })
+    downloadBudgetPdfMock.mockReturnValue(deferred)
+    const b = makeBudget({ id: 'budget-99' })
+    renderCard(b)
+
+    fireEvent.click(screen.getByLabelText('Actions'))
+    fireEvent.click(screen.getByText('Descargar PDF'))
+
+    // Busy state: menu stays open, button is disabled, spinner replaces the download icon.
+    const downloadButton = await waitFor(() => screen.getByText('Descargar PDF').closest('button'))
+    expect(downloadButton).not.toBeNull()
+    expect(downloadButton).toBeDisabled()
+    expect(downloadButton?.querySelector('.animate-spin')).not.toBeNull()
+    expect(screen.getByText('Ver detalle')).toBeInTheDocument()
+
+    // Resolve the pending download.
+    await act(async () => {
+      releaseDownload()
+      await deferred
+    })
+
+    // Idle state: menu closed, so the "Download PDF" action is no longer in the document.
+    await waitFor(() => {
+      expect(screen.queryByText('Descargar PDF')).not.toBeInTheDocument()
+    })
+    expect(downloadBudgetPdfMock).toHaveBeenCalledWith('budget-99')
   })
 })

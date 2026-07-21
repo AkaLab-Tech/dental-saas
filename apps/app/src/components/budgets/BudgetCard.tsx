@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router'
-import { FileText, MoreVertical, Eye, Trash2, Calendar } from 'lucide-react'
+import { FileText, MoreVertical, Eye, Trash2, Calendar, Download, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Permission } from '@dental/shared'
 import type { Budget, BudgetStatus } from '@/lib/budget-api'
 import { getExecutedItemsCount } from '@/lib/budget-api'
+import { downloadBudgetPdf } from '@/lib/pdf-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAuthStore } from '@/stores/auth.store'
 import { formatCurrency } from '@/lib/format'
+import { Can } from '@/components/auth'
 
 interface BudgetCardProps {
   budget: Budget
@@ -36,6 +38,7 @@ export function BudgetCard({ budget, patientId, onDelete }: BudgetCardProps) {
   const { can } = usePermissions()
   const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
   const [menuOpen, setMenuOpen] = useState(false)
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   const { executed, total: totalItems } = getExecutedItemsCount(budget)
@@ -53,6 +56,18 @@ export function BudgetCard({ budget, patientId, onDelete }: BudgetCardProps) {
   }, [menuOpen])
 
   const canDelete = can(Permission.BUDGETS_DELETE)
+
+  const handleDownloadPdf = async () => {
+    setIsDownloadingPdf(true)
+    try {
+      await downloadBudgetPdf(budget.id)
+    } catch (error) {
+      console.error('Failed to download budget PDF', error)
+    } finally {
+      setIsDownloadingPdf(false)
+      setMenuOpen(false)
+    }
+  }
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
@@ -90,6 +105,21 @@ export function BudgetCard({ budget, patientId, onDelete }: BudgetCardProps) {
             </button>
             {menuOpen && (
               <div className="absolute right-0 top-8 z-10 w-48 rounded-md border border-gray-200 bg-white shadow-lg">
+                <Can permission={Permission.BUDGETS_VIEW}>
+                  <button
+                    type="button"
+                    onClick={handleDownloadPdf}
+                    disabled={isDownloadingPdf}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    {isDownloadingPdf ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    {t('budgets.downloadPdf')}
+                  </button>
+                </Can>
                 <Link
                   to={`/patients/${patientId}/budgets/${budget.id}`}
                   onClick={() => setMenuOpen(false)}
