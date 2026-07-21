@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Plus, Search, AlertCircle, Users, Loader2, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { usePatientsStore } from '@/stores/patients.store'
 import { PatientsListView } from '@/components/patients/PatientsListView'
 import { PatientFormModal } from '@/components/patients/PatientFormModal'
@@ -7,6 +8,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import type { Patient, CreatePatientData } from '@/lib/patient-api'
 
 export function PatientsPage() {
+  const { t } = useTranslation()
   const {
     patients,
     stats,
@@ -72,7 +74,7 @@ export function PatientsPage() {
   const handleRestore = async (patient: Patient) => {
     try {
       await restoreDeletedPatient(patient.id)
-      setSuccessMessage(`${patient.firstName} ${patient.lastName} ha sido restaurado`)
+      setSuccessMessage(t('patients.toast.restored', { name: `${patient.firstName} ${patient.lastName}` }))
     } catch {
       // Error is handled by store
     }
@@ -83,10 +85,10 @@ export function PatientsPage() {
       try {
         if (selectedPatient) {
           await editPatient(selectedPatient.id, data)
-          setSuccessMessage(`${data.firstName} ${data.lastName} actualizado exitosamente`)
+          setSuccessMessage(t('patients.toast.updated', { name: `${data.firstName} ${data.lastName}` }))
         } else {
           await addPatient(data)
-          setSuccessMessage(`${data.firstName} ${data.lastName} creado exitosamente`)
+          setSuccessMessage(t('patients.toast.created', { name: `${data.firstName} ${data.lastName}` }))
         }
         setIsFormOpen(false)
         setSelectedPatient(null)
@@ -94,7 +96,7 @@ export function PatientsPage() {
         // Error is handled by store
       }
     },
-    [selectedPatient, addPatient, editPatient]
+    [selectedPatient, addPatient, editPatient, t]
   )
 
   const handleConfirmDelete = async () => {
@@ -102,7 +104,9 @@ export function PatientsPage() {
     setIsDeleting(true)
     try {
       await removePatient(patientToDelete.id)
-      setSuccessMessage(`${patientToDelete.firstName} ${patientToDelete.lastName} eliminado`)
+      setSuccessMessage(
+        t('patients.toast.deleted', { name: `${patientToDelete.firstName} ${patientToDelete.lastName}` })
+      )
       setPatientToDelete(null)
     } catch {
       // Error is handled by store
@@ -119,12 +123,12 @@ export function PatientsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Pacientes</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('patients.title')}</h1>
           <p className="text-gray-600 mt-1">
-            Gestiona los pacientes de tu clínica
+            {t('patients.subtitle')}
             {stats && (
               <span className="text-gray-500 ml-1">
-                ({stats.active} de {stats.limit} disponibles)
+                {t('patients.availableCount', { active: stats.active, limit: stats.limit })}
               </span>
             )}
           </p>
@@ -136,7 +140,7 @@ export function PatientsPage() {
           className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <Plus className="h-5 w-5" />
-          Nuevo Paciente
+          {t('patients.newPatient')}
         </button>
       </div>
 
@@ -145,13 +149,12 @@ export function PatientsPage() {
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
           <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
           <div>
-            <h3 className="font-medium text-amber-800">Límite de pacientes alcanzado</h3>
+            <h3 className="font-medium text-amber-800">{t('patients.limitBanner.title')}</h3>
             <p className="text-sm text-amber-700 mt-1">
-              Tu plan actual permite hasta {stats?.limit} pacientes. Para agregar más pacientes,
-              actualiza tu plan a uno superior.
+              {t('patients.limitBanner.body', { limit: stats?.limit })}
             </p>
             <span className="mt-2 inline-block text-sm font-medium text-amber-800">
-              Ver planes disponibles
+              {t('patients.limitBanner.viewPlans')}
             </span>
           </div>
         </div>
@@ -174,7 +177,7 @@ export function PatientsPage() {
           <button
             onClick={clearError}
             className="text-red-500 hover:text-red-700 p-1"
-            aria-label="Cerrar"
+            aria-label={t('common.close')}
           >
             <X className="h-4 w-4" />
           </button>
@@ -187,7 +190,7 @@ export function PatientsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
           <input
             type="text"
-            placeholder="Buscar por nombre, email o teléfono..."
+            placeholder={t('patients.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -201,7 +204,7 @@ export function PatientsPage() {
             onChange={(e) => setShowInactive(e.target.checked)}
             className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
           />
-          Mostrar inactivos
+          {t('patients.showInactiveFilter')}
         </label>
       </div>
 
@@ -219,12 +222,12 @@ export function PatientsPage() {
             <Users className="h-8 w-8 text-gray-400" />
           </div>
           <h3 className="text-lg font-medium text-gray-900">
-            {searchQuery ? 'No se encontraron pacientes' : 'No hay pacientes'}
+            {searchQuery ? t('patients.emptyState.noResults') : t('patients.emptyState.noPatients')}
           </h3>
           <p className="text-gray-600 mt-1">
             {searchQuery
-              ? 'Intenta con otros términos de búsqueda'
-              : 'Comienza agregando tu primer paciente'}
+              ? t('patients.emptyState.noResultsHint')
+              : t('patients.emptyState.noPatientsHint')}
           </p>
           {!searchQuery && canAddPatient && (
             <button
@@ -232,7 +235,7 @@ export function PatientsPage() {
               className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="h-5 w-5" />
-              Agregar Paciente
+              {t('patients.addPatient')}
             </button>
           )}
         </div>
@@ -265,10 +268,12 @@ export function PatientsPage() {
         isOpen={!!patientToDelete}
         onClose={() => setPatientToDelete(null)}
         onConfirm={handleConfirmDelete}
-        title="Eliminar Paciente"
-        message={`¿Estás seguro de que deseas eliminar a ${patientToDelete?.firstName} ${patientToDelete?.lastName}? Esta acción se puede revertir restaurando el paciente posteriormente.`}
-        confirmText="Eliminar"
-        cancelText="Cancelar"
+        title={t('patients.deletePatient')}
+        message={t('patients.deleteConfirmMessage', {
+          name: `${patientToDelete?.firstName} ${patientToDelete?.lastName}`,
+        })}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
         variant="danger"
         isLoading={isDeleting}
       />

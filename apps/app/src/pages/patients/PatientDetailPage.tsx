@@ -311,14 +311,14 @@ export default function PatientDetailPage() {
         setPatient(data)
         setShowPrimaryTeeth(data.showPrimaryTeeth)
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Error al cargar el paciente')
+        setError(e instanceof Error ? e.message : t('patients.errors.loadPatient'))
       } finally {
         setIsLoading(false)
       }
     }
 
     fetchPatient()
-  }, [id])
+  }, [id, t])
 
   // Toggle the per-patient primary-teeth chart with optimistic UI and rollback on error.
   const handleShowPrimaryTeethToggle = useCallback(
@@ -380,11 +380,11 @@ export default function PatientDetailPage() {
       setSelectedTooth(null)
       setSelectedToothType('')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al guardar los datos del diente')
+      setError(e instanceof Error ? e.message : t('patients.errors.saveToothData'))
     } finally {
       setIsSavingTooth(false)
     }
-  }, [patient, selectedTooth])
+  }, [patient, selectedTooth, t])
 
   // Handle delete tooth data
   const handleDeleteToothData = useCallback(async () => {
@@ -398,11 +398,11 @@ export default function PatientDetailPage() {
       setSelectedTooth(null)
       setSelectedToothType('')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al eliminar los datos del diente')
+      setError(e instanceof Error ? e.message : t('patients.errors.deleteToothData'))
     } finally {
       setIsSavingTooth(false)
     }
-  }, [patient, selectedTooth])
+  }, [patient, selectedTooth, t])
 
   // Loading state
   if (isLoading) {
@@ -584,7 +584,7 @@ export default function PatientDetailPage() {
                       : 'bg-gray-100 text-gray-800'
                   }`}
                 >
-                  {patient.isActive ? 'Activo' : 'Inactivo'}
+                  {patient.isActive ? t('common.active') : t('common.inactive')}
                 </span>
                 {age !== null && (
                   <span className="text-gray-500 text-sm">{age} años</span>
@@ -697,10 +697,10 @@ export default function PatientDetailPage() {
                   <div className="flex items-center gap-3 text-gray-600 bg-gray-50 rounded-lg px-3 py-2.5">
                     <User className="h-5 w-5 text-gray-400 shrink-0" />
                     <span className="text-sm capitalize truncate">
-                      {patient.gender === 'male' && 'Masculino'}
-                      {patient.gender === 'female' && 'Femenino'}
-                      {patient.gender === 'other' && 'Otro'}
-                      {patient.gender === 'prefer_not_to_say' && 'Prefiere no decir'}
+                      {patient.gender === 'male' && t('patients.form.male')}
+                      {patient.gender === 'female' && t('patients.form.female')}
+                      {patient.gender === 'other' && t('patients.form.other')}
+                      {patient.gender === 'prefer_not_to_say' && t('patients.form.preferNotToSay')}
                     </span>
                   </div>
                 )}

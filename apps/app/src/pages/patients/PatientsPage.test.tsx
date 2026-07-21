@@ -1,7 +1,17 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
+import i18n from 'i18next'
+import '@/i18n'
 import type { Patient, PatientsStats } from '@/lib/patient-api'
+
+// PatientsPage now renders every user-facing string through t(). Initialize
+// the real i18n instance (Spanish, the app default) so assertions exercise
+// the actual translated/interpolated output rather than raw keys — this
+// mirrors the pattern used by AppointmentCard.test.tsx for the same reason.
+beforeAll(async () => {
+  await i18n.changeLanguage('es')
+})
 
 // Mock functions defined before vi.mock
 const mockFetchPatients = vi.fn()
@@ -86,11 +96,12 @@ vi.mock('@/components/patients/PatientFormModal', () => ({
 
 // Mock ConfirmDialog component
 vi.mock('@/components/ui/ConfirmDialog', () => ({
-  ConfirmDialog: ({ isOpen, onClose, onConfirm, title }: any) => {
+  ConfirmDialog: ({ isOpen, onClose, onConfirm, title, message }: any) => {
     if (!isOpen) return null
     return (
       <div data-testid="confirm-dialog" role="dialog">
         <h2>{title}</h2>
+        <p>{message}</p>
         <button onClick={onClose}>Cancelar</button>
         <button onClick={onConfirm}>Confirmar</button>
       </div>
@@ -475,6 +486,22 @@ describe('PatientsPage', () => {
       expect(screen.getByText(/eliminar paciente/i)).toBeInTheDocument()
     })
 
+    // Regression coverage for task #324: the confirm message is now built from
+    // t('patients.deleteConfirmMessage', { name }) — pins down that the
+    // {{name}} placeholder is actually replaced with the patient's name, not
+    // left as a literal "{{name}}".
+    it('should interpolate the patient name into the delete confirmation message', () => {
+      mockPatientsState.patients = [mockPatient1]
+      renderPatientsPage()
+
+      fireEvent.click(screen.getAllByRole('button', { name: /eliminar/i })[0])
+
+      expect(
+        screen.getByText('¿Estás seguro de que deseas eliminar a Juan Pérez? Esta acción se puede revertir restaurando el paciente posteriormente.')
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/{{name}}/)).not.toBeInTheDocument()
+    })
+
     it('should call removePatient when confirming deletion', async () => {
       vi.useRealTimers() // Use real timers for async test
       mockPatientsState.patients = [mockPatient1]
@@ -528,6 +555,93 @@ describe('PatientsPage', () => {
       expect(mockRestoreDeletedPatient).toHaveBeenCalledWith('3')
 
       vi.useFakeTimers() // Restore fake timers
+    })
+  })
+
+  // Regression coverage for task #324: the four success toasts are now built
+  // from t('patients.toast.<action>', { name }) instead of a hardcoded
+  // string. Each assertion pins down the real interpolated Spanish output —
+  // not a literal "{{name}}" — for the actual patient acted upon.
+  describe('success toasts (i18n interpolation)', () => {
+    it('shows the interpolated "created" toast with the new patient name after adding a patient', async () => {
+      vi.useRealTimers()
+      mockPatientsState.stats = mockStats
+      mockPatientsState.patients = [mockPatient1]
+      mockAddPatient.mockResolvedValue(undefined)
+      renderPatientsPage()
+
+      fireEvent.click(screen.getAllByRole('button', { name: /nuevo paciente/i })[0])
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /guardar/i }))
+        await new Promise(resolve => setTimeout(resolve, 50))
+      })
+
+      expect(screen.getByText('Test Patient creado exitosamente')).toBeInTheDocument()
+
+      vi.useFakeTimers()
+    })
+
+    it('shows the interpolated "updated" toast with the edited patient name after editing a patient', async () => {
+      vi.useRealTimers()
+      mockPatientsState.patients = [mockPatient1]
+      mockEditPatient.mockResolvedValue(undefined)
+      renderPatientsPage()
+
+      fireEvent.click(screen.getAllByRole('button', { name: /editar/i })[0])
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /guardar/i }))
+        await new Promise(resolve => setTimeout(resolve, 50))
+      })
+
+      expect(screen.getByText('Test Patient actualizado exitosamente')).toBeInTheDocument()
+
+      vi.useFakeTimers()
+    })
+
+    it('shows the interpolated "deleted" toast with the deleted patient\'s name after confirming deletion', async () => {
+      vi.useRealTimers()
+      mockPatientsState.patients = [mockPatient1]
+      mockRemovePatient.mockResolvedValue(undefined)
+      renderPatientsPage()
+
+      fireEvent.click(screen.getAllByRole('button', { name: /eliminar/i })[0])
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /confirmar/i }))
+        await new Promise(resolve => setTimeout(resolve, 50))
+      })
+
+      expect(screen.getByText('Juan Pérez eliminado')).toBeInTheDocument()
+
+      vi.useFakeTimers()
+    })
+
+    it('shows the interpolated "restored" toast with the restored patient\'s name', async () => {
+      vi.useRealTimers()
+      mockPatientsState.patients = [mockInactivePatient]
+      mockPatientsState.showInactive = true
+      mockRestoreDeletedPatient.mockResolvedValue(undefined)
+      renderPatientsPage()
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /restaurar/i }))
+        await new Promise(resolve => setTimeout(resolve, 50))
+      })
+
+      expect(screen.getByText('Carlos López ha sido restaurado')).toBeInTheDocument()
+
+      vi.useFakeTimers()
+    })
+  })
+
+  // Regression coverage for task #324: the limit-reached banner's "view
+  // plans" call-to-action text is a new key (patients.limitBanner.viewPlans);
+  // pin it down alongside the title/body already covered above.
+  describe('limit banner (i18n)', () => {
+    it('renders the translated "view available plans" call to action', () => {
+      mockPatientsState.stats = { ...mockStats, remaining: 0 }
+      renderPatientsPage()
+
+      expect(screen.getByText('Ver planes disponibles')).toBeInTheDocument()
     })
   })
 
