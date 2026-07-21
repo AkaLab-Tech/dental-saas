@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Plus, Search, AlertCircle, Stethoscope, Loader2, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useDoctorsStore } from '@/stores/doctors.store'
 import { DoctorsListView } from '@/components/doctors/DoctorsListView'
 import { DoctorFormModal } from '@/components/doctors/DoctorFormModal'
@@ -7,6 +8,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import type { Doctor, CreateDoctorData } from '@/lib/doctor-api'
 
 export function DoctorsPage() {
+  const { t } = useTranslation()
   const {
     doctors,
     stats,
@@ -72,7 +74,7 @@ export function DoctorsPage() {
   const handleRestore = async (doctor: Doctor) => {
     try {
       await restoreDeletedDoctor(doctor.id)
-      setSuccessMessage(`Dr. ${doctor.firstName} ${doctor.lastName} ha sido restaurado`)
+      setSuccessMessage(t('doctors.toast.restored', { name: `${doctor.firstName} ${doctor.lastName}` }))
     } catch {
       // Error is handled by store
     }
@@ -83,10 +85,10 @@ export function DoctorsPage() {
       try {
         if (selectedDoctor) {
           await editDoctor(selectedDoctor.id, data)
-          setSuccessMessage(`Dr. ${data.firstName} ${data.lastName} actualizado exitosamente`)
+          setSuccessMessage(t('doctors.toast.updated', { name: `${data.firstName} ${data.lastName}` }))
         } else {
           await addDoctor(data)
-          setSuccessMessage(`Dr. ${data.firstName} ${data.lastName} creado exitosamente`)
+          setSuccessMessage(t('doctors.toast.created', { name: `${data.firstName} ${data.lastName}` }))
         }
         setIsFormOpen(false)
         setSelectedDoctor(null)
@@ -94,7 +96,7 @@ export function DoctorsPage() {
         // Error is handled by store
       }
     },
-    [selectedDoctor, addDoctor, editDoctor]
+    [selectedDoctor, addDoctor, editDoctor, t]
   )
 
   const handleConfirmDelete = async () => {
@@ -102,7 +104,9 @@ export function DoctorsPage() {
     setIsDeleting(true)
     try {
       await removeDoctor(doctorToDelete.id)
-      setSuccessMessage(`Dr. ${doctorToDelete.firstName} ${doctorToDelete.lastName} eliminado`)
+      setSuccessMessage(
+        t('doctors.toast.deleted', { name: `${doctorToDelete.firstName} ${doctorToDelete.lastName}` })
+      )
       setDoctorToDelete(null)
     } catch {
       // Error is handled by store
@@ -119,12 +123,12 @@ export function DoctorsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Doctores</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('doctors.title')}</h1>
           <p className="text-gray-600 mt-1">
-            Gestiona los doctores de tu clínica
+            {t('doctors.subtitle')}
             {stats && (
               <span className="text-gray-500 ml-1">
-                ({stats.active} de {stats.limit} disponibles)
+                {t('doctors.availableCount', { active: stats.active, limit: stats.limit })}
               </span>
             )}
           </p>
@@ -136,7 +140,7 @@ export function DoctorsPage() {
           className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <Plus className="h-5 w-5" />
-          Nuevo Doctor
+          {t('doctors.newDoctor')}
         </button>
       </div>
 
@@ -145,13 +149,12 @@ export function DoctorsPage() {
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
           <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
           <div>
-            <h3 className="font-medium text-amber-800">Límite de doctores alcanzado</h3>
+            <h3 className="font-medium text-amber-800">{t('doctors.limitBanner.title')}</h3>
             <p className="text-sm text-amber-700 mt-1">
-              Tu plan actual permite hasta {stats?.limit} doctores. Para agregar más doctores,
-              actualiza tu plan a uno superior.
+              {t('doctors.limitBanner.body', { limit: stats?.limit })}
             </p>
             <span className="mt-2 inline-block text-sm font-medium text-amber-800 hover:text-amber-900 underline cursor-pointer">
-              Ver planes disponibles
+              {t('doctors.limitBanner.viewPlans')}
             </span>
           </div>
         </div>
@@ -174,7 +177,7 @@ export function DoctorsPage() {
           <button
             onClick={clearError}
             className="text-red-500 hover:text-red-700 p-1"
-            aria-label="Cerrar"
+            aria-label={t('common.close')}
           >
             <X className="h-4 w-4" />
           </button>
@@ -187,7 +190,7 @@ export function DoctorsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
           <input
             type="text"
-            placeholder="Buscar por nombre, email o especialidad..."
+            placeholder={t('doctors.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -201,7 +204,7 @@ export function DoctorsPage() {
             onChange={(e) => setShowInactive(e.target.checked)}
             className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
           />
-          Mostrar inactivos
+          {t('doctors.showInactiveFilter')}
         </label>
       </div>
 
@@ -219,12 +222,12 @@ export function DoctorsPage() {
             <Stethoscope className="h-8 w-8 text-gray-400" />
           </div>
           <h3 className="text-lg font-medium text-gray-900">
-            {searchQuery ? 'No se encontraron doctores' : 'No hay doctores'}
+            {searchQuery ? t('doctors.emptyState.noResults') : t('doctors.emptyState.noDoctors')}
           </h3>
           <p className="text-gray-600 mt-1">
             {searchQuery
-              ? 'Intenta con otros términos de búsqueda'
-              : 'Comienza agregando tu primer doctor'}
+              ? t('doctors.emptyState.noResultsHint')
+              : t('doctors.emptyState.noDoctorsHint')}
           </p>
           {!searchQuery && canAddDoctor && (
             <button
@@ -232,7 +235,7 @@ export function DoctorsPage() {
               className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="h-5 w-5" />
-              Agregar Doctor
+              {t('doctors.addDoctor')}
             </button>
           )}
         </div>
@@ -265,10 +268,12 @@ export function DoctorsPage() {
         isOpen={!!doctorToDelete}
         onClose={() => setDoctorToDelete(null)}
         onConfirm={handleConfirmDelete}
-        title="Eliminar Doctor"
-        message={`¿Estás seguro de que deseas eliminar a Dr. ${doctorToDelete?.firstName} ${doctorToDelete?.lastName}? Esta acción se puede revertir restaurando el doctor posteriormente.`}
-        confirmText="Eliminar"
-        cancelText="Cancelar"
+        title={t('doctors.deleteDoctor')}
+        message={t('doctors.deleteConfirmMessage', {
+          name: `${doctorToDelete?.firstName} ${doctorToDelete?.lastName}`,
+        })}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
         variant="danger"
         isLoading={isDeleting}
       />

@@ -1,7 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import i18n from 'i18next'
+import '@/i18n'
 import { DoctorFormModal } from './DoctorFormModal'
 import type { Doctor } from '@/lib/doctor-api'
+
+// DoctorFormModal now renders every user-facing string through t(). Initialize
+// the real i18n instance (Spanish, the app default) so assertions exercise
+// the actual translated output rather than raw keys.
+beforeAll(async () => {
+  await i18n.changeLanguage('es')
+})
 
 describe('DoctorFormModal', () => {
   const mockOnClose = vi.fn()
@@ -196,6 +205,68 @@ describe('DoctorFormModal', () => {
 
       await waitFor(() => {
         expect(screen.getByText('El apellido es requerido')).toBeInTheDocument()
+      })
+
+      expect(mockOnSubmit).not.toHaveBeenCalled()
+    })
+
+    // These two cases fire the form's `submit` event directly rather than
+    // clicking the submit button: the `email`/`hourlyRate` inputs carry
+    // native HTML constraints (type="email"; type="number" min="0") that
+    // jsdom (like real browsers) enforces *before* dispatching `submit` when
+    // a button-click drives the request — which would short-circuit the
+    // RHF+Zod validation path entirely and never reach our translated
+    // message. Dispatching `submit` directly exercises the
+    // handleSubmit(handleFormSubmit) wiring in isolation, matching how the
+    // sibling required/bio-length cases already validate the Zod message
+    // independent of the browser's own (non-localized) constraint UI.
+    it('should show error for invalid email', async () => {
+      render(
+        <DoctorFormModal
+          isOpen={true}
+          onClose={mockOnClose}
+          onSubmit={mockOnSubmit}
+        />
+      )
+
+      const firstNameInput = screen.getByPlaceholderText('Juan')
+      const lastNameInput = screen.getByPlaceholderText('Pérez')
+      const emailInput = screen.getByPlaceholderText('doctor@clinica.com')
+
+      fireEvent.change(firstNameInput, { target: { value: 'John' } })
+      fireEvent.change(lastNameInput, { target: { value: 'Doe' } })
+      fireEvent.change(emailInput, { target: { value: 'not-an-email' } })
+
+      fireEvent.submit(firstNameInput.closest('form')!)
+
+      await waitFor(() => {
+        expect(screen.getByText('Email inválido')).toBeInTheDocument()
+      })
+
+      expect(mockOnSubmit).not.toHaveBeenCalled()
+    })
+
+    it('should show error for non-positive hourly rate', async () => {
+      render(
+        <DoctorFormModal
+          isOpen={true}
+          onClose={mockOnClose}
+          onSubmit={mockOnSubmit}
+        />
+      )
+
+      const firstNameInput = screen.getByPlaceholderText('Juan')
+      const lastNameInput = screen.getByPlaceholderText('Pérez')
+      const hourlyRateInput = screen.getByPlaceholderText('100.00')
+
+      fireEvent.change(firstNameInput, { target: { value: 'John' } })
+      fireEvent.change(lastNameInput, { target: { value: 'Doe' } })
+      fireEvent.change(hourlyRateInput, { target: { value: '-5' } })
+
+      fireEvent.submit(firstNameInput.closest('form')!)
+
+      await waitFor(() => {
+        expect(screen.getByText('Debe ser un número positivo')).toBeInTheDocument()
       })
 
       expect(mockOnSubmit).not.toHaveBeenCalled()

@@ -1,7 +1,9 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { X, Loader2 } from 'lucide-react'
 import type { Doctor, CreateDoctorData } from '@/lib/doctor-api'
 
@@ -9,36 +11,40 @@ import type { Doctor, CreateDoctorData } from '@/lib/doctor-api'
 // Validation Schema
 // ============================================================================
 
-const doctorFormSchema = z.object({
-  firstName: z.string().min(1, 'El nombre es requerido'),
-  lastName: z.string().min(1, 'El apellido es requerido'),
-  email: z.string().email('Email inválido').optional().or(z.literal('')),
-  phone: z.string().optional(),
-  specialty: z.string().optional(),
-  licenseNumber: z.string().optional(),
-  workingDays: z.array(z.enum(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'])).optional(),
-  workingHoursStart: z.string().optional(),
-  workingHoursEnd: z.string().optional(),
-  consultingRoom: z.string().optional(),
-  bio: z.string().max(5000, 'La biografía no puede exceder 5000 caracteres').optional(),
-  hourlyRate: z.coerce.number().positive('Debe ser un número positivo').optional().or(z.literal('')),
-})
+function createDoctorFormSchema(t: TFunction) {
+  return z.object({
+    firstName: z.string().min(1, t('doctors.form.validation.firstNameRequired')),
+    lastName: z.string().min(1, t('doctors.form.validation.lastNameRequired')),
+    email: z.string().email(t('doctors.form.validation.invalidEmail')).optional().or(z.literal('')),
+    phone: z.string().optional(),
+    specialty: z.string().optional(),
+    licenseNumber: z.string().optional(),
+    workingDays: z.array(z.enum(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'])).optional(),
+    workingHoursStart: z.string().optional(),
+    workingHoursEnd: z.string().optional(),
+    consultingRoom: z.string().optional(),
+    bio: z.string().max(5000, t('doctors.form.validation.bioMaxLength')).optional(),
+    hourlyRate: z.coerce.number().positive(t('doctors.form.validation.hourlyRatePositive')).optional().or(z.literal('')),
+  })
+}
 
-type DoctorFormData = z.infer<typeof doctorFormSchema>
+type DoctorFormData = z.infer<ReturnType<typeof createDoctorFormSchema>>
 
 // ============================================================================
 // Constants
 // ============================================================================
 
-const WORKING_DAYS = [
-  { value: 'MON', label: 'Lunes' },
-  { value: 'TUE', label: 'Martes' },
-  { value: 'WED', label: 'Miércoles' },
-  { value: 'THU', label: 'Jueves' },
-  { value: 'FRI', label: 'Viernes' },
-  { value: 'SAT', label: 'Sábado' },
-  { value: 'SUN', label: 'Domingo' },
-] as const
+const WORKING_DAYS_ORDER = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const
+
+const DAY_KEY_MAP: Record<(typeof WORKING_DAYS_ORDER)[number], string> = {
+  MON: 'mon',
+  TUE: 'tue',
+  WED: 'wed',
+  THU: 'thu',
+  FRI: 'fri',
+  SAT: 'sat',
+  SUN: 'sun',
+}
 
 // ============================================================================
 // Component
@@ -59,7 +65,19 @@ export function DoctorFormModal({
   doctor,
   isLoading = false,
 }: DoctorFormModalProps) {
+  const { t } = useTranslation()
   const isEditing = !!doctor
+
+  const doctorFormSchema = useMemo(() => createDoctorFormSchema(t), [t])
+
+  const WORKING_DAYS = useMemo(
+    () =>
+      WORKING_DAYS_ORDER.map((value) => ({
+        value,
+        label: t(`doctors.days.${DAY_KEY_MAP[value]}`),
+      })),
+    [t]
+  )
 
   const {
     register,
@@ -201,11 +219,11 @@ export function DoctorFormModal({
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
             <h2 id={modalTitleId} className="text-xl font-semibold text-gray-900">
-              {isEditing ? 'Editar Doctor' : 'Nuevo Doctor'}
+              {isEditing ? t('doctors.editDoctor') : t('doctors.newDoctor')}
             </h2>
             <button
               onClick={onClose}
-              aria-label="Cerrar formulario"
+              aria-label={t('doctors.form.closeForm')}
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <X className="h-5 w-5" />
@@ -219,13 +237,13 @@ export function DoctorFormModal({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Nombre *
+                    {t('doctors.form.firstName')} *
                   </label>
                   <input
                     type="text"
                     {...register('firstName')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Juan"
+                    placeholder={t('doctors.form.placeholders.firstName')}
                   />
                   {errors.firstName && (
                     <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>
@@ -234,13 +252,13 @@ export function DoctorFormModal({
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Apellido *
+                    {t('doctors.form.lastName')} *
                   </label>
                   <input
                     type="text"
                     {...register('lastName')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Pérez"
+                    placeholder={t('doctors.form.placeholders.lastName')}
                   />
                   {errors.lastName && (
                     <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>
@@ -252,13 +270,13 @@ export function DoctorFormModal({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
+                    {t('doctors.form.email')}
                   </label>
                   <input
                     type="email"
                     {...register('email')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="doctor@clinica.com"
+                    placeholder={t('doctors.form.placeholders.email')}
                   />
                   {errors.email && (
                     <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
@@ -267,13 +285,13 @@ export function DoctorFormModal({
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Teléfono
+                    {t('doctors.form.phone')}
                   </label>
                   <input
                     type="tel"
                     {...register('phone')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="+1 234 567 890"
+                    placeholder={t('doctors.form.placeholders.phone')}
                   />
                 </div>
               </div>
@@ -282,25 +300,25 @@ export function DoctorFormModal({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Especialidad
+                    {t('doctors.form.specialty')}
                   </label>
                   <input
                     type="text"
                     {...register('specialty')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Odontología General"
+                    placeholder={t('doctors.form.placeholders.specialty')}
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Número de Licencia
+                    {t('doctors.form.licenseNumber')}
                   </label>
                   <input
                     type="text"
                     {...register('licenseNumber')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="LIC-12345"
+                    placeholder={t('doctors.form.placeholders.licenseNumber')}
                   />
                 </div>
               </div>
@@ -308,7 +326,7 @@ export function DoctorFormModal({
               {/* Working days */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Días de Trabajo
+                  {t('doctors.list.workingDays')}
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {WORKING_DAYS.map((day) => (
@@ -332,7 +350,7 @@ export function DoctorFormModal({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Hora de Inicio
+                    {t('doctors.form.workingHoursStart')}
                   </label>
                   <input
                     type="time"
@@ -343,7 +361,7 @@ export function DoctorFormModal({
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Hora de Fin
+                    {t('doctors.form.workingHoursEnd')}
                   </label>
                   <input
                     type="time"
@@ -357,19 +375,19 @@ export function DoctorFormModal({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Consultorio
+                    {t('doctors.form.consultingRoom')}
                   </label>
                   <input
                     type="text"
                     {...register('consultingRoom')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Consultorio 101"
+                    placeholder={t('doctors.form.placeholders.consultingRoom')}
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tarifa por Hora
+                    {t('doctors.form.hourlyRate')}
                   </label>
                   <input
                     type="number"
@@ -377,7 +395,7 @@ export function DoctorFormModal({
                     min="0"
                     {...register('hourlyRate')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="100.00"
+                    placeholder={t('doctors.form.placeholders.hourlyRate')}
                   />
                   {errors.hourlyRate && (
                     <p className="mt-1 text-sm text-red-600">{errors.hourlyRate.message}</p>
@@ -388,13 +406,13 @@ export function DoctorFormModal({
               {/* Bio */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Biografía
+                  {t('doctors.bio')}
                 </label>
                 <textarea
                   {...register('bio')}
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                  placeholder="Breve descripción profesional..."
+                  placeholder={t('doctors.form.placeholders.bio')}
                 />
                 {errors.bio && (
                   <p className="mt-1 text-sm text-red-600">{errors.bio.message}</p>
@@ -409,7 +427,7 @@ export function DoctorFormModal({
                 onClick={onClose}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
-                Cancelar
+                {t('common.cancel')}
               </button>
               <button
                 type="submit"
@@ -417,7 +435,7 @@ export function DoctorFormModal({
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {(isSubmitting || isLoading) && <Loader2 className="h-4 w-4 animate-spin" />}
-                {isEditing ? 'Guardar Cambios' : 'Crear Doctor'}
+                {isEditing ? t('doctors.form.saveChanges') : t('doctors.form.createDoctor')}
               </button>
             </div>
           </form>

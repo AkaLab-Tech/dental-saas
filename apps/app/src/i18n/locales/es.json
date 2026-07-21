@@ -270,19 +270,95 @@
     "editDoctor": "Editar Doctor",
     "noDoctors": "No hay doctores registrados",
     "addDoctor": "Agregar Doctor",
+    "deleteDoctor": "Eliminar Doctor",
+    "deleteConfirmMessage": "¿Estás seguro de que deseas eliminar a Dr. {{name}}? Esta acción se puede revertir restaurando el doctor posteriormente.",
+    "availableCount": "({{active}} de {{limit}} disponibles)",
+    "searchPlaceholder": "Buscar por nombre, email o especialidad...",
+    "showInactiveFilter": "Mostrar inactivos",
+    "bio": "Biografía",
+    "limitBanner": {
+      "title": "Límite de doctores alcanzado",
+      "body": "Tu plan actual permite hasta {{limit}} doctores. Para agregar más doctores, actualiza tu plan a uno superior.",
+      "viewPlans": "Ver planes disponibles"
+    },
+    "emptyState": {
+      "noDoctors": "No hay doctores",
+      "noDoctorsHint": "Comienza agregando tu primer doctor",
+      "noResults": "No se encontraron doctores",
+      "noResultsHint": "Intenta con otros términos de búsqueda"
+    },
+    "toast": {
+      "created": "Dr. {{name}} creado exitosamente",
+      "updated": "Dr. {{name}} actualizado exitosamente",
+      "deleted": "Dr. {{name}} eliminado",
+      "restored": "Dr. {{name}} ha sido restaurado"
+    },
+    "days": {
+      "mon": "Lunes",
+      "tue": "Martes",
+      "wed": "Miércoles",
+      "thu": "Jueves",
+      "fri": "Viernes",
+      "sat": "Sábado",
+      "sun": "Domingo",
+      "short": {
+        "mon": "L",
+        "tue": "M",
+        "wed": "X",
+        "thu": "J",
+        "fri": "V",
+        "sat": "S",
+        "sun": "D"
+      }
+    },
     "form": {
       "firstName": "Nombre",
       "lastName": "Apellido",
       "email": "Correo electrónico",
       "phone": "Teléfono",
       "specialty": "Especialidad",
-      "licenseNumber": "Número de licencia"
+      "licenseNumber": "Número de licencia",
+      "consultingRoom": "Consultorio",
+      "hourlyRate": "Tarifa por Hora",
+      "workingHoursStart": "Hora de Inicio",
+      "workingHoursEnd": "Hora de Fin",
+      "closeForm": "Cerrar formulario",
+      "saveChanges": "Guardar Cambios",
+      "createDoctor": "Crear Doctor",
+      "placeholders": {
+        "firstName": "Juan",
+        "lastName": "Pérez",
+        "email": "doctor@clinica.com",
+        "phone": "+1 234 567 890",
+        "specialty": "Odontología General",
+        "licenseNumber": "LIC-12345",
+        "consultingRoom": "Consultorio 101",
+        "hourlyRate": "100.00",
+        "bio": "Breve descripción profesional..."
+      },
+      "validation": {
+        "firstNameRequired": "El nombre es requerido",
+        "lastNameRequired": "El apellido es requerido",
+        "invalidEmail": "Email inválido",
+        "bioMaxLength": "La biografía no puede exceder 5000 caracteres",
+        "hourlyRatePositive": "Debe ser un número positivo"
+      }
     },
     "list": {
       "name": "Nombre",
       "contact": "Contacto",
       "workingDays": "Días de trabajo",
       "viewRecord": "Ver detalle"
+    },
+    "detail": {
+      "backToDoctors": "Volver a doctores",
+      "loadError": "Error al cargar el doctor",
+      "saveError": "Error al guardar los cambios",
+      "workSchedule": "Horario de Trabajo",
+      "schedule": "Horario",
+      "license": "Matrícula: {{license}}",
+      "consultingRoom": "Consultorio: {{room}}",
+      "hourlyRate": "Tarifa: ${{rate}}/hr"
     }
   },
   "labworks": {
