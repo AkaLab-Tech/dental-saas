@@ -146,6 +146,32 @@
     "noPatients": "لا يوجد مرضى مسجلين",
     "addPatient": "إضافة مريض",
     "deletePatient": "حذف المريض",
+    "deleteConfirmMessage": "هل أنت متأكد من أنك تريد حذف {{name}}؟ يمكن التراجع عن هذا الإجراء لاحقًا عن طريق استعادة المريض.",
+    "availableCount": "({{active}} من {{limit}} متاح)",
+    "searchPlaceholder": "ابحث بالاسم أو البريد الإلكتروني أو الهاتف...",
+    "showInactiveFilter": "إظهار غير النشطين",
+    "limitBanner": {
+      "title": "تم الوصول إلى حد المرضى",
+      "body": "تسمح خطتك الحالية بما يصل إلى {{limit}} مريض. لإضافة المزيد من المرضى، قم بالترقية إلى خطة أعلى.",
+      "viewPlans": "عرض الخطط المتاحة"
+    },
+    "emptyState": {
+      "noPatients": "لا يوجد مرضى",
+      "noPatientsHint": "ابدأ بإضافة أول مريض لك",
+      "noResults": "لم يتم العثور على مرضى",
+      "noResultsHint": "جرّب مصطلحات بحث أخرى"
+    },
+    "toast": {
+      "created": "تم إنشاء {{name}} بنجاح",
+      "updated": "تم تحديث {{name}} بنجاح",
+      "deleted": "تم حذف {{name}}",
+      "restored": "تمت استعادة {{name}}"
+    },
+    "errors": {
+      "loadPatient": "خطأ في تحميل بيانات المريض",
+      "saveToothData": "خطأ في حفظ بيانات السن",
+      "deleteToothData": "خطأ في حذف بيانات السن"
+    },
     "exportPdf": "تصدير PDF",
     "medicalHistory": "التاريخ الطبي",
     "dentalChart": "مخطط الأسنان",

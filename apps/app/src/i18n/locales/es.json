@@ -146,6 +146,32 @@
     "noPatients": "No hay pacientes registrados",
     "addPatient": "Agregar Paciente",
     "deletePatient": "Eliminar Paciente",
+    "deleteConfirmMessage": "¿Estás seguro de que deseas eliminar a {{name}}? Esta acción se puede revertir restaurando el paciente posteriormente.",
+    "availableCount": "({{active}} de {{limit}} disponibles)",
+    "searchPlaceholder": "Buscar por nombre, email o teléfono...",
+    "showInactiveFilter": "Mostrar inactivos",
+    "limitBanner": {
+      "title": "Límite de pacientes alcanzado",
+      "body": "Tu plan actual permite hasta {{limit}} pacientes. Para agregar más pacientes, actualiza tu plan a uno superior.",
+      "viewPlans": "Ver planes disponibles"
+    },
+    "emptyState": {
+      "noPatients": "No hay pacientes",
+      "noPatientsHint": "Comienza agregando tu primer paciente",
+      "noResults": "No se encontraron pacientes",
+      "noResultsHint": "Intenta con otros términos de búsqueda"
+    },
+    "toast": {
+      "created": "{{name}} creado exitosamente",
+      "updated": "{{name}} actualizado exitosamente",
+      "deleted": "{{name}} eliminado",
+      "restored": "{{name}} ha sido restaurado"
+    },
+    "errors": {
+      "loadPatient": "Error al cargar el paciente",
+      "saveToothData": "Error al guardar los datos del diente",
+      "deleteToothData": "Error al eliminar los datos del diente"
+    },
     "exportPdf": "Exportar PDF",
     "medicalHistory": "Historial Médico",
     "dentalChart": "Odontograma",

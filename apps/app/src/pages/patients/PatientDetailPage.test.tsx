@@ -4,7 +4,7 @@ import { render, screen, waitFor, fireEvent, within } from '@testing-library/rea
 import { MemoryRouter, Routes, Route } from 'react-router'
 import { Permission, ToothStatus, type TeethData } from '@dental/shared'
 import PatientDetailPage from './PatientDetailPage'
-import { getPatientById, deleteToothData } from '@/lib/patient-api'
+import { getPatientById, deleteToothData, updateToothData } from '@/lib/patient-api'
 import { downloadPatientHistoryPdf } from '@/lib/pdf-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import type { Patient } from '@/lib/patient-api'
@@ -87,9 +87,14 @@ vi.mock('@/components/appointments/AppointmentFormModal', () => ({
     isOpen ? <div data-testid="appointment-form-modal" role="dialog" /> : null,
 }))
 
+// `t` must keep a stable identity across renders (the real react-i18next hook
+// memoizes it) — several callbacks/effects in the component now list `t` in
+// their dependency arrays, so a fresh function per render here would cause an
+// infinite effect loop (regression guard for task #324).
+const mockT = (key: string) => key
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: mockT,
     i18n: { language: 'es' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
@@ -661,5 +666,97 @@ describe('PatientDetailPage — visual polish (task #218)', () => {
       })
       expect(pdfButton).not.toBeDisabled()
     })
+  })
+})
+
+// ============================================================================
+// Task #324 — i18n migration: fallback error keys, active/inactive badge,
+// gender labels
+// ============================================================================
+
+describe('PatientDetailPage — i18n migrated error/status/gender text (task #324)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPermissions(true)
+  })
+
+  it('falls back to the translated patients.errors.loadPatient key when the patient fetch rejects with a non-Error value', async () => {
+    ;(getPatientById as unknown as Mock).mockRejectedValue('network exploded')
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('patients.errors.loadPatient')).toBeInTheDocument()
+    })
+  })
+
+  it('shows the raw Error message instead of the fallback key when the patient fetch rejects with an Error instance', async () => {
+    ;(getPatientById as unknown as Mock).mockRejectedValue(new Error('Patient not found'))
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Patient not found')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('patients.errors.loadPatient')).not.toBeInTheDocument()
+  })
+
+  it('falls back to the translated patients.errors.saveToothData key when saving tooth data rejects with a non-Error value', async () => {
+    ;(getPatientById as unknown as Mock).mockResolvedValue(makePatient({ teeth: sampleTeeth }))
+    ;(updateToothData as unknown as Mock).mockRejectedValue('save exploded')
+    await renderLoadedPage()
+
+    fireEvent.click(screen.getByRole('button', { name: /#11/ }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'common.save' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('patients.errors.saveToothData')).toBeInTheDocument()
+    })
+  })
+
+  // The modal's footer "delete" action (rendered only when the tooth already
+  // has a note/non-healthy status) is wired to handleDeleteToothData — the
+  // migrated callback. The sidebar chip's hover-delete "x" button uses a
+  // separate, still-unmigrated inline handler (out of scope for #324) and is
+  // covered by the pre-existing "still wires the hover-to-delete chip button"
+  // test above.
+  it('falls back to the translated patients.errors.deleteToothData key when deleting tooth data from the modal rejects with a non-Error value', async () => {
+    ;(getPatientById as unknown as Mock).mockResolvedValue(makePatient({ teeth: sampleTeeth }))
+    ;(deleteToothData as unknown as Mock).mockRejectedValue('delete exploded')
+    await renderLoadedPage()
+
+    fireEvent.click(screen.getByRole('button', { name: /#11/ }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'common.delete' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('patients.errors.deleteToothData')).toBeInTheDocument()
+    })
+  })
+
+  it('renders the translated common.active key for an active patient (and not common.inactive)', async () => {
+    ;(getPatientById as unknown as Mock).mockResolvedValue(makePatient({ isActive: true }))
+    await renderLoadedPage()
+
+    expect(screen.getByText('common.active')).toBeInTheDocument()
+    expect(screen.queryByText('common.inactive')).not.toBeInTheDocument()
+  })
+
+  it('renders the translated common.inactive key for an inactive patient (and not common.active)', async () => {
+    ;(getPatientById as unknown as Mock).mockResolvedValue(makePatient({ isActive: false }))
+    await renderLoadedPage()
+
+    expect(screen.getByText('common.inactive')).toBeInTheDocument()
+    expect(screen.queryByText('common.active')).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['male', 'patients.form.male'],
+    ['female', 'patients.form.female'],
+    ['other', 'patients.form.other'],
+    ['prefer_not_to_say', 'patients.form.preferNotToSay'],
+  ] as const)('renders the translated key for gender=%s', async (gender, expectedKey) => {
+    ;(getPatientById as unknown as Mock).mockResolvedValue(makePatient({ gender }))
+    await renderLoadedPage()
+
+    expect(screen.getByText(expectedKey)).toBeInTheDocument()
   })
 })

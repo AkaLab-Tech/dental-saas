@@ -146,6 +146,32 @@
     "noPatients": "No patients registered",
     "addPatient": "Add Patient",
     "deletePatient": "Delete Patient",
+    "deleteConfirmMessage": "Are you sure you want to delete {{name}}? This action can be reverted by restoring the patient afterwards.",
+    "availableCount": "({{active}} of {{limit}} available)",
+    "searchPlaceholder": "Search by name, email or phone...",
+    "showInactiveFilter": "Show inactive",
+    "limitBanner": {
+      "title": "Patient limit reached",
+      "body": "Your current plan allows up to {{limit}} patients. To add more patients, upgrade to a higher plan.",
+      "viewPlans": "View available plans"
+    },
+    "emptyState": {
+      "noPatients": "No patients",
+      "noPatientsHint": "Start by adding your first patient",
+      "noResults": "No patients found",
+      "noResultsHint": "Try other search terms"
+    },
+    "toast": {
+      "created": "{{name}} created successfully",
+      "updated": "{{name}} updated successfully",
+      "deleted": "{{name}} deleted",
+      "restored": "{{name}} has been restored"
+    },
+    "errors": {
+      "loadPatient": "Error loading patient",
+      "saveToothData": "Error saving tooth data",
+      "deleteToothData": "Error deleting tooth data"
+    },
     "exportPdf": "Export PDF",
     "medicalHistory": "Medical History",
     "dentalChart": "Dental Chart",
