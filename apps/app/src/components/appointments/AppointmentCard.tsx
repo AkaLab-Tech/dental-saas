@@ -126,7 +126,7 @@ export function AppointmentCard({
           <button
             onClick={() => setShowMenu(!showMenu)}
             className="p-1 hover:bg-gray-100 rounded transition-colors"
-            aria-label="Más opciones"
+            aria-label={t('appointments.moreOptions')}
           >
             <MoreVertical className="h-5 w-5 text-gray-400" />
           </button>

@@ -266,6 +266,31 @@ function getItemCheckbox(description: string) {
   return within(row).getByRole('checkbox')
 }
 
+// Regression coverage for task #323 (i18n migration): the header close
+// button's aria-label used to be a hardcoded Spanish literal ("Cerrar
+// formulario"); it is now wired through t('appointments.form.closeForm').
+// This pins down that the real es locale resource still resolves to that
+// exact string, and that the button remains queryable/functional by that name.
+describe('AppointmentFormModal — close button label (i18n)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getDoctorsMock.mockResolvedValue([mockDoctor])
+    getPatientsMock.mockResolvedValue([mockPatientRecord])
+    listBudgetsByPatientMock.mockResolvedValue({ data: [], total: 0 })
+    getAppointmentBudgetItemsMock.mockResolvedValue([])
+  })
+
+  it('renders the header close button with the translated "Cerrar formulario" aria-label and calls onClose when clicked', async () => {
+    const { onClose } = renderModal()
+    await waitForOptionsLoaded()
+
+    const closeButton = screen.getByRole('button', { name: 'Cerrar formulario' })
+    fireEvent.click(closeButton)
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('AppointmentFormModal — budget items association', () => {
   beforeEach(() => {
     vi.clearAllMocks()

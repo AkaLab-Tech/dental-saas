@@ -395,11 +395,11 @@ export function AppointmentFormModal({
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
             <h2 id={modalTitleId} className="text-xl font-semibold text-gray-900 flex items-center gap-2">
               <Calendar className="h-5 w-5 text-blue-600" />
-              {isEditing ? 'Editar Cita' : 'Nueva Cita'}
+              {isEditing ? t('appointments.editAppointment') : t('appointments.newAppointment')}
             </h2>
             <button
               onClick={onClose}
-              aria-label="Cerrar formulario"
+              aria-label={t('appointments.form.closeForm')}
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <X className="h-5 w-5" />
@@ -422,7 +422,7 @@ export function AppointmentFormModal({
                 <div>
                   <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
                     <User className="h-4 w-4" />
-                    Paciente *
+                    {t('appointments.form.patient')} *
                   </label>
                   <PatientSearchCombobox
                     selectedPatient={selectedPatient}
@@ -437,14 +437,14 @@ export function AppointmentFormModal({
                 <div>
                   <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
                     <Stethoscope className="h-4 w-4" />
-                    Doctor *
+                    {t('appointments.form.doctor')} *
                   </label>
                   <select
                     {...register('doctorId')}
                     disabled={loadingOptions}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
                   >
-                    <option value="">Seleccionar doctor...</option>
+                    <option value="">{t('appointments.form.selectDoctor')}</option>
                     {doctors.map((doctor) => (
                       <option key={doctor.id} value={doctor.id}>
                         {doctor.firstName} {doctor.lastName} {doctor.specialty ? `(${doctor.specialty})` : ''}
@@ -462,7 +462,7 @@ export function AppointmentFormModal({
                 <div>
                   <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
                     <Calendar className="h-4 w-4" />
-                    Fecha *
+                    {t('appointments.form.date')} *
                   </label>
                   <input
                     type="date"
@@ -477,7 +477,7 @@ export function AppointmentFormModal({
                 <div>
                   <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
                     <Clock className="h-4 w-4" />
-                    Hora Inicio *
+                    {t('appointments.form.startTime')} *
                   </label>
                   <input
                     type="time"
@@ -492,7 +492,7 @@ export function AppointmentFormModal({
                 <div>
                   <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
                     <Clock className="h-4 w-4" />
-                    Hora Fin *
+                    {t('appointments.form.endTime')} *
                   </label>
                   <input
                     type="time"
@@ -509,12 +509,12 @@ export function AppointmentFormModal({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tipo de Cita
+                    {t('appointments.form.type')}
                   </label>
                   <input
                     type="text"
                     {...register('type')}
-                    placeholder="Ej: Limpieza, Revisión, Ortodoncia..."
+                    placeholder={t('appointments.form.typePlaceholder')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -522,7 +522,7 @@ export function AppointmentFormModal({
                 {isEditing && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Estado
+                      {t('appointments.statusLabel')}
                     </label>
                     <select
                       {...register('status')}
@@ -542,7 +542,7 @@ export function AppointmentFormModal({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Costo ($)
+                    {t('appointments.form.cost')} ($)
                   </label>
                   <input
                     type="number"
@@ -563,16 +563,16 @@ export function AppointmentFormModal({
                       className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-60"
                     />
                     <span className="text-sm font-medium text-gray-700">
-                      Pagado
+                      {t('appointments.form.isPaid')}
                     </span>
                   </label>
                   {isAlreadyPaid ? (
                     <p className="mt-1 text-xs text-gray-500">
-                      Para revertir el pago, elimine la entrega correspondiente desde la sección de pagos del paciente.
+                      {t('appointments.form.alreadyPaidHint')}
                     </p>
                   ) : (
                     <p className="mt-1 text-xs text-gray-500">
-                      Al marcar, se registra una entrega que se aplica a la deuda más antigua del paciente.
+                      {t('appointments.form.isPaidHint')}
                     </p>
                   )}
                 </div>
@@ -631,12 +631,12 @@ export function AppointmentFormModal({
               {/* Notes */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notas
+                  {t('appointments.form.notes')}
                 </label>
                 <textarea
                   {...register('notes')}
                   rows={3}
-                  placeholder="Notas adicionales sobre la cita..."
+                  placeholder={t('appointments.form.notesPlaceholder')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
                 />
               </div>
@@ -650,7 +650,7 @@ export function AppointmentFormModal({
                 disabled={isSubmitting || isLoading}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
               >
-                Cancelar
+                {t('common.cancel')}
               </button>
               <button
                 type="submit"
@@ -658,7 +658,7 @@ export function AppointmentFormModal({
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
                 {(isSubmitting || isLoading) && <Loader2 className="h-4 w-4 animate-spin" />}
-                {isEditing ? 'Guardar Cambios' : 'Crear Cita'}
+                {isEditing ? t('appointments.form.saveChanges') : t('appointments.form.createAppointment')}
               </button>
             </div>
           </form>
