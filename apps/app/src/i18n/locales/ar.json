@@ -82,6 +82,7 @@
     "previousMonth": "الشهر السابق",
     "nextMonth": "الشهر التالي",
     "noAppointmentsInMonth": "لا توجد مواعيد في {{month}}",
+    "moreOptions": "خيارات إضافية",
     "status": {
       "scheduled": "مجدول",
       "confirmed": "مؤكد",
@@ -102,7 +103,13 @@
       "cost": "التكلفة",
       "isPaid": "مدفوع",
       "isPaidHint": "عند التحديد، يتم تسجيل دفعة وتطبيقها على أقدم رصيد مستحق للمريض.",
-      "alreadyPaidHint": "لإلغاء الدفعة، احذف الإدخال المقابل من قسم المدفوعات."
+      "alreadyPaidHint": "لإلغاء الدفعة، احذف الإدخال المقابل من قسم المدفوعات.",
+      "closeForm": "إغلاق النموذج",
+      "selectDoctor": "اختر طبيبًا...",
+      "typePlaceholder": "مثال: تنظيف، فحص، تقويم أسنان...",
+      "notesPlaceholder": "ملاحظات إضافية حول الموعد...",
+      "saveChanges": "حفظ التغييرات",
+      "createAppointment": "إنشاء موعد"
     },
     "budgetItems": {
       "title": "بنود الميزانية",

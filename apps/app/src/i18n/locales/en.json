@@ -82,6 +82,7 @@
     "previousMonth": "Previous month",
     "nextMonth": "Next month",
     "noAppointmentsInMonth": "No appointments found in {{month}}",
+    "moreOptions": "More options",
     "status": {
       "scheduled": "Scheduled",
       "confirmed": "Confirmed",
@@ -102,7 +103,13 @@
       "cost": "Cost",
       "isPaid": "Paid",
       "isPaidHint": "When checked, a payment is recorded and applied to the patient's oldest outstanding balance.",
-      "alreadyPaidHint": "To reverse the payment, delete the corresponding entry from the payments section."
+      "alreadyPaidHint": "To reverse the payment, delete the corresponding entry from the payments section.",
+      "closeForm": "Close form",
+      "selectDoctor": "Select doctor...",
+      "typePlaceholder": "E.g.: Cleaning, Check-up, Orthodontics...",
+      "notesPlaceholder": "Additional notes about the appointment...",
+      "saveChanges": "Save Changes",
+      "createAppointment": "Create Appointment"
     },
     "budgetItems": {
       "title": "Budget items",

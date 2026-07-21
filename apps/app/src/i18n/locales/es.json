@@ -82,6 +82,7 @@
     "previousMonth": "Mes anterior",
     "nextMonth": "Mes siguiente",
     "noAppointmentsInMonth": "No se encontraron citas en {{month}}",
+    "moreOptions": "Más opciones",
     "status": {
       "scheduled": "Programada",
       "confirmed": "Confirmada",
@@ -102,7 +103,13 @@
       "cost": "Costo",
       "isPaid": "Pagado",
       "isPaidHint": "Al marcar, se registra una entrega que se aplica a la deuda más antigua del paciente.",
-      "alreadyPaidHint": "Para revertir el pago, elimine la entrega correspondiente desde la sección de pagos."
+      "alreadyPaidHint": "Para revertir el pago, elimine la entrega correspondiente desde la sección de pagos.",
+      "closeForm": "Cerrar formulario",
+      "selectDoctor": "Seleccionar doctor...",
+      "typePlaceholder": "Ej: Limpieza, Revisión, Ortodoncia...",
+      "notesPlaceholder": "Notas adicionales sobre la cita...",
+      "saveChanges": "Guardar Cambios",
+      "createAppointment": "Crear Cita"
     },
     "budgetItems": {
       "title": "Ítems de presupuesto",
