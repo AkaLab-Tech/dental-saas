@@ -1,8 +1,18 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { Permission } from '@dental/shared'
+import i18n from 'i18next'
+import '@/i18n'
 import type { Labwork, LabworksStats } from '@/lib/labwork-api'
+
+// LabworksPage now renders every user-facing string through t(). Initialize
+// the real i18n instance (Spanish, the app default) so assertions exercise
+// the actual translated/interpolated output rather than raw keys — mirrors
+// the pattern used by DoctorsPage.test.tsx for the same reason (task #325).
+beforeAll(async () => {
+  await i18n.changeLanguage('es')
+})
 
 // Mock functions
 const mockFetchLabworks = vi.fn()
@@ -264,10 +274,10 @@ describe('LabworksPage', () => {
       mockLabworksState.labworks = [mockLabwork1]
       renderLabworksPage()
 
-      expect(screen.getByText('labworks.status.overdue')).toBeInTheDocument()
+      expect(screen.getByText('Atrasado')).toBeInTheDocument()
       // mockStats.overdue is 1; scope to the stat card value next to the label
       // to avoid ambiguity with the (unrelated) "1" that could appear elsewhere.
-      const overdueLabel = screen.getByText('labworks.status.overdue')
+      const overdueLabel = screen.getByText('Atrasado')
       const overdueCard = overdueLabel.closest('div.bg-white')
       expect(overdueCard).not.toBeNull()
       expect(overdueCard).toHaveTextContent('1')
@@ -363,7 +373,7 @@ describe('LabworksPage', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
 
-      const overdueButton = screen.getByRole('button', { name: 'labworks.status.overdue' })
+      const overdueButton = screen.getByRole('button', { name: 'Atrasado' })
       fireEvent.click(overdueButton)
 
       expect(mockSetFilters).toHaveBeenCalledWith({ overdue: true, isDelivered: undefined })
@@ -381,7 +391,7 @@ describe('LabworksPage', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
 
-      const overdueButton = screen.getByRole('button', { name: 'labworks.status.overdue' })
+      const overdueButton = screen.getByRole('button', { name: 'Atrasado' })
       fireEvent.click(overdueButton)
 
       expect(mockSetFilters).toHaveBeenCalledWith({ overdue: undefined, isDelivered: undefined })
@@ -419,9 +429,9 @@ describe('LabworksPage', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
 
-      expect(screen.getByText('labworks.dateRange')).toBeInTheDocument()
-      expect(screen.getByLabelText('labworks.dateFrom')).toBeInTheDocument()
-      expect(screen.getByLabelText('labworks.dateTo')).toBeInTheDocument()
+      expect(screen.getByText('Rango de Fechas')).toBeInTheDocument()
+      expect(screen.getByLabelText('Desde')).toBeInTheDocument()
+      expect(screen.getByLabelText('Hasta')).toBeInTheDocument()
     })
 
     it('should filter by "from" date', () => {
@@ -429,7 +439,7 @@ describe('LabworksPage', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
 
-      const fromInput = screen.getByLabelText('labworks.dateFrom')
+      const fromInput = screen.getByLabelText('Desde')
       fireEvent.change(fromInput, { target: { value: '2024-01-01' } })
 
       expect(mockSetFilters).toHaveBeenCalledWith({ from: '2024-01-01' })
@@ -440,7 +450,7 @@ describe('LabworksPage', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
 
-      const toInput = screen.getByLabelText('labworks.dateTo')
+      const toInput = screen.getByLabelText('Hasta')
       fireEvent.change(toInput, { target: { value: '2024-01-31' } })
 
       expect(mockSetFilters).toHaveBeenCalledWith({ to: '2024-01-31' })
@@ -452,7 +462,7 @@ describe('LabworksPage', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
 
-      const fromInput = screen.getByLabelText('labworks.dateFrom')
+      const fromInput = screen.getByLabelText('Desde')
       expect(fromInput).toHaveValue('2024-01-01')
       fireEvent.change(fromInput, { target: { value: '' } })
 
@@ -465,7 +475,7 @@ describe('LabworksPage', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
 
-      const toInput = screen.getByLabelText('labworks.dateTo')
+      const toInput = screen.getByLabelText('Hasta')
       expect(toInput).toHaveValue('2024-01-31')
       fireEvent.change(toInput, { target: { value: '' } })
 
@@ -478,7 +488,7 @@ describe('LabworksPage', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
 
-      const fromInput = screen.getByLabelText('labworks.dateFrom')
+      const fromInput = screen.getByLabelText('Desde')
       fireEvent.change(fromInput, { target: { value: '2024-01-01' } })
 
       // setFilters is called with only the changed key; the store itself
@@ -539,14 +549,14 @@ describe('LabworksPage', () => {
     it('renders the export button when the user has Permission.DATA_EXPORT', () => {
       renderLabworksPage()
 
-      expect(screen.getByRole('button', { name: 'labworks.exportCsv' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Exportar CSV' })).toBeInTheDocument()
     })
 
     it('does not render the export button when the user lacks Permission.DATA_EXPORT', () => {
       mockPermissionsState.deniedPermissions = [Permission.DATA_EXPORT]
       renderLabworksPage()
 
-      expect(screen.queryByRole('button', { name: 'labworks.exportCsv' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Exportar CSV' })).not.toBeInTheDocument()
       // Sanity check: other permission-gated content (e.g. "Nuevo Trabajo",
       // gated on Permission.LABWORKS_CREATE) is unaffected by this denial.
       expect(screen.getByRole('button', { name: /nuevo trabajo/i })).toBeInTheDocument()
@@ -561,7 +571,7 @@ describe('LabworksPage', () => {
       const searchInput = screen.getByPlaceholderText(/buscar por laboratorio o paciente/i)
       fireEvent.change(searchInput, { target: { value: 'Premium' } })
 
-      const exportButton = screen.getByRole('button', { name: 'labworks.exportCsv' })
+      const exportButton = screen.getByRole('button', { name: 'Exportar CSV' })
       await act(async () => {
         fireEvent.click(exportButton)
         await new Promise((resolve) => setTimeout(resolve, 10))
@@ -584,7 +594,7 @@ describe('LabworksPage', () => {
       mockExportLabworks.mockResolvedValue(undefined)
       renderLabworksPage()
 
-      const exportButton = screen.getByRole('button', { name: 'labworks.exportCsv' })
+      const exportButton = screen.getByRole('button', { name: 'Exportar CSV' })
       await act(async () => {
         fireEvent.click(exportButton)
         await new Promise((resolve) => setTimeout(resolve, 10))
@@ -602,7 +612,7 @@ describe('LabworksPage', () => {
       mockExportLabworks.mockRejectedValue(new Error('Network error'))
       renderLabworksPage()
 
-      const exportButton = screen.getByRole('button', { name: 'labworks.exportCsv' })
+      const exportButton = screen.getByRole('button', { name: 'Exportar CSV' })
       await act(async () => {
         fireEvent.click(exportButton)
         await new Promise((resolve) => setTimeout(resolve, 10))

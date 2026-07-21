@@ -136,7 +136,7 @@ export function ExpenseCard({
             ) : (
               <Clock className="h-4 w-4" />
             )}
-            {expense.isPaid ? 'Pagado' : 'Pendiente'}
+            {expense.isPaid ? t('payment.paid') : t('payment.pending')}
           </button>
         </div>
 
@@ -182,7 +182,7 @@ export function ExpenseCard({
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
               >
                 <RotateCcw className="h-4 w-4" />
-                Restaurar
+                {t('common.restore')}
               </button>
             )
           ) : (
@@ -193,7 +193,7 @@ export function ExpenseCard({
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <Pencil className="h-4 w-4" />
-                  Editar
+                  {t('common.edit')}
                 </button>
               )}
               {can(Permission.EXPENSES_DELETE) && (
@@ -202,7 +202,7 @@ export function ExpenseCard({
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                 >
                   <Trash2 className="h-4 w-4" />
-                  Eliminar
+                  {t('common.delete')}
                 </button>
               )}
             </>

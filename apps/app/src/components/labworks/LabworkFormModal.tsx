@@ -231,7 +231,7 @@ export function LabworkFormModal({
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200">
             <h2 id={modalTitleId} className="text-xl font-semibold text-gray-900">
-              {isEditing ? 'Editar Trabajo de Laboratorio' : 'Nuevo Trabajo de Laboratorio'}
+              {isEditing ? t('labworks.form.editTitle') : t('labworks.form.createTitle')}
             </h2>
             <button
               type="button"
@@ -249,7 +249,7 @@ export function LabworkFormModal({
               {/* Patient Search */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Paciente <span className="text-red-500">*</span>
+                  {t('labworks.form.patientLabel')} <span className="text-red-500">*</span>
                 </label>
                 <PatientSearchCombobox
                   selectedPatient={selectedPatient}
@@ -327,14 +327,14 @@ export function LabworkFormModal({
               {/* Lab name */}
               <div>
                 <label htmlFor="lab" className="block text-sm font-medium text-gray-700 mb-1">
-                  Laboratorio <span className="text-red-500">*</span>
+                  {t('labworks.form.labLabel')} <span className="text-red-500">*</span>
                 </label>
                 <input
                   {...register('lab')}
                   type="text"
                   id="lab"
                   list="lab-name-suggestions"
-                  placeholder="Ej: Lab Dental Central"
+                  placeholder={t('labworks.form.labPlaceholder')}
                   autoComplete="off"
                   className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.lab ? 'border-red-300' : 'border-gray-300'
                     }`}
@@ -367,7 +367,7 @@ export function LabworkFormModal({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">
-                    Fecha <span className="text-red-500">*</span>
+                    {t('labworks.form.dateLabel')} <span className="text-red-500">*</span>
                   </label>
                   <input
                     {...register('date')}
@@ -381,7 +381,7 @@ export function LabworkFormModal({
 
                 <div>
                   <label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-1">
-                    Precio <span className="text-red-500">*</span>
+                    {t('labworks.form.priceLabel')} <span className="text-red-500">*</span>
                   </label>
                   <input
                     {...register('price')}
@@ -389,7 +389,7 @@ export function LabworkFormModal({
                     id="price"
                     min="0"
                     step="0.01"
-                    placeholder="0.00"
+                    placeholder={t('labworks.form.pricePlaceholder')}
                     className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.price ? 'border-red-300' : 'border-gray-300'
                       }`}
                   />
@@ -405,7 +405,7 @@ export function LabworkFormModal({
                     type="checkbox"
                     className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <span className="text-sm text-gray-700">Pagado</span>
+                  <span className="text-sm text-gray-700">{t('payment.paid')}</span>
                 </label>
 
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -414,20 +414,20 @@ export function LabworkFormModal({
                     type="checkbox"
                     className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <span className="text-sm text-gray-700">Entregado</span>
+                  <span className="text-sm text-gray-700">{t('labworks.status.delivered')}</span>
                 </label>
               </div>
 
               {/* Notes */}
               <div>
                 <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
-                  Notas
+                  {t('labworks.form.notesLabel')}
                 </label>
                 <textarea
                   {...register('notes')}
                   id="notes"
                   rows={3}
-                  placeholder="Notas adicionales sobre el trabajo..."
+                  placeholder={t('labworks.form.notesPlaceholder')}
                   className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${errors.notes ? 'border-red-300' : 'border-gray-300'
                     }`}
                 />
@@ -443,7 +443,7 @@ export function LabworkFormModal({
                 disabled={isSubmitting || isLoading}
                 className="px-4 py-2 text-gray-700 font-medium hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
               >
-                Cancelar
+                {t('common.cancel')}
               </button>
               <button
                 type="submit"
@@ -451,7 +451,7 @@ export function LabworkFormModal({
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {(isSubmitting || isLoading) && <Loader2 className="h-4 w-4 animate-spin" />}
-                {isEditing ? 'Guardar Cambios' : 'Crear Trabajo'}
+                {isEditing ? t('labworks.form.saveChanges') : t('labworks.createLabwork')}
               </button>
             </div>
           </form>

@@ -158,7 +158,7 @@ export function LabworkCard({
             ) : (
               <Clock className="h-4 w-4" />
             )}
-            {labwork.isPaid ? 'Pagado' : 'Pendiente'}
+            {labwork.isPaid ? t('payment.paid') : t('payment.pending')}
           </button>
 
           <button
@@ -170,7 +170,7 @@ export function LabworkCard({
               } ${isDeleted || !can(Permission.LABWORKS_UPDATE) ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <Package className="h-4 w-4" />
-            {labwork.isDelivered ? 'Entregado' : 'Por entregar'}
+            {labwork.isDelivered ? t('labworks.status.delivered') : t('labworks.notDelivered')}
           </button>
         </div>
 
@@ -216,7 +216,7 @@ export function LabworkCard({
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
               >
                 <RotateCcw className="h-4 w-4" />
-                Restaurar
+                {t('common.restore')}
               </button>
             )
           ) : (
@@ -241,7 +241,7 @@ export function LabworkCard({
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <Pencil className="h-4 w-4" />
-                  Editar
+                  {t('common.edit')}
                 </button>
               )}
               {can(Permission.LABWORKS_DELETE) && (
@@ -250,7 +250,7 @@ export function LabworkCard({
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                 >
                   <Trash2 className="h-4 w-4" />
-                  Eliminar
+                  {t('common.delete')}
                 </button>
               )}
             </>

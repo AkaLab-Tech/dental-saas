@@ -3,6 +3,7 @@ import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { X, Loader2, Plus, Minus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { Expense, CreateExpenseData } from '@/lib/expense-api'
 import { formatDateForInput } from '@/lib/format'
 
@@ -41,6 +42,7 @@ export function ExpenseFormModal({
   expense,
   isLoading = false,
 }: ExpenseFormModalProps) {
+  const { t } = useTranslation()
   const isEditing = !!expense
   const [newTag, setNewTag] = useState('')
 
@@ -174,7 +176,7 @@ export function ExpenseFormModal({
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200">
             <h2 id={modalTitleId} className="text-xl font-semibold text-gray-900">
-              {isEditing ? 'Editar Gasto' : 'Nuevo Gasto'}
+              {isEditing ? t('expenses.editExpense') : t('expenses.newExpense')}
             </h2>
             <button
               type="button"
@@ -192,13 +194,13 @@ export function ExpenseFormModal({
               {/* Issuer */}
               <div>
                 <label htmlFor="issuer" className="block text-sm font-medium text-gray-700 mb-1">
-                  Proveedor <span className="text-red-500">*</span>
+                  {t('expenses.issuerLabel')} <span className="text-red-500">*</span>
                 </label>
                 <input
                   {...register('issuer')}
                   type="text"
                   id="issuer"
-                  placeholder="Ej: Dental Supply Co."
+                  placeholder={t('expenses.issuerPlaceholder')}
                   className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.issuer ? 'border-red-300' : 'border-gray-300'
                     }`}
                 />
@@ -209,7 +211,7 @@ export function ExpenseFormModal({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">
-                    Fecha <span className="text-red-500">*</span>
+                    {t('expenses.dateLabel')} <span className="text-red-500">*</span>
                   </label>
                   <input
                     {...register('date')}
@@ -223,7 +225,7 @@ export function ExpenseFormModal({
 
                 <div>
                   <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-1">
-                    Monto <span className="text-red-500">*</span>
+                    {t('expenses.amountLabel')} <span className="text-red-500">*</span>
                   </label>
                   <input
                     {...register('amount')}
@@ -231,7 +233,7 @@ export function ExpenseFormModal({
                     id="amount"
                     min="0"
                     step="0.01"
-                    placeholder="0.00"
+                    placeholder={t('expenses.amountPlaceholder')}
                     className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.amount ? 'border-red-300' : 'border-gray-300'
                       }`}
                   />
@@ -242,7 +244,7 @@ export function ExpenseFormModal({
               {/* Items */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Artículos
+                  {t('expenses.itemsLabel')}
                 </label>
                 <div className="space-y-2">
                   {itemFields.map((field, index) => (
@@ -250,7 +252,7 @@ export function ExpenseFormModal({
                       <input
                         {...register(`items.${index}.value`)}
                         type="text"
-                        placeholder="Descripción del artículo"
+                        placeholder={t('expenses.itemPlaceholder')}
                         className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       {itemFields.length > 1 && (
@@ -270,7 +272,7 @@ export function ExpenseFormModal({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg"
                   >
                     <Plus className="h-4 w-4" />
-                    Agregar artículo
+                    {t('expenses.addItem')}
                   </button>
                 </div>
               </div>
@@ -278,7 +280,7 @@ export function ExpenseFormModal({
               {/* Tags */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Etiquetas
+                  {t('expenses.tagsLabel')}
                 </label>
                 <div className="flex flex-wrap gap-2 mb-2">
                   {tagFields.map((field, index) => (
@@ -309,7 +311,7 @@ export function ExpenseFormModal({
                         handleAddTag()
                       }
                     }}
-                    placeholder="Nueva etiqueta..."
+                    placeholder={t('expenses.newTagPlaceholder')}
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <button
@@ -330,20 +332,20 @@ export function ExpenseFormModal({
                     type="checkbox"
                     className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <span className="text-sm text-gray-700">Pagado</span>
+                  <span className="text-sm text-gray-700">{t('payment.paid')}</span>
                 </label>
               </div>
 
               {/* Notes */}
               <div>
                 <label htmlFor="note" className="block text-sm font-medium text-gray-700 mb-1">
-                  Notas
+                  {t('expenses.notesLabel')}
                 </label>
                 <textarea
                   {...register('note')}
                   id="note"
                   rows={3}
-                  placeholder="Notas adicionales..."
+                  placeholder={t('expenses.notesPlaceholder')}
                   className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${errors.note ? 'border-red-300' : 'border-gray-300'
                     }`}
                 />
@@ -359,7 +361,7 @@ export function ExpenseFormModal({
                 disabled={isSubmitting || isLoading}
                 className="px-4 py-2 text-gray-700 font-medium hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
               >
-                Cancelar
+                {t('common.cancel')}
               </button>
               <button
                 type="submit"
@@ -367,7 +369,7 @@ export function ExpenseFormModal({
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {(isSubmitting || isLoading) && <Loader2 className="h-4 w-4 animate-spin" />}
-                {isEditing ? 'Guardar Cambios' : 'Crear Gasto'}
+                {isEditing ? t('expenses.saveChanges') : t('expenses.createExpense')}
               </button>
             </div>
           </form>

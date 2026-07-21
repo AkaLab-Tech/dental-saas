@@ -1,7 +1,17 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
+import i18n from 'i18next'
+import '@/i18n'
 import type { Expense, ExpensesStats } from '@/lib/expense-api'
+
+// ExpensesPage now renders every user-facing string through t(). Initialize
+// the real i18n instance (Spanish, the app default) so assertions exercise
+// the actual translated/interpolated output rather than raw keys — mirrors
+// the pattern used by DoctorsPage.test.tsx for the same reason (task #325).
+beforeAll(async () => {
+  await i18n.changeLanguage('es')
+})
 
 // Mock functions
 const mockFetchExpenses = vi.fn()

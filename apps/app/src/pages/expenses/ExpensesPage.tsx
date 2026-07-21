@@ -9,6 +9,7 @@ import {
   Filter,
   DollarSign,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Permission } from '@dental/shared'
 import { useExpensesStore } from '@/stores/expenses.store'
 import { useAuthStore } from '@/stores/auth.store'
@@ -20,6 +21,7 @@ import { Can } from '@/components/auth'
 import type { Expense, CreateExpenseData, UpdateExpenseData } from '@/lib/expense-api'
 
 export function ExpensesPage() {
+  const { t } = useTranslation()
   const {
     expenses,
     stats,
@@ -94,7 +96,7 @@ export function ExpensesPage() {
   const handleRestore = async (expense: Expense) => {
     try {
       await restoreExpense(expense.id)
-      setSuccessMessage(`Gasto restaurado`)
+      setSuccessMessage(t('expenses.toast.restored'))
     } catch {
       // Error is handled by store
     }
@@ -113,10 +115,10 @@ export function ExpensesPage() {
       try {
         if (selectedExpense) {
           await updateExpense(selectedExpense.id, data as UpdateExpenseData)
-          setSuccessMessage(`Gasto actualizado exitosamente`)
+          setSuccessMessage(t('expenses.toast.updated'))
         } else {
           await createExpense(data)
-          setSuccessMessage(`Gasto creado exitosamente`)
+          setSuccessMessage(t('expenses.toast.created'))
         }
         setIsFormOpen(false)
         setSelectedExpense(null)
@@ -124,7 +126,7 @@ export function ExpensesPage() {
         // Error is handled by store
       }
     },
-    [selectedExpense, createExpense, updateExpense]
+    [selectedExpense, createExpense, updateExpense, t]
   )
 
   const handleConfirmDelete = async () => {
@@ -132,7 +134,7 @@ export function ExpensesPage() {
     setIsDeleting(true)
     try {
       await deleteExpense(expenseToDelete.id)
-      setSuccessMessage(`Gasto eliminado`)
+      setSuccessMessage(t('expenses.toast.deleted'))
       setExpenseToDelete(null)
     } catch {
       // Error is handled by store
@@ -150,12 +152,13 @@ export function ExpensesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Gastos</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('expenses.title')}</h1>
           <p className="text-gray-600 mt-1">
-            Gestiona los gastos de tu clínica
+            {t('expenses.subtitle')}
             {stats && (
               <span className="text-gray-500 ml-1">
-                ({stats.total} gastos, {formatCurrency(stats.totalAmount || 0, currency)})
+                ({t('expenses.statsCount', { total: stats.total })},{' '}
+                {formatCurrency(stats.totalAmount || 0, currency)})
               </span>
             )}
           </p>
@@ -167,7 +170,7 @@ export function ExpensesPage() {
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="h-5 w-5" />
-            Nuevo Gasto
+            {t('expenses.newExpense')}
           </button>
         </Can>
       </div>
@@ -181,7 +184,7 @@ export function ExpensesPage() {
                 <Receipt className="h-5 w-5 text-red-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">Total</p>
+                <p className="text-sm text-gray-500">{t('expenses.stats.total')}</p>
                 <p className="text-xl font-semibold text-gray-900">{stats.total}</p>
               </div>
             </div>
@@ -193,7 +196,7 @@ export function ExpensesPage() {
                 <DollarSign className="h-5 w-5 text-amber-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">Por Pagar</p>
+                <p className="text-sm text-gray-500">{t('expenses.stats.unpaid')}</p>
                 <p className="text-xl font-semibold text-gray-900">{stats.unpaid}</p>
               </div>
             </div>
@@ -205,7 +208,7 @@ export function ExpensesPage() {
                 <DollarSign className="h-5 w-5 text-green-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">Pagados</p>
+                <p className="text-sm text-gray-500">{t('expenses.stats.paid')}</p>
                 <p className="text-xl font-semibold text-gray-900">{stats.paid}</p>
               </div>
             </div>
@@ -217,7 +220,7 @@ export function ExpensesPage() {
                 <DollarSign className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">Monto Total</p>
+                <p className="text-sm text-gray-500">{t('expenses.stats.totalAmount')}</p>
                 <p className="text-xl font-semibold text-gray-900">
                   {formatCurrency(stats.totalAmount || 0, currency)}
                 </p>
@@ -236,7 +239,7 @@ export function ExpensesPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar por proveedor o artículos..."
+            placeholder={t('expenses.searchPlaceholder')}
             className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           {searchQuery && (
@@ -258,7 +261,7 @@ export function ExpensesPage() {
             }`}
         >
           <Filter className="h-5 w-5" />
-          Filtros
+          {t('common.filter')}
         </button>
       </div>
 
@@ -266,7 +269,7 @@ export function ExpensesPage() {
       {showFilters && (
         <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex flex-wrap gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Estado de Pago</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{t('expenses.paymentStatus')}</label>
             <div className="flex gap-2">
               <button
                 onClick={() => handleFilterChange('isPaid', undefined)}
@@ -275,7 +278,7 @@ export function ExpensesPage() {
                     : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                   }`}
               >
-                Todos
+                {t('common.all')}
               </button>
               <button
                 onClick={() => handleFilterChange('isPaid', true)}
@@ -284,7 +287,7 @@ export function ExpensesPage() {
                     : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                   }`}
               >
-                Pagados
+                {t('expenses.stats.paid')}
               </button>
               <button
                 onClick={() => handleFilterChange('isPaid', false)}
@@ -293,7 +296,7 @@ export function ExpensesPage() {
                     : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                   }`}
               >
-                Pendientes
+                {t('expenses.pendingFilter')}
               </button>
             </div>
           </div>
@@ -315,7 +318,7 @@ export function ExpensesPage() {
           <div className="flex-1">
             <p className="text-red-800">{error}</p>
             <button onClick={clearError} className="text-sm text-red-600 hover:underline mt-1">
-              Cerrar
+              {t('common.close')}
             </button>
           </div>
         </div>
@@ -332,11 +335,11 @@ export function ExpensesPage() {
       {!loading && expenses.length === 0 && (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <Receipt className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No hay gastos</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">{t('expenses.noExpenses')}</h3>
           <p className="text-gray-600 mb-4">
             {searchQuery || filters.isPaid !== undefined
-              ? 'No se encontraron gastos con los filtros aplicados'
-              : 'Comienza registrando tu primer gasto'}
+              ? t('expenses.emptyState.filtered')
+              : t('expenses.emptyState.hint')}
           </p>
           {!searchQuery && filters.isPaid === undefined && (
             <Can permission={Permission.EXPENSES_CREATE}>
@@ -345,7 +348,7 @@ export function ExpensesPage() {
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <Plus className="h-5 w-5" />
-                Crear Gasto
+                {t('expenses.createExpense')}
               </button>
             </Can>
           )}
@@ -371,7 +374,7 @@ export function ExpensesPage() {
       {/* Pagination info */}
       {total > expenses.length && (
         <div className="text-center text-sm text-gray-500">
-          Mostrando {expenses.length} de {total} gastos
+          {t('expenses.pagination', { shown: expenses.length, total })}
         </div>
       )}
 
@@ -392,9 +395,10 @@ export function ExpensesPage() {
         isOpen={!!expenseToDelete}
         onClose={() => setExpenseToDelete(null)}
         onConfirm={handleConfirmDelete}
-        title="Eliminar Gasto"
-        message={`¿Estás seguro de que deseas eliminar el gasto de "${expenseToDelete?.issuer}"? Esta acción puede deshacerse.`}
-        confirmText="Eliminar"
+        title={t('expenses.deleteExpense')}
+        message={t('expenses.deleteConfirmMessage', { issuer: expenseToDelete?.issuer })}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
         variant="danger"
         isLoading={isDeleting}
       />

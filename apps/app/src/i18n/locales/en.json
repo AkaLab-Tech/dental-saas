@@ -363,7 +363,7 @@
   },
   "labworks": {
     "title": "Lab Works",
-    "subtitle": "Manage laboratory works",
+    "subtitle": "Manage the works sent to the laboratory",
     "newLabwork": "New Lab Work",
     "editLabwork": "Edit Lab Work",
     "noLabworks": "No lab works registered",
@@ -386,7 +386,48 @@
     "dateFrom": "From",
     "dateTo": "To",
     "exportCsv": "Export CSV",
-    "downloadPdf": "Download order"
+    "downloadPdf": "Download order",
+    "searchPlaceholder": "Search by lab or patient...",
+    "paymentStatus": "Payment Status",
+    "deliveryStatus": "Delivery Status",
+    "paidFilter": "Paid",
+    "unpaidFilter": "Pending",
+    "filterDelivered": "Delivered",
+    "pendingDelivery": "Pending Delivery",
+    "notDelivered": "Pending delivery",
+    "stats": {
+      "total": "Total",
+      "unpaid": "Unpaid",
+      "totalValue": "Total Value"
+    },
+    "emptyState": {
+      "filtered": "No lab works found with the applied filters",
+      "hint": "Start by creating your first lab work"
+    },
+    "createLabwork": "Create Lab Work",
+    "statsCount": "{{total}} lab works",
+    "pagination": "Showing {{shown}} of {{total}} lab works",
+    "deleteLabwork": "Delete Lab Work",
+    "deleteConfirmMessage": "Are you sure you want to delete the work for \"{{lab}}\"? This action can be undone.",
+    "toast": {
+      "restored": "Lab work restored",
+      "updated": "Lab work updated successfully",
+      "created": "Lab work created successfully",
+      "deleted": "Lab work deleted"
+    },
+    "form": {
+      "editTitle": "Edit Lab Work",
+      "createTitle": "New Lab Work",
+      "patientLabel": "Patient",
+      "labLabel": "Laboratory",
+      "labPlaceholder": "E.g.: Central Dental Lab",
+      "dateLabel": "Date",
+      "priceLabel": "Price",
+      "pricePlaceholder": "0.00",
+      "notesLabel": "Notes",
+      "notesPlaceholder": "Additional notes about the work...",
+      "saveChanges": "Save Changes"
+    }
   },
   "budgets": {
     "title": "Budgets",
@@ -465,8 +506,45 @@
     "subtitle": "Manage your clinic expenses",
     "newExpense": "New Expense",
     "editExpense": "Edit Expense",
-    "noExpenses": "No expenses registered",
-    "totalExpenses": "Total expenses"
+    "noExpenses": "No expenses",
+    "totalExpenses": "Total expenses",
+    "searchPlaceholder": "Search by supplier or items...",
+    "paymentStatus": "Payment Status",
+    "pendingFilter": "Pending",
+    "stats": {
+      "total": "Total",
+      "unpaid": "Unpaid",
+      "paid": "Paid",
+      "totalAmount": "Total Amount"
+    },
+    "emptyState": {
+      "filtered": "No expenses found with the applied filters",
+      "hint": "Start by registering your first expense"
+    },
+    "createExpense": "Create Expense",
+    "statsCount": "{{total}} expenses",
+    "pagination": "Showing {{shown}} of {{total}} expenses",
+    "deleteExpense": "Delete Expense",
+    "deleteConfirmMessage": "Are you sure you want to delete the expense for \"{{issuer}}\"? This action can be undone.",
+    "toast": {
+      "restored": "Expense restored",
+      "updated": "Expense updated successfully",
+      "created": "Expense created successfully",
+      "deleted": "Expense deleted"
+    },
+    "issuerLabel": "Supplier",
+    "issuerPlaceholder": "E.g.: Dental Supply Co.",
+    "dateLabel": "Date",
+    "amountLabel": "Amount",
+    "amountPlaceholder": "0.00",
+    "itemsLabel": "Items",
+    "itemPlaceholder": "Item description",
+    "addItem": "Add item",
+    "tagsLabel": "Tags",
+    "newTagPlaceholder": "New tag...",
+    "notesLabel": "Notes",
+    "notesPlaceholder": "Additional notes...",
+    "saveChanges": "Save Changes"
   },
   "settings": {
     "title": "Settings",
