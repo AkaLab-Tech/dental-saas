@@ -405,6 +405,7 @@
       "hint": "ابدأ بإنشاء أول عمل مختبر"
     },
     "createLabwork": "إنشاء عمل مختبر",
+    "statsCount": "{{total}} عمل مختبر",
     "pagination": "عرض {{shown}} من {{total}} عمل مختبر",
     "deleteLabwork": "حذف عمل المختبر",
     "deleteConfirmMessage": "هل أنت متأكد أنك تريد حذف العمل الخاص بـ \"{{lab}}\"؟ يمكن التراجع عن هذا الإجراء.",
@@ -521,6 +522,7 @@
       "hint": "ابدأ بتسجيل أول مصروف لك"
     },
     "createExpense": "إنشاء مصروف",
+    "statsCount": "{{total}} مصروف",
     "pagination": "عرض {{shown}} من {{total}} مصروف",
     "deleteExpense": "حذف المصروف",
     "deleteConfirmMessage": "هل أنت متأكد أنك تريد حذف المصروف الخاص بـ \"{{issuer}}\"؟ يمكن التراجع عن هذا الإجراء.",

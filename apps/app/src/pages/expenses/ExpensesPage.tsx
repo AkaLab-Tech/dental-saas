@@ -157,7 +157,8 @@ export function ExpensesPage() {
             {t('expenses.subtitle')}
             {stats && (
               <span className="text-gray-500 ml-1">
-                ({stats.total} gastos, {formatCurrency(stats.totalAmount || 0, currency)})
+                ({t('expenses.statsCount', { total: stats.total })},{' '}
+                {formatCurrency(stats.totalAmount || 0, currency)})
               </span>
             )}
           </p>

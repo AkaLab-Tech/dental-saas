@@ -405,6 +405,7 @@
       "hint": "Start by creating your first lab work"
     },
     "createLabwork": "Create Lab Work",
+    "statsCount": "{{total}} lab works",
     "pagination": "Showing {{shown}} of {{total}} lab works",
     "deleteLabwork": "Delete Lab Work",
     "deleteConfirmMessage": "Are you sure you want to delete the work for \"{{lab}}\"? This action can be undone.",
@@ -521,6 +522,7 @@
       "hint": "Start by registering your first expense"
     },
     "createExpense": "Create Expense",
+    "statsCount": "{{total}} expenses",
     "pagination": "Showing {{shown}} of {{total}} expenses",
     "deleteExpense": "Delete Expense",
     "deleteConfirmMessage": "Are you sure you want to delete the expense for \"{{issuer}}\"? This action can be undone.",

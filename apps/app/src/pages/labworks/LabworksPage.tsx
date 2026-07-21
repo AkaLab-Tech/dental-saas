@@ -199,7 +199,8 @@ export function LabworksPage() {
             {t('labworks.subtitle')}
             {stats && (
               <span className="text-gray-500 ml-1">
-                ({stats.total} trabajos, {formatCurrency(stats.totalValue || 0, currency)})
+                ({t('labworks.statsCount', { total: stats.total })},{' '}
+                {formatCurrency(stats.totalValue || 0, currency)})
               </span>
             )}
           </p>

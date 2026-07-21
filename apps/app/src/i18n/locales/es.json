@@ -405,6 +405,7 @@
       "hint": "Comienza creando tu primer trabajo de laboratorio"
     },
     "createLabwork": "Crear Trabajo",
+    "statsCount": "{{total}} trabajos",
     "pagination": "Mostrando {{shown}} de {{total}} trabajos",
     "deleteLabwork": "Eliminar Trabajo de Laboratorio",
     "deleteConfirmMessage": "¿Estás seguro de que deseas eliminar el trabajo de \"{{lab}}\"? Esta acción puede deshacerse.",
@@ -521,6 +522,7 @@
       "hint": "Comienza registrando tu primer gasto"
     },
     "createExpense": "Crear Gasto",
+    "statsCount": "{{total}} gastos",
     "pagination": "Mostrando {{shown}} de {{total}} gastos",
     "deleteExpense": "Eliminar Gasto",
     "deleteConfirmMessage": "¿Estás seguro de que deseas eliminar el gasto de \"{{issuer}}\"? Esta acción puede deshacerse.",
