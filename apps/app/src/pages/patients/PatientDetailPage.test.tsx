@@ -5,6 +5,7 @@ import { MemoryRouter, Routes, Route } from 'react-router'
 import { Permission, ToothStatus, type TeethData } from '@dental/shared'
 import PatientDetailPage from './PatientDetailPage'
 import { getPatientById, deleteToothData } from '@/lib/patient-api'
+import { downloadPatientHistoryPdf } from '@/lib/pdf-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import type { Patient } from '@/lib/patient-api'
 
@@ -534,5 +535,131 @@ describe('PatientDetailPage — odontogram 1/3/1 layout', () => {
       expect(screen.queryByRole('button', { name: /#11/ })).not.toBeInTheDocument()
     })
     expect(screen.getByRole('heading', { name: /patients\.registeredTeeth/ }).textContent).toContain('(2)')
+  })
+})
+
+// ============================================================================
+// Task #218 — visual polish per tab
+// ============================================================================
+
+describe('PatientDetailPage — visual polish (task #218)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    ;(getPatientById as unknown as Mock).mockResolvedValue(makePatient())
+    mockPermissions(true)
+  })
+
+  describe('Patient tab card treatment', () => {
+    it('wraps the contact-info section in the shared card treatment with a User-icon heading', async () => {
+      await renderLoadedPage()
+
+      const heading = screen.getByRole('heading', { name: 'patients.patientDetails', level: 2 })
+      const card = heading.closest('.rounded-xl') as HTMLElement
+      expect(card).not.toBeNull()
+      expect(card).toHaveClass('bg-white', 'rounded-xl', 'shadow-sm', 'border', 'border-gray-100')
+      // The contact info (e.g. the patient's email) lives inside that card.
+      expect(card).toContainElement(screen.getByText('juan@example.com'))
+    })
+
+    it('lays out the contact-info grid at sm:grid-cols-2 lg:grid-cols-3 with bg-gray-50 field chips', async () => {
+      await renderLoadedPage()
+
+      const emailChip = screen.getByText('juan@example.com').closest('div') as HTMLElement
+      expect(emailChip).toHaveClass('bg-gray-50', 'rounded-lg')
+
+      const grid = emailChip.parentElement
+      expect(grid).toHaveClass('grid', 'grid-cols-1', 'sm:grid-cols-2', 'lg:grid-cols-3')
+    })
+  })
+
+  describe('Images tab card treatment', () => {
+    it('wraps the upload + gallery section in the shared card treatment with an ImageIcon heading', async () => {
+      await renderLoadedPage()
+
+      fireEvent.click(screen.getByRole('button', { name: /patients\.tabs\.images/ }))
+
+      const heading = screen.getByRole('heading', { name: 'patients.tabs.images', level: 2 })
+      const card = heading.closest('.rounded-xl') as HTMLElement
+      expect(card).not.toBeNull()
+      expect(card).toHaveClass('bg-white', 'rounded-xl', 'shadow-sm', 'border', 'border-gray-100')
+      expect(card).toContainElement(screen.getByTestId('image-upload'))
+      expect(card).toContainElement(screen.getByTestId('image-gallery'))
+    })
+  })
+
+  describe('tab bar interactive states', () => {
+    it('tints the active tab and reserves a hover background on inactive tabs', async () => {
+      await renderLoadedPage()
+
+      const patientTab = screen.getByRole('button', { name: /patients\.tabs\.patient/ })
+      const appointmentsTab = screen.getByRole('button', { name: /patients\.tabs\.appointments/ })
+
+      // Patient tab starts active.
+      expect(patientTab).toHaveClass('bg-blue-50/50')
+      expect(appointmentsTab).not.toHaveClass('bg-blue-50/50')
+      expect(appointmentsTab).toHaveClass('hover:bg-gray-50')
+
+      fireEvent.click(appointmentsTab)
+
+      // Tint follows the active tab.
+      expect(appointmentsTab).toHaveClass('bg-blue-50/50')
+      expect(patientTab).not.toHaveClass('bg-blue-50/50')
+      expect(patientTab).toHaveClass('hover:bg-gray-50')
+    })
+
+    it('gives every tab button a focus-visible ring for keyboard accessibility', async () => {
+      await renderLoadedPage()
+
+      const tabs = screen.getByRole('navigation', { name: 'Tabs' })
+      const buttons = Array.from(tabs.querySelectorAll('button'))
+      expect(buttons.length).toBeGreaterThan(0)
+      buttons.forEach((button) => {
+        expect(button).toHaveClass('focus-visible:ring-2', 'focus-visible:ring-inset', 'focus-visible:ring-blue-500')
+      })
+    })
+  })
+
+  describe('identity header action-button row', () => {
+    it('lets the identity header row (avatar/name + action buttons) wrap onto a new line on narrow viewports', async () => {
+      await renderLoadedPage()
+
+      const pdfButton = screen.getByRole('button', { name: /Exportar PDF/ })
+      const editLink = screen.getByRole('link', { name: /Editar/ })
+      // The `flex-wrap gap-3` treatment lives on the row that contains both
+      // the avatar/name block and the action-buttons block, so that they can
+      // stack instead of overflowing on narrow viewports.
+      const headerRow = pdfButton.closest('.flex-wrap') as HTMLElement
+
+      expect(headerRow).not.toBeNull()
+      expect(headerRow).toHaveClass('flex-wrap', 'gap-3')
+      expect(headerRow).toContainElement(editLink)
+      expect(headerRow).toHaveTextContent('Juan Pérez')
+    })
+  })
+
+  describe('behavior preservation: PDF export wiring survives the layout change', () => {
+    it('calls downloadPatientHistoryPdf with the current patient id when "Exportar PDF" is clicked', async () => {
+      ;(downloadPatientHistoryPdf as unknown as Mock).mockResolvedValue(undefined)
+      await renderLoadedPage()
+
+      fireEvent.click(screen.getByRole('button', { name: /Exportar PDF/ }))
+
+      await waitFor(() => {
+        expect(downloadPatientHistoryPdf).toHaveBeenCalledWith('p1')
+      })
+    })
+
+    it('surfaces an error message and re-enables the button when the PDF download fails', async () => {
+      ;(downloadPatientHistoryPdf as unknown as Mock).mockRejectedValue(new Error('boom'))
+      await renderLoadedPage()
+
+      const pdfButton = screen.getByRole('button', { name: /Exportar PDF/ })
+      fireEvent.click(pdfButton)
+
+      await waitFor(() => {
+        expect(screen.getByText('boom')).toBeInTheDocument()
+      })
+      expect(pdfButton).not.toBeDisabled()
+    })
   })
 })

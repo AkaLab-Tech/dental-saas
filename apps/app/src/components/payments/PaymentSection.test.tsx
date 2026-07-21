@@ -143,4 +143,54 @@ describe('PaymentSection', () => {
       expect(screen.queryByText('Saldo a favor')).not.toBeInTheDocument()
     })
   })
+
+  // Task #218: payments list moved from a single-column stack to a
+  // responsive card grid (grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3).
+  describe('payments list layout (task #218)', () => {
+    function makePayment(overrides: Partial<Payment> = {}): Payment {
+      return {
+        id: 'pay-1',
+        tenantId: 't1',
+        patientId: 'patient-1',
+        amount: 50,
+        date: '2024-03-01T00:00:00Z',
+        note: null,
+        createdBy: null,
+        isActive: true,
+        createdAt: '2024-03-01T00:00:00Z',
+        updatedAt: '2024-03-01T00:00:00Z',
+        ...overrides,
+      }
+    }
+
+    it('renders the payments list as a responsive grid instead of a single-column stack', async () => {
+      // Amounts (77 / 33) are chosen to be distinct from the balance-summary
+      // tile values (150 / 50 / 100) so the query below can't match both.
+      getPatientBalanceMock.mockResolvedValue(makeBalance({ totalDebt: 150, totalPaid: 50, outstanding: 100, credit: 0 }))
+      getPatientPaymentsMock.mockResolvedValue({
+        data: [makePayment({ id: 'pay-1', amount: 77 }), makePayment({ id: 'pay-2', amount: 33 })],
+        pagination: { total: 2, limit: 50, offset: 0 },
+      })
+
+      renderSection()
+
+      const firstAmount = await screen.findByText(/USD\s*77\.00/)
+      const listItem = firstAmount.closest('.rounded-lg') as HTMLElement
+      const list = listItem.parentElement
+      expect(list).toHaveClass('grid', 'grid-cols-1', 'sm:grid-cols-2', 'lg:grid-cols-3')
+      expect(list).not.toHaveClass('space-y-1.5')
+    })
+
+    it('still renders the empty state (not the grid) when there are no payments', async () => {
+      getPatientBalanceMock.mockResolvedValue(makeBalance({ totalDebt: 100, totalPaid: 100, outstanding: 0, credit: 0 }))
+      getPatientPaymentsMock.mockResolvedValue(emptyPayments)
+
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('No hay entregas registradas')).toBeInTheDocument()
+      })
+      expect(document.querySelector('.grid-cols-1.sm\\:grid-cols-2.lg\\:grid-cols-3')).not.toBeInTheDocument()
+    })
+  })
 })

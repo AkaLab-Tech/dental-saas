@@ -96,7 +96,7 @@ export function ImageGallery({ module, entityId, refreshKey = 0 }: ImageGalleryP
 
   return (
     <>
-      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
         {attachments.map((att, index) => (
           <div key={att.id} className="relative group">
             <ThumbnailImage
