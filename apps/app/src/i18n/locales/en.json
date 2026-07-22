@@ -1,4 +1,88 @@
 {
+  "admin": {
+    "common": {
+      "unexpectedError": "Unexpected error",
+      "email": "Email",
+      "password": "Password",
+      "backToLogin": "Back to login",
+      "footerCopyright": "© {{year}} Alveo System. All rights reserved.",
+      "requestNewLink": "Request new link",
+      "superAdminPanelSubtitle": "Super Admin Panel"
+    },
+    "login": {
+      "title": "Super Admin",
+      "subtitle": "Platform Administration Panel",
+      "forgotPasswordLink": "Forgot your password?",
+      "submitting": "Signing in...",
+      "submit": "Sign In",
+      "firstTimePrompt": "First time?",
+      "setupLink": "Set Up Super Admin",
+      "invalidCredentials": "Invalid credentials"
+    },
+    "forgotPassword": {
+      "title": "Recover Password",
+      "checkYourEmail": "Check your email",
+      "successMessage": "If an account exists with that email, you'll receive a link to reset your password. The link expires in 15 minutes.",
+      "checkSpamFolder": "Also check your spam folder",
+      "formIntro": "Enter your email address and we'll send you a link to reset your password.",
+      "sending": "Sending...",
+      "submit": "Send recovery link",
+      "errorProcessingRequest": "Error processing the request"
+    },
+    "resetPassword": {
+      "title": "New Password",
+      "passwordUpdated": "Password updated!",
+      "successMessage": "Your password has been reset successfully. You will be redirected to login...",
+      "redirecting": "Redirecting...",
+      "invalidLinkTitle": "Invalid link",
+      "invalidLinkMessage": "This reset link is not valid or has expired.",
+      "formIntro": "Enter your new password. It must be at least 8 characters and include uppercase, lowercase, numbers and special characters.",
+      "newPasswordLabel": "New password",
+      "confirmPasswordLabel": "Confirm password",
+      "updating": "Resetting...",
+      "submit": "Reset password",
+      "invalidResetLink": "Invalid reset link. Please request a new one.",
+      "errorResettingPassword": "Error resetting the password",
+      "tokenInvalid": "The reset link is invalid",
+      "tokenExpired": "The reset link has expired. Please request a new one.",
+      "tokenUsed": "This link has already been used. Please request a new one.",
+      "accountInactive": "The account is deactivated"
+    },
+    "setup": {
+      "checkingStatus": "Checking system status...",
+      "errorCheckingStatus": "Error checking system status",
+      "unavailableTitle": "Setup Not Available",
+      "unavailableMessage": "The super admin has already been set up. Please sign in.",
+      "goToLogin": "Go to Sign In",
+      "successTitle": "Super Admin Created!",
+      "successMessage": "Redirecting to the admin panel...",
+      "title": "Initial Setup",
+      "subtitle": "Create the platform's first Super Admin",
+      "setupKeyLabel": "Setup Key",
+      "setupKeyPlaceholder": "Enter the SETUP_KEY",
+      "firstNameLabel": "First Name",
+      "firstNamePlaceholder": "Mike",
+      "lastNameLabel": "Last Name",
+      "lastNamePlaceholder": "Admin",
+      "passwordPlaceholder": "Minimum 12 characters",
+      "confirmPasswordLabel": "Confirm Password",
+      "confirmPasswordPlaceholder": "Repeat the password",
+      "submitting": "Creating Super Admin...",
+      "submit": "Create Super Admin",
+      "errorCreatingSuperAdmin": "Error creating the super admin"
+    },
+    "validation": {
+      "invalidEmail": "Invalid email",
+      "passwordRequired": "Password is required",
+      "passwordMinLength8": "Password must be at least 8 characters",
+      "passwordMinLength12": "Password must be at least 12 characters",
+      "passwordComplexity": "Must include uppercase, lowercase, number and special character",
+      "passwordMismatch": "Passwords do not match",
+      "firstNameRequired": "First name is required",
+      "lastNameRequired": "Last name is required",
+      "setupKeyRequired": "The setup key is required"
+    }
+  },
   "common": {
     "loading": "Loading...",
     "save": "Save",

@@ -1,4 +1,88 @@
 {
+  "admin": {
+    "common": {
+      "unexpectedError": "Error inesperado",
+      "email": "Email",
+      "password": "Contraseña",
+      "backToLogin": "Volver al inicio de sesión",
+      "footerCopyright": "© {{year}} Alveo System. Todos los derechos reservados.",
+      "requestNewLink": "Solicitar nuevo enlace",
+      "superAdminPanelSubtitle": "Panel de Super Administrador"
+    },
+    "login": {
+      "title": "Super Admin",
+      "subtitle": "Panel de Administración de Plataforma",
+      "forgotPasswordLink": "¿Olvidaste tu contraseña?",
+      "submitting": "Iniciando sesión...",
+      "submit": "Iniciar Sesión",
+      "firstTimePrompt": "¿Primera vez?",
+      "setupLink": "Configurar Super Admin",
+      "invalidCredentials": "Credenciales inválidas"
+    },
+    "forgotPassword": {
+      "title": "Recuperar Contraseña",
+      "checkYourEmail": "Revisa tu correo",
+      "successMessage": "Si existe una cuenta con ese correo, recibirás un enlace para restablecer tu contraseña. El enlace expira en 15 minutos.",
+      "checkSpamFolder": "Revisa también tu carpeta de spam",
+      "formIntro": "Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.",
+      "sending": "Enviando...",
+      "submit": "Enviar enlace de recuperación",
+      "errorProcessingRequest": "Error al procesar la solicitud"
+    },
+    "resetPassword": {
+      "title": "Nueva Contraseña",
+      "passwordUpdated": "¡Contraseña actualizada!",
+      "successMessage": "Tu contraseña ha sido restablecida exitosamente. Serás redirigido al inicio de sesión...",
+      "redirecting": "Redirigiendo...",
+      "invalidLinkTitle": "Enlace inválido",
+      "invalidLinkMessage": "Este enlace de restablecimiento no es válido o ha expirado.",
+      "formIntro": "Ingresa tu nueva contraseña. Debe tener al menos 8 caracteres e incluir mayúsculas, minúsculas, números y caracteres especiales.",
+      "newPasswordLabel": "Nueva contraseña",
+      "confirmPasswordLabel": "Confirmar contraseña",
+      "updating": "Restableciendo...",
+      "submit": "Restablecer contraseña",
+      "invalidResetLink": "Enlace de restablecimiento inválido. Por favor solicita uno nuevo.",
+      "errorResettingPassword": "Error al restablecer la contraseña",
+      "tokenInvalid": "El enlace de restablecimiento es inválido",
+      "tokenExpired": "El enlace de restablecimiento ha expirado. Por favor solicita uno nuevo.",
+      "tokenUsed": "Este enlace ya fue utilizado. Por favor solicita uno nuevo.",
+      "accountInactive": "La cuenta está desactivada"
+    },
+    "setup": {
+      "checkingStatus": "Verificando estado del sistema...",
+      "errorCheckingStatus": "Error al verificar el estado del sistema",
+      "unavailableTitle": "Configuración No Disponible",
+      "unavailableMessage": "El super administrador ya ha sido configurado. Por favor inicia sesión.",
+      "goToLogin": "Ir a Iniciar Sesión",
+      "successTitle": "¡Super Admin Creado!",
+      "successMessage": "Redirigiendo al panel de administración...",
+      "title": "Configuración Inicial",
+      "subtitle": "Crea el primer Super Administrador de la plataforma",
+      "setupKeyLabel": "Clave de Configuración",
+      "setupKeyPlaceholder": "Ingresa la SETUP_KEY",
+      "firstNameLabel": "Nombre",
+      "firstNamePlaceholder": "Mike",
+      "lastNameLabel": "Apellido",
+      "lastNamePlaceholder": "Admin",
+      "passwordPlaceholder": "Mínimo 12 caracteres",
+      "confirmPasswordLabel": "Confirmar Contraseña",
+      "confirmPasswordPlaceholder": "Repite la contraseña",
+      "submitting": "Creando Super Admin...",
+      "submit": "Crear Super Admin",
+      "errorCreatingSuperAdmin": "Error al crear el super admin"
+    },
+    "validation": {
+      "invalidEmail": "Email inválido",
+      "passwordRequired": "La contraseña es requerida",
+      "passwordMinLength8": "La contraseña debe tener al menos 8 caracteres",
+      "passwordMinLength12": "La contraseña debe tener al menos 12 caracteres",
+      "passwordComplexity": "Debe incluir mayúscula, minúscula, número y carácter especial",
+      "passwordMismatch": "Las contraseñas no coinciden",
+      "firstNameRequired": "Nombre requerido",
+      "lastNameRequired": "Apellido requerido",
+      "setupKeyRequired": "La clave de configuración es requerida"
+    }
+  },
   "common": {
     "loading": "Cargando...",
     "save": "Guardar",

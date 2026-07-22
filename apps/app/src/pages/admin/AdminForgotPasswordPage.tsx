@@ -1,22 +1,29 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { adminApiClient } from '@/lib/admin-api'
 import { Shield, Loader2, AlertCircle, CheckCircle, ArrowLeft, Mail } from 'lucide-react'
 import { AxiosError } from 'axios'
 
-const forgotPasswordSchema = z.object({
-  email: z.string().email('Email inválido'),
-})
+function createForgotPasswordSchema(t: TFunction) {
+  return z.object({
+    email: z.string().email(t('admin.validation.invalidEmail')),
+  })
+}
 
-type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>
+type ForgotPasswordFormData = z.infer<ReturnType<typeof createForgotPasswordSchema>>
 
 export function AdminForgotPasswordPage() {
+  const { t } = useTranslation()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isSuccess, setIsSuccess] = useState(false)
+
+  const forgotPasswordSchema = useMemo(() => createForgotPasswordSchema(t), [t])
 
   const {
     register,
@@ -38,10 +45,10 @@ export function AdminForgotPasswordPage() {
       setIsSuccess(true)
     } catch (err) {
       if (err instanceof AxiosError) {
-        const message = err.response?.data?.error?.message || 'Error al procesar la solicitud'
+        const message = err.response?.data?.error?.message || t('admin.forgotPassword.errorProcessingRequest')
         setError(message)
       } else {
-        setError('Error inesperado')
+        setError(t('admin.common.unexpectedError'))
       }
     } finally {
       setIsSubmitting(false)
@@ -56,8 +63,8 @@ export function AdminForgotPasswordPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-600 rounded-full mb-4">
             <Shield className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Recuperar Contraseña</h1>
-          <p className="text-gray-400 mt-2">Panel de Super Administrador</p>
+          <h1 className="text-2xl font-bold text-white">{t('admin.forgotPassword.title')}</h1>
+          <p className="text-gray-400 mt-2">{t('admin.common.superAdminPanelSubtitle')}</p>
         </div>
 
         {/* Card */}
@@ -69,29 +76,28 @@ export function AdminForgotPasswordPage() {
                 <CheckCircle className="w-8 h-8 text-green-500" />
               </div>
               <h2 className="text-xl font-semibold text-white mb-2">
-                Revisa tu correo
+                {t('admin.forgotPassword.checkYourEmail')}
               </h2>
               <p className="text-gray-400 mb-6">
-                Si existe una cuenta con ese correo, recibirás un enlace para restablecer tu contraseña.
-                El enlace expira en 15 minutos.
+                {t('admin.forgotPassword.successMessage')}
               </p>
               <div className="flex items-center justify-center gap-2 text-purple-400 text-sm mb-6">
                 <Mail className="w-4 h-4" />
-                <span>Revisa también tu carpeta de spam</span>
+                <span>{t('admin.forgotPassword.checkSpamFolder')}</span>
               </div>
               <Link
                 to="/admin/login"
                 className="inline-flex items-center gap-2 text-purple-400 hover:text-purple-300 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
-                Volver al inicio de sesión
+                {t('admin.common.backToLogin')}
               </Link>
             </div>
           ) : (
             /* Form */
             <>
               <p className="text-gray-400 text-sm mb-6">
-                Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.
+                {t('admin.forgotPassword.formIntro')}
               </p>
 
               {error && (
@@ -107,7 +113,7 @@ export function AdminForgotPasswordPage() {
                     htmlFor="email"
                     className="block text-sm font-medium text-gray-300 mb-2"
                   >
-                    Email
+                    {t('admin.common.email')}
                   </label>
                   <input
                     {...register('email')}
@@ -130,10 +136,10 @@ export function AdminForgotPasswordPage() {
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
-                      Enviando...
+                      {t('admin.forgotPassword.sending')}
                     </>
                   ) : (
-                    'Enviar enlace de recuperación'
+                    t('admin.forgotPassword.submit')
                   )}
                 </button>
               </form>
@@ -144,7 +150,7 @@ export function AdminForgotPasswordPage() {
                   className="inline-flex items-center gap-2 text-gray-400 hover:text-gray-300 transition-colors text-sm"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  Volver al inicio de sesión
+                  {t('admin.common.backToLogin')}
                 </Link>
               </div>
             </>
@@ -153,7 +159,7 @@ export function AdminForgotPasswordPage() {
 
         {/* Footer */}
         <p className="text-center text-gray-500 text-sm mt-6">
-          © {new Date().getFullYear()} Alveo System. Todos los derechos reservados.
+          {t('admin.common.footerCopyright', { year: new Date().getFullYear() })}
         </p>
       </div>
     </div>
