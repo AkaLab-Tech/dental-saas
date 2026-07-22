@@ -660,6 +660,38 @@
     "recentActivity": "Actividad reciente",
     "upcomingAppointments": "Próximas citas",
     "quickActions": "Acciones rápidas",
+    "welcomeUser": "Bienvenido, {{name}}. Aquí está el resumen de tu clínica.",
+    "trendVsLastMonth": "vs mes anterior",
+    "appointmentStatusTitle": "Estado de Citas (Este Mes)",
+    "statCards": {
+      "activePatients": "Pacientes Activos",
+      "doctors": "Doctores",
+      "appointmentsThisMonth": "Citas del Mes",
+      "completedCount": "{{count}} completadas",
+      "monthlyRevenue": "Ingresos del Mes",
+      "pendingAmount": "{{amount}} pendientes",
+      "pendingLabworks": "Labworks Pendientes",
+      "unpaidCount": "{{count}} sin pagar",
+      "totalAppointments": "Total de Citas",
+      "totalAppointmentsSubtitle": "Histórico completo",
+      "newPatients": "Nuevos Pacientes (Mes)",
+      "lastMonthCount": "{{count}} el mes pasado"
+    },
+    "charts": {
+      "appointmentsByDay": "Citas por Día (Últimos 14 días)",
+      "noAppointmentData": "No hay datos de citas para mostrar",
+      "revenueByMonth": "Ingresos por Mes",
+      "noRevenueData": "No hay datos de ingresos para mostrar",
+      "revenueTooltipLabel": "Ingresos"
+    },
+    "doctorPerformance": {
+      "title": "Rendimiento de Doctores (Este Mes)",
+      "doctor": "Doctor",
+      "appointments": "Citas",
+      "completed": "Completadas",
+      "rate": "Tasa",
+      "revenue": "Ingresos"
+    },
     "doctor": {
       "title": "Mi Dashboard",
       "welcome": "Hola, {{name}}. Aquí está tu resumen.",
