@@ -1,40 +1,47 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { adminApiClient } from '@/lib/admin-api'
 import { Shield, Loader2, AlertCircle, CheckCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import { AxiosError } from 'axios'
 
-const resetPasswordSchema = z
-  .object({
-    password: z
-      .string()
-      .min(8, 'La contraseña debe tener al menos 8 caracteres')
-      .regex(
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).+$/,
-        'Debe incluir mayúscula, minúscula, número y carácter especial'
-      ),
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: 'Las contraseñas no coinciden',
-    path: ['confirmPassword'],
-  })
+function createResetPasswordSchema(t: TFunction) {
+  return z
+    .object({
+      password: z
+        .string()
+        .min(8, t('admin.validation.passwordMinLength8'))
+        .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).+$/, {
+          message: t('admin.validation.passwordComplexity'),
+        }),
+      confirmPassword: z.string(),
+    })
+    .refine((data) => data.password === data.confirmPassword, {
+      message: t('admin.validation.passwordMismatch'),
+      path: ['confirmPassword'],
+    })
+}
 
-type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>
+type ResetPasswordFormData = z.infer<ReturnType<typeof createResetPasswordSchema>>
 
 export function AdminResetPasswordPage() {
+  const { t } = useTranslation()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const token = searchParams.get('token')
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showRequestNewLink, setShowRequestNewLink] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+
+  const resetPasswordSchema = useMemo(() => createResetPasswordSchema(t), [t])
 
   const {
     register,
@@ -47,15 +54,16 @@ export function AdminResetPasswordPage() {
   // Check if token is present
   useEffect(() => {
     if (!token) {
-      setError('Enlace de restablecimiento inválido. Por favor solicita uno nuevo.')
+      setError(t('admin.resetPassword.invalidResetLink'))
     }
-  }, [token])
+  }, [token, t])
 
   const onSubmit = async (data: ResetPasswordFormData) => {
     if (!token) return
 
     setIsSubmitting(true)
     setError(null)
+    setShowRequestNewLink(false)
 
     try {
       await adminApiClient.post('/auth/reset-password', {
@@ -72,20 +80,22 @@ export function AdminResetPasswordPage() {
     } catch (err) {
       if (err instanceof AxiosError) {
         const code = err.response?.data?.error?.code
-        let message = 'Error al restablecer la contraseña'
+        let message = t('admin.resetPassword.errorResettingPassword')
 
         switch (code) {
           case 'INVALID_TOKEN':
-            message = 'El enlace de restablecimiento es inválido'
+            message = t('admin.resetPassword.tokenInvalid')
             break
           case 'TOKEN_EXPIRED':
-            message = 'El enlace de restablecimiento ha expirado. Por favor solicita uno nuevo.'
+            message = t('admin.resetPassword.tokenExpired')
+            setShowRequestNewLink(true)
             break
           case 'TOKEN_USED':
-            message = 'Este enlace ya fue utilizado. Por favor solicita uno nuevo.'
+            message = t('admin.resetPassword.tokenUsed')
+            setShowRequestNewLink(true)
             break
           case 'ACCOUNT_INACTIVE':
-            message = 'La cuenta está desactivada'
+            message = t('admin.resetPassword.accountInactive')
             break
           default:
             message = err.response?.data?.error?.message || message
@@ -93,7 +103,7 @@ export function AdminResetPasswordPage() {
 
         setError(message)
       } else {
-        setError('Error inesperado')
+        setError(t('admin.common.unexpectedError'))
       }
     } finally {
       setIsSubmitting(false)
@@ -108,8 +118,8 @@ export function AdminResetPasswordPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-600 rounded-full mb-4">
             <Shield className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Nueva Contraseña</h1>
-          <p className="text-gray-400 mt-2">Panel de Super Administrador</p>
+          <h1 className="text-2xl font-bold text-white">{t('admin.resetPassword.title')}</h1>
+          <p className="text-gray-400 mt-2">{t('admin.common.superAdminPanelSubtitle')}</p>
         </div>
 
         {/* Card */}
@@ -121,15 +131,14 @@ export function AdminResetPasswordPage() {
                 <CheckCircle className="w-8 h-8 text-green-500" />
               </div>
               <h2 className="text-xl font-semibold text-white mb-2">
-                ¡Contraseña actualizada!
+                {t('admin.resetPassword.passwordUpdated')}
               </h2>
               <p className="text-gray-400 mb-6">
-                Tu contraseña ha sido restablecida exitosamente.
-                Serás redirigido al inicio de sesión...
+                {t('admin.resetPassword.successMessage')}
               </p>
               <div className="flex items-center justify-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
-                <span className="text-purple-400 text-sm">Redirigiendo...</span>
+                <span className="text-purple-400 text-sm">{t('admin.resetPassword.redirecting')}</span>
               </div>
             </div>
           ) : (
@@ -142,23 +151,22 @@ export function AdminResetPasswordPage() {
                     <AlertCircle className="w-8 h-8 text-red-500" />
                   </div>
                   <h2 className="text-xl font-semibold text-white mb-2">
-                    Enlace inválido
+                    {t('admin.resetPassword.invalidLinkTitle')}
                   </h2>
                   <p className="text-gray-400 mb-6">
-                    Este enlace de restablecimiento no es válido o ha expirado.
+                    {t('admin.resetPassword.invalidLinkMessage')}
                   </p>
                   <Link
                     to="/admin/forgot-password"
                     className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
                   >
-                    Solicitar nuevo enlace
+                    {t('admin.common.requestNewLink')}
                   </Link>
                 </div>
               ) : (
                 <>
                   <p className="text-gray-400 text-sm mb-6">
-                    Ingresa tu nueva contraseña. Debe tener al menos 8 caracteres e incluir
-                    mayúsculas, minúsculas, números y caracteres especiales.
+                    {t('admin.resetPassword.formIntro')}
                   </p>
 
                   {error && (
@@ -166,12 +174,12 @@ export function AdminResetPasswordPage() {
                       <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
                       <div className="text-red-200 text-sm">
                         <p>{error}</p>
-                        {(error.includes('expirado') || error.includes('utilizado')) && (
+                        {showRequestNewLink && (
                           <Link
                             to="/admin/forgot-password"
                             className="text-red-300 underline hover:text-red-200 mt-2 inline-block"
                           >
-                            Solicitar nuevo enlace
+                            {t('admin.common.requestNewLink')}
                           </Link>
                         )}
                       </div>
@@ -184,7 +192,7 @@ export function AdminResetPasswordPage() {
                         htmlFor="password"
                         className="block text-sm font-medium text-gray-300 mb-2"
                       >
-                        Nueva contraseña
+                        {t('admin.resetPassword.newPasswordLabel')}
                       </label>
                       <div className="relative">
                         <input
@@ -217,7 +225,7 @@ export function AdminResetPasswordPage() {
                         htmlFor="confirmPassword"
                         className="block text-sm font-medium text-gray-300 mb-2"
                       >
-                        Confirmar contraseña
+                        {t('admin.resetPassword.confirmPasswordLabel')}
                       </label>
                       <div className="relative">
                         <input
@@ -253,10 +261,10 @@ export function AdminResetPasswordPage() {
                       {isSubmitting ? (
                         <>
                           <Loader2 className="w-5 h-5 animate-spin" />
-                          Restableciendo...
+                          {t('admin.resetPassword.updating')}
                         </>
                       ) : (
-                        'Restablecer contraseña'
+                        t('admin.resetPassword.submit')
                       )}
                     </button>
                   </form>
@@ -267,7 +275,7 @@ export function AdminResetPasswordPage() {
                       className="inline-flex items-center gap-2 text-gray-400 hover:text-gray-300 transition-colors text-sm"
                     >
                       <ArrowLeft className="w-4 h-4" />
-                      Volver al inicio de sesión
+                      {t('admin.common.backToLogin')}
                     </Link>
                   </div>
                 </>
@@ -278,7 +286,7 @@ export function AdminResetPasswordPage() {
 
         {/* Footer */}
         <p className="text-center text-gray-500 text-sm mt-6">
-          © {new Date().getFullYear()} Alveo System. Todos los derechos reservados.
+          {t('admin.common.footerCopyright', { year: new Date().getFullYear() })}
         </p>
       </div>
     </div>

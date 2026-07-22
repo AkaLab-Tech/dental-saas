@@ -1,26 +1,33 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate, Navigate, Link } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { adminApiClient } from '@/lib/admin-api'
 import { useAdminStore } from '@/stores/admin.store'
 import { Shield, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { AxiosError } from 'axios'
 
-const loginSchema = z.object({
-  email: z.string().email('Email inválido'),
-  password: z.string().min(1, 'La contraseña es requerida'),
-})
+function createLoginSchema(t: TFunction) {
+  return z.object({
+    email: z.string().email(t('admin.validation.invalidEmail')),
+    password: z.string().min(1, t('admin.validation.passwordRequired')),
+  })
+}
 
-type LoginFormData = z.infer<typeof loginSchema>
+type LoginFormData = z.infer<ReturnType<typeof createLoginSchema>>
 
 export function AdminLoginPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { setAuth, isAuthenticated } = useAdminStore()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
+
+  const loginSchema = useMemo(() => createLoginSchema(t), [t])
 
   const {
     register,
@@ -65,10 +72,10 @@ export function AdminLoginPage() {
       navigate('/admin/dashboard', { replace: true })
     } catch (err) {
       if (err instanceof AxiosError) {
-        const message = err.response?.data?.error?.message || 'Credenciales inválidas'
+        const message = err.response?.data?.error?.message || t('admin.login.invalidCredentials')
         setError(message)
       } else {
-        setError('Error inesperado')
+        setError(t('admin.common.unexpectedError'))
       }
     } finally {
       setIsSubmitting(false)
@@ -82,10 +89,10 @@ export function AdminLoginPage() {
         <div className="text-center mb-8">
           <Shield className="h-16 w-16 text-blue-500 mx-auto" />
           <h1 className="mt-4 text-3xl font-bold text-white">
-            Super Admin
+            {t('admin.login.title')}
           </h1>
           <p className="mt-2 text-gray-400">
-            Panel de Administración de Plataforma
+            {t('admin.login.subtitle')}
           </p>
         </div>
 
@@ -102,7 +109,7 @@ export function AdminLoginPage() {
             {/* Email */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">
-                Email
+                {t('admin.common.email')}
               </label>
               <input
                 {...register('email')}
@@ -119,7 +126,7 @@ export function AdminLoginPage() {
             {/* Password */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">
-                Contraseña
+                {t('admin.common.password')}
               </label>
               <div className="relative">
                 <input
@@ -146,7 +153,7 @@ export function AdminLoginPage() {
                   to="/admin/forgot-password"
                   className="text-sm text-gray-400 hover:text-gray-300 transition-colors"
                 >
-                  ¿Olvidaste tu contraseña?
+                  {t('admin.login.forgotPasswordLink')}
                 </Link>
               </div>
             </div>
@@ -160,17 +167,17 @@ export function AdminLoginPage() {
             {isSubmitting ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                Iniciando sesión...
+                {t('admin.login.submitting')}
               </>
             ) : (
-              'Iniciar Sesión'
+              t('admin.login.submit')
             )}
           </button>
 
           <p className="mt-4 text-center text-sm text-gray-500">
-            ¿Primera vez?{' '}
+            {t('admin.login.firstTimePrompt')}{' '}
             <a href="/admin/setup" className="text-blue-400 hover:text-blue-300">
-              Configurar Super Admin
+              {t('admin.login.setupLink')}
             </a>
           </p>
         </form>

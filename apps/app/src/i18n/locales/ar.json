@@ -1,4 +1,88 @@
 {
+  "admin": {
+    "common": {
+      "unexpectedError": "خطأ غير متوقع",
+      "email": "البريد الإلكتروني",
+      "password": "كلمة المرور",
+      "backToLogin": "العودة إلى تسجيل الدخول",
+      "footerCopyright": "© {{year}} Alveo System. جميع الحقوق محفوظة.",
+      "requestNewLink": "طلب رابط جديد",
+      "superAdminPanelSubtitle": "لوحة المشرف العام"
+    },
+    "login": {
+      "title": "المشرف العام",
+      "subtitle": "لوحة إدارة المنصة",
+      "forgotPasswordLink": "هل نسيت كلمة المرور؟",
+      "submitting": "جارٍ تسجيل الدخول...",
+      "submit": "تسجيل الدخول",
+      "firstTimePrompt": "أول مرة؟",
+      "setupLink": "إعداد المشرف العام",
+      "invalidCredentials": "بيانات اعتماد غير صالحة"
+    },
+    "forgotPassword": {
+      "title": "استعادة كلمة المرور",
+      "checkYourEmail": "تحقق من بريدك الإلكتروني",
+      "successMessage": "إذا كان هناك حساب مرتبط بهذا البريد الإلكتروني، ستتلقى رابطًا لإعادة تعيين كلمة المرور. تنتهي صلاحية الرابط خلال 15 دقيقة.",
+      "checkSpamFolder": "تحقق أيضًا من مجلد البريد العشوائي",
+      "formIntro": "أدخل بريدك الإلكتروني وسنرسل لك رابطًا لإعادة تعيين كلمة المرور.",
+      "sending": "جارٍ الإرسال...",
+      "submit": "إرسال رابط الاستعادة",
+      "errorProcessingRequest": "حدث خطأ أثناء معالجة الطلب"
+    },
+    "resetPassword": {
+      "title": "كلمة مرور جديدة",
+      "passwordUpdated": "تم تحديث كلمة المرور!",
+      "successMessage": "تمت إعادة تعيين كلمة المرور بنجاح. سيتم تحويلك إلى تسجيل الدخول...",
+      "redirecting": "جارٍ التحويل...",
+      "invalidLinkTitle": "رابط غير صالح",
+      "invalidLinkMessage": "رابط إعادة التعيين هذا غير صالح أو منتهي الصلاحية.",
+      "formIntro": "أدخل كلمة المرور الجديدة. يجب أن تتكون من 8 أحرف على الأقل وتتضمن حروفًا كبيرة وصغيرة وأرقامًا ورموزًا خاصة.",
+      "newPasswordLabel": "كلمة مرور جديدة",
+      "confirmPasswordLabel": "تأكيد كلمة المرور",
+      "updating": "جارٍ إعادة التعيين...",
+      "submit": "إعادة تعيين كلمة المرور",
+      "invalidResetLink": "رابط إعادة التعيين غير صالح. يرجى طلب رابط جديد.",
+      "errorResettingPassword": "خطأ في إعادة تعيين كلمة المرور",
+      "tokenInvalid": "رابط إعادة التعيين غير صالح",
+      "tokenExpired": "انتهت صلاحية رابط إعادة التعيين. يرجى طلب رابط جديد.",
+      "tokenUsed": "تم استخدام هذا الرابط بالفعل. يرجى طلب رابط جديد.",
+      "accountInactive": "الحساب معطل"
+    },
+    "setup": {
+      "checkingStatus": "جارٍ التحقق من حالة النظام...",
+      "errorCheckingStatus": "خطأ في التحقق من حالة النظام",
+      "unavailableTitle": "الإعداد غير متاح",
+      "unavailableMessage": "تم إعداد المشرف العام بالفعل. يرجى تسجيل الدخول.",
+      "goToLogin": "الذهاب إلى تسجيل الدخول",
+      "successTitle": "تم إنشاء المشرف العام!",
+      "successMessage": "جارٍ التحويل إلى لوحة الإدارة...",
+      "title": "الإعداد الأولي",
+      "subtitle": "أنشئ أول مشرف عام للمنصة",
+      "setupKeyLabel": "مفتاح الإعداد",
+      "setupKeyPlaceholder": "أدخل SETUP_KEY",
+      "firstNameLabel": "الاسم الأول",
+      "firstNamePlaceholder": "أحمد",
+      "lastNameLabel": "اسم العائلة",
+      "lastNamePlaceholder": "محمد",
+      "passwordPlaceholder": "12 حرفًا على الأقل",
+      "confirmPasswordLabel": "تأكيد كلمة المرور",
+      "confirmPasswordPlaceholder": "أعد كتابة كلمة المرور",
+      "submitting": "جارٍ إنشاء المشرف العام...",
+      "submit": "إنشاء مشرف عام",
+      "errorCreatingSuperAdmin": "خطأ في إنشاء المشرف العام"
+    },
+    "validation": {
+      "invalidEmail": "بريد إلكتروني غير صالح",
+      "passwordRequired": "كلمة المرور مطلوبة",
+      "passwordMinLength8": "يجب أن تتكون كلمة المرور من 8 أحرف على الأقل",
+      "passwordMinLength12": "يجب أن تتكون كلمة المرور من 12 حرفًا على الأقل",
+      "passwordComplexity": "يجب أن تتضمن حرفًا كبيرًا وصغيرًا ورقمًا ورمزًا خاصًا",
+      "passwordMismatch": "كلمتا المرور غير متطابقتين",
+      "firstNameRequired": "الاسم الأول مطلوب",
+      "lastNameRequired": "اسم العائلة مطلوب",
+      "setupKeyRequired": "مفتاح الإعداد مطلوب"
+    }
+  },
   "common": {
     "loading": "جاري التحميل...",
     "save": "حفظ",

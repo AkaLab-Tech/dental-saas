@@ -1,34 +1,40 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { adminSetupApi } from '@/lib/admin-api'
 import { useAdminStore } from '@/stores/admin.store'
 import { Shield, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
 import { AxiosError } from 'axios'
 
-const setupSchema = z.object({
-  email: z.string().email('Email inválido'),
-  password: z
-    .string()
-    .min(12, 'La contraseña debe tener al menos 12 caracteres')
-    .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).+$/,
-      'Debe incluir mayúscula, minúscula, número y carácter especial'
-    ),
-  confirmPassword: z.string(),
-  firstName: z.string().min(1, 'Nombre requerido'),
-  lastName: z.string().min(1, 'Apellido requerido'),
-  setupKey: z.string().min(1, 'La clave de configuración es requerida'),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: 'Las contraseñas no coinciden',
-  path: ['confirmPassword'],
-})
+function createSetupSchema(t: TFunction) {
+  return z
+    .object({
+      email: z.string().email(t('admin.validation.invalidEmail')),
+      password: z
+        .string()
+        .min(12, t('admin.validation.passwordMinLength12'))
+        .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).+$/, {
+          message: t('admin.validation.passwordComplexity'),
+        }),
+      confirmPassword: z.string(),
+      firstName: z.string().min(1, t('admin.validation.firstNameRequired')),
+      lastName: z.string().min(1, t('admin.validation.lastNameRequired')),
+      setupKey: z.string().min(1, t('admin.validation.setupKeyRequired')),
+    })
+    .refine((data) => data.password === data.confirmPassword, {
+      message: t('admin.validation.passwordMismatch'),
+      path: ['confirmPassword'],
+    })
+}
 
-type SetupFormData = z.infer<typeof setupSchema>
+type SetupFormData = z.infer<ReturnType<typeof createSetupSchema>>
 
 export function AdminSetupPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { setAuth, isAuthenticated } = useAdminStore()
   const [setupAvailable, setSetupAvailable] = useState<boolean | null>(null)
@@ -36,6 +42,8 @@ export function AdminSetupPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+
+  const setupSchema = useMemo(() => createSetupSchema(t), [t])
 
   const {
     register,
@@ -58,14 +66,14 @@ export function AdminSetupPage() {
         const status = await adminSetupApi.checkStatus()
         setSetupAvailable(status.setupAvailable)
       } catch {
-        setError('Error al verificar el estado del sistema')
+        setError(t('admin.setup.errorCheckingStatus'))
       } finally {
         setIsCheckingStatus(false)
       }
     }
 
     checkSetupStatus()
-  }, [isAuthenticated, navigate])
+  }, [isAuthenticated, navigate, t])
 
   const onSubmit = async (data: SetupFormData) => {
     setIsSubmitting(true)
@@ -90,10 +98,10 @@ export function AdminSetupPage() {
       }, 2000)
     } catch (err) {
       if (err instanceof AxiosError) {
-        const message = err.response?.data?.error?.message || 'Error al crear el super admin'
+        const message = err.response?.data?.error?.message || t('admin.setup.errorCreatingSuperAdmin')
         setError(message)
       } else {
-        setError('Error inesperado')
+        setError(t('admin.common.unexpectedError'))
       }
     } finally {
       setIsSubmitting(false)
@@ -106,7 +114,7 @@ export function AdminSetupPage() {
       <div className="min-h-screen flex items-center justify-center bg-gray-900">
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto" />
-          <p className="mt-4 text-gray-400">Verificando estado del sistema...</p>
+          <p className="mt-4 text-gray-400">{t('admin.setup.checkingStatus')}</p>
         </div>
       </div>
     )
@@ -119,16 +127,16 @@ export function AdminSetupPage() {
         <div className="max-w-md w-full px-6 text-center">
           <Shield className="h-16 w-16 text-gray-600 mx-auto" />
           <h1 className="mt-6 text-2xl font-bold text-white">
-            Configuración No Disponible
+            {t('admin.setup.unavailableTitle')}
           </h1>
           <p className="mt-2 text-gray-400">
-            El super administrador ya ha sido configurado. Por favor inicia sesión.
+            {t('admin.setup.unavailableMessage')}
           </p>
           <a
             href="/admin/login"
             className="mt-6 inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            Ir a Iniciar Sesión
+            {t('admin.setup.goToLogin')}
           </a>
         </div>
       </div>
@@ -142,10 +150,10 @@ export function AdminSetupPage() {
         <div className="max-w-md w-full px-6 text-center">
           <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
           <h1 className="mt-6 text-2xl font-bold text-white">
-            ¡Super Admin Creado!
+            {t('admin.setup.successTitle')}
           </h1>
           <p className="mt-2 text-gray-400">
-            Redirigiendo al panel de administración...
+            {t('admin.setup.successMessage')}
           </p>
         </div>
       </div>
@@ -160,10 +168,10 @@ export function AdminSetupPage() {
         <div className="text-center mb-8">
           <Shield className="h-16 w-16 text-blue-500 mx-auto" />
           <h1 className="mt-4 text-3xl font-bold text-white">
-            Configuración Inicial
+            {t('admin.setup.title')}
           </h1>
           <p className="mt-2 text-gray-400">
-            Crea el primer Super Administrador de la plataforma
+            {t('admin.setup.subtitle')}
           </p>
         </div>
 
@@ -180,13 +188,13 @@ export function AdminSetupPage() {
             {/* Setup Key */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">
-                Clave de Configuración
+                {t('admin.setup.setupKeyLabel')}
               </label>
               <input
                 {...register('setupKey')}
                 type="password"
                 className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Ingresa la SETUP_KEY"
+                placeholder={t('admin.setup.setupKeyPlaceholder')}
               />
               {errors.setupKey && (
                 <p className="mt-1 text-sm text-red-400">{errors.setupKey.message}</p>
@@ -197,13 +205,13 @@ export function AdminSetupPage() {
               {/* First Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Nombre
+                  {t('admin.setup.firstNameLabel')}
                 </label>
                 <input
                   {...register('firstName')}
                   type="text"
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Mike"
+                  placeholder={t('admin.setup.firstNamePlaceholder')}
                 />
                 {errors.firstName && (
                   <p className="mt-1 text-sm text-red-400">{errors.firstName.message}</p>
@@ -213,13 +221,13 @@ export function AdminSetupPage() {
               {/* Last Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Apellido
+                  {t('admin.setup.lastNameLabel')}
                 </label>
                 <input
                   {...register('lastName')}
                   type="text"
                   className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Admin"
+                  placeholder={t('admin.setup.lastNamePlaceholder')}
                 />
                 {errors.lastName && (
                   <p className="mt-1 text-sm text-red-400">{errors.lastName.message}</p>
@@ -230,7 +238,7 @@ export function AdminSetupPage() {
             {/* Email */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">
-                Email
+                {t('admin.common.email')}
               </label>
               <input
                 {...register('email')}
@@ -246,13 +254,13 @@ export function AdminSetupPage() {
             {/* Password */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">
-                Contraseña
+                {t('admin.common.password')}
               </label>
               <input
                 {...register('password')}
                 type="password"
                 className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Mínimo 12 caracteres"
+                placeholder={t('admin.setup.passwordPlaceholder')}
               />
               {errors.password && (
                 <p className="mt-1 text-sm text-red-400">{errors.password.message}</p>
@@ -262,13 +270,13 @@ export function AdminSetupPage() {
             {/* Confirm Password */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">
-                Confirmar Contraseña
+                {t('admin.setup.confirmPasswordLabel')}
               </label>
               <input
                 {...register('confirmPassword')}
                 type="password"
                 className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Repite la contraseña"
+                placeholder={t('admin.setup.confirmPasswordPlaceholder')}
               />
               {errors.confirmPassword && (
                 <p className="mt-1 text-sm text-red-400">{errors.confirmPassword.message}</p>
@@ -284,10 +292,10 @@ export function AdminSetupPage() {
             {isSubmitting ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                Creando Super Admin...
+                {t('admin.setup.submitting')}
               </>
             ) : (
-              'Crear Super Admin'
+              t('admin.setup.submit')
             )}
           </button>
         </form>
