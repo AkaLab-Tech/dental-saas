@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Link, Navigate } from 'react-router'
 import { useAuth } from '@/hooks/useAuth'
 import { useAuthStore } from '@/stores/auth.store'
@@ -9,46 +11,45 @@ import { PASSWORD_REGEX } from '@/lib/constants'
 import { generateSlug, sanitizeSlugInput } from '@/lib/slug'
 import { LanguageSelector } from '@/components/ui/LanguageSelector'
 
-const registerSchema = z
-  .object({
-    clinicName: z
-      .string()
-      .min(2, 'El nombre de la clínica debe tener al menos 2 caracteres')
-      .optional(),
-    clinicSlug: z
-      .string()
-      .min(3, 'El identificador debe tener al menos 3 caracteres')
-      .max(50, 'El identificador no puede tener más de 50 caracteres')
-      .regex(
-        /^[a-z0-9-]+$/,
-        'Solo letras minúsculas, números y guiones permitidos'
-      ),
-    email: z.string().email('Email inválido'),
-    password: z
-      .string()
-      .min(8, 'La contraseña debe tener al menos 8 caracteres')
-      .regex(
-        PASSWORD_REGEX,
-        'Debe incluir mayúscula, minúscula, número y carácter especial (@$!%*?&)'
-      ),
-    confirmPassword: z.string(),
-    firstName: z.string().min(1, 'El nombre es requerido'),
-    lastName: z.string().min(1, 'El apellido es requerido'),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: 'Las contraseñas no coinciden',
-    path: ['confirmPassword'],
-  })
+function createRegisterSchema(t: TFunction) {
+  return z
+    .object({
+      clinicName: z
+        .string()
+        .min(2, t('auth.validation.clinicNameMinLength'))
+        .optional(),
+      clinicSlug: z
+        .string()
+        .min(3, t('auth.validation.clinicSlugMinLength'))
+        .max(50, t('auth.validation.clinicSlugMaxLength'))
+        .regex(/^[a-z0-9-]+$/, t('auth.validation.clinicSlugPattern')),
+      email: z.string().email(t('auth.validation.invalidEmail')),
+      password: z
+        .string()
+        .min(8, t('auth.validation.passwordMinLength'))
+        .regex(PASSWORD_REGEX, t('auth.validation.passwordComplexity')),
+      confirmPassword: z.string(),
+      firstName: z.string().min(1, t('auth.validation.firstNameRequired')),
+      lastName: z.string().min(1, t('auth.validation.lastNameRequired')),
+    })
+    .refine((data) => data.password === data.confirmPassword, {
+      message: t('auth.validation.passwordMismatch'),
+      path: ['confirmPassword'],
+    })
+}
 
-type RegisterFormData = z.infer<typeof registerSchema>
+type RegisterFormData = z.infer<ReturnType<typeof createRegisterSchema>>
 
 export function RegisterPage() {
+  const { t } = useTranslation()
   const { register: registerUser, isLoading, error, clearError } = useAuth()
   const { isAuthenticated } = useAuthStore()
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const [isSlugDirty, setIsSlugDirty] = useState(false)
+
+  const registerSchema = useMemo(() => createRegisterSchema(t), [t])
 
   const {
     register,
@@ -96,15 +97,15 @@ export function RegisterPage() {
             🦷 Alveo System
           </h1>
           <h2 className="mt-6 text-center text-2xl font-bold text-gray-900">
-            Crear Cuenta
+            {t('auth.createAccount')}
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            ¿Ya tienes cuenta?{' '}
+            {t('auth.alreadyHaveAccount')}{' '}
             <Link
               to="/login"
               className="font-medium text-blue-600 hover:text-blue-500"
             >
-              Inicia sesión
+              {t('auth.loginHere')}
             </Link>
           </p>
         </div>
@@ -126,7 +127,7 @@ export function RegisterPage() {
                 htmlFor="clinicName"
                 className="block text-sm font-medium text-gray-700"
               >
-                Nombre de la Clínica
+                {t('auth.clinicName')}
               </label>
               <input
                 {...register('clinicName', {
@@ -139,7 +140,7 @@ export function RegisterPage() {
                 id="clinicName"
                 type="text"
                 className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="Clínica Dental Sonrisa"
+                placeholder={t('auth.clinicNamePlaceholder')}
               />
               {errors.clinicName && (
                 <p className="mt-1 text-sm text-red-600">
@@ -153,7 +154,7 @@ export function RegisterPage() {
                 htmlFor="clinicSlug"
                 className="block text-sm font-medium text-gray-700"
               >
-                Identificador de Clínica (URL)
+                {t('auth.clinicSlugUrlLabel')}
               </label>
               <input
                 {...register('clinicSlug', {
@@ -174,7 +175,7 @@ export function RegisterPage() {
                 id="clinicSlug"
                 type="text"
                 className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="clinica-sonrisa"
+                placeholder={t('auth.clinicSlugUrlPlaceholder')}
               />
               {errors.clinicSlug && (
                 <p className="mt-1 text-sm text-red-600">
@@ -182,7 +183,7 @@ export function RegisterPage() {
                 </p>
               )}
               <p className="mt-1 text-xs text-gray-500">
-                Solo letras minúsculas, números y guiones. Ej: mi-clinica-dental
+                {t('auth.clinicSlugHelp')}
               </p>
             </div>
 
@@ -192,7 +193,7 @@ export function RegisterPage() {
                   htmlFor="firstName"
                   className="block text-sm font-medium text-gray-700"
                 >
-                  Nombre
+                  {t('auth.firstName')}
                 </label>
                 <input
                   {...register('firstName')}
@@ -200,7 +201,7 @@ export function RegisterPage() {
                   type="text"
                   autoComplete="given-name"
                   className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="Juan"
+                  placeholder={t('auth.firstNamePlaceholder')}
                 />
                 {errors.firstName && (
                   <p className="mt-1 text-sm text-red-600">
@@ -214,7 +215,7 @@ export function RegisterPage() {
                   htmlFor="lastName"
                   className="block text-sm font-medium text-gray-700"
                 >
-                  Apellido
+                  {t('auth.lastName')}
                 </label>
                 <input
                   {...register('lastName')}
@@ -222,7 +223,7 @@ export function RegisterPage() {
                   type="text"
                   autoComplete="family-name"
                   className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="Pérez"
+                  placeholder={t('auth.lastNamePlaceholder')}
                 />
                 {errors.lastName && (
                   <p className="mt-1 text-sm text-red-600">
@@ -237,7 +238,7 @@ export function RegisterPage() {
                 htmlFor="email"
                 className="block text-sm font-medium text-gray-700"
               >
-                Email
+                {t('auth.email')}
               </label>
               <input
                 {...register('email')}
@@ -245,7 +246,7 @@ export function RegisterPage() {
                 type="email"
                 autoComplete="email"
                 className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="tu@email.com"
+                placeholder={t('auth.emailPlaceholder')}
               />
               {errors.email && (
                 <p className="mt-1 text-sm text-red-600">
@@ -259,7 +260,7 @@ export function RegisterPage() {
                 htmlFor="password"
                 className="block text-sm font-medium text-gray-700"
               >
-                Contraseña
+                {t('auth.password')}
               </label>
               <div className="relative">
                 <input
@@ -268,13 +269,13 @@ export function RegisterPage() {
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm pr-10"
-                  placeholder="••••••••"
+                  placeholder={t('auth.passwordPlaceholder')}
                 />
                 <button
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                 >
                   {showPassword ? '🙈' : '👁️'}
                 </button>
@@ -285,8 +286,7 @@ export function RegisterPage() {
                 </p>
               )}
               <p className="mt-1 text-xs text-gray-500">
-                Mínimo 8 caracteres, con mayúscula, minúscula, número y carácter
-                especial
+                {t('auth.passwordHelp')}
               </p>
             </div>
 
@@ -295,7 +295,7 @@ export function RegisterPage() {
                 htmlFor="confirmPassword"
                 className="block text-sm font-medium text-gray-700"
               >
-                Confirmar Contraseña
+                {t('auth.confirmPassword')}
               </label>
               <div className="relative">
                 <input
@@ -304,7 +304,7 @@ export function RegisterPage() {
                   type={showConfirmPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm pr-10"
-                  placeholder="••••••••"
+                  placeholder={t('auth.passwordPlaceholder')}
                 />
                 <button
                   type="button"
@@ -312,8 +312,8 @@ export function RegisterPage() {
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   aria-label={
                     showConfirmPassword
-                      ? 'Ocultar contraseña de confirmación'
-                      : 'Mostrar contraseña de confirmación'
+                      ? t('auth.hideConfirmPassword')
+                      : t('auth.showConfirmPassword')
                   }
                 >
                   {showConfirmPassword ? '🙈' : '👁️'}
@@ -355,30 +355,30 @@ export function RegisterPage() {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-                  Creando cuenta...
+                  {t('auth.creatingAccount')}
                 </span>
               ) : (
-                'Crear Cuenta'
+                t('auth.createAccount')
               )}
             </button>
           </div>
 
           <p className="text-center text-xs text-gray-500">
-            Al registrarte, aceptas nuestros{' '}
+            {t('auth.termsPrefix')}{' '}
             <a
               href="#"
               onClick={(e) => e.preventDefault()}
               className="text-blue-600 hover:text-blue-500"
             >
-              Términos de Servicio
+              {t('auth.termsOfService')}
             </a>{' '}
-            y{' '}
+            {t('auth.termsAnd')}{' '}
             <a
               href="#"
               onClick={(e) => e.preventDefault()}
               className="text-blue-600 hover:text-blue-500"
             >
-              Política de Privacidad
+              {t('auth.privacyPolicy')}
             </a>
           </p>
         </form>

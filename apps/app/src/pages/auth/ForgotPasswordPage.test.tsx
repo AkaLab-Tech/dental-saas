@@ -3,6 +3,13 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router'
 import { AxiosError, AxiosHeaders } from 'axios'
 
+// Mock react-i18next — return the key so assertions are stable regardless of locale
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
+}))
+
 // Mock apiClient
 const mockPost = vi.fn()
 
@@ -52,16 +59,16 @@ describe('ForgotPasswordPage', () => {
     it('should render the forgot password form', () => {
       renderForgotPasswordPage()
 
-      expect(screen.getByRole('heading', { name: /recuperar contraseña/i })).toBeInTheDocument()
-      expect(screen.getByLabelText(/identificador de clínica/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /enviar enlace/i })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'auth.recoverPasswordTitle' })).toBeInTheDocument()
+      expect(screen.getByLabelText('auth.clinicSlug')).toBeInTheDocument()
+      expect(screen.getByLabelText('auth.email')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'auth.sendResetLink' })).toBeInTheDocument()
     })
 
     it('should render back to login link', () => {
       renderForgotPasswordPage()
 
-      const loginLink = screen.getByRole('link', { name: /volver al inicio de sesión/i })
+      const loginLink = screen.getByRole('link', { name: 'auth.backToLogin' })
       expect(loginLink).toBeInTheDocument()
       expect(loginLink).toHaveAttribute('href', '/login')
     })
@@ -69,7 +76,7 @@ describe('ForgotPasswordPage', () => {
     it('should render description text', () => {
       renderForgotPasswordPage()
 
-      expect(screen.getByText(/te enviaremos un enlace para restablecer tu contraseña/i)).toBeInTheDocument()
+      expect(screen.getByText('auth.recoverPasswordSubtitle')).toBeInTheDocument()
     })
   })
 
@@ -77,7 +84,7 @@ describe('ForgotPasswordPage', () => {
     it('should not call API when fields are empty', async () => {
       renderForgotPasswordPage()
 
-      fireEvent.click(screen.getByRole('button', { name: /enviar enlace/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'auth.sendResetLink' }))
 
       await waitFor(() => {
         expect(mockPost).not.toHaveBeenCalled()
@@ -87,20 +94,31 @@ describe('ForgotPasswordPage', () => {
     it('should not call API with invalid email', async () => {
       renderForgotPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'invalid-email' } })
-      fireEvent.change(screen.getByLabelText(/identificador de clínica/i), { target: { value: 'my-clinic' } })
-      fireEvent.click(screen.getByRole('button', { name: /enviar enlace/i }))
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'invalid-email' } })
+      fireEvent.change(screen.getByLabelText('auth.clinicSlug'), { target: { value: 'my-clinic' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.sendResetLink' }))
 
       await waitFor(() => {
         expect(mockPost).not.toHaveBeenCalled()
       })
     })
 
+    it('should show validation error messages when fields are empty', async () => {
+      renderForgotPasswordPage()
+
+      fireEvent.click(screen.getByRole('button', { name: 'auth.sendResetLink' }))
+
+      await waitFor(() => {
+        expect(screen.getByText('auth.validation.clinicSlugRequired')).toBeInTheDocument()
+        expect(screen.getByText('auth.validation.invalidEmail')).toBeInTheDocument()
+      })
+    })
+
     it('should not call API with empty clinic slug', async () => {
       renderForgotPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } })
-      fireEvent.click(screen.getByRole('button', { name: /enviar enlace/i }))
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'test@example.com' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.sendResetLink' }))
 
       await waitFor(() => {
         expect(mockPost).not.toHaveBeenCalled()
@@ -113,9 +131,9 @@ describe('ForgotPasswordPage', () => {
       mockPost.mockResolvedValue({})
       renderForgotPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/identificador de clínica/i), { target: { value: 'my-clinic' } })
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } })
-      fireEvent.click(screen.getByRole('button', { name: /enviar enlace/i }))
+      fireEvent.change(screen.getByLabelText('auth.clinicSlug'), { target: { value: 'my-clinic' } })
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'test@example.com' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.sendResetLink' }))
 
       await waitFor(() => {
         expect(mockPost).toHaveBeenCalledWith('/auth/forgot-password', {
@@ -129,14 +147,13 @@ describe('ForgotPasswordPage', () => {
       mockPost.mockResolvedValue({})
       renderForgotPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/identificador de clínica/i), { target: { value: 'my-clinic' } })
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } })
-      fireEvent.click(screen.getByRole('button', { name: /enviar enlace/i }))
+      fireEvent.change(screen.getByLabelText('auth.clinicSlug'), { target: { value: 'my-clinic' } })
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'test@example.com' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.sendResetLink' }))
 
       await waitFor(() => {
-        expect(screen.getByText(/revisa tu correo/i)).toBeInTheDocument()
-        expect(screen.getByText(/si existe una cuenta con ese correo/i)).toBeInTheDocument()
-        expect(screen.getByText(/el enlace expira en 15 minutos/i)).toBeInTheDocument()
+        expect(screen.getByText('auth.checkYourEmail')).toBeInTheDocument()
+        expect(screen.getByText('auth.forgotPasswordSuccessMessage')).toBeInTheDocument()
       })
     })
 
@@ -144,12 +161,12 @@ describe('ForgotPasswordPage', () => {
       mockPost.mockResolvedValue({})
       renderForgotPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/identificador de clínica/i), { target: { value: 'my-clinic' } })
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } })
-      fireEvent.click(screen.getByRole('button', { name: /enviar enlace/i }))
+      fireEvent.change(screen.getByLabelText('auth.clinicSlug'), { target: { value: 'my-clinic' } })
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'test@example.com' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.sendResetLink' }))
 
       await waitFor(() => {
-        expect(screen.getByText(/revisa también tu carpeta de spam/i)).toBeInTheDocument()
+        expect(screen.getByText('auth.checkSpamFolder')).toBeInTheDocument()
       })
     })
 
@@ -157,13 +174,13 @@ describe('ForgotPasswordPage', () => {
       mockPost.mockResolvedValue({})
       renderForgotPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/identificador de clínica/i), { target: { value: 'my-clinic' } })
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } })
-      fireEvent.click(screen.getByRole('button', { name: /enviar enlace/i }))
+      fireEvent.change(screen.getByLabelText('auth.clinicSlug'), { target: { value: 'my-clinic' } })
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'test@example.com' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.sendResetLink' }))
 
       await waitFor(() => {
-        expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument()
-        expect(screen.queryByRole('button', { name: /enviar enlace/i })).not.toBeInTheDocument()
+        expect(screen.queryByLabelText('auth.email')).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: 'auth.sendResetLink' })).not.toBeInTheDocument()
       })
     })
   })
@@ -173,9 +190,9 @@ describe('ForgotPasswordPage', () => {
       mockPost.mockRejectedValue(createAxiosError('Request failed', { message: 'Usuario no encontrado' }))
       renderForgotPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/identificador de clínica/i), { target: { value: 'my-clinic' } })
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } })
-      fireEvent.click(screen.getByRole('button', { name: /enviar enlace/i }))
+      fireEvent.change(screen.getByLabelText('auth.clinicSlug'), { target: { value: 'my-clinic' } })
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'test@example.com' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.sendResetLink' }))
 
       await waitFor(() => {
         expect(screen.getByText('Usuario no encontrado')).toBeInTheDocument()
@@ -186,12 +203,12 @@ describe('ForgotPasswordPage', () => {
       mockPost.mockRejectedValue(createAxiosError('Request failed'))
       renderForgotPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/identificador de clínica/i), { target: { value: 'my-clinic' } })
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } })
-      fireEvent.click(screen.getByRole('button', { name: /enviar enlace/i }))
+      fireEvent.change(screen.getByLabelText('auth.clinicSlug'), { target: { value: 'my-clinic' } })
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'test@example.com' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.sendResetLink' }))
 
       await waitFor(() => {
-        expect(screen.getByText(/error al procesar la solicitud/i)).toBeInTheDocument()
+        expect(screen.getByText('auth.errorProcessingRequest')).toBeInTheDocument()
       })
     })
 
@@ -199,12 +216,12 @@ describe('ForgotPasswordPage', () => {
       mockPost.mockRejectedValue(new Error('Network error'))
       renderForgotPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/identificador de clínica/i), { target: { value: 'my-clinic' } })
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } })
-      fireEvent.click(screen.getByRole('button', { name: /enviar enlace/i }))
+      fireEvent.change(screen.getByLabelText('auth.clinicSlug'), { target: { value: 'my-clinic' } })
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'test@example.com' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.sendResetLink' }))
 
       await waitFor(() => {
-        expect(screen.getByText(/error inesperado/i)).toBeInTheDocument()
+        expect(screen.getByText('auth.unexpectedError')).toBeInTheDocument()
       })
     })
   })
@@ -214,12 +231,12 @@ describe('ForgotPasswordPage', () => {
       mockPost.mockImplementation(() => new Promise(() => {})) // Never resolves
       renderForgotPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/identificador de clínica/i), { target: { value: 'my-clinic' } })
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } })
-      fireEvent.click(screen.getByRole('button', { name: /enviar enlace/i }))
+      fireEvent.change(screen.getByLabelText('auth.clinicSlug'), { target: { value: 'my-clinic' } })
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'test@example.com' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.sendResetLink' }))
 
       await waitFor(() => {
-        expect(screen.getByText(/enviando/i)).toBeInTheDocument()
+        expect(screen.getByText('auth.sending')).toBeInTheDocument()
       })
     })
 
@@ -227,12 +244,12 @@ describe('ForgotPasswordPage', () => {
       mockPost.mockImplementation(() => new Promise(() => {}))
       renderForgotPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/identificador de clínica/i), { target: { value: 'my-clinic' } })
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } })
-      fireEvent.click(screen.getByRole('button', { name: /enviar enlace/i }))
+      fireEvent.change(screen.getByLabelText('auth.clinicSlug'), { target: { value: 'my-clinic' } })
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'test@example.com' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.sendResetLink' }))
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /enviando/i })).toBeDisabled()
+        expect(screen.getByRole('button', { name: 'auth.sending' })).toBeDisabled()
       })
     })
   })
