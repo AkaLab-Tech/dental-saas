@@ -1,27 +1,34 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Link, Navigate, useParams, useSearchParams } from 'react-router'
 import { useAuth } from '@/hooks/useAuth'
 import { useAuthStore } from '@/stores/auth.store'
 import { AxiosError } from 'axios'
 
-const loginSchema = z.object({
-  email: z.string().email('Email inválido'),
-  password: z.string().min(1, 'La contraseña es requerida'),
-  clinicSlug: z.string().min(1, 'El identificador de clínica es requerido'),
-})
+function createLoginSchema(t: TFunction) {
+  return z.object({
+    email: z.string().email(t('auth.validation.invalidEmail')),
+    password: z.string().min(1, t('auth.validation.passwordRequired')),
+    clinicSlug: z.string().min(1, t('auth.validation.clinicSlugRequired')),
+  })
+}
 
-type LoginFormData = z.infer<typeof loginSchema>
+type LoginFormData = z.infer<ReturnType<typeof createLoginSchema>>
 
 export function LoginPage() {
+  const { t } = useTranslation()
   const { clinicSlug: urlClinicSlug } = useParams<{ clinicSlug?: string }>()
   const [searchParams] = useSearchParams()
   const sessionExpired = searchParams.get('session') === 'expired'
   const { login, isLoading, error, clearError } = useAuth()
   const { isAuthenticated } = useAuthStore()
   const [showPassword, setShowPassword] = useState(false)
+
+  const loginSchema = useMemo(() => createLoginSchema(t), [t])
 
   const {
     register,
@@ -61,15 +68,15 @@ export function LoginPage() {
             🦷 Alveo System
           </h1>
           <h2 className="mt-6 text-center text-2xl font-bold text-gray-900">
-            Iniciar Sesión
+            {t('auth.login')}
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            ¿No tienes cuenta?{' '}
+            {t('auth.dontHaveAccount')}{' '}
             <Link
               to="/register"
               className="font-medium text-blue-600 hover:text-blue-500"
             >
-              Regístrate aquí
+              {t('auth.registerHere')}
             </Link>
           </p>
         </div>
@@ -78,7 +85,7 @@ export function LoginPage() {
           {sessionExpired && !error && (
             <div className="rounded-md bg-yellow-50 border border-yellow-200 p-4">
               <p className="text-sm text-yellow-800">
-                Tu sesión ha expirado. Por favor, iniciá sesión nuevamente.
+                {t('auth.sessionExpired')}
               </p>
             </div>
           )}
@@ -100,7 +107,7 @@ export function LoginPage() {
                   htmlFor="clinicSlug"
                   className="block text-sm font-medium text-gray-700"
                 >
-                  Identificador de Clínica
+                  {t('auth.clinicSlug')}
                 </label>
                 <input
                   {...register('clinicSlug')}
@@ -108,7 +115,7 @@ export function LoginPage() {
                   type="text"
                   autoComplete="organization"
                   className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="mi-clinica"
+                  placeholder={t('auth.clinicSlugPlaceholder')}
                 />
                 {errors.clinicSlug && (
                   <p className="mt-1 text-sm text-red-600">
@@ -123,7 +130,7 @@ export function LoginPage() {
                 htmlFor="email"
                 className="block text-sm font-medium text-gray-700"
               >
-                Email
+                {t('auth.email')}
               </label>
               <input
                 {...register('email')}
@@ -131,7 +138,7 @@ export function LoginPage() {
                 type="email"
                 autoComplete="email"
                 className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="tu@email.com"
+                placeholder={t('auth.emailPlaceholder')}
               />
               {errors.email && (
                 <p className="mt-1 text-sm text-red-600">
@@ -145,7 +152,7 @@ export function LoginPage() {
                 htmlFor="password"
                 className="block text-sm font-medium text-gray-700"
               >
-                Contraseña
+                {t('auth.password')}
               </label>
               <div className="relative">
                 <input
@@ -154,13 +161,13 @@ export function LoginPage() {
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm pr-10"
-                  placeholder="••••••••"
+                  placeholder={t('auth.passwordPlaceholder')}
                 />
                 <button
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                 >
                   {showPassword ? '🙈' : '👁️'}
                 </button>
@@ -180,7 +187,7 @@ export function LoginPage() {
                   to="/login"
                   className="font-medium text-blue-600 hover:text-blue-500"
                 >
-                  Cambiar clínica
+                  {t('auth.changeClinic')}
                 </Link>
               )}
             </div>
@@ -189,7 +196,7 @@ export function LoginPage() {
                 to="/forgot-password"
                 className="font-medium text-blue-600 hover:text-blue-500"
               >
-                ¿Olvidaste tu contraseña?
+                {t('auth.forgotPassword')}
               </Link>
             </div>
           </div>
@@ -222,10 +229,10 @@ export function LoginPage() {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-                  Cargando...
+                  {t('common.loading')}
                 </span>
               ) : (
-                'Iniciar Sesión'
+                t('auth.login')
               )}
             </button>
           </div>

@@ -2,6 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router'
 
+// Mock react-i18next — return the key so assertions are stable regardless of locale
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
+}))
+
 // Mock functions defined before vi.mock
 const mockLogin = vi.fn()
 const mockClearError = vi.fn()
@@ -62,17 +69,17 @@ describe('LoginPage', () => {
     it('should render the login form', () => {
       renderLoginPage()
 
-      expect(screen.getByRole('heading', { name: /iniciar sesión/i })).toBeInTheDocument()
-      expect(screen.getByLabelText(/identificador de clínica/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'auth.login' })).toBeInTheDocument()
+      expect(screen.getByLabelText('auth.clinicSlug')).toBeInTheDocument()
+      expect(screen.getByLabelText('auth.email')).toBeInTheDocument()
       expect(getPasswordInput()).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /iniciar sesión/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'auth.login' })).toBeInTheDocument()
     })
 
     it('should render register link', () => {
       renderLoginPage()
 
-      const registerLink = screen.getByRole('link', { name: /regístrate aquí/i })
+      const registerLink = screen.getByRole('link', { name: 'auth.registerHere' })
       expect(registerLink).toBeInTheDocument()
       expect(registerLink).toHaveAttribute('href', '/register')
     })
@@ -80,7 +87,7 @@ describe('LoginPage', () => {
     it('should render forgot password link', () => {
       renderLoginPage()
 
-      const forgotLink = screen.getByRole('link', { name: /olvidaste tu contraseña/i })
+      const forgotLink = screen.getByRole('link', { name: 'auth.forgotPassword' })
       expect(forgotLink).toBeInTheDocument()
       expect(forgotLink).toHaveAttribute('href', '/forgot-password')
     })
@@ -94,7 +101,7 @@ describe('LoginPage', () => {
         </MemoryRouter>
       )
 
-      expect(screen.queryByLabelText(/identificador de clínica/i)).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('auth.clinicSlug')).not.toBeInTheDocument()
     })
 
     it('should show "Cambiar clínica" link pointing to /login when slug is in URL', () => {
@@ -106,7 +113,7 @@ describe('LoginPage', () => {
         </MemoryRouter>
       )
 
-      const changeLink = screen.getByRole('link', { name: /cambiar clínica/i })
+      const changeLink = screen.getByRole('link', { name: 'auth.changeClinic' })
       expect(changeLink).toBeInTheDocument()
       expect(changeLink).toHaveAttribute('href', '/login')
     })
@@ -114,8 +121,8 @@ describe('LoginPage', () => {
     it('should show clinic slug input and hide "Cambiar clínica" when no slug in URL', () => {
       renderLoginPage()
 
-      expect(screen.getByLabelText(/identificador de clínica/i)).toBeInTheDocument()
-      expect(screen.queryByRole('link', { name: /cambiar clínica/i })).not.toBeInTheDocument()
+      expect(screen.getByLabelText('auth.clinicSlug')).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: 'auth.changeClinic' })).not.toBeInTheDocument()
     })
   })
 
@@ -123,18 +130,30 @@ describe('LoginPage', () => {
     it('should not call login when fields are empty', async () => {
       renderLoginPage()
 
-      fireEvent.click(screen.getByRole('button', { name: /iniciar sesión/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'auth.login' }))
 
       await waitFor(() => {
         expect(mockLogin).not.toHaveBeenCalled()
       })
     })
 
+    it('should show validation error messages when fields are empty', async () => {
+      renderLoginPage()
+
+      fireEvent.click(screen.getByRole('button', { name: 'auth.login' }))
+
+      await waitFor(() => {
+        expect(screen.getByText('auth.validation.clinicSlugRequired')).toBeInTheDocument()
+        expect(screen.getByText('auth.validation.invalidEmail')).toBeInTheDocument()
+        expect(screen.getByText('auth.validation.passwordRequired')).toBeInTheDocument()
+      })
+    })
+
     it('should not call login with incomplete data', async () => {
       renderLoginPage()
 
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } })
-      fireEvent.click(screen.getByRole('button', { name: /iniciar sesión/i }))
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'test@example.com' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.login' }))
 
       await waitFor(() => {
         expect(mockLogin).not.toHaveBeenCalled()
@@ -147,10 +166,10 @@ describe('LoginPage', () => {
       mockLogin.mockResolvedValue({})
       renderLoginPage()
 
-      fireEvent.change(screen.getByLabelText(/identificador de clínica/i), { target: { value: 'my-clinic' } })
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } })
+      fireEvent.change(screen.getByLabelText('auth.clinicSlug'), { target: { value: 'my-clinic' } })
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'test@example.com' } })
       fireEvent.change(getPasswordInput(), { target: { value: 'password123' } })
-      fireEvent.click(screen.getByRole('button', { name: /iniciar sesión/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'auth.login' }))
 
       await waitFor(() => {
         expect(mockClearError).toHaveBeenCalled()
@@ -172,9 +191,9 @@ describe('LoginPage', () => {
         </MemoryRouter>
       )
 
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } })
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'test@example.com' } })
       fireEvent.change(getPasswordInput(), { target: { value: 'password123' } })
-      fireEvent.click(screen.getByRole('button', { name: /iniciar sesión/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'auth.login' }))
 
       await waitFor(() => {
         expect(mockLogin).toHaveBeenCalledWith({
@@ -190,10 +209,10 @@ describe('LoginPage', () => {
       mockLogin.mockRejectedValue(error)
       renderLoginPage()
 
-      fireEvent.change(screen.getByLabelText(/identificador de clínica/i), { target: { value: 'my-clinic' } })
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } })
+      fireEvent.change(screen.getByLabelText('auth.clinicSlug'), { target: { value: 'my-clinic' } })
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'test@example.com' } })
       fireEvent.change(getPasswordInput(), { target: { value: 'wrongpassword' } })
-      fireEvent.click(screen.getByRole('button', { name: /iniciar sesión/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'auth.login' }))
 
       await waitFor(() => {
         expect(mockLogin).toHaveBeenCalled()
@@ -206,15 +225,15 @@ describe('LoginPage', () => {
       mockAuthState.isLoading = true
       renderLoginPage()
 
-      expect(screen.getByText(/cargando/i)).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /cargando/i })).toBeDisabled()
+      expect(screen.getByText('common.loading')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'common.loading' })).toBeDisabled()
     })
 
     it('should disable submit button when loading', () => {
       mockAuthState.isLoading = true
       renderLoginPage()
 
-      const submitButton = screen.getByRole('button', { name: /cargando/i })
+      const submitButton = screen.getByRole('button', { name: 'common.loading' })
       expect(submitButton).toBeDisabled()
     })
   })
@@ -235,12 +254,12 @@ describe('LoginPage', () => {
       const passwordInput = getPasswordInput()
       expect(passwordInput).toHaveAttribute('type', 'password')
 
-      const toggleButton = screen.getByRole('button', { name: /mostrar contraseña/i })
+      const toggleButton = screen.getByRole('button', { name: 'auth.showPassword' })
       fireEvent.click(toggleButton)
 
       expect(passwordInput).toHaveAttribute('type', 'text')
 
-      fireEvent.click(screen.getByRole('button', { name: /ocultar contraseña/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'auth.hidePassword' }))
       expect(passwordInput).toHaveAttribute('type', 'password')
     })
   })

@@ -1,27 +1,32 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { apiClient } from '@/lib/api'
 import { AxiosError } from 'axios'
 
-const resetPasswordSchema = z.object({
-  password: z
-    .string()
-    .min(8, 'La contraseña debe tener al menos 8 caracteres')
-    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).+$/, {
-      message: 'Debe incluir mayúscula, minúscula, número y carácter especial',
-    }),
-  confirmPassword: z.string().min(1, 'Confirma tu contraseña'),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: 'Las contraseñas no coinciden',
-  path: ['confirmPassword'],
-})
+function createResetPasswordSchema(t: TFunction) {
+  return z.object({
+    password: z
+      .string()
+      .min(8, t('auth.validation.passwordMinLength'))
+      .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).+$/, {
+        message: t('auth.validation.passwordComplexityBasic'),
+      }),
+    confirmPassword: z.string().min(1, t('auth.validation.confirmPasswordRequired')),
+  }).refine((data) => data.password === data.confirmPassword, {
+    message: t('auth.validation.passwordMismatch'),
+    path: ['confirmPassword'],
+  })
+}
 
-type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>
+type ResetPasswordFormData = z.infer<ReturnType<typeof createResetPasswordSchema>>
 
 export function ResetPasswordPage() {
+  const { t } = useTranslation()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const token = searchParams.get('token')
@@ -31,6 +36,8 @@ export function ResetPasswordPage() {
   const [isSuccess, setIsSuccess] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+
+  const resetPasswordSchema = useMemo(() => createResetPasswordSchema(t), [t])
 
   const {
     register,
@@ -43,9 +50,9 @@ export function ResetPasswordPage() {
   // Validate token presence
   useEffect(() => {
     if (!token) {
-      setError('Enlace de recuperación inválido. Por favor solicita uno nuevo.')
+      setError(t('auth.invalidResetLink'))
     }
-  }, [token])
+  }, [token, t])
 
   const onSubmit = async (data: ResetPasswordFormData) => {
     if (!token) return
@@ -68,22 +75,22 @@ export function ResetPasswordPage() {
     } catch (err) {
       if (err instanceof AxiosError) {
         const code = err.response?.data?.error?.code
-        let message = err.response?.data?.error?.message || 'Error al restablecer la contraseña'
-        
+        let message = err.response?.data?.error?.message || t('auth.errorResettingPassword')
+
         // Translate common error codes
         if (code === 'TOKEN_EXPIRED') {
-          message = 'El enlace ha expirado. Por favor solicita uno nuevo.'
+          message = t('auth.tokenExpired')
         } else if (code === 'TOKEN_USED') {
-          message = 'Este enlace ya fue utilizado. Por favor solicita uno nuevo.'
+          message = t('auth.tokenUsed')
         } else if (code === 'INVALID_TOKEN') {
-          message = 'Enlace inválido. Por favor solicita uno nuevo.'
+          message = t('auth.invalidToken')
         } else if (code === 'ACCOUNT_INACTIVE') {
-          message = 'Tu cuenta está desactivada. Contacta al administrador.'
+          message = t('auth.accountInactive')
         }
-        
+
         setError(message)
       } else {
-        setError('Error inesperado')
+        setError(t('auth.unexpectedError'))
       }
     } finally {
       setIsSubmitting(false)
@@ -97,10 +104,10 @@ export function ResetPasswordPage() {
         <div className="text-center">
           <h1 className="text-3xl font-extrabold text-gray-900">🦷 Alveo System</h1>
           <h2 className="mt-6 text-2xl font-bold text-gray-900">
-            Nueva Contraseña
+            {t('auth.newPassword')}
           </h2>
           <p className="mt-2 text-sm text-gray-600">
-            Ingresa tu nueva contraseña
+            {t('auth.enterNewPasswordSubtitle')}
           </p>
         </div>
 
@@ -115,17 +122,16 @@ export function ResetPasswordPage() {
                 </svg>
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                ¡Contraseña actualizada!
+                {t('auth.passwordUpdated')}
               </h3>
               <p className="text-gray-600 mb-6">
-                Tu contraseña ha sido restablecida exitosamente.
-                Serás redirigido al inicio de sesión...
+                {t('auth.passwordResetSuccessMessage')}
               </p>
               <Link
                 to="/login"
                 className="text-blue-600 hover:text-blue-500 font-medium"
               >
-                Ir al inicio de sesión
+                {t('auth.goToLogin')}
               </Link>
             </div>
           ) : (
@@ -150,7 +156,7 @@ export function ResetPasswordPage() {
                     to="/forgot-password"
                     className="text-blue-600 hover:text-blue-500 font-medium"
                   >
-                    Solicitar un nuevo enlace de recuperación
+                    {t('auth.requestNewResetLink')}
                   </Link>
                 </div>
               ) : (
@@ -160,7 +166,7 @@ export function ResetPasswordPage() {
                       htmlFor="password"
                       className="block text-sm font-medium text-gray-700"
                     >
-                      Nueva Contraseña
+                      {t('auth.newPassword')}
                     </label>
                     <div className="relative mt-1">
                       <input
@@ -169,13 +175,13 @@ export function ResetPasswordPage() {
                         type={showPassword ? 'text' : 'password'}
                         autoComplete="new-password"
                         className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm pr-10"
-                        placeholder="••••••••"
+                        placeholder={t('auth.passwordPlaceholder')}
                       />
                       <button
                         type="button"
                         className="absolute inset-y-0 right-0 pr-3 flex items-center"
                         onClick={() => setShowPassword(!showPassword)}
-                        aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                        aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                       >
                         {showPassword ? '🙈' : '👁️'}
                       </button>
@@ -184,7 +190,7 @@ export function ResetPasswordPage() {
                       <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
                     )}
                     <p className="mt-1 text-xs text-gray-500">
-                      Mínimo 8 caracteres, con mayúscula, minúscula, número y carácter especial
+                      {t('auth.passwordHelp')}
                     </p>
                   </div>
 
@@ -193,7 +199,7 @@ export function ResetPasswordPage() {
                       htmlFor="confirmPassword"
                       className="block text-sm font-medium text-gray-700"
                     >
-                      Confirmar Contraseña
+                      {t('auth.confirmPassword')}
                     </label>
                     <div className="relative mt-1">
                       <input
@@ -202,13 +208,13 @@ export function ResetPasswordPage() {
                         type={showConfirmPassword ? 'text' : 'password'}
                         autoComplete="new-password"
                         className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm pr-10"
-                        placeholder="••••••••"
+                        placeholder={t('auth.passwordPlaceholder')}
                       />
                       <button
                         type="button"
                         className="absolute inset-y-0 right-0 pr-3 flex items-center"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        aria-label={showConfirmPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                        aria-label={showConfirmPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                       >
                         {showConfirmPassword ? '🙈' : '👁️'}
                       </button>
@@ -229,10 +235,10 @@ export function ResetPasswordPage() {
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                         </svg>
-                        Actualizando...
+                        {t('auth.updating')}
                       </span>
                     ) : (
-                      'Restablecer Contraseña'
+                      t('auth.resetPassword')
                     )}
                   </button>
                 </>
@@ -243,7 +249,7 @@ export function ResetPasswordPage() {
                   to="/login"
                   className="text-sm text-blue-600 hover:text-blue-500"
                 >
-                  ← Volver al inicio de sesión
+                  {t('auth.backToLogin')}
                 </Link>
               </div>
             </form>

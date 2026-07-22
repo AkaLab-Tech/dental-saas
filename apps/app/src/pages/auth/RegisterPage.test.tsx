@@ -2,6 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router'
 
+// Mock react-i18next — return the key so assertions are stable regardless of locale
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+    i18n: { language: 'es', changeLanguage: vi.fn() },
+  }),
+  initReactI18next: { type: '3rdParty', init: () => {} },
+}))
+
 // Mock functions defined before vi.mock
 const mockRegister = vi.fn()
 const mockClearError = vi.fn()
@@ -60,21 +69,21 @@ describe('RegisterPage', () => {
     it('should render the registration form', () => {
       renderRegisterPage()
 
-      expect(screen.getByRole('heading', { name: /crear cuenta/i })).toBeInTheDocument()
-      expect(screen.getByLabelText(/nombre de la clínica/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/identificador de clínica/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/^nombre$/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/apellido/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/^contraseña$/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/confirmar contraseña/i)).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /crear cuenta/i })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'auth.createAccount' })).toBeInTheDocument()
+      expect(screen.getByLabelText('auth.clinicName')).toBeInTheDocument()
+      expect(screen.getByLabelText('auth.clinicSlugUrlLabel')).toBeInTheDocument()
+      expect(screen.getByLabelText('auth.firstName')).toBeInTheDocument()
+      expect(screen.getByLabelText('auth.lastName')).toBeInTheDocument()
+      expect(screen.getByLabelText('auth.email')).toBeInTheDocument()
+      expect(screen.getByLabelText('auth.password')).toBeInTheDocument()
+      expect(screen.getByLabelText('auth.confirmPassword')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'auth.createAccount' })).toBeInTheDocument()
     })
 
     it('should render login link', () => {
       renderRegisterPage()
 
-      const loginLink = screen.getByRole('link', { name: /inicia sesión/i })
+      const loginLink = screen.getByRole('link', { name: 'auth.loginHere' })
       expect(loginLink).toBeInTheDocument()
       expect(loginLink).toHaveAttribute('href', '/login')
     })
@@ -82,8 +91,8 @@ describe('RegisterPage', () => {
     it('should render terms and privacy links', () => {
       renderRegisterPage()
 
-      expect(screen.getByText(/términos de servicio/i)).toBeInTheDocument()
-      expect(screen.getByText(/política de privacidad/i)).toBeInTheDocument()
+      expect(screen.getByText('auth.termsOfService')).toBeInTheDocument()
+      expect(screen.getByText('auth.privacyPolicy')).toBeInTheDocument()
     })
   })
 
@@ -91,9 +100,42 @@ describe('RegisterPage', () => {
     it('should not call register when fields are empty', async () => {
       renderRegisterPage()
 
-      fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'auth.createAccount' }))
 
       await waitFor(() => {
+        expect(mockRegister).not.toHaveBeenCalled()
+      })
+    })
+
+    it('should show validation error messages when fields are empty', async () => {
+      renderRegisterPage()
+
+      fireEvent.click(screen.getByRole('button', { name: 'auth.createAccount' }))
+
+      await waitFor(() => {
+        expect(screen.getByText('auth.validation.clinicNameMinLength')).toBeInTheDocument()
+        expect(screen.getByText('auth.validation.clinicSlugMinLength')).toBeInTheDocument()
+        expect(screen.getByText('auth.validation.firstNameRequired')).toBeInTheDocument()
+        expect(screen.getByText('auth.validation.lastNameRequired')).toBeInTheDocument()
+        expect(screen.getByText('auth.validation.invalidEmail')).toBeInTheDocument()
+        expect(screen.getByText('auth.validation.passwordMinLength')).toBeInTheDocument()
+      })
+    })
+
+    it('should show password mismatch error on confirm password', async () => {
+      renderRegisterPage()
+
+      fireEvent.change(screen.getByLabelText('auth.clinicName'), { target: { value: 'My Dental Clinic' } })
+      fireEvent.change(screen.getByLabelText('auth.clinicSlugUrlLabel'), { target: { value: 'my-clinic' } })
+      fireEvent.change(screen.getByLabelText('auth.firstName'), { target: { value: 'John' } })
+      fireEvent.change(screen.getByLabelText('auth.lastName'), { target: { value: 'Doe' } })
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'test@example.com' } })
+      fireEvent.change(screen.getByLabelText('auth.password'), { target: { value: 'Password1!' } })
+      fireEvent.change(screen.getByLabelText('auth.confirmPassword'), { target: { value: 'Different1!' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.createAccount' }))
+
+      await waitFor(() => {
+        expect(screen.getByText('auth.validation.passwordMismatch')).toBeInTheDocument()
         expect(mockRegister).not.toHaveBeenCalled()
       })
     })
@@ -101,8 +143,8 @@ describe('RegisterPage', () => {
     it('should not call register with incomplete data', async () => {
       renderRegisterPage()
 
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } })
-      fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }))
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'test@example.com' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.createAccount' }))
 
       await waitFor(() => {
         expect(mockRegister).not.toHaveBeenCalled()
@@ -115,14 +157,14 @@ describe('RegisterPage', () => {
       mockRegister.mockResolvedValue({})
       renderRegisterPage()
 
-      fireEvent.change(screen.getByLabelText(/nombre de la clínica/i), { target: { value: 'My Dental Clinic' } })
-      fireEvent.change(screen.getByLabelText(/identificador de clínica/i), { target: { value: 'my-clinic' } })
-      fireEvent.change(screen.getByLabelText(/^nombre$/i), { target: { value: 'John' } })
-      fireEvent.change(screen.getByLabelText(/apellido/i), { target: { value: 'Doe' } })
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } })
-      fireEvent.change(screen.getByLabelText(/^contraseña$/i), { target: { value: 'Password1!' } })
-      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'Password1!' } })
-      fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }))
+      fireEvent.change(screen.getByLabelText('auth.clinicName'), { target: { value: 'My Dental Clinic' } })
+      fireEvent.change(screen.getByLabelText('auth.clinicSlugUrlLabel'), { target: { value: 'my-clinic' } })
+      fireEvent.change(screen.getByLabelText('auth.firstName'), { target: { value: 'John' } })
+      fireEvent.change(screen.getByLabelText('auth.lastName'), { target: { value: 'Doe' } })
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'test@example.com' } })
+      fireEvent.change(screen.getByLabelText('auth.password'), { target: { value: 'Password1!' } })
+      fireEvent.change(screen.getByLabelText('auth.confirmPassword'), { target: { value: 'Password1!' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.createAccount' }))
 
       await waitFor(() => {
         expect(mockClearError).toHaveBeenCalled()
@@ -142,14 +184,14 @@ describe('RegisterPage', () => {
       mockRegister.mockRejectedValue(error)
       renderRegisterPage()
 
-      fireEvent.change(screen.getByLabelText(/nombre de la clínica/i), { target: { value: 'My Dental Clinic' } })
-      fireEvent.change(screen.getByLabelText(/identificador de clínica/i), { target: { value: 'my-clinic' } })
-      fireEvent.change(screen.getByLabelText(/^nombre$/i), { target: { value: 'John' } })
-      fireEvent.change(screen.getByLabelText(/apellido/i), { target: { value: 'Doe' } })
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } })
-      fireEvent.change(screen.getByLabelText(/^contraseña$/i), { target: { value: 'Password1!' } })
-      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'Password1!' } })
-      fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }))
+      fireEvent.change(screen.getByLabelText('auth.clinicName'), { target: { value: 'My Dental Clinic' } })
+      fireEvent.change(screen.getByLabelText('auth.clinicSlugUrlLabel'), { target: { value: 'my-clinic' } })
+      fireEvent.change(screen.getByLabelText('auth.firstName'), { target: { value: 'John' } })
+      fireEvent.change(screen.getByLabelText('auth.lastName'), { target: { value: 'Doe' } })
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'test@example.com' } })
+      fireEvent.change(screen.getByLabelText('auth.password'), { target: { value: 'Password1!' } })
+      fireEvent.change(screen.getByLabelText('auth.confirmPassword'), { target: { value: 'Password1!' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.createAccount' }))
 
       await waitFor(() => {
         expect(mockRegister).toHaveBeenCalled()
@@ -162,8 +204,8 @@ describe('RegisterPage', () => {
       mockAuthState.isLoading = true
       renderRegisterPage()
 
-      expect(screen.getByText(/creando cuenta/i)).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /creando cuenta/i })).toBeDisabled()
+      expect(screen.getByText('auth.creatingAccount')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'auth.creatingAccount' })).toBeDisabled()
     })
   })
 
@@ -180,25 +222,29 @@ describe('RegisterPage', () => {
     it('should toggle password visibility', async () => {
       renderRegisterPage()
 
-      const passwordInput = screen.getByLabelText(/^contraseña$/i)
+      const passwordInput = screen.getByLabelText('auth.password')
       expect(passwordInput).toHaveAttribute('type', 'password')
 
-      const toggleButtons = screen.getAllByRole('button', { name: /mostrar contraseña/i })
-      fireEvent.click(toggleButtons[0])
+      fireEvent.click(screen.getByRole('button', { name: 'auth.showPassword' }))
 
       expect(passwordInput).toHaveAttribute('type', 'text')
+
+      fireEvent.click(screen.getByRole('button', { name: 'auth.hidePassword' }))
+      expect(passwordInput).toHaveAttribute('type', 'password')
     })
 
     it('should toggle confirm password visibility', async () => {
       renderRegisterPage()
 
-      const confirmPasswordInput = screen.getByLabelText(/confirmar contraseña/i)
+      const confirmPasswordInput = screen.getByLabelText('auth.confirmPassword')
       expect(confirmPasswordInput).toHaveAttribute('type', 'password')
 
-      const toggleButtons = screen.getAllByRole('button', { name: /mostrar contraseña/i })
-      fireEvent.click(toggleButtons[1])
+      fireEvent.click(screen.getByRole('button', { name: 'auth.showConfirmPassword' }))
 
       expect(confirmPasswordInput).toHaveAttribute('type', 'text')
+
+      fireEvent.click(screen.getByRole('button', { name: 'auth.hideConfirmPassword' }))
+      expect(confirmPasswordInput).toHaveAttribute('type', 'password')
     })
   })
 
@@ -261,8 +307,8 @@ describe('RegisterPage', () => {
     it('should auto-fill slug when typing clinic name', async () => {
       renderRegisterPage()
 
-      const clinicNameInput = screen.getByLabelText(/nombre de la clínica/i)
-      const slugInput = screen.getByLabelText(/identificador de clínica/i) as HTMLInputElement
+      const clinicNameInput = screen.getByLabelText('auth.clinicName')
+      const slugInput = screen.getByLabelText('auth.clinicSlugUrlLabel') as HTMLInputElement
 
       fireEvent.change(clinicNameInput, { target: { value: 'My Dental Clinic' } })
 
@@ -274,8 +320,8 @@ describe('RegisterPage', () => {
     it('should stop auto-generating when slug is manually edited', async () => {
       renderRegisterPage()
 
-      const clinicNameInput = screen.getByLabelText(/nombre de la clínica/i)
-      const slugInput = screen.getByLabelText(/identificador de clínica/i) as HTMLInputElement
+      const clinicNameInput = screen.getByLabelText('auth.clinicName')
+      const slugInput = screen.getByLabelText('auth.clinicSlugUrlLabel') as HTMLInputElement
 
       fireEvent.change(clinicNameInput, { target: { value: 'My Clinic' } })
 
@@ -295,8 +341,8 @@ describe('RegisterPage', () => {
     it('should resume auto-generating when slug is cleared', async () => {
       renderRegisterPage()
 
-      const clinicNameInput = screen.getByLabelText(/nombre de la clínica/i)
-      const slugInput = screen.getByLabelText(/identificador de clínica/i) as HTMLInputElement
+      const clinicNameInput = screen.getByLabelText('auth.clinicName')
+      const slugInput = screen.getByLabelText('auth.clinicSlugUrlLabel') as HTMLInputElement
 
       fireEvent.change(clinicNameInput, { target: { value: 'My Clinic' } })
 
@@ -321,8 +367,8 @@ describe('RegisterPage', () => {
     it('should normalize diacritics in auto-generated slug', async () => {
       renderRegisterPage()
 
-      const clinicNameInput = screen.getByLabelText(/nombre de la clínica/i)
-      const slugInput = screen.getByLabelText(/identificador de clínica/i) as HTMLInputElement
+      const clinicNameInput = screen.getByLabelText('auth.clinicName')
+      const slugInput = screen.getByLabelText('auth.clinicSlugUrlLabel') as HTMLInputElement
 
       fireEvent.change(clinicNameInput, { target: { value: 'Clínica Señor' } })
 
@@ -336,7 +382,7 @@ describe('RegisterPage', () => {
     it('should convert manual slug input to lowercase', async () => {
       renderRegisterPage()
 
-      const slugInput = screen.getByLabelText(/identificador de clínica/i) as HTMLInputElement
+      const slugInput = screen.getByLabelText('auth.clinicSlugUrlLabel') as HTMLInputElement
 
       fireEvent.change(slugInput, { target: { value: 'My-Clinic' } })
 
@@ -348,7 +394,7 @@ describe('RegisterPage', () => {
     it('should replace spaces with hyphens in manual slug input', async () => {
       renderRegisterPage()
 
-      const slugInput = screen.getByLabelText(/identificador de clínica/i) as HTMLInputElement
+      const slugInput = screen.getByLabelText('auth.clinicSlugUrlLabel') as HTMLInputElement
 
       fireEvent.change(slugInput, { target: { value: 'my clinic' } })
 
@@ -360,7 +406,7 @@ describe('RegisterPage', () => {
     it('should preserve trailing hyphen when typing with spaces', async () => {
       renderRegisterPage()
 
-      const slugInput = screen.getByLabelText(/identificador de clínica/i) as HTMLInputElement
+      const slugInput = screen.getByLabelText('auth.clinicSlugUrlLabel') as HTMLInputElement
 
       fireEvent.change(slugInput, { target: { value: 'my ' } })
 
@@ -372,7 +418,7 @@ describe('RegisterPage', () => {
     it('should strip special characters from manual slug input', async () => {
       renderRegisterPage()
 
-      const slugInput = screen.getByLabelText(/identificador de clínica/i) as HTMLInputElement
+      const slugInput = screen.getByLabelText('auth.clinicSlugUrlLabel') as HTMLInputElement
 
       fireEvent.change(slugInput, { target: { value: 'my@clinic!' } })
 
@@ -384,7 +430,7 @@ describe('RegisterPage', () => {
     it('should not convert accent marks to hyphens', async () => {
       renderRegisterPage()
 
-      const slugInput = screen.getByLabelText(/identificador de clínica/i) as HTMLInputElement
+      const slugInput = screen.getByLabelText('auth.clinicSlugUrlLabel') as HTMLInputElement
 
       fireEvent.change(slugInput, { target: { value: "mi'clinica" } })
 
@@ -396,7 +442,7 @@ describe('RegisterPage', () => {
     it('should normalize diacritics in manual slug input', async () => {
       renderRegisterPage()
 
-      const slugInput = screen.getByLabelText(/identificador de clínica/i) as HTMLInputElement
+      const slugInput = screen.getByLabelText('auth.clinicSlugUrlLabel') as HTMLInputElement
 
       fireEvent.change(slugInput, { target: { value: 'clínica' } })
 
@@ -408,7 +454,7 @@ describe('RegisterPage', () => {
     it('should show helper text with format instructions', () => {
       renderRegisterPage()
 
-      expect(screen.getByText(/solo letras minúsculas, números y guiones/i)).toBeInTheDocument()
+      expect(screen.getByText('auth.clinicSlugHelp')).toBeInTheDocument()
     })
   })
 })

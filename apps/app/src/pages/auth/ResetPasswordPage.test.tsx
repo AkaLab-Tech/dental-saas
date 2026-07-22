@@ -3,6 +3,13 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router'
 import { AxiosError, AxiosHeaders } from 'axios'
 
+// Mock react-i18next — return the key so assertions are stable regardless of locale
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
+}))
+
 // Mock apiClient
 const mockPost = vi.fn()
 
@@ -59,16 +66,16 @@ describe('ResetPasswordPage', () => {
     it('should render the reset password form with valid token', () => {
       renderResetPasswordPage()
 
-      expect(screen.getByRole('heading', { name: /nueva contraseña/i })).toBeInTheDocument()
-      expect(screen.getByLabelText(/nueva contraseña/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/confirmar contraseña/i)).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /restablecer contraseña/i })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'auth.newPassword' })).toBeInTheDocument()
+      expect(screen.getByLabelText('auth.newPassword')).toBeInTheDocument()
+      expect(screen.getByLabelText('auth.confirmPassword')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'auth.resetPassword' })).toBeInTheDocument()
     })
 
     it('should render back to login link', () => {
       renderResetPasswordPage()
 
-      const loginLink = screen.getByRole('link', { name: /volver al inicio de sesión/i })
+      const loginLink = screen.getByRole('link', { name: 'auth.backToLogin' })
       expect(loginLink).toBeInTheDocument()
       expect(loginLink).toHaveAttribute('href', '/login')
     })
@@ -76,13 +83,13 @@ describe('ResetPasswordPage', () => {
     it('should show error when token is missing', () => {
       renderResetPasswordPage(null)
 
-      expect(screen.getByText(/enlace de recuperación inválido/i)).toBeInTheDocument()
+      expect(screen.getByText('auth.invalidResetLink')).toBeInTheDocument()
     })
 
     it('should show request new link when token is missing', () => {
       renderResetPasswordPage(null)
 
-      const newLinkButton = screen.getByRole('link', { name: /solicitar un nuevo enlace/i })
+      const newLinkButton = screen.getByRole('link', { name: 'auth.requestNewResetLink' })
       expect(newLinkButton).toBeInTheDocument()
       expect(newLinkButton).toHaveAttribute('href', '/forgot-password')
     })
@@ -93,10 +100,21 @@ describe('ResetPasswordPage', () => {
       vi.useRealTimers()
       renderResetPasswordPage()
 
-      fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'auth.resetPassword' }))
 
       await waitFor(() => {
         expect(mockPost).not.toHaveBeenCalled()
+      })
+    })
+
+    it('should show validation error messages when fields are empty', async () => {
+      vi.useRealTimers()
+      renderResetPasswordPage()
+
+      fireEvent.click(screen.getByRole('button', { name: 'auth.resetPassword' }))
+
+      await waitFor(() => {
+        expect(screen.getByText('auth.validation.passwordMinLength')).toBeInTheDocument()
       })
     })
 
@@ -104,12 +122,13 @@ describe('ResetPasswordPage', () => {
       vi.useRealTimers()
       renderResetPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'short' } })
-      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'short' } })
-      fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }))
+      fireEvent.change(screen.getByLabelText('auth.newPassword'), { target: { value: 'short' } })
+      fireEvent.change(screen.getByLabelText('auth.confirmPassword'), { target: { value: 'short' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.resetPassword' }))
 
       await waitFor(() => {
         expect(mockPost).not.toHaveBeenCalled()
+        expect(screen.getByText('auth.validation.passwordMinLength')).toBeInTheDocument()
       })
     })
 
@@ -117,12 +136,13 @@ describe('ResetPasswordPage', () => {
       vi.useRealTimers()
       renderResetPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'Password123' } })
-      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'Password123' } })
-      fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }))
+      fireEvent.change(screen.getByLabelText('auth.newPassword'), { target: { value: 'Password123' } })
+      fireEvent.change(screen.getByLabelText('auth.confirmPassword'), { target: { value: 'Password123' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.resetPassword' }))
 
       await waitFor(() => {
         expect(mockPost).not.toHaveBeenCalled()
+        expect(screen.getByText('auth.validation.passwordComplexityBasic')).toBeInTheDocument()
       })
     })
 
@@ -130,12 +150,13 @@ describe('ResetPasswordPage', () => {
       vi.useRealTimers()
       renderResetPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'Password1!' } })
-      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'Different1!' } })
-      fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }))
+      fireEvent.change(screen.getByLabelText('auth.newPassword'), { target: { value: 'Password1!' } })
+      fireEvent.change(screen.getByLabelText('auth.confirmPassword'), { target: { value: 'Different1!' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.resetPassword' }))
 
       await waitFor(() => {
         expect(mockPost).not.toHaveBeenCalled()
+        expect(screen.getByText('auth.validation.passwordMismatch')).toBeInTheDocument()
       })
     })
   })
@@ -146,9 +167,9 @@ describe('ResetPasswordPage', () => {
       mockPost.mockResolvedValue({})
       renderResetPasswordPage('my-reset-token')
 
-      fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }))
+      fireEvent.change(screen.getByLabelText('auth.newPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.change(screen.getByLabelText('auth.confirmPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.resetPassword' }))
 
       await waitFor(() => {
         expect(mockPost).toHaveBeenCalledWith('/auth/reset-password', {
@@ -163,13 +184,13 @@ describe('ResetPasswordPage', () => {
       mockPost.mockResolvedValue({})
       renderResetPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }))
+      fireEvent.change(screen.getByLabelText('auth.newPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.change(screen.getByLabelText('auth.confirmPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.resetPassword' }))
 
       await waitFor(() => {
-        expect(screen.getByText(/contraseña actualizada/i)).toBeInTheDocument()
-        expect(screen.getByText(/tu contraseña ha sido restablecida exitosamente/i)).toBeInTheDocument()
+        expect(screen.getByText('auth.passwordUpdated')).toBeInTheDocument()
+        expect(screen.getByText('auth.passwordResetSuccessMessage')).toBeInTheDocument()
       })
     })
 
@@ -178,13 +199,13 @@ describe('ResetPasswordPage', () => {
       mockPost.mockResolvedValue({})
       renderResetPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }))
+      fireEvent.change(screen.getByLabelText('auth.newPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.change(screen.getByLabelText('auth.confirmPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.resetPassword' }))
 
       await waitFor(() => {
-        expect(screen.queryByLabelText(/nueva contraseña/i)).not.toBeInTheDocument()
-        expect(screen.queryByRole('button', { name: /restablecer contraseña/i })).not.toBeInTheDocument()
+        expect(screen.queryByLabelText('auth.newPassword')).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: 'auth.resetPassword' })).not.toBeInTheDocument()
       })
     })
 
@@ -193,7 +214,7 @@ describe('ResetPasswordPage', () => {
       renderResetPasswordPage(null)
 
       // Form fields are not rendered when token is missing
-      expect(screen.queryByLabelText(/nueva contraseña/i)).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('auth.newPassword')).not.toBeInTheDocument()
       expect(mockPost).not.toHaveBeenCalled()
     })
   })
@@ -204,12 +225,12 @@ describe('ResetPasswordPage', () => {
       mockPost.mockRejectedValue(createAxiosError('Request failed', { code: 'TOKEN_EXPIRED', message: 'Token expired' }))
       renderResetPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }))
+      fireEvent.change(screen.getByLabelText('auth.newPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.change(screen.getByLabelText('auth.confirmPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.resetPassword' }))
 
       await waitFor(() => {
-        expect(screen.getByText(/el enlace ha expirado/i)).toBeInTheDocument()
+        expect(screen.getByText('auth.tokenExpired')).toBeInTheDocument()
       })
     })
 
@@ -218,12 +239,12 @@ describe('ResetPasswordPage', () => {
       mockPost.mockRejectedValue(createAxiosError('Request failed', { code: 'TOKEN_USED', message: 'Token used' }))
       renderResetPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }))
+      fireEvent.change(screen.getByLabelText('auth.newPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.change(screen.getByLabelText('auth.confirmPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.resetPassword' }))
 
       await waitFor(() => {
-        expect(screen.getByText(/este enlace ya fue utilizado/i)).toBeInTheDocument()
+        expect(screen.getByText('auth.tokenUsed')).toBeInTheDocument()
       })
     })
 
@@ -232,12 +253,12 @@ describe('ResetPasswordPage', () => {
       mockPost.mockRejectedValue(createAxiosError('Request failed', { code: 'INVALID_TOKEN', message: 'Invalid token' }))
       renderResetPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }))
+      fireEvent.change(screen.getByLabelText('auth.newPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.change(screen.getByLabelText('auth.confirmPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.resetPassword' }))
 
       await waitFor(() => {
-        expect(screen.getByText(/enlace inválido. por favor solicita uno nuevo/i)).toBeInTheDocument()
+        expect(screen.getByText('auth.invalidToken')).toBeInTheDocument()
       })
     })
 
@@ -246,12 +267,12 @@ describe('ResetPasswordPage', () => {
       mockPost.mockRejectedValue(createAxiosError('Request failed', { code: 'ACCOUNT_INACTIVE', message: 'Account inactive' }))
       renderResetPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }))
+      fireEvent.change(screen.getByLabelText('auth.newPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.change(screen.getByLabelText('auth.confirmPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.resetPassword' }))
 
       await waitFor(() => {
-        expect(screen.getByText(/tu cuenta está desactivada/i)).toBeInTheDocument()
+        expect(screen.getByText('auth.accountInactive')).toBeInTheDocument()
       })
     })
 
@@ -260,9 +281,9 @@ describe('ResetPasswordPage', () => {
       mockPost.mockRejectedValue(createAxiosError('Request failed', { code: 'UNKNOWN_ERROR', message: 'Something went wrong' }))
       renderResetPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }))
+      fireEvent.change(screen.getByLabelText('auth.newPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.change(screen.getByLabelText('auth.confirmPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.resetPassword' }))
 
       await waitFor(() => {
         expect(screen.getByText('Something went wrong')).toBeInTheDocument()
@@ -274,12 +295,12 @@ describe('ResetPasswordPage', () => {
       mockPost.mockRejectedValue(new Error('Network error'))
       renderResetPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }))
+      fireEvent.change(screen.getByLabelText('auth.newPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.change(screen.getByLabelText('auth.confirmPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.resetPassword' }))
 
       await waitFor(() => {
-        expect(screen.getByText(/error inesperado/i)).toBeInTheDocument()
+        expect(screen.getByText('auth.unexpectedError')).toBeInTheDocument()
       })
     })
   })
@@ -290,12 +311,12 @@ describe('ResetPasswordPage', () => {
       mockPost.mockImplementation(() => new Promise(() => {}))
       renderResetPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }))
+      fireEvent.change(screen.getByLabelText('auth.newPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.change(screen.getByLabelText('auth.confirmPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.resetPassword' }))
 
       await waitFor(() => {
-        expect(screen.getByText(/actualizando/i)).toBeInTheDocument()
+        expect(screen.getByText('auth.updating')).toBeInTheDocument()
       })
     })
 
@@ -304,12 +325,12 @@ describe('ResetPasswordPage', () => {
       mockPost.mockImplementation(() => new Promise(() => {}))
       renderResetPasswordPage()
 
-      fireEvent.change(screen.getByLabelText(/nueva contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'NewPassword1!' } })
-      fireEvent.click(screen.getByRole('button', { name: /restablecer contraseña/i }))
+      fireEvent.change(screen.getByLabelText('auth.newPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.change(screen.getByLabelText('auth.confirmPassword'), { target: { value: 'NewPassword1!' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.resetPassword' }))
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /actualizando/i })).toBeDisabled()
+        expect(screen.getByRole('button', { name: 'auth.updating' })).toBeDisabled()
       })
     })
   })
@@ -318,10 +339,10 @@ describe('ResetPasswordPage', () => {
     it('should toggle password visibility', async () => {
       renderResetPasswordPage()
 
-      const passwordInput = screen.getByLabelText(/nueva contraseña/i)
+      const passwordInput = screen.getByLabelText('auth.newPassword')
       expect(passwordInput).toHaveAttribute('type', 'password')
 
-      const toggleButtons = screen.getAllByRole('button', { name: /mostrar contraseña/i })
+      const toggleButtons = screen.getAllByRole('button', { name: 'auth.showPassword' })
       fireEvent.click(toggleButtons[0])
 
       expect(passwordInput).toHaveAttribute('type', 'text')
@@ -330,10 +351,10 @@ describe('ResetPasswordPage', () => {
     it('should toggle confirm password visibility', async () => {
       renderResetPasswordPage()
 
-      const confirmPasswordInput = screen.getByLabelText(/confirmar contraseña/i)
+      const confirmPasswordInput = screen.getByLabelText('auth.confirmPassword')
       expect(confirmPasswordInput).toHaveAttribute('type', 'password')
 
-      const toggleButtons = screen.getAllByRole('button', { name: /mostrar contraseña/i })
+      const toggleButtons = screen.getAllByRole('button', { name: 'auth.showPassword' })
       fireEvent.click(toggleButtons[1])
 
       expect(confirmPasswordInput).toHaveAttribute('type', 'text')
