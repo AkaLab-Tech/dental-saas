@@ -41,7 +41,9 @@
     "settings": "Configuración",
     "logout": "Cerrar sesión",
     "users": "Usuarios",
-    "lock": "Bloquear"
+    "lock": "Bloquear",
+    "openMenu": "Abrir menú",
+    "closeMenu": "Cerrar menú"
   },
   "auth": {
     "login": "Iniciar sesión",
@@ -572,6 +574,45 @@
     "sendReminder": "Enviar recordatorio",
     "saveChanges": "Guardar Cambios",
     "readOnlyNotice": "Solo el propietario o administradores pueden editar las preferencias",
+    "noExportPermission": "No tienes permisos para exportar datos",
+    "exportError": "Error al exportar datos",
+    "tabs": {
+      "profile": "Perfil de Clínica",
+      "profileDescription": "Información general de tu clínica",
+      "preferences": "Preferencias",
+      "preferencesDescription": "Idioma, formatos y notificaciones",
+      "hours": "Horarios",
+      "hoursDescription": "Días y horarios de atención",
+      "data": "Datos",
+      "dataDescription": "Exportar datos de la clínica"
+    },
+    "days": {
+      "sun": "Domingo",
+      "sunShort": "Dom",
+      "mon": "Lunes",
+      "monShort": "Lun",
+      "tue": "Martes",
+      "tueShort": "Mar",
+      "wed": "Miércoles",
+      "wedShort": "Mié",
+      "thu": "Jueves",
+      "thuShort": "Jue",
+      "fri": "Viernes",
+      "friShort": "Vie",
+      "sat": "Sábado",
+      "satShort": "Sáb"
+    },
+    "businessHours": {
+      "workingDays": "Días Laborables",
+      "workingDaysHint": "Selecciona los días en que la clínica está abierta",
+      "openingHours": "Horarios de Atención",
+      "openingHoursHint": "Define el horario de apertura y cierre para cada día",
+      "readOnlyNotice": "Solo el propietario o administradores pueden editar los horarios",
+      "openingTime": "Hora de apertura",
+      "closingTime": "Hora de cierre",
+      "timeSeparator": "a",
+      "noWorkingDays": "No hay días laborables seleccionados"
+    },
     "currencyWarning": {
       "title": "Cambiar Moneda",
       "changeFrom": "Estás cambiando la moneda de",

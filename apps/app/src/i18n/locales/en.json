@@ -41,7 +41,9 @@
     "settings": "Settings",
     "logout": "Logout",
     "users": "Users",
-    "lock": "Lock"
+    "lock": "Lock",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
   },
   "auth": {
     "login": "Login",
@@ -572,6 +574,45 @@
     "sendReminder": "Send reminder",
     "saveChanges": "Save Changes",
     "readOnlyNotice": "Only the owner or administrators can edit preferences",
+    "noExportPermission": "You do not have permission to export data",
+    "exportError": "Error exporting data",
+    "tabs": {
+      "profile": "Clinic Profile",
+      "profileDescription": "General information about your clinic",
+      "preferences": "Preferences",
+      "preferencesDescription": "Language, formats and notifications",
+      "hours": "Business Hours",
+      "hoursDescription": "Working days and hours",
+      "data": "Data",
+      "dataDescription": "Export clinic data"
+    },
+    "days": {
+      "sun": "Sunday",
+      "sunShort": "Sun",
+      "mon": "Monday",
+      "monShort": "Mon",
+      "tue": "Tuesday",
+      "tueShort": "Tue",
+      "wed": "Wednesday",
+      "wedShort": "Wed",
+      "thu": "Thursday",
+      "thuShort": "Thu",
+      "fri": "Friday",
+      "friShort": "Fri",
+      "sat": "Saturday",
+      "satShort": "Sat"
+    },
+    "businessHours": {
+      "workingDays": "Working Days",
+      "workingDaysHint": "Select the days the clinic is open",
+      "openingHours": "Business Hours",
+      "openingHoursHint": "Set the opening and closing time for each day",
+      "readOnlyNotice": "Only the owner or administrators can edit business hours",
+      "openingTime": "Opening time",
+      "closingTime": "Closing time",
+      "timeSeparator": "to",
+      "noWorkingDays": "No working days selected"
+    },
     "duration": {
       "15min": "15 minutes",
       "30min": "30 minutes",

@@ -1,17 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Loader2, Lock } from 'lucide-react'
 import { useSettingsStore } from '@/stores/settings.store'
 import type { TenantSettings, UpdateSettingsData } from '@/lib/settings-api'
-
-const DAYS_OF_WEEK = [
-  { value: 0, label: 'Domingo', short: 'Dom' },
-  { value: 1, label: 'Lunes', short: 'Lun' },
-  { value: 2, label: 'Martes', short: 'Mar' },
-  { value: 3, label: 'Miércoles', short: 'Mié' },
-  { value: 4, label: 'Jueves', short: 'Jue' },
-  { value: 5, label: 'Viernes', short: 'Vie' },
-  { value: 6, label: 'Sábado', short: 'Sáb' },
-]
 
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 
@@ -21,7 +12,14 @@ interface BusinessHoursFormProps {
 }
 
 export function BusinessHoursForm({ settings, canEdit }: BusinessHoursFormProps) {
+  const { t } = useTranslation()
   const { updateSettings, isSaving } = useSettingsStore()
+
+  const DAYS_OF_WEEK = DAY_KEYS.map((dayKey, value) => ({
+    value,
+    label: t(`settings.days.${dayKey}`),
+    short: t(`settings.days.${dayKey}Short`),
+  }))
 
   const [workingDays, setWorkingDays] = useState<number[]>([1, 2, 3, 4, 5])
   const [businessHours, setBusinessHours] = useState<Record<string, { start: string; end: string }>>(
@@ -97,15 +95,15 @@ export function BusinessHoursForm({ settings, canEdit }: BusinessHoursFormProps)
       {!canEdit && (
         <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
           <Lock className="h-4 w-4" />
-          Solo el propietario o administradores pueden editar los horarios
+          {t('settings.businessHours.readOnlyNotice')}
         </div>
       )}
 
       {/* Working Days Section */}
       <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Días Laborables</h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">{t('settings.businessHours.workingDays')}</h3>
         <p className="text-sm text-gray-500 mb-4">
-          Selecciona los días en que la clínica está abierta
+          {t('settings.businessHours.workingDaysHint')}
         </p>
 
         <div className="flex flex-wrap gap-2">
@@ -133,9 +131,9 @@ export function BusinessHoursForm({ settings, canEdit }: BusinessHoursFormProps)
 
       {/* Business Hours Section */}
       <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Horarios de Atención</h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">{t('settings.businessHours.openingHours')}</h3>
         <p className="text-sm text-gray-500 mb-4">
-          Define el horario de apertura y cierre para cada día
+          {t('settings.businessHours.openingHoursHint')}
         </p>
 
         <div className="space-y-3">
@@ -152,7 +150,7 @@ export function BusinessHoursForm({ settings, canEdit }: BusinessHoursFormProps)
 
                 <div className="flex items-center gap-2">
                   <label htmlFor={`${dayKey}-start`} className="sr-only">
-                    Hora de apertura
+                    {t('settings.businessHours.openingTime')}
                   </label>
                   <input
                     type="time"
@@ -162,9 +160,9 @@ export function BusinessHoursForm({ settings, canEdit }: BusinessHoursFormProps)
                     disabled={!canEdit}
                     className="rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
-                  <span className="text-gray-500">a</span>
+                  <span className="text-gray-500">{t('settings.businessHours.timeSeparator')}</span>
                   <label htmlFor={`${dayKey}-end`} className="sr-only">
-                    Hora de cierre
+                    {t('settings.businessHours.closingTime')}
                   </label>
                   <input
                     type="time"
@@ -181,7 +179,7 @@ export function BusinessHoursForm({ settings, canEdit }: BusinessHoursFormProps)
 
           {workingDays.length === 0 && (
             <div className="p-4 text-center text-gray-500 bg-gray-50 rounded-lg">
-              No hay días laborables seleccionados
+              {t('settings.businessHours.noWorkingDays')}
             </div>
           )}
         </div>
@@ -196,7 +194,7 @@ export function BusinessHoursForm({ settings, canEdit }: BusinessHoursFormProps)
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-            Guardar Cambios
+            {t('settings.saveChanges')}
           </button>
         </div>
       )}

@@ -41,7 +41,9 @@
     "settings": "الإعدادات",
     "logout": "تسجيل الخروج",
     "users": "المستخدمون",
-    "lock": "قفل"
+    "lock": "قفل",
+    "openMenu": "فتح القائمة",
+    "closeMenu": "إغلاق القائمة"
   },
   "auth": {
     "login": "تسجيل الدخول",
@@ -572,6 +574,45 @@
     "sendReminder": "إرسال تذكير",
     "saveChanges": "حفظ التغييرات",
     "readOnlyNotice": "فقط المالك أو المسؤولين يمكنهم تعديل التفضيلات",
+    "noExportPermission": "ليس لديك صلاحية لتصدير البيانات",
+    "exportError": "خطأ في تصدير البيانات",
+    "tabs": {
+      "profile": "ملف العيادة",
+      "profileDescription": "معلومات عامة عن عيادتك",
+      "preferences": "التفضيلات",
+      "preferencesDescription": "اللغة والتنسيقات والإشعارات",
+      "hours": "ساعات العمل",
+      "hoursDescription": "أيام وساعات الدوام",
+      "data": "البيانات",
+      "dataDescription": "تصدير بيانات العيادة"
+    },
+    "days": {
+      "sun": "الأحد",
+      "sunShort": "أحد",
+      "mon": "الإثنين",
+      "monShort": "إثن",
+      "tue": "الثلاثاء",
+      "tueShort": "ثلا",
+      "wed": "الأربعاء",
+      "wedShort": "أرب",
+      "thu": "الخميس",
+      "thuShort": "خمي",
+      "fri": "الجمعة",
+      "friShort": "جمع",
+      "sat": "السبت",
+      "satShort": "سبت"
+    },
+    "businessHours": {
+      "workingDays": "أيام العمل",
+      "workingDaysHint": "اختر الأيام التي تكون فيها العيادة مفتوحة",
+      "openingHours": "ساعات الدوام",
+      "openingHoursHint": "حدد وقت الفتح والإغلاق لكل يوم",
+      "readOnlyNotice": "فقط المالك أو المسؤولين يمكنهم تعديل ساعات الدوام",
+      "openingTime": "وقت الفتح",
+      "closingTime": "وقت الإغلاق",
+      "timeSeparator": "إلى",
+      "noWorkingDays": "لم يتم تحديد أيام عمل"
+    },
     "currencyWarning": {
       "title": "تغيير العملة",
       "changeFrom": "أنت تغير العملة من",
