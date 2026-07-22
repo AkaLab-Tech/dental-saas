@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Settings, Building2, Clock, Bell, Loader2, AlertCircle, CheckCircle2, Database } from 'lucide-react'
 import { UserRole } from '@dental/shared'
 import { useSettingsStore } from '@/stores/settings.store'
@@ -12,39 +13,40 @@ type TabId = 'profile' | 'preferences' | 'hours' | 'data'
 
 interface Tab {
   id: TabId
-  label: string
+  labelKey: string
   icon: typeof Settings
-  description: string
+  descriptionKey: string
 }
 
 const tabs: Tab[] = [
   {
     id: 'profile',
-    label: 'Perfil de Clínica',
+    labelKey: 'settings.tabs.profile',
     icon: Building2,
-    description: 'Información general de tu clínica',
+    descriptionKey: 'settings.tabs.profileDescription',
   },
   {
     id: 'preferences',
-    label: 'Preferencias',
+    labelKey: 'settings.tabs.preferences',
     icon: Bell,
-    description: 'Idioma, formatos y notificaciones',
+    descriptionKey: 'settings.tabs.preferencesDescription',
   },
   {
     id: 'hours',
-    label: 'Horarios',
+    labelKey: 'settings.tabs.hours',
     icon: Clock,
-    description: 'Días y horarios de atención',
+    descriptionKey: 'settings.tabs.hoursDescription',
   },
   {
     id: 'data',
-    label: 'Datos',
+    labelKey: 'settings.tabs.data',
     icon: Database,
-    description: 'Exportar datos de la clínica',
+    descriptionKey: 'settings.tabs.dataDescription',
   },
 ]
 
 export function SettingsPage() {
+  const { t } = useTranslation()
   const { user } = useAuthStore()
   const {
     settings,
@@ -88,10 +90,10 @@ export function SettingsPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Settings className="h-7 w-7" />
-          Configuración
+          {t('settings.title')}
         </h1>
         <p className="mt-1 text-sm text-gray-500">
-          Administra la configuración de tu clínica
+          {t('settings.subtitle')}
         </p>
       </div>
 
@@ -106,7 +108,7 @@ export function SettingsPage() {
             onClick={clearError}
             className="text-red-500 hover:text-red-700 text-sm font-medium"
           >
-            Cerrar
+            {t('common.close')}
           </button>
         </div>
       )}
@@ -138,7 +140,7 @@ export function SettingsPage() {
                   }`}
                 >
                   <Icon className={`h-5 w-5 mx-auto mb-1 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
-                  <span className="hidden sm:block">{tab.label}</span>
+                  <span className="hidden sm:block">{t(tab.labelKey)}</span>
                 </button>
               )
             })}
@@ -170,7 +172,7 @@ export function SettingsPage() {
           )}
           {activeTab === 'data' && !canEditSettings && (
             <div className="text-center py-8 text-gray-500">
-              No tienes permisos para exportar datos
+              {t('settings.noExportPermission')}
             </div>
           )}
         </div>

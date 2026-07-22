@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Download, Loader2, CheckCircle2, AlertCircle, FileJson, Database } from 'lucide-react'
 import { exportData } from '@/lib/export-api'
 
 export function DataExportForm() {
+  const { t } = useTranslation()
   const [isExporting, setIsExporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -18,7 +20,7 @@ export function DataExportForm() {
       // Auto-clear success after 3 seconds
       setTimeout(() => setSuccess(false), 3000)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al exportar datos')
+      setError(err instanceof Error ? err.message : t('settings.exportError'))
     } finally {
       setIsExporting(false)
     }

@@ -1,9 +1,21 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { BrowserRouter } from 'react-router'
+import i18n from 'i18next'
+import '@/i18n'
 import SettingsPage from './SettingsPage'
 import { useSettingsStore } from '@/stores/settings.store'
 import { useAuthStore } from '@/stores/auth.store'
+
+// SettingsPage (and its BusinessHoursForm / DataExportForm children) now
+// render every user-facing string through t(). Initialize the real i18n
+// instance (Spanish, the app default) so assertions exercise the actual
+// translated/interpolated output rather than raw keys or jsdom's default
+// `en` locale detection — mirrors the pattern used by LabworksPage.test.tsx
+// and DoctorsPage.test.tsx for the same reason (tasks #325/#326).
+beforeAll(async () => {
+  await i18n.changeLanguage('es')
+})
 
 // Mock the stores
 vi.mock('@/stores/settings.store', () => ({
