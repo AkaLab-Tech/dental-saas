@@ -660,6 +660,38 @@
     "recentActivity": "النشاط الأخير",
     "upcomingAppointments": "المواعيد القادمة",
     "quickActions": "إجراءات سريعة",
+    "welcomeUser": "مرحبًا، {{name}}. إليك ملخص عيادتك.",
+    "trendVsLastMonth": "مقارنة بالشهر السابق",
+    "appointmentStatusTitle": "حالة المواعيد (هذا الشهر)",
+    "statCards": {
+      "activePatients": "المرضى النشطون",
+      "doctors": "الأطباء",
+      "appointmentsThisMonth": "مواعيد هذا الشهر",
+      "completedCount": "{{count}} مكتملة",
+      "monthlyRevenue": "إيرادات الشهر",
+      "pendingAmount": "{{amount}} معلّق",
+      "pendingLabworks": "أعمال مخبرية معلّقة",
+      "unpaidCount": "{{count}} غير مدفوعة",
+      "totalAppointments": "إجمالي المواعيد",
+      "totalAppointmentsSubtitle": "السجل الكامل",
+      "newPatients": "مرضى جدد (الشهر)",
+      "lastMonthCount": "{{count}} الشهر الماضي"
+    },
+    "charts": {
+      "appointmentsByDay": "المواعيد حسب اليوم (آخر ١٤ يومًا)",
+      "noAppointmentData": "لا توجد بيانات مواعيد لعرضها",
+      "revenueByMonth": "الإيرادات حسب الشهر",
+      "noRevenueData": "لا توجد بيانات إيرادات لعرضها",
+      "revenueTooltipLabel": "الإيرادات"
+    },
+    "doctorPerformance": {
+      "title": "أداء الأطباء (هذا الشهر)",
+      "doctor": "الطبيب",
+      "appointments": "المواعيد",
+      "completed": "مكتملة",
+      "rate": "المعدل",
+      "revenue": "الإيرادات"
+    },
     "doctor": {
       "title": "لوحتي",
       "welcome": "مرحبًا، {{name}}. إليك ملخصك.",

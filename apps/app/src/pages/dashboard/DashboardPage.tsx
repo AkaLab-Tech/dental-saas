@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import {
   Users,
   Stethoscope,
@@ -55,6 +56,7 @@ const colorClasses = {
 }
 
 function StatCard({ title, value, subtitle, icon, trend, linkTo, color }: StatCardProps) {
+  const { t } = useTranslation()
   const content = (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between">
@@ -65,7 +67,7 @@ function StatCard({ title, value, subtitle, icon, trend, linkTo, color }: StatCa
           {trend && (
             <div className={`mt-2 flex items-center text-sm ${trend.isPositive ? 'text-green-600' : 'text-red-600'}`}>
               {trend.isPositive ? <TrendingUp className="h-4 w-4 mr-1" /> : <TrendingDown className="h-4 w-4 mr-1" />}
-              {trend.isPositive ? '+' : ''}{trend.value}% vs mes anterior
+              {trend.isPositive ? '+' : ''}{trend.value}% {t('dashboard.trendVsLastMonth')}
             </div>
           )}
         </div>
@@ -88,6 +90,7 @@ function StatCard({ title, value, subtitle, icon, trend, linkTo, color }: StatCa
 // ============================================================================
 
 export default function DashboardPage() {
+  const { t } = useTranslation()
   const { overview, appointmentStats, revenueStats, patientsGrowth, doctorPerformance, isLoading, error, fetchAllStats } = useStatsStore()
   const { user, accessToken } = useAuthStore()
   const activeUser = useLockStore((s) => s.activeUser)
@@ -146,9 +149,9 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('dashboard.title')}</h1>
           <p className="text-gray-500">
-            Bienvenido, {user?.firstName}. Aquí está el resumen de tu clínica.
+            {t('dashboard.welcomeUser', { name: user?.firstName })}
           </p>
         </div>
       </div>
@@ -156,7 +159,7 @@ export default function DashboardPage() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          title="Pacientes Activos"
+          title={t('dashboard.statCards.activePatients')}
           value={overview?.totalPatients || 0}
           icon={<Users className="h-6 w-6" />}
           color="blue"
@@ -167,24 +170,24 @@ export default function DashboardPage() {
           } : undefined}
         />
         <StatCard
-          title="Doctores"
+          title={t('dashboard.statCards.doctors')}
           value={overview?.totalDoctors || 0}
           icon={<Stethoscope className="h-6 w-6" />}
           color="green"
           linkTo="/doctors"
         />
         <StatCard
-          title="Citas del Mes"
+          title={t('dashboard.statCards.appointmentsThisMonth')}
           value={overview?.appointmentsThisMonth || 0}
-          subtitle={`${overview?.completedAppointmentsThisMonth || 0} completadas`}
+          subtitle={t('dashboard.statCards.completedCount', { count: overview?.completedAppointmentsThisMonth || 0 })}
           icon={<Calendar className="h-6 w-6" />}
           color="purple"
           linkTo="/appointments"
         />
         <StatCard
-          title="Ingresos del Mes"
+          title={t('dashboard.statCards.monthlyRevenue')}
           value={formatCurrency(overview?.monthlyRevenue || 0, currency)}
-          subtitle={overview?.pendingPayments ? `${formatCurrency(overview.pendingPayments, currency)} pendientes` : undefined}
+          subtitle={overview?.pendingPayments ? t('dashboard.statCards.pendingAmount', { amount: formatCurrency(overview.pendingPayments, currency) }) : undefined}
           icon={<DollarSign className="h-6 w-6" />}
           color="orange"
         />
@@ -193,24 +196,24 @@ export default function DashboardPage() {
       {/* Secondary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <StatCard
-          title="Labworks Pendientes"
+          title={t('dashboard.statCards.pendingLabworks')}
           value={overview?.pendingLabworks || 0}
-          subtitle={overview?.unpaidLabworks ? `${overview.unpaidLabworks} sin pagar` : undefined}
+          subtitle={overview?.unpaidLabworks ? t('dashboard.statCards.unpaidCount', { count: overview.unpaidLabworks }) : undefined}
           icon={<FlaskConical className="h-6 w-6" />}
           color="red"
           linkTo="/labworks"
         />
         <StatCard
-          title="Total de Citas"
+          title={t('dashboard.statCards.totalAppointments')}
           value={overview?.totalAppointments || 0}
-          subtitle="Histórico completo"
+          subtitle={t('dashboard.statCards.totalAppointmentsSubtitle')}
           icon={<Clock className="h-6 w-6" />}
           color="blue"
         />
         <StatCard
-          title="Nuevos Pacientes (Mes)"
+          title={t('dashboard.statCards.newPatients')}
           value={patientsGrowth?.thisMonth || 0}
-          subtitle={`${patientsGrowth?.lastMonth || 0} el mes pasado`}
+          subtitle={t('dashboard.statCards.lastMonthCount', { count: patientsGrowth?.lastMonth || 0 })}
           icon={<TrendingUp className="h-6 w-6" />}
           color="green"
         />
@@ -220,7 +223,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Appointments Chart */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Citas por Día (Últimos 14 días)</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('dashboard.charts.appointmentsByDay')}</h3>
           {appointmentChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={appointmentChartData}>
@@ -233,27 +236,27 @@ export default function DashboardPage() {
             </ResponsiveContainer>
           ) : (
             <div className="flex items-center justify-center h-[300px] text-gray-400">
-              No hay datos de citas para mostrar
+              {t('dashboard.charts.noAppointmentData')}
             </div>
           )}
         </div>
 
         {/* Revenue Chart */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Ingresos por Mes</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('dashboard.charts.revenueByMonth')}</h3>
           {revenueChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={revenueChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `$${value}`} />
-                <Tooltip formatter={(value) => [`$${value}`, 'Ingresos']} />
+                <Tooltip formatter={(value) => [`$${value}`, t('dashboard.charts.revenueTooltipLabel')]} />
                 <Line type="monotone" dataKey="ingresos" stroke="#10b981" strokeWidth={2} dot={{ fill: '#10b981' }} />
               </LineChart>
             </ResponsiveContainer>
           ) : (
             <div className="flex items-center justify-center h-[300px] text-gray-400">
-              No hay datos de ingresos para mostrar
+              {t('dashboard.charts.noRevenueData')}
             </div>
           )}
         </div>
@@ -262,16 +265,16 @@ export default function DashboardPage() {
       {/* Doctor Performance Table (Admin only) */}
       {isAdmin && doctorPerformance && doctorPerformance.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Rendimiento de Doctores (Este Mes)</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('dashboard.doctorPerformance.title')}</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Doctor</th>
-                  <th className="text-center py-3 px-4 font-medium text-gray-600">Citas</th>
-                  <th className="text-center py-3 px-4 font-medium text-gray-600">Completadas</th>
-                  <th className="text-center py-3 px-4 font-medium text-gray-600">Tasa</th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-600">Ingresos</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">{t('dashboard.doctorPerformance.doctor')}</th>
+                  <th className="text-center py-3 px-4 font-medium text-gray-600">{t('dashboard.doctorPerformance.appointments')}</th>
+                  <th className="text-center py-3 px-4 font-medium text-gray-600">{t('dashboard.doctorPerformance.completed')}</th>
+                  <th className="text-center py-3 px-4 font-medium text-gray-600">{t('dashboard.doctorPerformance.rate')}</th>
+                  <th className="text-right py-3 px-4 font-medium text-gray-600">{t('dashboard.doctorPerformance.revenue')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -300,7 +303,7 @@ export default function DashboardPage() {
       {/* Appointment Status Breakdown */}
       {appointmentStats && Object.keys(appointmentStats.byStatus).length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Estado de Citas (Este Mes)</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('dashboard.appointmentStatusTitle')}</h3>
           <div className="flex flex-wrap gap-4">
             {Object.entries(appointmentStats.byStatus).map(([status, count]) => (
               <div key={status} className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg">

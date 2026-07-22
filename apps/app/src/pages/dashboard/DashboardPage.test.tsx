@@ -11,6 +11,22 @@ vi.mock('@/stores/stats.store')
 vi.mock('@/stores/auth.store')
 vi.mock('@/stores/lock.store')
 
+// Mock react-i18next — return the key (plus interpolated values) so assertions
+// are stable regardless of locale. Follows the pattern established by
+// DoctorDashboard.test.tsx and BudgetDetailPage.test.tsx.
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, opts?: Record<string, unknown>) => {
+      if (opts?.name !== undefined) return `${key} ${opts.name}`
+      if (opts?.count !== undefined) return `${key} ${opts.count}`
+      if (opts?.amount !== undefined) return `${key} ${opts.amount}`
+      return key
+    },
+    i18n: { language: 'es' },
+  }),
+  initReactI18next: { type: '3rdParty', init: () => {} },
+}))
+
 // Mock Recharts to avoid canvas issues in tests
 vi.mock('recharts', () => ({
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div data-testid="responsive-container">{children}</div>,
@@ -182,30 +198,45 @@ describe('DashboardPage', () => {
     )
 
     // Check header
-    expect(screen.getByText('Dashboard')).toBeInTheDocument()
-    expect(screen.getByText(/Bienvenido, Admin/)).toBeInTheDocument()
+    expect(screen.getByText('dashboard.title')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.welcomeUser Admin')).toBeInTheDocument()
 
     // Check stat cards
-    expect(screen.getByText('Pacientes Activos')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.statCards.activePatients')).toBeInTheDocument()
     expect(screen.getByText('150')).toBeInTheDocument()
-    expect(screen.getByText('Doctores')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.statCards.doctors')).toBeInTheDocument()
     // '5' appears multiple times (doctors count + appointment status count)
     expect(screen.getAllByText('5').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('Citas del Mes')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.statCards.appointmentsThisMonth')).toBeInTheDocument()
     expect(screen.getByText('45')).toBeInTheDocument()
-    expect(screen.getByText('Ingresos del Mes')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.statCards.completedCount 38')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.statCards.monthlyRevenue')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.statCards.pendingAmount USD 5,000.00')).toBeInTheDocument()
+
+    // Check secondary stat cards (new interpolated subtitles from #332)
+    expect(screen.getByText('dashboard.statCards.pendingLabworks')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.statCards.unpaidCount 1')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.statCards.totalAppointments')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.statCards.totalAppointmentsSubtitle')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.statCards.newPatients')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.statCards.lastMonthCount 8')).toBeInTheDocument()
 
     // Check charts are rendered
-    expect(screen.getByText('Citas por Día (Últimos 14 días)')).toBeInTheDocument()
-    expect(screen.getByText('Ingresos por Mes')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.charts.appointmentsByDay')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.charts.revenueByMonth')).toBeInTheDocument()
 
-    // Admin should see doctor performance table
-    expect(screen.getByText('Rendimiento de Doctores (Este Mes)')).toBeInTheDocument()
+    // Admin should see doctor performance table, including its migrated headers
+    expect(screen.getByText('dashboard.doctorPerformance.title')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.doctorPerformance.doctor')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.doctorPerformance.appointments')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.doctorPerformance.completed')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.doctorPerformance.rate')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.doctorPerformance.revenue')).toBeInTheDocument()
     expect(screen.getByText('Dr. Smith')).toBeInTheDocument()
     expect(screen.getByText('Dr. Johnson')).toBeInTheDocument()
 
     // Check appointment status breakdown
-    expect(screen.getByText('Estado de Citas (Este Mes)')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.appointmentStatusTitle')).toBeInTheDocument()
     expect(screen.getByText('COMPLETED')).toBeInTheDocument()
   })
 
@@ -237,7 +268,7 @@ describe('DashboardPage', () => {
     )
 
     // Staff sees doctor dashboard — shows "not linked" message when no doctorId
-    expect(screen.queryByText('Rendimiento de Doctores (Este Mes)')).not.toBeInTheDocument()
+    expect(screen.queryByText('dashboard.doctorPerformance.title')).not.toBeInTheDocument()
   })
 
   it('should call fetchAllStats on mount', () => {
@@ -314,8 +345,8 @@ describe('DashboardPage', () => {
       </BrowserRouter>
     )
 
-    expect(screen.getByText('No hay datos de citas para mostrar')).toBeInTheDocument()
-    expect(screen.getByText('No hay datos de ingresos para mostrar')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.charts.noAppointmentData')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.charts.noRevenueData')).toBeInTheDocument()
   })
 
   it('should show growth trend indicator', () => {
@@ -340,6 +371,6 @@ describe('DashboardPage', () => {
     )
 
     // Should show growth percentage
-    expect(screen.getByText(/\+50% vs mes anterior/)).toBeInTheDocument()
+    expect(screen.getByText(/\+50% dashboard\.trendVsLastMonth/)).toBeInTheDocument()
   })
 })

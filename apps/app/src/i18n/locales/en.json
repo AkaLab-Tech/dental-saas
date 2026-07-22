@@ -651,6 +651,38 @@
     "recentActivity": "Recent activity",
     "upcomingAppointments": "Upcoming appointments",
     "quickActions": "Quick actions",
+    "welcomeUser": "Welcome, {{name}}. Here's your clinic summary.",
+    "trendVsLastMonth": "vs last month",
+    "appointmentStatusTitle": "Appointment Status (This Month)",
+    "statCards": {
+      "activePatients": "Active Patients",
+      "doctors": "Doctors",
+      "appointmentsThisMonth": "Appointments This Month",
+      "completedCount": "{{count}} completed",
+      "monthlyRevenue": "Monthly Revenue",
+      "pendingAmount": "{{amount}} pending",
+      "pendingLabworks": "Pending Labworks",
+      "unpaidCount": "{{count}} unpaid",
+      "totalAppointments": "Total Appointments",
+      "totalAppointmentsSubtitle": "Complete history",
+      "newPatients": "New Patients (Month)",
+      "lastMonthCount": "{{count}} last month"
+    },
+    "charts": {
+      "appointmentsByDay": "Appointments by Day (Last 14 days)",
+      "noAppointmentData": "No appointment data to show",
+      "revenueByMonth": "Revenue by Month",
+      "noRevenueData": "No revenue data to show",
+      "revenueTooltipLabel": "Revenue"
+    },
+    "doctorPerformance": {
+      "title": "Doctor Performance (This Month)",
+      "doctor": "Doctor",
+      "appointments": "Appointments",
+      "completed": "Completed",
+      "rate": "Rate",
+      "revenue": "Revenue"
+    },
     "doctor": {
       "title": "My Dashboard",
       "welcome": "Hello, {{name}}. Here's your summary.",
