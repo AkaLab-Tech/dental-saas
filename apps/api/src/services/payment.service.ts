@@ -272,6 +272,75 @@ export async function getPatientBalance(
   return { success: true, data: { totalDebt, totalPaid, outstanding, credit } }
 }
 
+export interface Debtor {
+  patientId: string
+  name: string
+  totalDebt: number
+  totalPaid: number
+  outstanding: number
+}
+
+function addToMap(map: Map<string, number>, patientId: string | null, amount: number): void {
+  if (!patientId) return
+  map.set(patientId, (map.get(patientId) || 0) + amount)
+}
+
+/**
+ * List all patients with an outstanding balance for the tenant, sorted by
+ * outstanding desc. Uses set-based grouped aggregations (no per-patient
+ * N+1) with the same filters as getPatientBalance/getBillableItems, so the
+ * debt figures stay consistent with the per-patient balance view.
+ */
+export async function listDebtors(tenantId: string): Promise<Debtor[]> {
+  const [appointments, labworks, payments] = await Promise.all([
+    prisma.appointment.groupBy({
+      by: ['patientId'],
+      where: { tenantId, isActive: true, cost: { not: null, gt: 0 } },
+      _sum: { cost: true },
+    }),
+    prisma.labwork.groupBy({
+      by: ['patientId'],
+      where: { tenantId, isActive: true, price: { gt: 0 }, priceIncludedInAppointment: false },
+      _sum: { price: true },
+    }),
+    prisma.patientPayment.groupBy({
+      by: ['patientId'],
+      where: { tenantId, isActive: true },
+      _sum: { amount: true },
+    }),
+  ])
+
+  const debtByPatient = new Map<string, number>()
+  appointments.forEach((r) => addToMap(debtByPatient, r.patientId, r._sum.cost?.toNumber() || 0))
+  labworks.forEach((r) => addToMap(debtByPatient, r.patientId, r._sum.price?.toNumber() || 0))
+
+  const paidByPatient = new Map<string, number>()
+  payments.forEach((r) => addToMap(paidByPatient, r.patientId, r._sum.amount?.toNumber() || 0))
+
+  const patientIds = [...debtByPatient.keys()].filter(
+    (id) => (debtByPatient.get(id) || 0) - (paidByPatient.get(id) || 0) > 0
+  )
+
+  const patients = await prisma.patient.findMany({
+    where: { tenantId, id: { in: patientIds } },
+    select: { id: true, firstName: true, lastName: true },
+  })
+
+  return patients
+    .map((patient) => {
+      const totalDebt = debtByPatient.get(patient.id) || 0
+      const totalPaid = paidByPatient.get(patient.id) || 0
+      return {
+        patientId: patient.id,
+        name: `${patient.firstName} ${patient.lastName}`,
+        totalDebt,
+        totalPaid,
+        outstanding: Math.max(0, totalDebt - totalPaid),
+      }
+    })
+    .sort((a, b) => b.outstanding - a.outstanding)
+}
+
 /**
  * Create a new payment and recalculate FIFO allocation
  */

@@ -273,7 +273,8 @@
     "users": "Users",
     "lock": "Lock",
     "openMenu": "Open menu",
-    "closeMenu": "Close menu"
+    "closeMenu": "Close menu",
+    "debtors": "Debtors"
   },
   "auth": {
     "login": "Login",
@@ -1047,6 +1048,12 @@
     "paymentCreated": "Payment registered successfully",
     "paymentDeleted": "Payment deleted successfully",
     "noOutstandingBalance": "No outstanding balance",
+    "debtors": {
+      "title": "Patient Debts",
+      "subtitle": "Patients with an outstanding balance, sorted by amount owed",
+      "empty": "No patients with outstanding balances",
+      "patient": "Patient"
+    },
     "form": {
       "amount": "Amount",
       "amountHint": "Maximum: {{max}}",

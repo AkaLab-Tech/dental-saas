@@ -30,6 +30,14 @@ export interface CreatePaymentData {
   note?: string
 }
 
+export interface Debtor {
+  patientId: string
+  name: string
+  totalDebt: number
+  totalPaid: number
+  outstanding: number
+}
+
 interface PaymentListResponse {
   success: boolean
   data: Payment[]
@@ -48,6 +56,11 @@ interface BalanceResponse {
 interface PaymentResponse {
   success: boolean
   data: Payment
+}
+
+interface DebtorsResponse {
+  success: boolean
+  data: Debtor[]
 }
 
 // ============================================================================
@@ -91,4 +104,9 @@ export async function deletePayment(
   paymentId: string
 ): Promise<void> {
   await apiClient.delete(`/patients/${patientId}/payments/${paymentId}`)
+}
+
+export async function getDebtors(): Promise<Debtor[]> {
+  const response = await apiClient.get<DebtorsResponse>('/patients/debts')
+  return response.data.data
 }

@@ -25,6 +25,7 @@ import {
   listPayments,
   deletePayment,
   getPatientBalance,
+  listDebtors,
 } from '../services/payment.service.js'
 import { createBudget, listBudgetsByPatient } from '../services/budget.service.js'
 import { createBudgetSchema } from './budgets.js'
@@ -204,6 +205,22 @@ patientsRouter.get('/stats', requireMinRole('CLINIC_ADMIN'), async (req, res, ne
       success: true,
       data: stats,
     })
+  } catch (e) {
+    next(e)
+  }
+})
+
+/**
+ * GET /api/patients/debts
+ * List all patients with an outstanding balance for the tenant (sorted desc)
+ */
+patientsRouter.get('/debts', requirePermission(Permission.PAYMENTS_VIEW), async (req, res, next) => {
+  try {
+    const tenantId = req.user!.tenantId!
+
+    const debtors = await listDebtors(tenantId)
+
+    res.json({ success: true, data: debtors })
   } catch (e) {
     next(e)
   }

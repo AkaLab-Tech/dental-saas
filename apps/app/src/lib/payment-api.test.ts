@@ -4,8 +4,10 @@ import {
   getPatientPayments,
   createPayment,
   deletePayment,
+  getDebtors,
   type Payment,
   type PatientBalance,
+  type Debtor,
 } from './payment-api'
 import { apiClient } from './api'
 
@@ -133,6 +135,33 @@ describe('payment-api', () => {
       expect(apiClient.delete).toHaveBeenCalledWith(
         '/patients/patient-789/payments/payment-123'
       )
+    })
+  })
+
+  describe('getDebtors', () => {
+    it('should fetch the list of debtors', async () => {
+      const mockDebtors: Debtor[] = [
+        { patientId: 'patient-1', name: 'Jane Doe', totalDebt: 500, totalPaid: 100, outstanding: 400 },
+        { patientId: 'patient-2', name: 'John Smith', totalDebt: 200, totalPaid: 200, outstanding: 0 },
+      ]
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: mockDebtors },
+      })
+
+      const result = await getDebtors()
+
+      expect(apiClient.get).toHaveBeenCalledWith('/patients/debts')
+      expect(result).toEqual(mockDebtors)
+    })
+
+    it('should return an empty array when there are no debtors', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [] },
+      })
+
+      const result = await getDebtors()
+
+      expect(result).toEqual([])
     })
   })
 })
