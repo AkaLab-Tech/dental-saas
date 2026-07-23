@@ -302,6 +302,89 @@ describe('Doctors API', () => {
       expect(response.body.error.currentCount).toBe(3)
       expect(response.body.error.limit).toBe(3)
     })
+
+    it('should create a doctor with a boundary commissionPercentage of 0', async () => {
+      const response = await request(app)
+        .post('/api/doctors')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          firstName: 'Zero',
+          lastName: 'Commission',
+          commissionPercentage: 0,
+        })
+
+      expect(response.status).toBe(201)
+      expect(response.body.data.commissionPercentage).toBe('0')
+    })
+
+    it('should create a doctor with a boundary commissionPercentage of 100', async () => {
+      const response = await request(app)
+        .post('/api/doctors')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          firstName: 'Full',
+          lastName: 'Commission',
+          commissionPercentage: 100,
+        })
+
+      expect(response.status).toBe(201)
+      expect(response.body.data.commissionPercentage).toBe('100')
+    })
+
+    it('should persist a mid-range commissionPercentage', async () => {
+      const response = await request(app)
+        .post('/api/doctors')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          firstName: 'Mid',
+          lastName: 'Commission',
+          commissionPercentage: 12.5,
+        })
+
+      expect(response.status).toBe(201)
+      expect(response.body.data.commissionPercentage).toBe('12.5')
+    })
+
+    it('should return 400 for a negative commissionPercentage', async () => {
+      const response = await request(app)
+        .post('/api/doctors')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          firstName: 'Negative',
+          lastName: 'Commission',
+          commissionPercentage: -1,
+        })
+
+      expect(response.status).toBe(400)
+      expect(response.body.error.code).toBe('VALIDATION_ERROR')
+    })
+
+    it('should return 400 for a commissionPercentage above 100', async () => {
+      const response = await request(app)
+        .post('/api/doctors')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          firstName: 'Over',
+          lastName: 'Commission',
+          commissionPercentage: 100.01,
+        })
+
+      expect(response.status).toBe(400)
+      expect(response.body.error.code).toBe('VALIDATION_ERROR')
+    })
+
+    it('should create a doctor with no commissionPercentage (defaults to null)', async () => {
+      const response = await request(app)
+        .post('/api/doctors')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          firstName: 'No',
+          lastName: 'Commission',
+        })
+
+      expect(response.status).toBe(201)
+      expect(response.body.data.commissionPercentage).toBeNull()
+    })
   })
 
   describe('GET /api/doctors', () => {
@@ -444,6 +527,59 @@ describe('Doctors API', () => {
 
       expect(response.status).toBe(200)
       expect(response.body.data.specialty).toBeNull()
+    })
+
+    it('should update and persist commissionPercentage', async () => {
+      const response = await request(app)
+        .put(`/api/doctors/${testDoctorId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          commissionPercentage: 30,
+        })
+
+      expect(response.status).toBe(200)
+      expect(response.body.data.commissionPercentage).toBe('30')
+    })
+
+    it('should allow clearing commissionPercentage back to null', async () => {
+      await prisma.doctor.update({
+        where: { id: testDoctorId },
+        data: { commissionPercentage: 30 },
+      })
+
+      const response = await request(app)
+        .put(`/api/doctors/${testDoctorId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          commissionPercentage: null,
+        })
+
+      expect(response.status).toBe(200)
+      expect(response.body.data.commissionPercentage).toBeNull()
+    })
+
+    it('should return 400 when updating with a negative commissionPercentage', async () => {
+      const response = await request(app)
+        .put(`/api/doctors/${testDoctorId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          commissionPercentage: -5,
+        })
+
+      expect(response.status).toBe(400)
+      expect(response.body.error.code).toBe('VALIDATION_ERROR')
+    })
+
+    it('should return 400 when updating with a commissionPercentage above 100', async () => {
+      const response = await request(app)
+        .put(`/api/doctors/${testDoctorId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          commissionPercentage: 150,
+        })
+
+      expect(response.status).toBe(400)
+      expect(response.body.error.code).toBe('VALIDATION_ERROR')
     })
 
     it('should return 403 for STAFF trying to update', async () => {

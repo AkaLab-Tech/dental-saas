@@ -272,6 +272,36 @@ describe('DoctorFormModal', () => {
       expect(mockOnSubmit).not.toHaveBeenCalled()
     })
 
+    it('should show error for out-of-range commissionPercentage', async () => {
+      render(
+        <DoctorFormModal
+          isOpen={true}
+          onClose={mockOnClose}
+          onSubmit={mockOnSubmit}
+        />
+      )
+
+      const firstNameInput = screen.getByPlaceholderText('Juan')
+      const lastNameInput = screen.getByPlaceholderText('Pérez')
+      const commissionInput = screen.getByPlaceholderText('20.00')
+
+      fireEvent.change(firstNameInput, { target: { value: 'John' } })
+      fireEvent.change(lastNameInput, { target: { value: 'Doe' } })
+      fireEvent.change(commissionInput, { target: { value: '150' } })
+
+      // Same rationale as the hourlyRate case above: type="number" max="100"
+      // is a native browser constraint that would short-circuit a
+      // button-click submit before reaching RHF+Zod, so dispatch `submit`
+      // directly to exercise the Zod validation path.
+      fireEvent.submit(firstNameInput.closest('form')!)
+
+      await waitFor(() => {
+        expect(screen.getByText('Debe estar entre 0 y 100')).toBeInTheDocument()
+      })
+
+      expect(mockOnSubmit).not.toHaveBeenCalled()
+    })
+
     it('should show error for bio too long', async () => {
       render(
         <DoctorFormModal
@@ -386,6 +416,37 @@ describe('DoctorFormModal', () => {
         expect(mockOnSubmit).toHaveBeenCalledWith({
           firstName: 'John',
           lastName: 'Doe',
+        })
+      })
+    })
+
+    it('should include a valid commissionPercentage in the onSubmit payload', async () => {
+      mockOnSubmit.mockResolvedValue(undefined)
+
+      render(
+        <DoctorFormModal
+          isOpen={true}
+          onClose={mockOnClose}
+          onSubmit={mockOnSubmit}
+        />
+      )
+
+      const firstNameInput = screen.getByPlaceholderText('Juan')
+      const lastNameInput = screen.getByPlaceholderText('Pérez')
+      const commissionInput = screen.getByPlaceholderText('20.00')
+
+      fireEvent.change(firstNameInput, { target: { value: 'John' } })
+      fireEvent.change(lastNameInput, { target: { value: 'Doe' } })
+      fireEvent.change(commissionInput, { target: { value: '45' } })
+
+      const submitButton = screen.getByRole('button', { name: /crear doctor/i })
+      fireEvent.click(submitButton)
+
+      await waitFor(() => {
+        expect(mockOnSubmit).toHaveBeenCalledWith({
+          firstName: 'John',
+          lastName: 'Doe',
+          commissionPercentage: 45,
         })
       })
     })

@@ -45,6 +45,8 @@ export interface DoctorPerformanceStats {
   completedCount: number
   revenue: number
   completionRate: number
+  commissionPercentage: number | null
+  commission: number
 }
 
 export interface UpcomingAppointment {
@@ -378,13 +380,20 @@ export async function getPatientsGrowthStats(
 }
 
 /**
- * Get doctor performance statistics
+ * Get doctor performance statistics, including commission earned on billed
+ * consultations (appointment.cost) and labworks (labwork.price) attributed
+ * to each doctor over the given range (defaults to the current month).
+ * Labworks with multiple doctors credit each doctor in full (no split).
  */
-export async function getDoctorPerformanceStats(tenantId: string): Promise<DoctorPerformanceStats[]> {
+export async function getDoctorPerformanceStats(
+  tenantId: string,
+  startDate?: Date,
+  endDate?: Date
+): Promise<DoctorPerformanceStats[]> {
   logger.debug({ tenantId }, 'Fetching doctor performance stats')
 
-  const monthStart = getMonthStart()
-  const monthEnd = getMonthEnd()
+  const rangeStart = startDate ?? getMonthStart()
+  const rangeEnd = endDate ?? getMonthEnd()
 
   // Get all active doctors
   const doctors = await prisma.doctor.findMany({
@@ -393,6 +402,7 @@ export async function getDoctorPerformanceStats(tenantId: string): Promise<Docto
       id: true,
       firstName: true,
       lastName: true,
+      commissionPercentage: true,
     },
   })
 
@@ -402,13 +412,13 @@ export async function getDoctorPerformanceStats(tenantId: string): Promise<Docto
 
   const doctorIds = doctors.map((doctor) => doctor.id)
 
-  // Get all appointments for all doctors this month in a single query (avoids N+1)
+  // Get all appointments for all doctors this range in a single query (avoids N+1)
   const allAppointments = await prisma.appointment.findMany({
     where: {
       tenantId,
       doctorId: { in: doctorIds },
       isActive: true,
-      startTime: { gte: monthStart, lte: monthEnd },
+      startTime: { gte: rangeStart, lte: rangeEnd },
     },
     select: {
       doctorId: true,
@@ -426,6 +436,21 @@ export async function getDoctorPerformanceStats(tenantId: string): Promise<Docto
     appointmentsByDoctor.set(appointment.doctorId, existing)
   }
 
+  // Labwork doctor attribution is a JSON array (not a relation), so it must be
+  // filtered in JS rather than via a SQL `IN`.
+  const allLabworks = await prisma.labwork.findMany({
+    where: { tenantId, isActive: true, date: { gte: rangeStart, lte: rangeEnd } },
+    select: { doctorIds: true, price: true },
+  })
+
+  const labworkBaseByDoctor = new Map<string, number>()
+  for (const labwork of allLabworks) {
+    const attributedDoctorIds = Array.isArray(labwork.doctorIds) ? (labwork.doctorIds as string[]) : []
+    for (const doctorId of attributedDoctorIds) {
+      labworkBaseByDoctor.set(doctorId, (labworkBaseByDoctor.get(doctorId) ?? 0) + labwork.price.toNumber())
+    }
+  }
+
   const performanceStats: DoctorPerformanceStats[] = []
 
   for (const doctor of doctors) {
@@ -439,6 +464,13 @@ export async function getDoctorPerformanceStats(tenantId: string): Promise<Docto
 
     const completionRate = appointmentsCount > 0 ? (completedCount / appointmentsCount) * 100 : 0
 
+    // Commission base uses the billed amount (not paid-only): sum of appointment
+    // cost plus labwork price attributed to this doctor over the range.
+    const consultationBase = appointments.reduce((sum, a) => sum + (a.cost?.toNumber() ?? 0), 0)
+    const labworkBase = labworkBaseByDoctor.get(doctor.id) ?? 0
+    const commissionPercentage = doctor.commissionPercentage?.toNumber() ?? null
+    const commission = commissionPercentage != null ? ((consultationBase + labworkBase) * commissionPercentage) / 100 : 0
+
     performanceStats.push({
       doctorId: doctor.id,
       doctorName: `${doctor.firstName} ${doctor.lastName}`,
@@ -446,6 +478,8 @@ export async function getDoctorPerformanceStats(tenantId: string): Promise<Docto
       completedCount,
       revenue,
       completionRate: Math.round(completionRate * 10) / 10,
+      commissionPercentage,
+      commission,
     })
   }
 

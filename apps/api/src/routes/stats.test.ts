@@ -386,6 +386,169 @@ describe('Stats API', () => {
 
       expect(res.status).toBe(403)
     })
+
+    it('should return 400 for invalid startDate format', async () => {
+      const res = await request(app)
+        .get('/api/stats/doctors-performance')
+        .query({ startDate: 'not-a-date' })
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(400)
+    })
+  })
+
+  // ============================================================================
+  // GET /api/stats/doctors-performance — commission
+  // ============================================================================
+
+  describe('GET /api/stats/doctors-performance — commission', () => {
+    // A fixed date window in the past keeps this block fully isolated from
+    // the "current month" fixtures created in the outer beforeAll (and from
+    // real-clock drift), so the range filter can be asserted exactly.
+    const rangeStartIso = '2020-01-01T00:00:00.000Z'
+    const rangeEndIso = '2020-01-31T23:59:59.999Z'
+
+    let commissionDoctorId: string // 25% commission
+    let noCommissionDoctorId: string // commissionPercentage left null
+
+    beforeAll(async () => {
+      const doctorWithCommission = await prisma.doctor.create({
+        data: {
+          tenantId,
+          firstName: 'Commission',
+          lastName: 'Doctor',
+          email: 'commission.doctor@test.com',
+          commissionPercentage: 25,
+        },
+      })
+      commissionDoctorId = doctorWithCommission.id
+
+      const doctorWithoutCommission = await prisma.doctor.create({
+        data: {
+          tenantId,
+          firstName: 'NoCommission',
+          lastName: 'Doctor',
+          email: 'no-commission.doctor@test.com',
+        },
+      })
+      noCommissionDoctorId = doctorWithoutCommission.id
+
+      // In-range, paid, completed: counts toward both revenue and commission base.
+      await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId: commissionDoctorId,
+          startTime: new Date('2020-01-10T10:00:00.000Z'),
+          endTime: new Date('2020-01-10T10:30:00.000Z'),
+          duration: 30,
+          status: 'COMPLETED',
+          cost: 100,
+          isPaid: true,
+        },
+      })
+
+      // In-range, UNPAID and not completed: must still count toward the
+      // billed commission base (unlike `revenue`, which excludes it).
+      await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId: commissionDoctorId,
+          startTime: new Date('2020-01-15T10:00:00.000Z'),
+          endTime: new Date('2020-01-15T10:30:00.000Z'),
+          duration: 30,
+          status: 'SCHEDULED',
+          cost: 50,
+          isPaid: false,
+        },
+      })
+
+      // Out of range: must be excluded from the commission base.
+      await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId: commissionDoctorId,
+          startTime: new Date('2019-12-31T10:00:00.000Z'),
+          endTime: new Date('2019-12-31T10:30:00.000Z'),
+          duration: 30,
+          status: 'COMPLETED',
+          cost: 999,
+          isPaid: true,
+        },
+      })
+
+      // In-range labwork with TWO doctors: full price credited to BOTH.
+      await prisma.labwork.create({
+        data: {
+          tenantId,
+          patientId,
+          lab: 'Commission Lab',
+          date: new Date('2020-01-12T00:00:00.000Z'),
+          price: 200,
+          isPaid: false,
+          isDelivered: false,
+          doctorIds: [commissionDoctorId, noCommissionDoctorId],
+        },
+      })
+
+      // Out of range labwork: must be excluded from the commission base.
+      await prisma.labwork.create({
+        data: {
+          tenantId,
+          patientId,
+          lab: 'Commission Lab Out Of Range',
+          date: new Date('2020-02-01T00:00:00.000Z'),
+          price: 500,
+          isPaid: false,
+          isDelivered: false,
+          doctorIds: [commissionDoctorId],
+        },
+      })
+    })
+
+    afterAll(async () => {
+      await prisma.labwork.deleteMany({
+        where: { tenantId, lab: { in: ['Commission Lab', 'Commission Lab Out Of Range'] } },
+      })
+      await prisma.appointment.deleteMany({
+        where: { tenantId, doctorId: { in: [commissionDoctorId, noCommissionDoctorId] } },
+      })
+      await prisma.doctor.deleteMany({
+        where: { id: { in: [commissionDoctorId, noCommissionDoctorId] } },
+      })
+    })
+
+    it('computes billed commission over the requested date range, crediting a shared labwork in full to both doctors', async () => {
+      const res = await request(app)
+        .get('/api/stats/doctors-performance')
+        .query({ startDate: rangeStartIso, endDate: rangeEndIso })
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(200)
+
+      const commissionDoctorStats = res.body.data.find(
+        (d: { doctorId: string }) => d.doctorId === commissionDoctorId
+      )
+      const noCommissionDoctorStats = res.body.data.find(
+        (d: { doctorId: string }) => d.doctorId === noCommissionDoctorId
+      )
+
+      // consultationBase = 100 (paid) + 50 (unpaid) = 150 (999 out-of-range excluded)
+      // labworkBase = 200 (500 out-of-range excluded)
+      // commission = (150 + 200) * 25 / 100 = 87.5
+      expect(commissionDoctorStats.commissionPercentage).toBe(25)
+      expect(commissionDoctorStats.appointmentsCount).toBe(2)
+      expect(commissionDoctorStats.revenue).toBe(100) // only the paid + COMPLETED appointment
+      expect(commissionDoctorStats.commission).toBe(87.5)
+
+      // No appointments of its own, but credited the FULL $200 labwork (not
+      // split), and commissionPercentage is null so commission is 0.
+      expect(noCommissionDoctorStats.commissionPercentage).toBeNull()
+      expect(noCommissionDoctorStats.appointmentsCount).toBe(0)
+      expect(noCommissionDoctorStats.commission).toBe(0)
+    })
   })
 
   // ============================================================================

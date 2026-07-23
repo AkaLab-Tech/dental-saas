@@ -25,6 +25,15 @@ function createDoctorFormSchema(t: TFunction) {
     consultingRoom: z.string().optional(),
     bio: z.string().max(5000, t('doctors.form.validation.bioMaxLength')).optional(),
     hourlyRate: z.coerce.number().positive(t('doctors.form.validation.hourlyRatePositive')).optional().or(z.literal('')),
+    commissionPercentage: z
+      .literal('')
+      .or(
+        z.coerce
+          .number()
+          .min(0, t('doctors.form.validation.commissionRange'))
+          .max(100, t('doctors.form.validation.commissionRange'))
+      )
+      .optional(),
   })
 }
 
@@ -101,6 +110,7 @@ export function DoctorFormModal({
       consultingRoom: '',
       bio: '',
       hourlyRate: '',
+      commissionPercentage: '',
     },
   })
 
@@ -124,6 +134,7 @@ export function DoctorFormModal({
           consultingRoom: doctor.consultingRoom || '',
           bio: doctor.bio || '',
           hourlyRate: doctor.hourlyRate ?? '',
+          commissionPercentage: doctor.commissionPercentage ?? '',
         })
       } else {
         reset({
@@ -139,6 +150,7 @@ export function DoctorFormModal({
           consultingRoom: '',
           bio: '',
           hourlyRate: '',
+          commissionPercentage: '',
         })
       }
     }
@@ -160,6 +172,7 @@ export function DoctorFormModal({
       ...(data.consultingRoom && { consultingRoom: data.consultingRoom }),
       ...(data.bio && { bio: data.bio }),
       ...(typeof data.hourlyRate === 'number' && { hourlyRate: data.hourlyRate }),
+      ...(typeof data.commissionPercentage === 'number' && { commissionPercentage: data.commissionPercentage }),
     }
 
     await onSubmit(submitData)
@@ -399,6 +412,27 @@ export function DoctorFormModal({
                   />
                   {errors.hourlyRate && (
                     <p className="mt-1 text-sm text-red-600">{errors.hourlyRate.message}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Commission */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('doctors.form.commissionPercentage')}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    {...register('commissionPercentage')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder={t('doctors.form.placeholders.commissionPercentage')}
+                  />
+                  {errors.commissionPercentage && (
+                    <p className="mt-1 text-sm text-red-600">{errors.commissionPercentage.message}</p>
                   )}
                 </div>
               </div>

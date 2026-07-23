@@ -320,6 +320,9 @@ model Doctor {
   /// Hourly rate for billing purposes
   hourlyRate Decimal? @db.Decimal(10, 2)
 
+  /// Percentage (0-100) of billed consultation/labwork value paid to this doctor as commission
+  commissionPercentage Decimal? @db.Decimal(5, 2)
+
   /// Link to User account for login (nullable for unlinked doctors)
   userId String? @unique
 

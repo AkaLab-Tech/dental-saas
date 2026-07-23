@@ -635,6 +635,7 @@
       "licenseNumber": "License number",
       "consultingRoom": "Consulting room",
       "hourlyRate": "Hourly Rate",
+      "commissionPercentage": "Commission (%)",
       "workingHoursStart": "Start Time",
       "workingHoursEnd": "End Time",
       "closeForm": "Close form",
@@ -649,6 +650,7 @@
         "licenseNumber": "LIC-12345",
         "consultingRoom": "Room 101",
         "hourlyRate": "100.00",
+        "commissionPercentage": "20.00",
         "bio": "Brief professional description..."
       },
       "validation": {
@@ -656,7 +658,8 @@
         "lastNameRequired": "Last name is required",
         "invalidEmail": "Invalid email",
         "bioMaxLength": "Biography cannot exceed 5000 characters",
-        "hourlyRatePositive": "Must be a positive number"
+        "hourlyRatePositive": "Must be a positive number",
+        "commissionRange": "Must be between 0 and 100"
       }
     },
     "list": {
@@ -673,7 +676,8 @@
       "schedule": "Schedule",
       "license": "License: {{license}}",
       "consultingRoom": "Consulting room: {{room}}",
-      "hourlyRate": "Rate: ${{rate}}/hr"
+      "hourlyRate": "Rate: ${{rate}}/hr",
+      "commissionPercentage": "Commission: {{percentage}}%"
     }
   },
   "labworks": {
@@ -994,7 +998,8 @@
       "appointments": "Appointments",
       "completed": "Completed",
       "rate": "Rate",
-      "revenue": "Revenue"
+      "revenue": "Revenue",
+      "commission": "Commission"
     },
     "doctor": {
       "title": "My Dashboard",
