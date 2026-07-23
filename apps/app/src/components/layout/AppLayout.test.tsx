@@ -55,12 +55,14 @@ function mockLockStoreState(overrides: Partial<{
   autoLockMinutes: number
   activeUser: unknown
   fetchProfiles: () => void
+  setAutoLockMinutes: (minutes: number) => void
 }> = {}) {
   const state = {
     isLocked: false,
     autoLockMinutes: 0,
     activeUser: null,
     fetchProfiles: vi.fn(),
+    setAutoLockMinutes: vi.fn(),
     ...overrides,
   }
   ;(useLockStore as unknown as Mock).mockImplementation(
@@ -137,5 +139,129 @@ describe('AppLayout', () => {
 
     expect(screen.getByText('Panel de Control')).toBeInTheDocument()
     expect(screen.getByText('Cerrar sesión')).toBeInTheDocument()
+  })
+
+  // ---------------------------------------------------------------------
+  // Task #280 (follow-up to #210) — the account's saved language must be
+  // resolved before the sidebar/content ever paints, so the nav never shows
+  // the browser/detector-resolved language before flipping to the account's
+  // saved one. useAccountLanguage (mocked away above via the real module —
+  // it is NOT mocked here, so the real hook runs against the real i18n
+  // singleton) is the single path allowed to call changeLanguage for this.
+  // ---------------------------------------------------------------------
+  describe('language gate — first authenticated paint (#280)', () => {
+    afterEach(async () => {
+      window.localStorage.removeItem('language')
+      await act(async () => {
+        await i18n.changeLanguage('es')
+      })
+      document.documentElement.dir = 'ltr'
+      document.documentElement.lang = 'es'
+    })
+
+    function mockSettings(settings: { language: string; autoLockMinutes: number } | null) {
+      ;(useSettingsStore as unknown as Mock).mockImplementation(
+        (selector: (s: { settings: typeof settings; fetchSettings: () => void }) => unknown) =>
+          selector({ settings, fetchSettings: vi.fn() })
+      )
+    }
+
+    it('shows a loading spinner — not the sidebar/nav — when settings have not resolved and no language is cached', () => {
+      window.localStorage.removeItem('language')
+      mockSettings(null)
+
+      const { container } = renderAppLayout()
+
+      expect(container.querySelector('.animate-spin')).toBeInTheDocument()
+      expect(screen.queryByText('Panel de Control')).not.toBeInTheDocument()
+      expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    })
+
+    it('skips the loading gate when a language is already cached, even though settings have not resolved yet', () => {
+      window.localStorage.setItem('language', 'en')
+      mockSettings(null)
+
+      const { container } = renderAppLayout()
+
+      expect(container.querySelector('.animate-spin')).not.toBeInTheDocument()
+      expect(screen.getByText('Panel de Control')).toBeInTheDocument()
+    })
+
+    it('replaces the spinner with the sidebar nav once settings resolve to the SAME language i18n already has', () => {
+      window.localStorage.removeItem('language')
+      mockSettings(null)
+
+      const { container, rerender } = renderAppLayout()
+      expect(container.querySelector('.animate-spin')).toBeInTheDocument()
+
+      mockSettings({ language: 'es', autoLockMinutes: 0 })
+      rerender(
+        <MemoryRouter initialEntries={['/']}>
+          <AppLayout />
+        </MemoryRouter>
+      )
+
+      expect(container.querySelector('.animate-spin')).not.toBeInTheDocument()
+      expect(screen.getByText('Panel de Control')).toBeInTheDocument()
+    })
+
+    it('never paints the stale/detected-language nav when settings resolve to a DIFFERENT language on the first authenticated paint', () => {
+      // Current i18n.language is 'es' (set in the top-level beforeAll/afterEach
+      // of this suite) — simulating the browser/detector-resolved locale.
+      // The account's saved language ('en') differs. This is exactly the
+      // #280 scenario: no cached language yet, and the account preference
+      // disagrees with the detected one.
+      window.localStorage.removeItem('language')
+      mockSettings(null)
+
+      const { container, rerender } = renderAppLayout()
+      expect(container.querySelector('.animate-spin')).toBeInTheDocument()
+      expect(i18n.language).toBe('es')
+
+      mockSettings({ language: 'en', autoLockMinutes: 0 })
+      rerender(
+        <MemoryRouter initialEntries={['/']}>
+          <AppLayout />
+        </MemoryRouter>
+      )
+
+      // The very first frame that shows real content must never be the
+      // stale Spanish nav — it must already be English, or the gate must
+      // still be showing the spinner. What must NEVER happen is painting
+      // "Panel de Control" (Spanish) once settings/content are shown.
+      const showsSpinner = container.querySelector('.animate-spin') !== null
+      const showsStaleSpanishNav = screen.queryByText('Panel de Control') !== null
+      expect(showsStaleSpanishNav).toBe(false)
+      if (!showsSpinner) {
+        expect(screen.getByText('Dashboard')).toBeInTheDocument()
+      }
+    })
+
+    it('resolves to Arabic with dir=rtl once settings arrive with language "ar", with no interim spinner-less wrong-language paint', async () => {
+      window.localStorage.removeItem('language')
+      mockSettings(null)
+
+      const { container, rerender } = renderAppLayout()
+      expect(container.querySelector('.animate-spin')).toBeInTheDocument()
+
+      mockSettings({ language: 'ar', autoLockMinutes: 0 })
+      await act(async () => {
+        rerender(
+          <MemoryRouter initialEntries={['/']}>
+            <AppLayout />
+          </MemoryRouter>
+        )
+        // Flush the changeLanguage('ar') promise chain kicked off by
+        // useAccountLanguage so i18n.language settles and document
+        // direction updates.
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(screen.queryByText('Panel de Control')).not.toBeInTheDocument()
+      expect(document.documentElement.dir).toBe('rtl')
+      expect(document.documentElement.lang).toBe('ar')
+      expect(window.localStorage.getItem('language')).toBe('ar')
+    })
   })
 })

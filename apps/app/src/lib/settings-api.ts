@@ -6,7 +6,7 @@ import { apiClient } from './api'
 
 export interface TenantSettings {
   id: string
-  language: 'es' | 'en' | 'pt'
+  language: 'es' | 'en' | 'ar'
   dateFormat: 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD'
   timeFormat: '12h' | '24h'
   defaultAppointmentDuration: number
@@ -36,7 +36,7 @@ export interface TenantProfile {
 }
 
 export interface UpdateSettingsData {
-  language?: 'es' | 'en' | 'pt'
+  language?: 'es' | 'en' | 'ar'
   dateFormat?: 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD'
   timeFormat?: '12h' | '24h'
   defaultAppointmentDuration?: number
