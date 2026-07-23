@@ -58,7 +58,9 @@ export function PreferencesForm({ settings, canEdit }: PreferencesFormProps) {
     reminderHoursBefore: 24,
   })
 
-  // Sync form data and i18n language when settings load
+  // Sync form data when settings load. Applying the saved language itself is
+  // handled globally by useAccountLanguage (in AppLayout) — this effect only
+  // mirrors settings into local form state.
   useEffect(() => {
     if (settings) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -73,12 +75,8 @@ export function PreferencesForm({ settings, canEdit }: PreferencesFormProps) {
         appointmentReminders: settings.appointmentReminders,
         reminderHoursBefore: settings.reminderHoursBefore,
       })
-      // Sync i18n language with saved settings
-      if (settings.language !== i18n.language) {
-        i18n.changeLanguage(settings.language as LanguageCode)
-      }
     }
-  }, [settings, i18n])
+  }, [settings])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target

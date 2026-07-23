@@ -15,6 +15,7 @@ import {
   LogOut,
   Menu,
   X,
+  Loader2,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -23,6 +24,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { useLockStore } from '@/stores/lock.store'
 import { useSettingsStore } from '@/stores/settings.store'
 import { useInactivityTimer } from '@/hooks/useInactivityTimer'
+import { useAccountLanguage } from '@/hooks/useAccountLanguage'
 import { LockScreen } from '@/components/auth/LockScreen'
 import { PinSetupModal } from '@/components/auth/PinSetupModal'
 
@@ -62,6 +64,7 @@ export function AppLayout() {
   const fetchSettings = useSettingsStore((s) => s.fetchSettings)
 
   useInactivityTimer()
+  useAccountLanguage(settings)
 
   // Sync autoLockMinutes from tenant settings
   useEffect(() => {
@@ -90,6 +93,24 @@ export function AppLayout() {
   // Show lock screen when locked
   if (isLocked) {
     return <LockScreen />
+  }
+
+  // Gate the first authenticated paint on the account's saved language so the
+  // sidebar/content never briefly show the detector-resolved language before
+  // flipping to the tenant's preference (#280). Deliberately checks the
+  // `accountLanguage` marker (written only by useAccountLanguage), not
+  // `language` — the latter is also written by the i18next LanguageDetector
+  // on every init from the browser locale, so it is non-null even on a
+  // session's very first paint and would make this gate a no-op. Once the
+  // marker has been cached this resolves instantly on future loads, so the
+  // loading state only appears on a session's very first paint.
+  const languageResolved = settings !== null || window.localStorage.getItem('accountLanguage') !== null
+  if (!languageResolved) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>
+    )
   }
 
   // Show PIN setup modal when auto-lock is enabled but user has no PIN
