@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { adminUsersApi, type AdminUser, type UsersListResponse } from '@/lib/admin-api'
 import { roleColors } from '@/lib/admin-utils'
 import {
@@ -19,6 +20,7 @@ import {
 } from 'lucide-react'
 
 export function AdminUsersPage() {
+  const { t, i18n } = useTranslation()
   const [data, setData] = useState<UsersListResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -46,11 +48,11 @@ export function AdminUsersPage() {
       setData(response)
       setError(null)
     } catch {
-      setError('Error al cargar los usuarios')
+      setError(t('admin.users.loadError'))
     } finally {
       setIsLoading(false)
     }
-  }, [page, search, status, role])
+  }, [page, search, status, role, t])
 
   useEffect(() => {
     fetchUsers()
@@ -72,7 +74,7 @@ export function AdminUsersPage() {
       }
       fetchUsers()
     } catch {
-      setError('Error al cambiar el estado del usuario')
+      setError(t('admin.users.toggleStatusError'))
     } finally {
       setActionLoading(null)
       setOpenMenu(null)
@@ -81,7 +83,7 @@ export function AdminUsersPage() {
   }
 
   const handleDelete = async (user: AdminUser) => {
-    if (!window.confirm(`¿Estás seguro de eliminar a "${user.firstName} ${user.lastName}"?`)) {
+    if (!window.confirm(t('admin.users.deleteConfirm', { name: `${user.firstName} ${user.lastName}` }))) {
       return
     }
 
@@ -90,7 +92,7 @@ export function AdminUsersPage() {
       await adminUsersApi.delete(user.id)
       fetchUsers()
     } catch {
-      setError('Error al eliminar el usuario')
+      setError(t('admin.users.deleteError'))
     } finally {
       setActionLoading(null)
       setOpenMenu(null)
@@ -108,7 +110,7 @@ export function AdminUsersPage() {
       setNewPassword('')
       setPasswordError(null)
     } catch {
-      setPasswordError('Error al resetear la contraseña')
+      setPasswordError(t('admin.users.resetPasswordError'))
     } finally {
       setActionLoading(null)
     }
@@ -119,8 +121,8 @@ export function AdminUsersPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Usuarios</h1>
-          <p className="text-gray-500">Gestiona todos los usuarios de la plataforma</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('admin.users.title')}</h1>
+          <p className="text-gray-500">{t('admin.users.subtitle')}</p>
         </div>
       </div>
 
@@ -134,7 +136,7 @@ export function AdminUsersPage() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por email o nombre..."
+                placeholder={t('admin.users.searchPlaceholder')}
                 className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
@@ -147,9 +149,9 @@ export function AdminUsersPage() {
             }}
             className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="">Todos los estados</option>
-            <option value="active">Activos</option>
-            <option value="inactive">Inactivos</option>
+            <option value="">{t('admin.status.all')}</option>
+            <option value="active">{t('admin.status.activeFilter')}</option>
+            <option value="inactive">{t('admin.status.inactiveFilter')}</option>
           </select>
           <select
             value={role}
@@ -159,19 +161,19 @@ export function AdminUsersPage() {
             }}
             className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="">Todos los roles</option>
-            <option value="SUPER_ADMIN">Super Admin</option>
-            <option value="OWNER">Owner</option>
-            <option value="ADMIN">Admin</option>
-            <option value="CLINIC_ADMIN">Clinic Admin</option>
-            <option value="DOCTOR">Doctor</option>
-            <option value="STAFF">Staff</option>
+            <option value="">{t('admin.users.allRoles')}</option>
+            <option value="SUPER_ADMIN">{t('admin.roles.SUPER_ADMIN')}</option>
+            <option value="OWNER">{t('admin.roles.OWNER')}</option>
+            <option value="ADMIN">{t('admin.roles.ADMIN')}</option>
+            <option value="CLINIC_ADMIN">{t('admin.roles.CLINIC_ADMIN')}</option>
+            <option value="DOCTOR">{t('admin.roles.DOCTOR')}</option>
+            <option value="STAFF">{t('admin.roles.STAFF')}</option>
           </select>
           <button
             type="submit"
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            Buscar
+            {t('admin.users.searchButton')}
           </button>
         </form>
       </div>
@@ -199,22 +201,22 @@ export function AdminUsersPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Usuario
+                    {t('admin.users.tableHeaderUser')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Rol
+                    {t('admin.users.tableHeaderRole')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Estado
+                    {t('admin.users.tableHeaderStatus')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Clínica
+                    {t('admin.users.tableHeaderTenant')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Último Login
+                    {t('admin.users.tableHeaderLastLogin')}
                   </th>
                   <th className="relative px-6 py-3">
-                    <span className="sr-only">Acciones</span>
+                    <span className="sr-only">{t('admin.users.tableHeaderActionsSr')}</span>
                   </th>
                 </tr>
               </thead>
@@ -222,7 +224,7 @@ export function AdminUsersPage() {
                 {data.users.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                      No se encontraron usuarios
+                      {t('admin.users.emptyState')}
                     </td>
                   </tr>
                 ) : (
@@ -245,19 +247,19 @@ export function AdminUsersPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${roleColors[user.role] || 'bg-gray-100 text-gray-800'}`}>
-                          {user.role.replace('_', ' ')}
+                          {t(`admin.roles.${user.role}`)}
                         </span>
                       </td>
                       <td className="px-6 py-4">
                         {user.isActive ? (
                           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                             <CheckCircle className="h-3 w-3" />
-                            Activo
+                            {t('admin.status.active')}
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
                             <XCircle className="h-3 w-3" />
-                            Suspendido
+                            {t('admin.status.suspended')}
                           </span>
                         )}
                       </td>
@@ -273,13 +275,13 @@ export function AdminUsersPage() {
                       </td>
                       <td className="px-6 py-4 text-gray-500">
                         {user.lastLoginAt
-                          ? new Date(user.lastLoginAt).toLocaleDateString('es-ES', {
+                          ? new Date(user.lastLoginAt).toLocaleDateString(i18n.language, {
                             day: 'numeric',
                             month: 'short',
                             hour: '2-digit',
                             minute: '2-digit',
                           })
-                          : 'Nunca'}
+                          : t('admin.users.never')}
                       </td>
                       <td className="px-6 py-4">
                         <div className="relative">
@@ -338,7 +340,7 @@ export function AdminUsersPage() {
                                   }}
                                 >
                                   <Eye className="h-4 w-4" />
-                                  Ver detalles
+                                  {t('admin.users.viewDetails')}
                                 </Link>
                                 <button
                                   onClick={() => {
@@ -349,21 +351,21 @@ export function AdminUsersPage() {
                                   className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                 >
                                   <Key className="h-4 w-4" />
-                                  Resetear contraseña
+                                  {t('admin.users.resetPasswordAction')}
                                 </button>
                                 <button
                                   onClick={() => handleToggleStatus(user)}
                                   className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                 >
                                   <Power className="h-4 w-4" />
-                                  {user.isActive ? 'Suspender' : 'Activar'}
+                                  {user.isActive ? t('admin.users.suspendAction') : t('admin.users.activateAction')}
                                 </button>
                                 <button
                                   onClick={() => handleDelete(user)}
                                   className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50"
                                 >
                                   <Trash2 className="h-4 w-4" />
-                                  Eliminar
+                                  {t('admin.users.deleteAction')}
                                 </button>
                               </div>
                             </>
@@ -381,7 +383,11 @@ export function AdminUsersPage() {
           {data.pagination.totalPages > 1 && (
             <div className="flex items-center justify-between mt-6">
               <p className="text-sm text-gray-500">
-                Mostrando {(page - 1) * 10 + 1} a {Math.min(page * 10, data.pagination.total)} de {data.pagination.total}
+                {t('admin.users.paginationShowing', {
+                  from: (page - 1) * 10 + 1,
+                  to: Math.min(page * 10, data.pagination.total),
+                  total: data.pagination.total,
+                })}
               </p>
               <div className="flex items-center gap-2">
                 <button
@@ -392,7 +398,7 @@ export function AdminUsersPage() {
                   <ChevronLeft className="h-4 w-4" />
                 </button>
                 <span className="px-4 py-2 text-sm">
-                  Página {page} de {data.pagination.totalPages}
+                  {t('admin.users.paginationPage', { page, totalPages: data.pagination.totalPages })}
                 </span>
                 <button
                   onClick={() => setPage(page + 1)}
@@ -429,10 +435,10 @@ export function AdminUsersPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Resetear Contraseña
+              {t('admin.users.resetPasswordModalTitle')}
             </h3>
             <p className="text-sm text-gray-500 mb-4">
-              Usuario: {resetPasswordModal.email}
+              {t('admin.users.resetPasswordModalUser', { email: resetPasswordModal.email })}
             </p>
             <div className="mb-4">
               <input
@@ -442,7 +448,7 @@ export function AdminUsersPage() {
                   setNewPassword(e.target.value)
                   setPasswordError(null)
                 }}
-                placeholder="Nueva contraseña (mín. 8 caracteres)"
+                placeholder={t('admin.users.newPasswordPlaceholder')}
                 className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${newPassword.length > 0 && newPassword.length < 8
                     ? 'border-red-300'
                     : 'border-gray-200'
@@ -451,7 +457,7 @@ export function AdminUsersPage() {
               />
               {newPassword.length > 0 && newPassword.length < 8 && (
                 <p className="text-sm text-red-600 mt-1">
-                  La contraseña debe tener al menos 8 caracteres
+                  {t('admin.users.passwordTooShort')}
                 </p>
               )}
               {passwordError && (
@@ -467,14 +473,14 @@ export function AdminUsersPage() {
                 }}
                 className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                Cancelar
+                {t('admin.users.cancel')}
               </button>
               <button
                 onClick={handleResetPassword}
                 disabled={newPassword.length < 8 || actionLoading === resetPasswordModal.userId}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {actionLoading === resetPasswordModal.userId ? 'Reseteando...' : 'Resetear'}
+                {actionLoading === resetPasswordModal.userId ? t('admin.users.resetPasswordSubmitting') : t('admin.users.resetPasswordSubmit')}
               </button>
             </div>
           </div>

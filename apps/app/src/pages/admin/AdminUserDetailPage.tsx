@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { adminUsersApi, type AdminUserDetail } from '@/lib/admin-api'
 import { roleColors } from '@/lib/admin-utils'
 import {
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react'
 
 export function AdminUserDetailPage() {
+  const { t, i18n } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [user, setUser] = useState<AdminUserDetail | null>(null)
@@ -34,14 +36,14 @@ export function AdminUserDetailPage() {
         setUser(data)
         setError(null)
       } catch {
-        setError('Error al cargar los detalles del usuario')
+        setError(t('admin.userDetail.loadError'))
       } finally {
         setIsLoading(false)
       }
     }
 
     fetchUser()
-  }, [id])
+  }, [id, t])
 
   if (isLoading) {
     return (
@@ -56,12 +58,12 @@ export function AdminUserDetailPage() {
       <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
         <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
         <div>
-          <p className="text-red-600 font-medium">{error || 'No se encontró el usuario'}</p>
+          <p className="text-red-600 font-medium">{error || t('admin.userDetail.notFound')}</p>
           <Link
             to="/admin/users"
             className="text-red-600 hover:text-red-700 underline text-sm mt-1 inline-block"
           >
-            Volver a usuarios
+            {t('admin.userDetail.backToUsers')}
           </Link>
         </div>
       </div>
@@ -95,17 +97,17 @@ export function AdminUserDetailPage() {
         </div>
         <div className="flex items-center gap-3">
           <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${roleColors[user.role] || 'bg-gray-100 text-gray-800'}`}>
-            {user.role.replace('_', ' ')}
+            {t(`admin.roles.${user.role}`)}
           </span>
           {user.isActive ? (
             <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium bg-green-100 text-green-800">
               <CheckCircle className="h-4 w-4" />
-              Activo
+              {t('admin.status.active')}
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium bg-red-100 text-red-800">
               <XCircle className="h-4 w-4" />
-              Suspendido
+              {t('admin.status.suspended')}
             </span>
           )}
         </div>
@@ -116,7 +118,7 @@ export function AdminUserDetailPage() {
         <div className="lg:col-span-2 space-y-6">
           {/* Contact Information */}
           <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Información de Contacto</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.userDetail.contactInfoHeading')}</h2>
             <div className="space-y-3">
               <div className="flex items-center gap-3 text-gray-600">
                 <Mail className="h-5 w-5 text-gray-400" />
@@ -134,7 +136,7 @@ export function AdminUserDetailPage() {
           {/* Tenant Information */}
           {user.tenant && (
             <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Clínica</h2>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.userDetail.tenantHeading')}</h2>
               <Link
                 to={`/admin/tenants/${user.tenant.id}`}
                 className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
@@ -152,49 +154,55 @@ export function AdminUserDetailPage() {
 
           {/* Account Details */}
           <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Detalles de la Cuenta</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.userDetail.accountDetailsHeading')}</h2>
             <div className="space-y-3">
               <div className="flex items-center gap-3 text-gray-600">
                 <Shield className="h-5 w-5 text-gray-400" />
-                <span>Rol: {user.role.replace('_', ' ')}</span>
+                <span>{t('admin.userDetail.roleLabel', { role: t(`admin.roles.${user.role}`) })}</span>
               </div>
               <div className="flex items-center gap-3 text-gray-600">
                 <Mail className="h-5 w-5 text-gray-400" />
-                <span>Email verificado: {user.emailVerified ? 'Sí' : 'No'}</span>
+                <span>{t('admin.userDetail.emailVerifiedLabel', { value: user.emailVerified ? t('admin.userDetail.yes') : t('admin.userDetail.no') })}</span>
               </div>
               <div className="flex items-center gap-3 text-gray-600">
                 <Key className="h-5 w-5 text-gray-400" />
-                <span>Sesiones activas: {user._count.refreshTokens}</span>
+                <span>{t('admin.userDetail.activeSessionsLabel', { count: user._count.refreshTokens })}</span>
               </div>
               <div className="flex items-center gap-3 text-gray-600">
                 <Calendar className="h-5 w-5 text-gray-400" />
-                <span>Creado: {new Date(user.createdAt).toLocaleString('es-ES', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}</span>
-              </div>
-              <div className="flex items-center gap-3 text-gray-600">
-                <Clock className="h-5 w-5 text-gray-400" />
-                <span>Actualizado: {new Date(user.updatedAt).toLocaleString('es-ES', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}</span>
-              </div>
-              {user.lastLoginAt && (
-                <div className="flex items-center gap-3 text-gray-600">
-                  <Clock className="h-5 w-5 text-gray-400" />
-                  <span>Último login: {new Date(user.lastLoginAt).toLocaleString('es-ES', {
+                <span>{t('admin.userDetail.createdLabel', {
+                  date: new Date(user.createdAt).toLocaleString(i18n.language, {
                     day: 'numeric',
                     month: 'long',
                     year: 'numeric',
                     hour: '2-digit',
                     minute: '2-digit',
+                  }),
+                })}</span>
+              </div>
+              <div className="flex items-center gap-3 text-gray-600">
+                <Clock className="h-5 w-5 text-gray-400" />
+                <span>{t('admin.userDetail.updatedLabel', {
+                  date: new Date(user.updatedAt).toLocaleString(i18n.language, {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  }),
+                })}</span>
+              </div>
+              {user.lastLoginAt && (
+                <div className="flex items-center gap-3 text-gray-600">
+                  <Clock className="h-5 w-5 text-gray-400" />
+                  <span>{t('admin.userDetail.lastLoginLabel', {
+                    date: new Date(user.lastLoginAt).toLocaleString(i18n.language, {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    }),
                   })}</span>
                 </div>
               )}
@@ -205,33 +213,33 @@ export function AdminUserDetailPage() {
         {/* Status Sidebar */}
         <div className="space-y-6">
           <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Estado</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.userDetail.statusHeading')}</h2>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Cuenta</span>
+                <span className="text-sm text-gray-600">{t('admin.userDetail.accountLabel')}</span>
                 {user.isActive ? (
                   <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                     <CheckCircle className="h-3 w-3" />
-                    Activa
+                    {t('admin.userDetail.accountActive')}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
                     <XCircle className="h-3 w-3" />
-                    Suspendida
+                    {t('admin.userDetail.accountSuspended')}
                   </span>
                 )}
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Email</span>
+                <span className="text-sm text-gray-600">{t('admin.common.email')}</span>
                 {user.emailVerified ? (
                   <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                     <CheckCircle className="h-3 w-3" />
-                    Verificado
+                    {t('admin.userDetail.verified')}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                     <AlertCircle className="h-3 w-3" />
-                    Sin verificar
+                    {t('admin.userDetail.unverified')}
                   </span>
                 )}
               </div>
@@ -240,7 +248,7 @@ export function AdminUserDetailPage() {
 
           {/* Quick Actions */}
           <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">ID</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.userDetail.idHeading')}</h2>
             <p className="text-xs font-mono text-gray-500 break-all">{user.id}</p>
           </div>
         </div>
