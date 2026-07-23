@@ -1025,7 +1025,12 @@
   },
   "dates": {
     "tomorrow": "Tomorrow",
-    "yesterday": "Yesterday"
+    "yesterday": "Yesterday",
+    "datePicker": {
+      "placeholder": "Select date",
+      "previousMonth": "Previous month",
+      "nextMonth": "Next month"
+    }
   },
   "payment": {
     "paid": "Paid",

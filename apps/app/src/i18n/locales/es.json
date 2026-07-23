@@ -1034,7 +1034,12 @@
   },
   "dates": {
     "tomorrow": "Mañana",
-    "yesterday": "Ayer"
+    "yesterday": "Ayer",
+    "datePicker": {
+      "placeholder": "Seleccionar fecha",
+      "previousMonth": "Mes anterior",
+      "nextMonth": "Mes siguiente"
+    }
   },
   "payment": {
     "paid": "Pagado",

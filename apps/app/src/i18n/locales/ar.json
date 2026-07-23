@@ -1034,7 +1034,12 @@
   },
   "dates": {
     "tomorrow": "غداً",
-    "yesterday": "أمس"
+    "yesterday": "أمس",
+    "datePicker": {
+      "placeholder": "اختر التاريخ",
+      "previousMonth": "الشهر السابق",
+      "nextMonth": "الشهر التالي"
+    }
   },
   "payment": {
     "paid": "مدفوع",

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useTranslation } from 'react-i18next'
@@ -17,6 +17,8 @@ import * as doctorApi from '../../lib/doctor-api'
 import { listBudgetsByPatient, type BudgetItem } from '../../lib/budget-api'
 import { formatDateForInput, formatCurrency } from '../../lib/format'
 import { PatientSearchCombobox, type PatientOption } from '../ui/PatientSearchCombobox'
+import { DatePicker } from '../ui/DatePicker'
+import { TimePicker } from '../ui/TimePicker'
 import { useAuthStore } from '../../stores/auth.store'
 
 interface EligibleBudgetItem {
@@ -127,6 +129,7 @@ export function AppointmentFormModal({
     reset,
     setValue,
     watch,
+    control,
     formState: { errors, isSubmitting, dirtyFields },
   } = useForm<FormData>({
     resolver: zodResolver(appointmentFormSchemaInput),
@@ -464,10 +467,18 @@ export function AppointmentFormModal({
                     <Calendar className="h-4 w-4" />
                     {t('appointments.form.date')} *
                   </label>
-                  <input
-                    type="date"
-                    {...register('date')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  <Controller
+                    name="date"
+                    control={control}
+                    render={({ field }) => (
+                      <DatePicker
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        error={!!errors.date}
+                        aria-label={t('appointments.form.date')}
+                      />
+                    )}
                   />
                   {errors.date && (
                     <p className="mt-1 text-sm text-red-600">{errors.date.message}</p>
@@ -479,10 +490,9 @@ export function AppointmentFormModal({
                     <Clock className="h-4 w-4" />
                     {t('appointments.form.startTime')} *
                   </label>
-                  <input
-                    type="time"
+                  <TimePicker
                     {...register('startTime')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    error={!!errors.startTime}
                   />
                   {errors.startTime && (
                     <p className="mt-1 text-sm text-red-600">{errors.startTime.message}</p>
@@ -494,10 +504,9 @@ export function AppointmentFormModal({
                     <Clock className="h-4 w-4" />
                     {t('appointments.form.endTime')} *
                   </label>
-                  <input
-                    type="time"
+                  <TimePicker
                     {...register('endTime')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    error={!!errors.endTime}
                   />
                   {errors.endTime && (
                     <p className="mt-1 text-sm text-red-600">{errors.endTime.message}</p>
