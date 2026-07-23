@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { adminStatsApi, type PlatformStats, type TopTenant, type RecentActivity } from '@/lib/admin-api'
 import {
   Building2,
@@ -48,6 +49,7 @@ function StatCard({
 }
 
 export function AdminDashboardPage() {
+  const { t, i18n } = useTranslation()
   const [stats, setStats] = useState<PlatformStats | null>(null)
   const [topTenants, setTopTenants] = useState<TopTenant[]>([])
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([])
@@ -66,14 +68,14 @@ export function AdminDashboardPage() {
         setTopTenants(tenantsData)
         setRecentActivity(activityData)
       } catch {
-        setError('Error al cargar los datos del dashboard')
+        setError(t('admin.dashboard.loadError'))
       } finally {
         setIsLoading(false)
       }
     }
 
     fetchData()
-  }, [])
+  }, [t])
 
   if (isLoading) {
     return (
@@ -88,7 +90,7 @@ export function AdminDashboardPage() {
       <div className="bg-red-50 border border-red-200 rounded-lg p-6 flex items-start gap-3">
         <AlertCircle className="h-6 w-6 text-red-500 flex-shrink-0" />
         <div>
-          <h3 className="font-medium text-red-800">Error</h3>
+          <h3 className="font-medium text-red-800">{t('admin.dashboard.errorTitle')}</h3>
           <p className="text-red-600">{error}</p>
         </div>
       </div>
@@ -99,36 +101,36 @@ export function AdminDashboardPage() {
     <div>
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500">Resumen de la plataforma Alveo System</p>
+        <h1 className="text-2xl font-bold text-gray-900">{t('admin.dashboard.title')}</h1>
+        <p className="text-gray-500">{t('admin.dashboard.subtitle')}</p>
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <StatCard
-          title="Total Clínicas"
+          title={t('admin.dashboard.statTenantsTitle')}
           value={stats?.tenants.total || 0}
-          subtitle={`${stats?.tenants.active || 0} activas`}
+          subtitle={t('admin.dashboard.statTenantsSubtitle', { count: stats?.tenants.active || 0 })}
           icon={Building2}
           color="blue"
         />
         <StatCard
-          title="Total Usuarios"
+          title={t('admin.dashboard.statUsersTitle')}
           value={stats?.users.total || 0}
-          subtitle={`${stats?.users.active || 0} activos`}
+          subtitle={t('admin.dashboard.statUsersSubtitle', { count: stats?.users.active || 0 })}
           icon={Users}
           color="green"
         />
         <StatCard
-          title="Total Pacientes"
+          title={t('admin.dashboard.statPatientsTitle')}
           value={stats?.patients.total || 0}
           icon={UserCheck}
           color="purple"
         />
         <StatCard
-          title="Citas Este Mes"
+          title={t('admin.dashboard.statAppointmentsTitle')}
           value={stats?.appointments.thisMonth || 0}
-          subtitle={`${stats?.appointments.total || 0} total`}
+          subtitle={t('admin.dashboard.statAppointmentsSubtitle', { count: stats?.appointments.total || 0 })}
           icon={CalendarDays}
           color="orange"
         />
@@ -140,11 +142,11 @@ export function AdminDashboardPage() {
         <div className="bg-white rounded-xl shadow-sm p-6">
           <div className="flex items-center gap-2 mb-6">
             <TrendingUp className="h-5 w-5 text-gray-400" />
-            <h2 className="text-lg font-semibold text-gray-900">Top Clínicas</h2>
+            <h2 className="text-lg font-semibold text-gray-900">{t('admin.dashboard.topTenantsHeading')}</h2>
           </div>
-          
+
           {topTenants.length === 0 ? (
-            <p className="text-gray-500 text-sm">No hay clínicas registradas</p>
+            <p className="text-gray-500 text-sm">{t('admin.dashboard.topTenantsEmpty')}</p>
           ) : (
             <div className="space-y-4">
               {topTenants.map((tenant, index) => (
@@ -155,7 +157,10 @@ export function AdminDashboardPage() {
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 truncate">{tenant.name}</p>
                     <p className="text-sm text-gray-500">
-                      {tenant._count.patients} pacientes • {tenant._count.appointments} citas
+                      {t('admin.dashboard.topTenantsStats', {
+                        patients: tenant._count.patients,
+                        appointments: tenant._count.appointments,
+                      })}
                     </p>
                   </div>
                 </div>
@@ -168,11 +173,11 @@ export function AdminDashboardPage() {
         <div className="bg-white rounded-xl shadow-sm p-6">
           <div className="flex items-center gap-2 mb-6">
             <Activity className="h-5 w-5 text-gray-400" />
-            <h2 className="text-lg font-semibold text-gray-900">Actividad Reciente</h2>
+            <h2 className="text-lg font-semibold text-gray-900">{t('admin.dashboard.recentActivityHeading')}</h2>
           </div>
-          
+
           {recentActivity.length === 0 ? (
-            <p className="text-gray-500 text-sm">No hay actividad reciente</p>
+            <p className="text-gray-500 text-sm">{t('admin.dashboard.recentActivityEmpty')}</p>
           ) : (
             <div className="space-y-4">
               {recentActivity.map((activity) => (
@@ -183,17 +188,17 @@ export function AdminDashboardPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-900">
                       {activity.type === 'tenant_created' ? (
-                        <>Nueva clínica: <span className="font-medium">{activity.name}</span></>
+                        <>{t('admin.dashboard.activityNewTenant')} <span className="font-medium">{activity.name}</span></>
                       ) : (
-                        <>Nuevo usuario: <span className="font-medium">{activity.email}</span>
+                        <>{t('admin.dashboard.activityNewUser')} <span className="font-medium">{activity.email}</span>
                           {activity.tenantName && (
-                            <span className="text-gray-500"> en {activity.tenantName}</span>
+                            <span className="text-gray-500"> {t('admin.dashboard.activityInTenant', { tenantName: activity.tenantName })}</span>
                           )}
                         </>
                       )}
                     </p>
                     <p className="text-xs text-gray-400">
-                      {new Date(activity.createdAt).toLocaleDateString('es-ES', {
+                      {new Date(activity.createdAt).toLocaleDateString(i18n.language, {
                         day: 'numeric',
                         month: 'short',
                         hour: '2-digit',
@@ -211,12 +216,12 @@ export function AdminDashboardPage() {
       {/* Users by Role */}
       {stats?.users.byRole && (
         <div className="mt-8 bg-white rounded-xl shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Usuarios por Rol</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.dashboard.usersByRoleHeading')}</h2>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             {Object.entries(stats.users.byRole).map(([role, count]) => (
               <div key={role} className="text-center p-4 bg-gray-50 rounded-lg">
                 <p className="text-2xl font-bold text-gray-900">{count}</p>
-                <p className="text-sm text-gray-500 capitalize">{role.toLowerCase().replace('_', ' ')}</p>
+                <p className="text-sm text-gray-500">{t(`admin.roles.${role}`)}</p>
               </div>
             ))}
           </div>

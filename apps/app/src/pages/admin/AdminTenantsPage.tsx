@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { adminTenantsApi, type Tenant, type TenantsListResponse } from '@/lib/admin-api'
 import {
   Building2,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react'
 
 export function AdminTenantsPage() {
+  const { t, i18n } = useTranslation()
   const [data, setData] = useState<TenantsListResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -39,11 +41,11 @@ export function AdminTenantsPage() {
       setData(response)
       setError(null)
     } catch {
-      setError('Error al cargar las clínicas')
+      setError(t('admin.tenants.loadError'))
     } finally {
       setIsLoading(false)
     }
-  }, [page, search, status])
+  }, [page, search, status, t])
 
   useEffect(() => {
     fetchTenants()
@@ -65,7 +67,7 @@ export function AdminTenantsPage() {
       }
       fetchTenants()
     } catch {
-      setError('Error al cambiar el estado de la clínica')
+      setError(t('admin.tenants.toggleStatusError'))
     } finally {
       setActionLoading(null)
       setOpenMenu(null)
@@ -74,7 +76,7 @@ export function AdminTenantsPage() {
   }
 
   const handleDelete = async (tenant: Tenant) => {
-    if (!window.confirm(`¿Estás seguro de eliminar "${tenant.name}"? Esta acción eliminará todos los datos asociados.`)) {
+    if (!window.confirm(t('admin.tenants.deleteConfirm', { name: tenant.name }))) {
       return
     }
 
@@ -83,7 +85,7 @@ export function AdminTenantsPage() {
       await adminTenantsApi.delete(tenant.id)
       fetchTenants()
     } catch {
-      setError('Error al eliminar la clínica')
+      setError(t('admin.tenants.deleteError'))
     } finally {
       setActionLoading(null)
       setOpenMenu(null)
@@ -96,8 +98,8 @@ export function AdminTenantsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Clínicas</h1>
-          <p className="text-gray-500">Gestiona todas las clínicas de la plataforma</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('admin.tenants.title')}</h1>
+          <p className="text-gray-500">{t('admin.tenants.subtitle')}</p>
         </div>
       </div>
 
@@ -111,7 +113,7 @@ export function AdminTenantsPage() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por nombre, slug o email..."
+                placeholder={t('admin.tenants.searchPlaceholder')}
                 className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
@@ -124,15 +126,15 @@ export function AdminTenantsPage() {
             }}
             className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="">Todos los estados</option>
-            <option value="active">Activos</option>
-            <option value="inactive">Inactivos</option>
+            <option value="">{t('admin.status.all')}</option>
+            <option value="active">{t('admin.status.activeFilter')}</option>
+            <option value="inactive">{t('admin.status.inactiveFilter')}</option>
           </select>
           <button
             type="submit"
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            Buscar
+            {t('admin.tenants.searchButton')}
           </button>
         </form>
       </div>
@@ -160,25 +162,25 @@ export function AdminTenantsPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Clínica
+                    {t('admin.tenants.tableHeaderTenant')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Estado
+                    {t('admin.tenants.tableHeaderStatus')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Usuarios
+                    {t('admin.tenants.tableHeaderUsers')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Pacientes
+                    {t('admin.tenants.tableHeaderPatients')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Plan
+                    {t('admin.tenants.tableHeaderPlan')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Creada
+                    {t('admin.tenants.tableHeaderCreated')}
                   </th>
                   <th className="relative px-6 py-3">
-                    <span className="sr-only">Acciones</span>
+                    <span className="sr-only">{t('admin.tenants.tableHeaderActionsSr')}</span>
                   </th>
                 </tr>
               </thead>
@@ -186,7 +188,7 @@ export function AdminTenantsPage() {
                 {data.tenants.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
-                      No se encontraron clínicas
+                      {t('admin.tenants.emptyState')}
                     </td>
                   </tr>
                 ) : (
@@ -207,12 +209,12 @@ export function AdminTenantsPage() {
                         {tenant.isActive ? (
                           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                             <CheckCircle className="h-3 w-3" />
-                            Activo
+                            {t('admin.status.active')}
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
                             <XCircle className="h-3 w-3" />
-                            Suspendido
+                            {t('admin.status.suspended')}
                           </span>
                         )}
                       </td>
@@ -223,10 +225,10 @@ export function AdminTenantsPage() {
                         {tenant._count.patients}
                       </td>
                       <td className="px-6 py-4 text-gray-500">
-                        {tenant.subscription?.plan?.displayName || 'Sin plan'}
+                        {tenant.subscription?.plan?.displayName || t('admin.tenants.noPlan')}
                       </td>
                       <td className="px-6 py-4 text-gray-500">
-                        {new Date(tenant.createdAt).toLocaleDateString('es-ES')}
+                        {new Date(tenant.createdAt).toLocaleDateString(i18n.language)}
                       </td>
                       <td className="px-6 py-4">
                         <div className="relative">
@@ -285,21 +287,21 @@ export function AdminTenantsPage() {
                                   }}
                                 >
                                   <Eye className="h-4 w-4" />
-                                  Ver detalles
+                                  {t('admin.tenants.viewDetails')}
                                 </Link>
                                 <button
                                   onClick={() => handleToggleStatus(tenant)}
                                   className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                 >
                                   <Power className="h-4 w-4" />
-                                  {tenant.isActive ? 'Suspender' : 'Activar'}
+                                  {tenant.isActive ? t('admin.tenants.suspendAction') : t('admin.tenants.activateAction')}
                                 </button>
                                 <button
                                   onClick={() => handleDelete(tenant)}
                                   className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50"
                                 >
                                   <Trash2 className="h-4 w-4" />
-                                  Eliminar
+                                  {t('admin.tenants.deleteAction')}
                                 </button>
                               </div>
                             </>
@@ -317,7 +319,11 @@ export function AdminTenantsPage() {
           {data.pagination.totalPages > 1 && (
             <div className="flex items-center justify-between mt-6">
               <p className="text-sm text-gray-500">
-                Mostrando {(page - 1) * 10 + 1} a {Math.min(page * 10, data.pagination.total)} de {data.pagination.total}
+                {t('admin.tenants.paginationShowing', {
+                  from: (page - 1) * 10 + 1,
+                  to: Math.min(page * 10, data.pagination.total),
+                  total: data.pagination.total,
+                })}
               </p>
               <div className="flex items-center gap-2">
                 <button
@@ -328,7 +334,7 @@ export function AdminTenantsPage() {
                   <ChevronLeft className="h-4 w-4" />
                 </button>
                 <span className="px-4 py-2 text-sm">
-                  Página {page} de {data.pagination.totalPages}
+                  {t('admin.tenants.paginationPage', { page, totalPages: data.pagination.totalPages })}
                 </span>
                 <button
                   onClick={() => setPage(page + 1)}

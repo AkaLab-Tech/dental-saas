@@ -1,4 +1,5 @@
 import { Navigate, Outlet, Link, useLocation } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { useAdminStore } from '@/stores/admin.store'
 import {
   LayoutDashboard,
@@ -8,15 +9,16 @@ import {
   Shield,
 } from 'lucide-react'
 
-const navItems = [
-  { path: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/admin/tenants', label: 'Clínicas', icon: Building2 },
-  { path: '/admin/users', label: 'Usuarios', icon: Users },
-]
-
 export function AdminLayout() {
+  const { t } = useTranslation()
   const { isAuthenticated, superAdmin, logout } = useAdminStore()
   const location = useLocation()
+
+  const navItems = [
+    { path: '/admin/dashboard', label: t('admin.layout.navDashboard'), icon: LayoutDashboard },
+    { path: '/admin/tenants', label: t('admin.layout.navTenants'), icon: Building2 },
+    { path: '/admin/users', label: t('admin.layout.navUsers'), icon: Users },
+  ]
 
   if (!isAuthenticated) {
     return <Navigate to="/admin/login" replace />
@@ -35,7 +37,7 @@ export function AdminLayout() {
           <Shield className="h-8 w-8 text-blue-400" />
           <div>
             <h1 className="text-lg font-bold">Alveo System</h1>
-            <p className="text-xs text-gray-400">Super Admin Panel</p>
+            <p className="text-xs text-gray-400">{t('admin.common.superAdminPanelSubtitle')}</p>
           </div>
         </div>
 
@@ -83,7 +85,7 @@ export function AdminLayout() {
             className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white rounded-lg transition-colors"
           >
             <LogOut className="h-4 w-4" />
-            Cerrar Sesión
+            {t('admin.layout.logout')}
           </button>
         </div>
       </aside>

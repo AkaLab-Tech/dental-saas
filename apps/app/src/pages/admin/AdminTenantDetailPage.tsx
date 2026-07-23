@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { adminTenantsApi, type TenantDetail } from '@/lib/admin-api'
 import {
   Building2,
@@ -22,6 +23,7 @@ import {
 } from 'lucide-react'
 
 export function AdminTenantDetailPage() {
+  const { t, i18n } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [tenant, setTenant] = useState<TenantDetail | null>(null)
@@ -38,14 +40,14 @@ export function AdminTenantDetailPage() {
         setTenant(data)
         setError(null)
       } catch {
-        setError('Error al cargar los detalles de la clínica')
+        setError(t('admin.tenantDetail.loadError'))
       } finally {
         setIsLoading(false)
       }
     }
 
     fetchTenant()
-  }, [id])
+  }, [id, t])
 
   if (isLoading) {
     return (
@@ -60,12 +62,12 @@ export function AdminTenantDetailPage() {
       <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
         <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
         <div>
-          <p className="text-red-600 font-medium">{error || 'No se encontró la clínica'}</p>
+          <p className="text-red-600 font-medium">{error || t('admin.tenantDetail.notFound')}</p>
           <Link
             to="/admin/tenants"
             className="text-red-600 hover:text-red-700 underline text-sm mt-1 inline-block"
           >
-            Volver a clínicas
+            {t('admin.tenantDetail.backToTenants')}
           </Link>
         </div>
       </div>
@@ -97,12 +99,12 @@ export function AdminTenantDetailPage() {
           {tenant.isActive ? (
             <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium bg-green-100 text-green-800">
               <CheckCircle className="h-4 w-4" />
-              Activo
+              {t('admin.status.active')}
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium bg-red-100 text-red-800">
               <XCircle className="h-4 w-4" />
-              Suspendido
+              {t('admin.status.suspended')}
             </span>
           )}
         </div>
@@ -113,7 +115,7 @@ export function AdminTenantDetailPage() {
         <div className="lg:col-span-2 space-y-6">
           {/* Contact Information */}
           <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Información de Contacto</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.tenantDetail.contactInfoHeading')}</h2>
             <div className="space-y-3">
               {tenant.email && (
                 <div className="flex items-center gap-3 text-gray-600">
@@ -138,30 +140,34 @@ export function AdminTenantDetailPage() {
 
           {/* Settings */}
           <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Configuración</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.tenantDetail.settingsHeading')}</h2>
             <div className="space-y-3">
               <div className="flex items-center gap-3 text-gray-600">
                 <Globe className="h-5 w-5 text-gray-400" />
-                <span>Zona horaria: {tenant.timezone}</span>
+                <span>{t('admin.tenantDetail.timezoneLabel', { timezone: tenant.timezone })}</span>
               </div>
               <div className="flex items-center gap-3 text-gray-600">
                 <DollarSign className="h-5 w-5 text-gray-400" />
-                <span>Moneda: {tenant.currency}</span>
+                <span>{t('admin.tenantDetail.currencyLabel', { currency: tenant.currency })}</span>
               </div>
               <div className="flex items-center gap-3 text-gray-600">
                 <Calendar className="h-5 w-5 text-gray-400" />
-                <span>Creado: {new Date(tenant.createdAt).toLocaleDateString('es-ES', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
+                <span>{t('admin.tenantDetail.createdLabel', {
+                  date: new Date(tenant.createdAt).toLocaleDateString(i18n.language, {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  }),
                 })}</span>
               </div>
               <div className="flex items-center gap-3 text-gray-600">
                 <Clock className="h-5 w-5 text-gray-400" />
-                <span>Actualizado: {new Date(tenant.updatedAt).toLocaleDateString('es-ES', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
+                <span>{t('admin.tenantDetail.updatedLabel', {
+                  date: new Date(tenant.updatedAt).toLocaleDateString(i18n.language, {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  }),
                 })}</span>
               </div>
             </div>
@@ -169,9 +175,9 @@ export function AdminTenantDetailPage() {
 
           {/* Users */}
           <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Usuarios ({tenant.users.length})</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.tenantDetail.usersHeading', { count: tenant.users.length })}</h2>
             {tenant.users.length === 0 ? (
-              <p className="text-gray-500 text-sm">No hay usuarios registrados</p>
+              <p className="text-gray-500 text-sm">{t('admin.tenantDetail.usersEmpty')}</p>
             ) : (
               <div className="space-y-3">
                 {tenant.users.map((user) => (
@@ -194,7 +200,7 @@ export function AdminTenantDetailPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
-                        {user.role}
+                        {t(`admin.roles.${user.role}`)}
                       </span>
                       {user.isActive ? (
                         <CheckCircle className="h-4 w-4 text-green-500" />
@@ -212,33 +218,33 @@ export function AdminTenantDetailPage() {
         {/* Statistics Sidebar */}
         <div className="space-y-6">
           <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Estadísticas</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.tenantDetail.statisticsHeading')}</h2>
             <div className="space-y-4">
               <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
                 <div className="flex items-center gap-3">
                   <Users className="h-5 w-5 text-blue-600" />
-                  <span className="text-sm text-gray-700">Usuarios</span>
+                  <span className="text-sm text-gray-700">{t('admin.tenantDetail.statUsers')}</span>
                 </div>
                 <span className="text-lg font-semibold text-gray-900">{tenant.users.length}</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
                 <div className="flex items-center gap-3">
                   <Stethoscope className="h-5 w-5 text-green-600" />
-                  <span className="text-sm text-gray-700">Doctores</span>
+                  <span className="text-sm text-gray-700">{t('admin.tenantDetail.statDoctors')}</span>
                 </div>
                 <span className="text-lg font-semibold text-gray-900">{tenant._count.doctors}</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
                 <div className="flex items-center gap-3">
                   <User className="h-5 w-5 text-purple-600" />
-                  <span className="text-sm text-gray-700">Pacientes</span>
+                  <span className="text-sm text-gray-700">{t('admin.tenantDetail.statPatients')}</span>
                 </div>
                 <span className="text-lg font-semibold text-gray-900">{tenant._count.patients}</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
                 <div className="flex items-center gap-3">
                   <CalendarDays className="h-5 w-5 text-orange-600" />
-                  <span className="text-sm text-gray-700">Citas</span>
+                  <span className="text-sm text-gray-700">{t('admin.tenantDetail.statAppointments')}</span>
                 </div>
                 <span className="text-lg font-semibold text-gray-900">{tenant._count.appointments}</span>
               </div>
@@ -247,13 +253,13 @@ export function AdminTenantDetailPage() {
 
           {/* Subscription */}
           <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Plan de Suscripción</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.tenantDetail.subscriptionHeading')}</h2>
             <p className="text-2xl font-bold text-blue-600">
-              {tenant.subscription?.plan?.displayName || 'Sin plan'}
+              {tenant.subscription?.plan?.displayName || t('admin.tenantDetail.noPlan')}
             </p>
             {tenant.subscription?.plan && (
               <p className="text-sm text-gray-500 mt-1">
-                Plan {tenant.subscription.plan.name}
+                {t('admin.tenantDetail.planName', { name: tenant.subscription.plan.name })}
               </p>
             )}
           </div>
