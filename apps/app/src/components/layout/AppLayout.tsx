@@ -97,10 +97,14 @@ export function AppLayout() {
 
   // Gate the first authenticated paint on the account's saved language so the
   // sidebar/content never briefly show the detector-resolved language before
-  // flipping to the tenant's preference (#280). Once a language has been
-  // cached (by useAccountLanguage, above) this resolves instantly on future
-  // loads, so the loading state only appears on a session's very first paint.
-  const languageResolved = settings !== null || window.localStorage.getItem('language') !== null
+  // flipping to the tenant's preference (#280). Deliberately checks the
+  // `accountLanguage` marker (written only by useAccountLanguage), not
+  // `language` — the latter is also written by the i18next LanguageDetector
+  // on every init from the browser locale, so it is non-null even on a
+  // session's very first paint and would make this gate a no-op. Once the
+  // marker has been cached this resolves instantly on future loads, so the
+  // loading state only appears on a session's very first paint.
+  const languageResolved = settings !== null || window.localStorage.getItem('accountLanguage') !== null
   if (!languageResolved) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">

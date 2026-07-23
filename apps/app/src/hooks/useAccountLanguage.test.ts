@@ -40,6 +40,7 @@ describe('useAccountLanguage', () => {
       await i18n.changeLanguage('es')
     })
     window.localStorage.removeItem('language')
+    window.localStorage.removeItem('accountLanguage')
   })
 
   afterEach(async () => {
@@ -48,15 +49,17 @@ describe('useAccountLanguage', () => {
       await i18n.changeLanguage('es')
     })
     window.localStorage.removeItem('language')
+    window.localStorage.removeItem('accountLanguage')
   })
 
-  it('does nothing when settings is null — no changeLanguage call, no localStorage write', () => {
+  it('does nothing when settings is null — no changeLanguage call, no localStorage write (either key)', () => {
     const changeLanguageSpy = vi.spyOn(i18n, 'changeLanguage')
 
     renderHook(() => useAccountLanguage(null))
 
     expect(changeLanguageSpy).not.toHaveBeenCalled()
     expect(window.localStorage.getItem('language')).toBeNull()
+    expect(window.localStorage.getItem('accountLanguage')).toBeNull()
   })
 
   it('calls i18n.changeLanguage(settings.language) exactly once when it differs from the current language', () => {
@@ -68,10 +71,16 @@ describe('useAccountLanguage', () => {
     expect(changeLanguageSpy).toHaveBeenCalledWith('en')
   })
 
-  it('mirrors settings.language into localStorage.language when it differs from the current language', () => {
+  it('mirrors settings.language into BOTH localStorage.language and the accountLanguage marker when it differs from the current language', () => {
     renderHook(() => useAccountLanguage(makeSettings('en')))
 
     expect(window.localStorage.getItem('language')).toBe('en')
+    // The accountLanguage marker (review fix cycle 1, task #280) is written
+    // ONLY here — never by the i18next LanguageDetector — so AppLayout's
+    // first-paint gate can distinguish "account settings actually applied"
+    // from "detector cached a browser-guessed locale". It must reflect
+    // settings.language exactly.
+    expect(window.localStorage.getItem('accountLanguage')).toBe('en')
   })
 
   it('is idempotent: does NOT call changeLanguage when settings.language already equals i18n.language', () => {
@@ -83,10 +92,11 @@ describe('useAccountLanguage', () => {
     expect(changeLanguageSpy).not.toHaveBeenCalled()
   })
 
-  it('still mirrors the value into localStorage even when no changeLanguage call is needed', () => {
+  it('still mirrors the value into both localStorage keys even when no changeLanguage call is needed', () => {
     renderHook(() => useAccountLanguage(makeSettings('es')))
 
     expect(window.localStorage.getItem('language')).toBe('es')
+    expect(window.localStorage.getItem('accountLanguage')).toBe('es')
   })
 
   it('guards against StrictMode double-invocation: mounting under React.StrictMode calls changeLanguage only once', () => {
@@ -144,5 +154,6 @@ describe('useAccountLanguage', () => {
     rerender({ s: makeSettings('ar') })
     expect(changeLanguageSpy).toHaveBeenCalledWith('ar')
     expect(window.localStorage.getItem('language')).toBe('ar')
+    expect(window.localStorage.getItem('accountLanguage')).toBe('ar')
   })
 })

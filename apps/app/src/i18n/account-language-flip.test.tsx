@@ -79,6 +79,8 @@ describe('account language consistency — regression #280 (follow-up to #210)',
     await switchLocale('es')
     document.documentElement.dir = 'ltr'
     document.documentElement.lang = 'es'
+    window.localStorage.removeItem('language')
+    window.localStorage.removeItem('accountLanguage')
   })
 
   it('applies the account language via useAccountLanguage and settles the nav to it — no detector-language leftovers', async () => {
@@ -154,12 +156,18 @@ describe('account language consistency — regression #280 (follow-up to #210)',
     expect(allEnglish).toBe(true)
   })
 
-  it('mirrors the resolved account language into localStorage so the next full page load starts pre-resolved', async () => {
+  it('mirrors the resolved account language into localStorage so the next full page load starts pre-resolved, and writes the accountLanguage marker AppLayout\'s first-paint gate relies on', async () => {
     await i18nReady
     await switchLocale('es')
     window.localStorage.removeItem('language')
+    window.localStorage.removeItem('accountLanguage')
 
     const { rerender } = render(<AccountLanguageHarness settings={null} />)
+
+    // Before settings resolve, neither key has been written yet by this hook
+    // (the LanguageDetector may still have its own `language` entry in a
+    // real session, but this harness starts clean to isolate the hook).
+    expect(window.localStorage.getItem('accountLanguage')).toBeNull()
 
     await act(async () => {
       rerender(<AccountLanguageHarness settings={makeSettings('en')} />)
@@ -168,6 +176,10 @@ describe('account language consistency — regression #280 (follow-up to #210)',
     })
 
     expect(window.localStorage.getItem('language')).toBe('en')
+    // accountLanguage (review fix cycle 1, task #280) is the marker
+    // AppLayout's first-paint gate reads to distinguish "account settings
+    // actually applied" from a mere detector-cached guess in `language`.
+    expect(window.localStorage.getItem('accountLanguage')).toBe('en')
   })
 
   it('does not redundantly call changeLanguage when the account language already matches the current one (no-op update)', async () => {
