@@ -273,7 +273,8 @@
     "users": "Usuarios",
     "lock": "Bloquear",
     "openMenu": "Abrir menú",
-    "closeMenu": "Cerrar menú"
+    "closeMenu": "Cerrar menú",
+    "debtors": "Deudas"
   },
   "auth": {
     "login": "Iniciar sesión",
@@ -1056,6 +1057,12 @@
     "paymentCreated": "Entrega registrada exitosamente",
     "paymentDeleted": "Entrega eliminada exitosamente",
     "noOutstandingBalance": "No hay saldo pendiente",
+    "debtors": {
+      "title": "Deudas de pacientes",
+      "subtitle": "Pacientes con saldo pendiente, ordenados por monto adeudado",
+      "empty": "No hay pacientes con saldo pendiente",
+      "patient": "Paciente"
+    },
     "form": {
       "amount": "Monto",
       "amountHint": "Máximo: {{max}}",

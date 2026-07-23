@@ -754,4 +754,155 @@ describe('Patient Payments Routes', () => {
       expect(found.outstanding).toBe(0)
     })
   })
+
+  describe('GET /api/patients/debts', () => {
+    let debtorAId: string
+    let debtorBId: string
+    let paidPatientId: string
+    let noBillablesPatientId: string
+
+    beforeAll(async () => {
+      // Debtor A: $200 debt, $50 paid -> $150 outstanding
+      const debtorA = await prisma.patient.create({
+        data: { tenantId, firstName: 'DebtorA', lastName: 'Test' },
+      })
+      debtorAId = debtorA.id
+      await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId: debtorAId,
+          doctorId,
+          startTime: new Date('2025-09-01T10:00:00Z'),
+          endTime: new Date('2025-09-01T10:30:00Z'),
+          cost: 200,
+          status: 'COMPLETED',
+        },
+      })
+      await request(app)
+        .post(`/api/patients/${debtorAId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 50, date: '2025-09-02' })
+
+      // Debtor B: $500 debt, $100 paid -> $400 outstanding (bigger than A's, for sort ordering)
+      const debtorB = await prisma.patient.create({
+        data: { tenantId, firstName: 'DebtorB', lastName: 'Test' },
+      })
+      debtorBId = debtorB.id
+      await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId: debtorBId,
+          doctorId,
+          startTime: new Date('2025-09-03T10:00:00Z'),
+          endTime: new Date('2025-09-03T10:30:00Z'),
+          cost: 500,
+          status: 'COMPLETED',
+        },
+      })
+      await request(app)
+        .post(`/api/patients/${debtorBId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 100, date: '2025-09-04' })
+
+      // Fully-paid patient: $100 debt, $100 paid -> $0 outstanding (must be excluded)
+      const paidPatient = await prisma.patient.create({
+        data: { tenantId, firstName: 'FullyPaid', lastName: 'Test' },
+      })
+      paidPatientId = paidPatient.id
+      await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId: paidPatientId,
+          doctorId,
+          startTime: new Date('2025-09-05T10:00:00Z'),
+          endTime: new Date('2025-09-05T10:30:00Z'),
+          cost: 100,
+          status: 'COMPLETED',
+        },
+      })
+      await request(app)
+        .post(`/api/patients/${paidPatientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 100, date: '2025-09-06' })
+
+      // Patient with no billable items at all (must be excluded)
+      const noBillables = await prisma.patient.create({
+        data: { tenantId, firstName: 'NoBillables', lastName: 'Test' },
+      })
+      noBillablesPatientId = noBillables.id
+    })
+
+    it('should return 401 without authentication', async () => {
+      const res = await request(app).get('/api/patients/debts')
+
+      expect(res.status).toBe(401)
+    })
+
+    it('should allow STAFF (PAYMENTS_VIEW) to view the debtors list, consistent with /balance', async () => {
+      const res = await request(app)
+        .get('/api/patients/debts')
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(res.status).toBe(200)
+      expect(Array.isArray(res.body.data)).toBe(true)
+    })
+
+    it('should include a patient with outstanding debt with the correct totals', async () => {
+      const res = await request(app)
+        .get('/api/patients/debts')
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(200)
+      const debtorA = res.body.data.find((d: { patientId: string }) => d.patientId === debtorAId)
+      expect(debtorA).toEqual({
+        patientId: debtorAId,
+        name: 'DebtorA Test',
+        totalDebt: 200,
+        totalPaid: 50,
+        outstanding: 150,
+      })
+    })
+
+    it('should exclude a fully-paid patient (outstanding === 0)', async () => {
+      const res = await request(app)
+        .get('/api/patients/debts')
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(200)
+      expect(
+        res.body.data.find((d: { patientId: string }) => d.patientId === paidPatientId)
+      ).toBeUndefined()
+    })
+
+    it('should exclude a patient with no billable items (no appointments/labworks)', async () => {
+      const res = await request(app)
+        .get('/api/patients/debts')
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(200)
+      expect(
+        res.body.data.find((d: { patientId: string }) => d.patientId === noBillablesPatientId)
+      ).toBeUndefined()
+    })
+
+    it('should sort the full result set by outstanding descending', async () => {
+      const res = await request(app)
+        .get('/api/patients/debts')
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(200)
+
+      // Debtor B ($400 outstanding) must come before Debtor A ($150 outstanding)
+      const relevant = res.body.data.filter((d: { patientId: string }) =>
+        [debtorAId, debtorBId].includes(d.patientId)
+      )
+      expect(relevant.map((d: { patientId: string }) => d.patientId)).toEqual([debtorBId, debtorAId])
+
+      // The list as a whole (including other debtors created by earlier tests
+      // in this file) must already be in descending order.
+      const outstandingValues = res.body.data.map((d: { outstanding: number }) => d.outstanding)
+      const sortedDesc = [...outstandingValues].sort((a: number, b: number) => b - a)
+      expect(outstandingValues).toEqual(sortedDesc)
+    })
+  })
 })
