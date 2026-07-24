@@ -176,9 +176,19 @@ export function TimePicker({
         aria-activedescendant={isOpen ? `${listboxId}-option-${activeIndex}` : undefined}
         onClick={() => setIsOpen((prev) => !prev)}
         onKeyDown={handleKeyDown}
-        onBlur={() => {
-          // Only fire RHF's onBlur when focus isn't moving into the popover.
-          if (!isOpen) onBlur?.()
+        onBlur={(e) => {
+          // Nothing inside the popover is focusable (activedescendant
+          // pattern), so any blur whose relatedTarget isn't inside the
+          // container — including Tab moving focus to the next field — means
+          // focus has genuinely left the widget: close the popover and let
+          // RHF mark the field touched. Clicking an option never reaches
+          // here because its mousedown is prevented below, so it stays on
+          // commit()'s own onBlur call with no double firing. Escape moving
+          // focus back to this same button never fires blur at all.
+          const nextFocusTarget = e.relatedTarget as Node | null
+          if (nextFocusTarget && containerRef.current?.contains(nextFocusTarget)) return
+          if (isOpen) setIsOpen(false)
+          onBlur?.()
         }}
         className={`w-full flex items-center justify-between gap-2 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left text-sm disabled:bg-gray-100 disabled:cursor-not-allowed ${
           error ? 'border-red-300' : 'border-gray-300'
@@ -201,6 +211,9 @@ export function TimePicker({
             role="listbox"
             aria-label={ariaLabel || t('dates.timePicker.label')}
             className="max-h-56 overflow-y-auto py-1"
+            // Keeps focus on the trigger through a mouse selection, so no
+            // blur fires ahead of the click (see the trigger's onBlur above).
+            onMouseDown={(e) => e.preventDefault()}
           >
             {slots.map((slot, index) => (
               <li

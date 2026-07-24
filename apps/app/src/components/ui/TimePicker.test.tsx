@@ -125,6 +125,82 @@ describe('TimePicker', () => {
     })
   })
 
+  // Regression coverage for task #347 review cycle 2: tabbing away from the
+  // trigger while the popover was open used to leave the 96-option listbox
+  // rendered with focus elsewhere, and RHF's onBlur never fired because the
+  // old handler gated on `if (!isOpen)`. The fix drops that gate and instead
+  // checks e.relatedTarget: focus landing inside the container is a no-op,
+  // anything else closes the popover and always calls onBlur.
+  //
+  // jsdom does not simulate real Tab-triggered focus traversal via
+  // fireEvent.keyDown, so these dispatch a native blur event with
+  // relatedTarget set explicitly, mirroring what the browser does when Tab
+  // moves focus to the next focusable element.
+  describe('closing via blur (Tab away from the trigger)', () => {
+    it('closes the popover, flips aria-expanded to false, and fires onBlur when focus moves outside the widget', () => {
+      const onChange = vi.fn()
+      const onBlur = vi.fn()
+      render(
+        <div>
+          <TimePicker value="09:00" onChange={onChange} onBlur={onBlur} />
+          <button type="button">next field</button>
+        </div>
+      )
+      fireEvent.click(getTrigger())
+      expect(screen.getByRole('listbox')).toBeInTheDocument()
+
+      fireEvent.blur(getTrigger(), { relatedTarget: screen.getByRole('button', { name: 'next field' }) })
+
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+      expect(getTrigger()).toHaveAttribute('aria-expanded', 'false')
+      expect(onBlur).toHaveBeenCalledTimes(1)
+      expect(onChange).not.toHaveBeenCalled()
+    })
+
+    it('fires onBlur exactly once even when the popover was already closed (no isOpen gate left)', () => {
+      const onBlur = vi.fn()
+      render(
+        <div>
+          <TimePicker value="09:00" onChange={vi.fn()} onBlur={onBlur} />
+          <button type="button">next field</button>
+        </div>
+      )
+      // Popover is closed (never opened) — this exercises the branch that
+      // used to be gated on `if (!isOpen)` and silently swallowed onBlur.
+      fireEvent.blur(getTrigger(), { relatedTarget: screen.getByRole('button', { name: 'next field' }) })
+
+      expect(onBlur).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not close or fire onBlur when the relatedTarget is still inside the widget', () => {
+      const onBlur = vi.fn()
+      render(<TimePicker value="09:00" onChange={vi.fn()} onBlur={onBlur} />)
+      fireEvent.click(getTrigger())
+      const listbox = screen.getByRole('listbox')
+
+      fireEvent.blur(getTrigger(), { relatedTarget: listbox })
+
+      expect(screen.getByRole('listbox')).toBeInTheDocument()
+      expect(onBlur).not.toHaveBeenCalled()
+    })
+
+    // Cross-check against the two behaviors this fix must not regress: a
+    // mouse selection still fires onBlur exactly once (via commit(), not a
+    // second time through this same handler — see "fires onBlur after a
+    // selection is made" below, and Escape still never fires onBlur at all
+    // because focus never leaves the trigger.
+    it('does not fire onBlur when Escape closes the popover (focus stays on the trigger)', () => {
+      const onChange = vi.fn()
+      const onBlur = vi.fn()
+      render(<TimePicker value="09:00" onChange={onChange} onBlur={onBlur} />)
+      fireEvent.click(getTrigger())
+      fireEvent.keyDown(getTrigger(), { key: 'Escape' })
+
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+      expect(onBlur).not.toHaveBeenCalled()
+    })
+  })
+
   describe('slots', () => {
     it('renders 96 options at the default 15-minute step, from 00:00 to 23:45', () => {
       render(<TimePicker value="09:00" onChange={vi.fn()} />)
