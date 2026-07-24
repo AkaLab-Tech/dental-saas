@@ -1035,6 +1035,10 @@
       "placeholder": "Select date",
       "previousMonth": "Previous month",
       "nextMonth": "Next month"
+    },
+    "timePicker": {
+      "placeholder": "Select time",
+      "label": "Time"
     }
   },
   "payment": {

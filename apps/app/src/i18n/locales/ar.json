@@ -1044,6 +1044,10 @@
       "placeholder": "اختر التاريخ",
       "previousMonth": "الشهر السابق",
       "nextMonth": "الشهر التالي"
+    },
+    "timePicker": {
+      "placeholder": "اختر الوقت",
+      "label": "الوقت"
     }
   },
   "payment": {

@@ -602,18 +602,32 @@ describe('AppointmentFormModal — budget items association', () => {
       // Actual (current code): the select is left on '' ("Seleccionar
       // doctor..."), forcing the user to manually re-pick the doctor before
       // they can save the edit (doctorId is a required field).
-      expect((screen.getAllByRole('combobox')[0] as HTMLSelectElement).value).toBe('doc-1')
+      //
+      // Waited for directly (not asserted synchronously right after
+      // waitForOptionsLoaded): the doctor <select>'s `disabled` attribute
+      // clears as soon as `loadingOptions` flips to false, but the dedicated
+      // effect that re-applies `doctorId` (AppointmentFormModal.tsx, keyed on
+      // that same `loadingOptions` flip) is a separate passive effect that
+      // commits in its own flush. Reading the value synchronously right after
+      // the select becomes enabled is a race against that effect landing;
+      // waiting for the value itself waits for the behavior this test
+      // actually guards, not a proxy for it.
+      await waitFor(() => {
+        expect((screen.getAllByRole('combobox')[0] as HTMLSelectElement).value).toBe('doc-1')
+      })
     })
   })
 })
 
-// Coverage for task #233 (date/time picker UI migration): the date field
-// moved from a native <input type="date"> to a button-triggered <DatePicker>
-// popover, and the time fields moved from native <input type="time">s to a
-// styled <TimePicker> wrapper (still a real input[type="time"] under the
-// hood). These tests drive the *new* widgets directly and assert the exact
-// same submit payload shape the old native inputs produced (date=YYYY-MM-DD
-// combined with startTime/endTime=HH:mm into ISO instants).
+// Coverage for task #233 (date/time picker UI migration) and task #347
+// (custom TimePicker UI): the date field moved from a native
+// <input type="date"> to a button-triggered <DatePicker> popover, and the
+// time fields moved from native <input type="time">s to a fully custom,
+// button-triggered <TimePicker> listbox popover (no native input at all —
+// see TimePicker.test.tsx for the component's own suite). These tests drive
+// the *new* widgets directly and assert the exact same submit payload shape
+// the old native inputs produced (date=YYYY-MM-DD combined with
+// startTime/endTime=HH:mm into ISO instants).
 describe('AppointmentFormModal — date/time picker migration (task #233)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -630,13 +644,28 @@ describe('AppointmentFormModal — date/time picker migration (task #233)', () =
     return screen.getByRole('button', { name: 'Fecha' })
   }
 
-  // The TimePicker inputs have no accessible name wired up in the modal (no
-  // htmlFor/aria-label — a pre-existing gap, unchanged by this migration: the
-  // native inputs they replaced had the same lack of association). Query by
-  // DOM order instead, mirroring this file's existing convention for the
-  // doctor <select> (see waitForOptionsLoaded's comment above).
-  function getTimeInputs() {
-    return Array.from(document.querySelectorAll<HTMLInputElement>('input[type="time"]'))
+  // The TimePicker trigger <button> exposes role="combobox" (task #347: the
+  // APG select-only-combobox pattern, sanctioned for a <button> in ARIA-in-HTML
+  // — see TimePicker.test.tsx). The doctor <select> also computes to role
+  // "combobox", but its accessible name is "Doctor"
+  // (t('appointments.form.doctor')), so these name-scoped queries for "Hora de
+  // inicio" / "Hora de fin" stay unambiguous.
+  function getTimeTriggers() {
+    return [
+      screen.getByRole('combobox', { name: 'Hora de inicio' }),
+      screen.getByRole('combobox', { name: 'Hora de fin' }),
+    ]
+  }
+
+  // Opens a TimePicker's popover and clicks the option matching the given
+  // 'HH:mm' value. Only one TimePicker popover is ever open at a time (each
+  // selection closes its own popover), so this is safe to call sequentially
+  // for the start and end fields.
+  function selectTime(trigger: HTMLElement, hhmm: string) {
+    fireEvent.click(trigger)
+    const option = screen.getAllByRole('option').find((el) => el.textContent === hhmm)
+    if (!option) throw new Error(`No TimePicker option found for "${hhmm}"`)
+    fireEvent.click(option)
   }
 
   it('renders the date field as a button-triggered popover, not a native date input', async () => {
@@ -675,15 +704,15 @@ describe('AppointmentFormModal — date/time picker migration (task #233)', () =
     expect(screen.queryByRole('grid')).not.toBeInTheDocument()
   })
 
-  it('submits times entered via the TimePicker inputs', async () => {
+  it('submits times selected via the TimePicker popovers', async () => {
     const { onSubmit } = renderModal()
     await waitForOptionsLoaded()
     fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
     await selectDoctor()
 
-    const [startInput, endInput] = getTimeInputs()
-    fireEvent.change(startInput, { target: { value: '14:15' } })
-    fireEvent.change(endInput, { target: { value: '15:00' } })
+    const [startTrigger, endTrigger] = getTimeTriggers()
+    selectTime(startTrigger, '14:15')
+    selectTime(endTrigger, '15:00')
 
     fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
 
@@ -702,15 +731,25 @@ describe('AppointmentFormModal — date/time picker migration (task #233)', () =
     fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
     await selectDoctor()
 
-    const [startInput, endInput] = getTimeInputs()
-    fireEvent.change(startInput, { target: { value: '10:00' } })
-    fireEvent.change(endInput, { target: { value: '09:00' } })
+    const [startTrigger, endTrigger] = getTimeTriggers()
+    selectTime(startTrigger, '10:00')
+    selectTime(endTrigger, '09:00')
 
     fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
 
     await waitFor(() =>
       expect(screen.getByText('La hora de fin debe ser posterior a la hora de inicio')).toBeInTheDocument()
     )
+  })
+
+  it('renders the time fields as button-triggered listbox popovers, not native time inputs', async () => {
+    renderModal()
+    await waitForOptionsLoaded()
+
+    expect(document.querySelector('input[type="time"]')).not.toBeInTheDocument()
+    const [startTrigger, endTrigger] = getTimeTriggers()
+    expect(startTrigger).toHaveAttribute('aria-haspopup', 'listbox')
+    expect(endTrigger).toHaveAttribute('aria-haspopup', 'listbox')
   })
 })
 

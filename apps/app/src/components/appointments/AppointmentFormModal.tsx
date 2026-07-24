@@ -490,9 +490,18 @@ export function AppointmentFormModal({
                     <Clock className="h-4 w-4" />
                     {t('appointments.form.startTime')} *
                   </label>
-                  <TimePicker
-                    {...register('startTime')}
-                    error={!!errors.startTime}
+                  <Controller
+                    name="startTime"
+                    control={control}
+                    render={({ field }) => (
+                      <TimePicker
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        error={!!errors.startTime}
+                        aria-label={t('appointments.form.startTime')}
+                      />
+                    )}
                   />
                   {errors.startTime && (
                     <p className="mt-1 text-sm text-red-600">{errors.startTime.message}</p>
@@ -504,9 +513,18 @@ export function AppointmentFormModal({
                     <Clock className="h-4 w-4" />
                     {t('appointments.form.endTime')} *
                   </label>
-                  <TimePicker
-                    {...register('endTime')}
-                    error={!!errors.endTime}
+                  <Controller
+                    name="endTime"
+                    control={control}
+                    render={({ field }) => (
+                      <TimePicker
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        error={!!errors.endTime}
+                        aria-label={t('appointments.form.endTime')}
+                      />
+                    )}
                   />
                   {errors.endTime && (
                     <p className="mt-1 text-sm text-red-600">{errors.endTime.message}</p>
