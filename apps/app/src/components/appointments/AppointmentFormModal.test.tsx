@@ -606,3 +606,120 @@ describe('AppointmentFormModal — budget items association', () => {
     })
   })
 })
+
+// Coverage for task #233 (date/time picker UI migration): the date field
+// moved from a native <input type="date"> to a button-triggered <DatePicker>
+// popover, and the time fields moved from native <input type="time">s to a
+// styled <TimePicker> wrapper (still a real input[type="time"] under the
+// hood). These tests drive the *new* widgets directly and assert the exact
+// same submit payload shape the old native inputs produced (date=YYYY-MM-DD
+// combined with startTime/endTime=HH:mm into ISO instants).
+describe('AppointmentFormModal — date/time picker migration (task #233)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getDoctorsMock.mockResolvedValue([mockDoctor])
+    getPatientsMock.mockResolvedValue([mockPatientRecord])
+    listBudgetsByPatientMock.mockResolvedValue({ data: [], total: 0 })
+    getAppointmentBudgetItemsMock.mockResolvedValue([])
+  })
+
+  // The DatePicker's trigger button carries a fixed aria-label
+  // (t('appointments.form.date') = "Fecha"), independent of the currently
+  // displayed date text, so it's reliably queryable by name.
+  function getDateTrigger() {
+    return screen.getByRole('button', { name: 'Fecha' })
+  }
+
+  // The TimePicker inputs have no accessible name wired up in the modal (no
+  // htmlFor/aria-label — a pre-existing gap, unchanged by this migration: the
+  // native inputs they replaced had the same lack of association). Query by
+  // DOM order instead, mirroring this file's existing convention for the
+  // doctor <select> (see waitForOptionsLoaded's comment above).
+  function getTimeInputs() {
+    return Array.from(document.querySelectorAll<HTMLInputElement>('input[type="time"]'))
+  }
+
+  it('renders the date field as a button-triggered popover, not a native date input', async () => {
+    renderModal()
+    await waitForOptionsLoaded()
+
+    expect(document.querySelector('input[type="date"]')).not.toBeInTheDocument()
+    expect(getDateTrigger()).toHaveAttribute('aria-haspopup', 'dialog')
+  })
+
+  it('submits the exact date selected via the DatePicker popover', async () => {
+    const { onSubmit } = renderModal()
+    await waitForOptionsLoaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+    await selectDoctor()
+
+    fireEvent.click(getDateTrigger())
+    fireEvent.click(screen.getByRole('button', { name: 'viernes, 10 de julio de 2026' }))
+
+    fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const payload = onSubmit.mock.calls[0][0]
+    expect(payload.startTime).toBe(new Date('2026-07-10T09:00:00').toISOString())
+    expect(payload.endTime).toBe(new Date('2026-07-10T09:30:00').toISOString())
+  })
+
+  it('closes the DatePicker popover after selecting a day (no leftover open grid)', async () => {
+    renderModal()
+    await waitForOptionsLoaded()
+
+    fireEvent.click(getDateTrigger())
+    expect(screen.getByRole('grid')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'viernes, 10 de julio de 2026' }))
+    expect(screen.queryByRole('grid')).not.toBeInTheDocument()
+  })
+
+  it('submits times entered via the TimePicker inputs', async () => {
+    const { onSubmit } = renderModal()
+    await waitForOptionsLoaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+    await selectDoctor()
+
+    const [startInput, endInput] = getTimeInputs()
+    fireEvent.change(startInput, { target: { value: '14:15' } })
+    fireEvent.change(endInput, { target: { value: '15:00' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const payload = onSubmit.mock.calls[0][0]
+    const submittedDate = new Date(payload.startTime as string)
+    const expectedDate = formatDateForInputHelper(new Date())
+    expect(formatDateForInputHelper(submittedDate)).toBe(expectedDate)
+    expect(payload.startTime).toBe(new Date(`${expectedDate}T14:15:00`).toISOString())
+    expect(payload.endTime).toBe(new Date(`${expectedDate}T15:00:00`).toISOString())
+  })
+
+  it('shows the "end time after start time" validation error when the TimePicker end value precedes start', async () => {
+    renderModal()
+    await waitForOptionsLoaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+    await selectDoctor()
+
+    const [startInput, endInput] = getTimeInputs()
+    fireEvent.change(startInput, { target: { value: '10:00' } })
+    fireEvent.change(endInput, { target: { value: '09:00' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
+
+    await waitFor(() =>
+      expect(screen.getByText('La hora de fin debe ser posterior a la hora de inicio')).toBeInTheDocument()
+    )
+  })
+})
+
+// Local helper mirroring lib/format.ts's formatDateForInput (kept separate so
+// the test doesn't depend on module-internal formatting behavior changing
+// silently — it only needs the plain YYYY-MM-DD shape "today" produces).
+function formatDateForInputHelper(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
