@@ -1044,6 +1044,10 @@
       "placeholder": "Seleccionar fecha",
       "previousMonth": "Mes anterior",
       "nextMonth": "Mes siguiente"
+    },
+    "timePicker": {
+      "placeholder": "Seleccionar hora",
+      "label": "Hora"
     }
   },
   "payment": {
