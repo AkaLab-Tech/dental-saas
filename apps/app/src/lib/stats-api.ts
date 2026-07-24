@@ -44,6 +44,8 @@ export interface DoctorPerformanceStats {
   completedCount: number
   revenue: number
   completionRate: number
+  commissionPercentage: number | null
+  commission: number
 }
 
 export interface UpcomingAppointment {

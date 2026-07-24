@@ -636,6 +636,7 @@
       "licenseNumber": "رقم الترخيص",
       "consultingRoom": "العيادة",
       "hourlyRate": "الأجر بالساعة",
+      "commissionPercentage": "العمولة (%)",
       "workingHoursStart": "وقت البدء",
       "workingHoursEnd": "وقت الانتهاء",
       "closeForm": "إغلاق النموذج",
@@ -650,6 +651,7 @@
         "licenseNumber": "LIC-12345",
         "consultingRoom": "العيادة 101",
         "hourlyRate": "100.00",
+        "commissionPercentage": "20.00",
         "bio": "وصف مهني موجز..."
       },
       "validation": {
@@ -657,7 +659,8 @@
         "lastNameRequired": "الاسم الأخير مطلوب",
         "invalidEmail": "بريد إلكتروني غير صالح",
         "bioMaxLength": "لا يمكن أن تتجاوز السيرة الذاتية 5000 حرف",
-        "hourlyRatePositive": "يجب أن يكون رقمًا موجبًا"
+        "hourlyRatePositive": "يجب أن يكون رقمًا موجبًا",
+        "commissionRange": "يجب أن تكون بين 0 و100"
       }
     },
     "list": {
@@ -674,7 +677,8 @@
       "schedule": "الجدول",
       "license": "رقم الترخيص: {{license}}",
       "consultingRoom": "العيادة: {{room}}",
-      "hourlyRate": "الأجر: ${{rate}}/ساعة"
+      "hourlyRate": "الأجر: ${{rate}}/ساعة",
+      "commissionPercentage": "العمولة: {{percentage}}%"
     }
   },
   "labworks": {
@@ -1004,7 +1008,8 @@
       "appointments": "المواعيد",
       "completed": "مكتملة",
       "rate": "المعدل",
-      "revenue": "الإيرادات"
+      "revenue": "الإيرادات",
+      "commission": "العمولة"
     },
     "doctor": {
       "title": "لوحتي",

@@ -243,6 +243,14 @@ export default function DoctorDetailPage() {
               <span className="text-sm">{t('doctors.detail.hourlyRate', { rate: doctor.hourlyRate })}</span>
             </div>
           )}
+          {doctor.commissionPercentage != null && (
+            <div className="flex items-center gap-3 text-gray-600">
+              <FileText className="h-5 w-5 text-gray-400" />
+              <span className="text-sm">
+                {t('doctors.detail.commissionPercentage', { percentage: doctor.commissionPercentage })}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

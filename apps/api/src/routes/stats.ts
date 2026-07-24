@@ -246,14 +246,26 @@ statsRouter.get('/patients-growth', async (req, res, next) => {
 
 /**
  * GET /api/stats/doctors-performance
- * Get doctor performance statistics for current month
+ * Get doctor performance statistics (including commission earned), defaulting
+ * to the current month. Query params: startDate, endDate (ISO, optional).
  * Access: CLINIC_ADMIN and above
  */
 statsRouter.get('/doctors-performance', requireMinRole('CLINIC_ADMIN'), async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId
 
-    const stats = await getDoctorPerformanceStats(tenantId)
+    const parseResult = dateRangeSchema.safeParse(req.query)
+    if (!parseResult.success) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid query parameters', details: parseResult.error.errors },
+      })
+    }
+
+    const startDate = parseResult.data.startDate ? new Date(parseResult.data.startDate) : undefined
+    const endDate = parseResult.data.endDate ? new Date(parseResult.data.endDate) : undefined
+
+    const stats = await getDoctorPerformanceStats(tenantId, startDate, endDate)
 
     res.json({
       success: true,

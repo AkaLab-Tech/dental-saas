@@ -240,6 +240,7 @@ export const DoctorScalarFieldEnum = {
   avatar: 'avatar',
   bio: 'bio',
   hourlyRate: 'hourlyRate',
+  commissionPercentage: 'commissionPercentage',
   userId: 'userId',
   isActive: 'isActive',
   createdAt: 'createdAt',

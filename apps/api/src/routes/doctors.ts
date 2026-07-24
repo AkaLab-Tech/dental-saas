@@ -114,6 +114,7 @@ const createDoctorSchema = z.object({
   avatar: z.string().url().optional(),
   bio: z.string().max(5000, 'Bio cannot exceed 5000 characters').optional(),
   hourlyRate: z.number().positive().optional(),
+  commissionPercentage: z.number().min(0).max(100).optional(),
   userId: z.string().optional(),
 })
 
@@ -131,6 +132,7 @@ const updateDoctorSchema = z.object({
   avatar: z.string().url().optional().nullable(),
   bio: z.string().max(5000, 'Bio cannot exceed 5000 characters').optional().nullable(),
   hourlyRate: z.number().positive().optional().nullable(),
+  commissionPercentage: z.number().min(0).max(100).optional().nullable(),
   userId: z.string().optional().nullable(),
 })
 

@@ -636,6 +636,7 @@
       "licenseNumber": "Número de licencia",
       "consultingRoom": "Consultorio",
       "hourlyRate": "Tarifa por Hora",
+      "commissionPercentage": "Comisión (%)",
       "workingHoursStart": "Hora de Inicio",
       "workingHoursEnd": "Hora de Fin",
       "closeForm": "Cerrar formulario",
@@ -650,6 +651,7 @@
         "licenseNumber": "LIC-12345",
         "consultingRoom": "Consultorio 101",
         "hourlyRate": "100.00",
+        "commissionPercentage": "20.00",
         "bio": "Breve descripción profesional..."
       },
       "validation": {
@@ -657,7 +659,8 @@
         "lastNameRequired": "El apellido es requerido",
         "invalidEmail": "Email inválido",
         "bioMaxLength": "La biografía no puede exceder 5000 caracteres",
-        "hourlyRatePositive": "Debe ser un número positivo"
+        "hourlyRatePositive": "Debe ser un número positivo",
+        "commissionRange": "Debe estar entre 0 y 100"
       }
     },
     "list": {
@@ -674,7 +677,8 @@
       "schedule": "Horario",
       "license": "Matrícula: {{license}}",
       "consultingRoom": "Consultorio: {{room}}",
-      "hourlyRate": "Tarifa: ${{rate}}/hr"
+      "hourlyRate": "Tarifa: ${{rate}}/hr",
+      "commissionPercentage": "Comisión: {{percentage}}%"
     }
   },
   "labworks": {
@@ -1004,7 +1008,8 @@
       "appointments": "Citas",
       "completed": "Completadas",
       "rate": "Tasa",
-      "revenue": "Ingresos"
+      "revenue": "Ingresos",
+      "commission": "Comisión"
     },
     "doctor": {
       "title": "Mi Dashboard",

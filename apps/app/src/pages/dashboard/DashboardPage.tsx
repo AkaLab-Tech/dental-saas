@@ -275,6 +275,7 @@ export default function DashboardPage() {
                   <th className="text-center py-3 px-4 font-medium text-gray-600">{t('dashboard.doctorPerformance.completed')}</th>
                   <th className="text-center py-3 px-4 font-medium text-gray-600">{t('dashboard.doctorPerformance.rate')}</th>
                   <th className="text-right py-3 px-4 font-medium text-gray-600">{t('dashboard.doctorPerformance.revenue')}</th>
+                  <th className="text-right py-3 px-4 font-medium text-gray-600">{t('dashboard.doctorPerformance.commission')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -292,6 +293,9 @@ export default function DashboardPage() {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right text-gray-900 font-medium">{formatCurrency(doctor.revenue, currency)}</td>
+                    <td className="py-3 px-4 text-right text-gray-900 font-medium">
+                      {doctor.commissionPercentage != null ? formatCurrency(doctor.commission, currency) : '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -28,10 +28,12 @@ export type AggregateDoctor = {
 
 export type DoctorAvgAggregateOutputType = {
   hourlyRate: runtime.Decimal | null
+  commissionPercentage: runtime.Decimal | null
 }
 
 export type DoctorSumAggregateOutputType = {
   hourlyRate: runtime.Decimal | null
+  commissionPercentage: runtime.Decimal | null
 }
 
 export type DoctorMinAggregateOutputType = {
@@ -47,6 +49,7 @@ export type DoctorMinAggregateOutputType = {
   avatar: string | null
   bio: string | null
   hourlyRate: runtime.Decimal | null
+  commissionPercentage: runtime.Decimal | null
   userId: string | null
   isActive: boolean | null
   createdAt: Date | null
@@ -66,6 +69,7 @@ export type DoctorMaxAggregateOutputType = {
   avatar: string | null
   bio: string | null
   hourlyRate: runtime.Decimal | null
+  commissionPercentage: runtime.Decimal | null
   userId: string | null
   isActive: boolean | null
   createdAt: Date | null
@@ -87,6 +91,7 @@ export type DoctorCountAggregateOutputType = {
   avatar: number
   bio: number
   hourlyRate: number
+  commissionPercentage: number
   userId: number
   isActive: number
   createdAt: number
@@ -97,10 +102,12 @@ export type DoctorCountAggregateOutputType = {
 
 export type DoctorAvgAggregateInputType = {
   hourlyRate?: true
+  commissionPercentage?: true
 }
 
 export type DoctorSumAggregateInputType = {
   hourlyRate?: true
+  commissionPercentage?: true
 }
 
 export type DoctorMinAggregateInputType = {
@@ -116,6 +123,7 @@ export type DoctorMinAggregateInputType = {
   avatar?: true
   bio?: true
   hourlyRate?: true
+  commissionPercentage?: true
   userId?: true
   isActive?: true
   createdAt?: true
@@ -135,6 +143,7 @@ export type DoctorMaxAggregateInputType = {
   avatar?: true
   bio?: true
   hourlyRate?: true
+  commissionPercentage?: true
   userId?: true
   isActive?: true
   createdAt?: true
@@ -156,6 +165,7 @@ export type DoctorCountAggregateInputType = {
   avatar?: true
   bio?: true
   hourlyRate?: true
+  commissionPercentage?: true
   userId?: true
   isActive?: true
   createdAt?: true
@@ -264,6 +274,7 @@ export type DoctorGroupByOutputType = {
   avatar: string | null
   bio: string | null
   hourlyRate: runtime.Decimal | null
+  commissionPercentage: runtime.Decimal | null
   userId: string | null
   isActive: boolean
   createdAt: Date
@@ -308,6 +319,7 @@ export type DoctorWhereInput = {
   avatar?: Prisma.StringNullableFilter<"Doctor"> | string | null
   bio?: Prisma.StringNullableFilter<"Doctor"> | string | null
   hourlyRate?: Prisma.DecimalNullableFilter<"Doctor"> | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: Prisma.DecimalNullableFilter<"Doctor"> | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   userId?: Prisma.StringNullableFilter<"Doctor"> | string | null
   isActive?: Prisma.BoolFilter<"Doctor"> | boolean
   createdAt?: Prisma.DateTimeFilter<"Doctor"> | Date | string
@@ -332,6 +344,7 @@ export type DoctorOrderByWithRelationInput = {
   avatar?: Prisma.SortOrderInput | Prisma.SortOrder
   bio?: Prisma.SortOrderInput | Prisma.SortOrder
   hourlyRate?: Prisma.SortOrderInput | Prisma.SortOrder
+  commissionPercentage?: Prisma.SortOrderInput | Prisma.SortOrder
   userId?: Prisma.SortOrderInput | Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -362,6 +375,7 @@ export type DoctorWhereUniqueInput = Prisma.AtLeast<{
   avatar?: Prisma.StringNullableFilter<"Doctor"> | string | null
   bio?: Prisma.StringNullableFilter<"Doctor"> | string | null
   hourlyRate?: Prisma.DecimalNullableFilter<"Doctor"> | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: Prisma.DecimalNullableFilter<"Doctor"> | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   isActive?: Prisma.BoolFilter<"Doctor"> | boolean
   createdAt?: Prisma.DateTimeFilter<"Doctor"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Doctor"> | Date | string
@@ -385,6 +399,7 @@ export type DoctorOrderByWithAggregationInput = {
   avatar?: Prisma.SortOrderInput | Prisma.SortOrder
   bio?: Prisma.SortOrderInput | Prisma.SortOrder
   hourlyRate?: Prisma.SortOrderInput | Prisma.SortOrder
+  commissionPercentage?: Prisma.SortOrderInput | Prisma.SortOrder
   userId?: Prisma.SortOrderInput | Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -414,6 +429,7 @@ export type DoctorScalarWhereWithAggregatesInput = {
   avatar?: Prisma.StringNullableWithAggregatesFilter<"Doctor"> | string | null
   bio?: Prisma.StringNullableWithAggregatesFilter<"Doctor"> | string | null
   hourlyRate?: Prisma.DecimalNullableWithAggregatesFilter<"Doctor"> | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: Prisma.DecimalNullableWithAggregatesFilter<"Doctor"> | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   userId?: Prisma.StringNullableWithAggregatesFilter<"Doctor"> | string | null
   isActive?: Prisma.BoolWithAggregatesFilter<"Doctor"> | boolean
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Doctor"> | Date | string
@@ -434,6 +450,7 @@ export type DoctorCreateInput = {
   avatar?: string | null
   bio?: string | null
   hourlyRate?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -457,6 +474,7 @@ export type DoctorUncheckedCreateInput = {
   avatar?: string | null
   bio?: string | null
   hourlyRate?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   userId?: string | null
   isActive?: boolean
   createdAt?: Date | string
@@ -478,6 +496,7 @@ export type DoctorUpdateInput = {
   avatar?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bio?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hourlyRate?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -501,6 +520,7 @@ export type DoctorUncheckedUpdateInput = {
   avatar?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bio?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hourlyRate?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -523,6 +543,7 @@ export type DoctorCreateManyInput = {
   avatar?: string | null
   bio?: string | null
   hourlyRate?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   userId?: string | null
   isActive?: boolean
   createdAt?: Date | string
@@ -543,6 +564,7 @@ export type DoctorUpdateManyMutationInput = {
   avatar?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bio?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hourlyRate?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -563,6 +585,7 @@ export type DoctorUncheckedUpdateManyInput = {
   avatar?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bio?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hourlyRate?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -609,6 +632,7 @@ export type DoctorCountOrderByAggregateInput = {
   avatar?: Prisma.SortOrder
   bio?: Prisma.SortOrder
   hourlyRate?: Prisma.SortOrder
+  commissionPercentage?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -617,6 +641,7 @@ export type DoctorCountOrderByAggregateInput = {
 
 export type DoctorAvgOrderByAggregateInput = {
   hourlyRate?: Prisma.SortOrder
+  commissionPercentage?: Prisma.SortOrder
 }
 
 export type DoctorMaxOrderByAggregateInput = {
@@ -632,6 +657,7 @@ export type DoctorMaxOrderByAggregateInput = {
   avatar?: Prisma.SortOrder
   bio?: Prisma.SortOrder
   hourlyRate?: Prisma.SortOrder
+  commissionPercentage?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -651,6 +677,7 @@ export type DoctorMinOrderByAggregateInput = {
   avatar?: Prisma.SortOrder
   bio?: Prisma.SortOrder
   hourlyRate?: Prisma.SortOrder
+  commissionPercentage?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -659,6 +686,7 @@ export type DoctorMinOrderByAggregateInput = {
 
 export type DoctorSumOrderByAggregateInput = {
   hourlyRate?: Prisma.SortOrder
+  commissionPercentage?: Prisma.SortOrder
 }
 
 export type DoctorScalarRelationFilter = {
@@ -776,6 +804,7 @@ export type DoctorCreateWithoutTenantInput = {
   avatar?: string | null
   bio?: string | null
   hourlyRate?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -797,6 +826,7 @@ export type DoctorUncheckedCreateWithoutTenantInput = {
   avatar?: string | null
   bio?: string | null
   hourlyRate?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   userId?: string | null
   isActive?: boolean
   createdAt?: Date | string
@@ -848,6 +878,7 @@ export type DoctorScalarWhereInput = {
   avatar?: Prisma.StringNullableFilter<"Doctor"> | string | null
   bio?: Prisma.StringNullableFilter<"Doctor"> | string | null
   hourlyRate?: Prisma.DecimalNullableFilter<"Doctor"> | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: Prisma.DecimalNullableFilter<"Doctor"> | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   userId?: Prisma.StringNullableFilter<"Doctor"> | string | null
   isActive?: Prisma.BoolFilter<"Doctor"> | boolean
   createdAt?: Prisma.DateTimeFilter<"Doctor"> | Date | string
@@ -868,6 +899,7 @@ export type DoctorCreateWithoutUserInput = {
   avatar?: string | null
   bio?: string | null
   hourlyRate?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -890,6 +922,7 @@ export type DoctorUncheckedCreateWithoutUserInput = {
   avatar?: string | null
   bio?: string | null
   hourlyRate?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -926,6 +959,7 @@ export type DoctorUpdateWithoutUserInput = {
   avatar?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bio?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hourlyRate?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -948,6 +982,7 @@ export type DoctorUncheckedUpdateWithoutUserInput = {
   avatar?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bio?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hourlyRate?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -968,6 +1003,7 @@ export type DoctorCreateWithoutAppointmentsInput = {
   avatar?: string | null
   bio?: string | null
   hourlyRate?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -990,6 +1026,7 @@ export type DoctorUncheckedCreateWithoutAppointmentsInput = {
   avatar?: string | null
   bio?: string | null
   hourlyRate?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   userId?: string | null
   isActive?: boolean
   createdAt?: Date | string
@@ -1026,6 +1063,7 @@ export type DoctorUpdateWithoutAppointmentsInput = {
   avatar?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bio?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hourlyRate?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1048,6 +1086,7 @@ export type DoctorUncheckedUpdateWithoutAppointmentsInput = {
   avatar?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bio?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hourlyRate?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1068,6 +1107,7 @@ export type DoctorCreateManyTenantInput = {
   avatar?: string | null
   bio?: string | null
   hourlyRate?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   userId?: string | null
   isActive?: boolean
   createdAt?: Date | string
@@ -1088,6 +1128,7 @@ export type DoctorUpdateWithoutTenantInput = {
   avatar?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bio?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hourlyRate?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1109,6 +1150,7 @@ export type DoctorUncheckedUpdateWithoutTenantInput = {
   avatar?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bio?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hourlyRate?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1130,6 +1172,7 @@ export type DoctorUncheckedUpdateManyWithoutTenantInput = {
   avatar?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bio?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hourlyRate?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  commissionPercentage?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1182,6 +1225,7 @@ export type DoctorSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   avatar?: boolean
   bio?: boolean
   hourlyRate?: boolean
+  commissionPercentage?: boolean
   userId?: boolean
   isActive?: boolean
   createdAt?: boolean
@@ -1207,6 +1251,7 @@ export type DoctorSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extens
   avatar?: boolean
   bio?: boolean
   hourlyRate?: boolean
+  commissionPercentage?: boolean
   userId?: boolean
   isActive?: boolean
   createdAt?: boolean
@@ -1230,6 +1275,7 @@ export type DoctorSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extens
   avatar?: boolean
   bio?: boolean
   hourlyRate?: boolean
+  commissionPercentage?: boolean
   userId?: boolean
   isActive?: boolean
   createdAt?: boolean
@@ -1253,13 +1299,14 @@ export type DoctorSelectScalar = {
   avatar?: boolean
   bio?: boolean
   hourlyRate?: boolean
+  commissionPercentage?: boolean
   userId?: boolean
   isActive?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type DoctorOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "firstName" | "lastName" | "email" | "phone" | "specialty" | "licenseNumber" | "workingDays" | "workingHours" | "consultingRoom" | "avatar" | "bio" | "hourlyRate" | "userId" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["doctor"]>
+export type DoctorOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "firstName" | "lastName" | "email" | "phone" | "specialty" | "licenseNumber" | "workingDays" | "workingHours" | "consultingRoom" | "avatar" | "bio" | "hourlyRate" | "commissionPercentage" | "userId" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["doctor"]>
 export type DoctorInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   user?: boolean | Prisma.Doctor$userArgs<ExtArgs>
@@ -1321,6 +1368,10 @@ export type $DoctorPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs
      * Hourly rate for billing purposes
      */
     hourlyRate: runtime.Decimal | null
+    /**
+     * Percentage (0-100) of billed consultation/labwork value paid to this doctor as commission
+     */
+    commissionPercentage: runtime.Decimal | null
     /**
      * Link to User account for login (nullable for unlinked doctors)
      */
@@ -1768,6 +1819,7 @@ export interface DoctorFieldRefs {
   readonly avatar: Prisma.FieldRef<"Doctor", 'String'>
   readonly bio: Prisma.FieldRef<"Doctor", 'String'>
   readonly hourlyRate: Prisma.FieldRef<"Doctor", 'Decimal'>
+  readonly commissionPercentage: Prisma.FieldRef<"Doctor", 'Decimal'>
   readonly userId: Prisma.FieldRef<"Doctor", 'String'>
   readonly isActive: Prisma.FieldRef<"Doctor", 'Boolean'>
   readonly createdAt: Prisma.FieldRef<"Doctor", 'DateTime'>

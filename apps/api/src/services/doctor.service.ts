@@ -21,6 +21,7 @@ const DOCTOR_SELECT = {
   avatar: true,
   bio: true,
   hourlyRate: true,
+  commissionPercentage: true,
   userId: true,
   isActive: true,
   createdAt: true,
@@ -42,6 +43,7 @@ export type SafeDoctor = {
   avatar: string | null
   bio: string | null
   hourlyRate: Prisma.Decimal | null
+  commissionPercentage: Prisma.Decimal | null
   userId: string | null
   isActive: boolean
   createdAt: Date
@@ -143,6 +145,7 @@ export async function createDoctor(
     avatar?: string
     bio?: string
     hourlyRate?: number
+    commissionPercentage?: number
     userId?: string
   }
 ): Promise<SafeDoctor> {
@@ -159,6 +162,7 @@ export async function createDoctor(
     avatar,
     bio,
     hourlyRate,
+    commissionPercentage,
     userId,
   } = data
 
@@ -177,6 +181,7 @@ export async function createDoctor(
       avatar,
       bio,
       hourlyRate,
+      commissionPercentage,
       userId,
     },
     select: DOCTOR_SELECT,
@@ -206,6 +211,7 @@ export async function updateDoctor(
     avatar?: string | null
     bio?: string | null
     hourlyRate?: number | null
+    commissionPercentage?: number | null
     isActive?: boolean
     userId?: string | null
   }

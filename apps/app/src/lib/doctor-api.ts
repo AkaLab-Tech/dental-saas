@@ -19,6 +19,7 @@ export interface Doctor {
   avatar: string | null
   bio: string | null
   hourlyRate: number | null
+  commissionPercentage: number | null
   isActive: boolean
   createdAt: string
   updatedAt: string
@@ -44,6 +45,7 @@ export interface CreateDoctorData {
   consultingRoom?: string
   bio?: string
   hourlyRate?: number
+  commissionPercentage?: number
 }
 
 export interface UpdateDoctorData extends Partial<CreateDoctorData> {
