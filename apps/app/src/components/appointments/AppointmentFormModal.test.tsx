@@ -602,7 +602,19 @@ describe('AppointmentFormModal — budget items association', () => {
       // Actual (current code): the select is left on '' ("Seleccionar
       // doctor..."), forcing the user to manually re-pick the doctor before
       // they can save the edit (doctorId is a required field).
-      expect((screen.getAllByRole('combobox')[0] as HTMLSelectElement).value).toBe('doc-1')
+      //
+      // Waited for directly (not asserted synchronously right after
+      // waitForOptionsLoaded): the doctor <select>'s `disabled` attribute
+      // clears as soon as `loadingOptions` flips to false, but the dedicated
+      // effect that re-applies `doctorId` (AppointmentFormModal.tsx, keyed on
+      // that same `loadingOptions` flip) is a separate passive effect that
+      // commits in its own flush. Reading the value synchronously right after
+      // the select becomes enabled is a race against that effect landing;
+      // waiting for the value itself waits for the behavior this test
+      // actually guards, not a proxy for it.
+      await waitFor(() => {
+        expect((screen.getAllByRole('combobox')[0] as HTMLSelectElement).value).toBe('doc-1')
+      })
     })
   })
 })
