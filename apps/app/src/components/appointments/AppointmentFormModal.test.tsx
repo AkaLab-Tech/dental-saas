@@ -632,13 +632,16 @@ describe('AppointmentFormModal — date/time picker migration (task #233)', () =
     return screen.getByRole('button', { name: 'Fecha' })
   }
 
-  // The TimePicker trigger buttons carry an explicit aria-label
-  // (t('appointments.form.startTime') / t('appointments.form.endTime')), so
-  // unlike the doctor <select> they're reliably queryable by accessible name.
+  // The TimePicker trigger <button> exposes role="combobox" (task #347: the
+  // APG select-only-combobox pattern, sanctioned for a <button> in ARIA-in-HTML
+  // — see TimePicker.test.tsx). The doctor <select> also computes to role
+  // "combobox", but its accessible name is "Doctor"
+  // (t('appointments.form.doctor')), so these name-scoped queries for "Hora de
+  // inicio" / "Hora de fin" stay unambiguous.
   function getTimeTriggers() {
     return [
-      screen.getByRole('button', { name: 'Hora de inicio' }),
-      screen.getByRole('button', { name: 'Hora de fin' }),
+      screen.getByRole('combobox', { name: 'Hora de inicio' }),
+      screen.getByRole('combobox', { name: 'Hora de fin' }),
     ]
   }
 

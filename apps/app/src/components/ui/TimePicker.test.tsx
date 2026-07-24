@@ -357,6 +357,19 @@ describe('TimePicker', () => {
       expect(getTrigger()).toHaveAttribute('aria-expanded', 'true')
     })
 
+    // Regression guard for task #347 review cycle 1: the trigger is a
+    // <button>, which WAI-ARIA does not permit to carry
+    // aria-activedescendant under its implicit role="button" — screen
+    // readers ignored the attribute entirely. role="combobox" is the
+    // ARIA-in-HTML-sanctioned role for <button> and matches the APG
+    // select-only-combobox pattern this widget implements, so
+    // aria-activedescendant is announced correctly while arrowing through
+    // options.
+    it('exposes role="combobox" on the trigger so aria-activedescendant is valid', () => {
+      render(<TimePicker value="09:00" onChange={vi.fn()} />)
+      expect(getTrigger()).toHaveAttribute('role', 'combobox')
+    })
+
     it('wires aria-controls to the open listbox and aria-activedescendant to the active option', () => {
       render(<TimePicker value="09:00" onChange={vi.fn()} />)
       fireEvent.click(getTrigger())

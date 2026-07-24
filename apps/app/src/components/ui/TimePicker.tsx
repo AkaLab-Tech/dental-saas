@@ -168,6 +168,7 @@ export function TimePicker({
         type="button"
         id={id}
         disabled={disabled}
+        role="combobox"
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
