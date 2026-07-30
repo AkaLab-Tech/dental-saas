@@ -101,7 +101,11 @@ describe('DatePicker', () => {
       render(<DatePicker value="2026-07-01" onChange={onChange} />)
       fireEvent.click(getTrigger())
 
-      fireEvent.click(screen.getByRole('button', { name: 'jueves, 30 de julio de 2026' }))
+      // Use a regex instead of the exact accessible name: react-day-picker
+      // prefixes the CURRENT day's cell with "Hoy, " (e.g. "Hoy, jueves, 30
+      // de julio de 2026"), so an exact-string match breaks whenever "today"
+      // (whatever date the suite runs on) collides with this fixture date.
+      fireEvent.click(screen.getByRole('button', { name: /jueves, 30 de julio de 2026/ }))
 
       expect(onChange).toHaveBeenCalledTimes(1)
       expect(onChange).toHaveBeenCalledWith('2026-07-30')
@@ -125,7 +129,11 @@ describe('DatePicker', () => {
       const onChange = vi.fn()
       render(<DatePicker value="2026-07-01" onChange={onChange} />)
       fireEvent.click(getTrigger())
-      fireEvent.click(screen.getByRole('button', { name: 'jueves, 30 de julio de 2026' }))
+      // Use a regex instead of the exact accessible name: react-day-picker
+      // prefixes the CURRENT day's cell with "Hoy, " (e.g. "Hoy, jueves, 30
+      // de julio de 2026"), so an exact-string match breaks whenever "today"
+      // (whatever date the suite runs on) collides with this fixture date.
+      fireEvent.click(screen.getByRole('button', { name: /jueves, 30 de julio de 2026/ }))
 
       expect(screen.queryByRole('grid')).not.toBeInTheDocument()
       expect(getTrigger()).toHaveAttribute('aria-expanded', 'false')
@@ -136,7 +144,11 @@ describe('DatePicker', () => {
       const onBlur = vi.fn()
       render(<DatePicker value="2026-07-01" onChange={onChange} onBlur={onBlur} />)
       fireEvent.click(getTrigger())
-      fireEvent.click(screen.getByRole('button', { name: 'jueves, 30 de julio de 2026' }))
+      // Use a regex instead of the exact accessible name: react-day-picker
+      // prefixes the CURRENT day's cell with "Hoy, " (e.g. "Hoy, jueves, 30
+      // de julio de 2026"), so an exact-string match breaks whenever "today"
+      // (whatever date the suite runs on) collides with this fixture date.
+      fireEvent.click(screen.getByRole('button', { name: /jueves, 30 de julio de 2026/ }))
 
       expect(onBlur).toHaveBeenCalledTimes(1)
     })
