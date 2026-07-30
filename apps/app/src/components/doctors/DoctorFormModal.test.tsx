@@ -210,16 +210,6 @@ describe('DoctorFormModal', () => {
       expect(mockOnSubmit).not.toHaveBeenCalled()
     })
 
-    // These two cases fire the form's `submit` event directly rather than
-    // clicking the submit button: the `email`/`hourlyRate` inputs carry
-    // native HTML constraints (type="email"; type="number" min="0") that
-    // jsdom (like real browsers) enforces *before* dispatching `submit` when
-    // a button-click drives the request — which would short-circuit the
-    // RHF+Zod validation path entirely and never reach our translated
-    // message. Dispatching `submit` directly exercises the
-    // handleSubmit(handleFormSubmit) wiring in isolation, matching how the
-    // sibling required/bio-length cases already validate the Zod message
-    // independent of the browser's own (non-localized) constraint UI.
     it('should show error for invalid email', async () => {
       render(
         <DoctorFormModal
@@ -237,7 +227,8 @@ describe('DoctorFormModal', () => {
       fireEvent.change(lastNameInput, { target: { value: 'Doe' } })
       fireEvent.change(emailInput, { target: { value: 'not-an-email' } })
 
-      fireEvent.submit(firstNameInput.closest('form')!)
+      const submitButton = screen.getByRole('button', { name: /crear doctor/i })
+      fireEvent.click(submitButton)
 
       await waitFor(() => {
         expect(screen.getByText('Email inválido')).toBeInTheDocument()
@@ -263,7 +254,8 @@ describe('DoctorFormModal', () => {
       fireEvent.change(lastNameInput, { target: { value: 'Doe' } })
       fireEvent.change(hourlyRateInput, { target: { value: '-5' } })
 
-      fireEvent.submit(firstNameInput.closest('form')!)
+      const submitButton = screen.getByRole('button', { name: /crear doctor/i })
+      fireEvent.click(submitButton)
 
       await waitFor(() => {
         expect(screen.getByText('Debe ser un número positivo')).toBeInTheDocument()
@@ -289,11 +281,8 @@ describe('DoctorFormModal', () => {
       fireEvent.change(lastNameInput, { target: { value: 'Doe' } })
       fireEvent.change(commissionInput, { target: { value: '150' } })
 
-      // Same rationale as the hourlyRate case above: type="number" max="100"
-      // is a native browser constraint that would short-circuit a
-      // button-click submit before reaching RHF+Zod, so dispatch `submit`
-      // directly to exercise the Zod validation path.
-      fireEvent.submit(firstNameInput.closest('form')!)
+      const submitButton = screen.getByRole('button', { name: /crear doctor/i })
+      fireEvent.click(submitButton)
 
       await waitFor(() => {
         expect(screen.getByText('Debe estar entre 0 y 100')).toBeInTheDocument()
