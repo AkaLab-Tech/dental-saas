@@ -132,7 +132,7 @@ export function PaymentFormModal({
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit(handleFormSubmit)}>
+          <form noValidate onSubmit={handleSubmit(handleFormSubmit)}>
             <div className="p-6 space-y-5">
               {/* Amount and Date row */}
               <div className="grid grid-cols-2 gap-4">

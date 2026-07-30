@@ -244,7 +244,7 @@ export function LabworkFormModal({
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit(handleFormSubmit)}>
+          <form noValidate onSubmit={handleSubmit(handleFormSubmit)}>
             <div className="p-6 space-y-5 max-h-[calc(100vh-200px)] overflow-y-auto">
               {/* Patient Search */}
               <div>
