@@ -418,7 +418,7 @@ export function AppointmentFormModal({
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit(handleFormSubmit)}>
+          <form noValidate onSubmit={handleSubmit(handleFormSubmit)}>
             <div className="px-6 py-4 space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto">
               {/* Patient and Doctor */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

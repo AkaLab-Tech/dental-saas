@@ -28,18 +28,11 @@ function renderModal(props: Partial<Parameters<typeof PaymentFormModal>[0]> = {}
   return { ...utils, onClose, onSubmit }
 }
 
-// Submits by dispatching the form's `submit` event directly rather than
-// clicking the submit button. Clicking would trigger the browser's native
-// HTML5 constraint validation (min/max on the <input type="number">), which
-// blocks the "submit" event entirely for genuinely out-of-range values —
-// masking the Zod-level message this suite is pinning down. Dispatching
-// `submit` still runs react-hook-form's zodResolver exactly the same way.
-async function fillAndSubmit(container: HTMLElement, amount: string) {
+async function fillAndSubmit(amount: string) {
   const amountInput = screen.getByLabelText(/monto/i)
   fireEvent.change(amountInput, { target: { value: amount } })
-  const form = container.querySelector('form')
-  if (!form) throw new Error('form not found')
-  fireEvent.submit(form)
+  const submitButton = screen.getByRole('button', { name: /guardar/i })
+  fireEvent.click(submitButton)
 }
 
 // ============================================================================
@@ -62,9 +55,9 @@ describe('PaymentFormModal', () => {
     })
 
     it('rejects an amount above maxAmount with a validation error and does not submit', async () => {
-      const { onSubmit, container } = renderModal({ maxAmount: 150 })
+      const { onSubmit } = renderModal({ maxAmount: 150 })
 
-      await fillAndSubmit(container, '200')
+      await fillAndSubmit('200')
 
       await waitFor(() => {
         expect(screen.getByText('El monto no puede exceder 150')).toBeInTheDocument()
@@ -73,9 +66,9 @@ describe('PaymentFormModal', () => {
     })
 
     it('accepts an amount at exactly maxAmount (boundary)', async () => {
-      const { onSubmit, container } = renderModal({ maxAmount: 150 })
+      const { onSubmit } = renderModal({ maxAmount: 150 })
 
-      await fillAndSubmit(container, '150')
+      await fillAndSubmit('150')
 
       await waitFor(() => {
         expect(onSubmit).toHaveBeenCalledWith(
@@ -103,9 +96,9 @@ describe('PaymentFormModal', () => {
     })
 
     it('accepts an amount that would have exceeded a typical outstanding balance', async () => {
-      const { onSubmit, container } = renderModal()
+      const { onSubmit } = renderModal()
 
-      await fillAndSubmit(container, '99999')
+      await fillAndSubmit('99999')
 
       await waitFor(() => {
         expect(onSubmit).toHaveBeenCalledWith(
@@ -117,9 +110,9 @@ describe('PaymentFormModal', () => {
 
   describe('amount floor (0.01), independent of maxAmount', () => {
     it('rejects a zero amount', async () => {
-      const { onSubmit, container } = renderModal()
+      const { onSubmit } = renderModal()
 
-      await fillAndSubmit(container, '0')
+      await fillAndSubmit('0')
 
       await waitFor(() => {
         expect(screen.getByText('El monto debe ser mayor a 0')).toBeInTheDocument()

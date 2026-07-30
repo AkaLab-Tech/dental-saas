@@ -126,7 +126,7 @@ export function BudgetFormModal({
       <div className="fixed inset-0 bg-black/50 transition-opacity" onClick={onClose} />
       <div className="flex min-h-full items-start justify-center p-4 sm:items-center">
         <div className="relative bg-white rounded-xl shadow-xl w-full max-w-3xl my-4">
-          <form onSubmit={handleSubmit(handleFormSubmit)}>
+          <form noValidate onSubmit={handleSubmit(handleFormSubmit)}>
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900">
