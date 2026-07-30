@@ -110,7 +110,7 @@ export function RegisterPage() {
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)} noValidate>
           {error && (
             <div className="rounded-md bg-red-50 p-4">
               <div className="flex">

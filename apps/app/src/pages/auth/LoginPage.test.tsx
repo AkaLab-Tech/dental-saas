@@ -149,6 +149,20 @@ describe('LoginPage', () => {
       })
     })
 
+    it('should show invalidEmail message for a malformed email and not call login', async () => {
+      renderLoginPage()
+
+      fireEvent.change(screen.getByLabelText('auth.clinicSlug'), { target: { value: 'my-clinic' } })
+      fireEvent.change(screen.getByLabelText('auth.email'), { target: { value: 'not-an-email' } })
+      fireEvent.change(getPasswordInput(), { target: { value: 'password123' } })
+      fireEvent.click(screen.getByRole('button', { name: 'auth.login' }))
+
+      await waitFor(() => {
+        expect(screen.getByText('auth.validation.invalidEmail')).toBeInTheDocument()
+      })
+      expect(mockLogin).not.toHaveBeenCalled()
+    })
+
     it('should not call login with incomplete data', async () => {
       renderLoginPage()
 

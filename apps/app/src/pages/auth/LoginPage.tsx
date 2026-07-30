@@ -81,7 +81,7 @@ export function LoginPage() {
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)} noValidate>
           {sessionExpired && !error && (
             <div className="rounded-md bg-yellow-50 border border-yellow-200 p-4">
               <p className="text-sm text-yellow-800">

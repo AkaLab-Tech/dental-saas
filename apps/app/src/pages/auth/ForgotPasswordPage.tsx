@@ -101,7 +101,7 @@ export function ForgotPasswordPage() {
             </div>
           ) : (
             /* Form */
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
               {error && (
                 <div className="rounded-md bg-red-50 p-4">
                   <div className="flex">

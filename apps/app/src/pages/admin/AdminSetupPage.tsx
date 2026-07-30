@@ -176,7 +176,7 @@ export function AdminSetupPage() {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit(onSubmit)} className="bg-gray-800 rounded-xl p-8 shadow-xl">
+        <form onSubmit={handleSubmit(onSubmit)} className="bg-gray-800 rounded-xl p-8 shadow-xl" noValidate>
           {error && (
             <div className="mb-6 p-4 bg-red-900/50 border border-red-700 rounded-lg flex items-start gap-3">
               <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
