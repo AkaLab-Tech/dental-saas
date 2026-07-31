@@ -97,14 +97,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Setup test environment
-        run: |
-          cp .env.example .env.test
-          echo "DATABASE_URL=postgresql://dental_test:test_password@localhost:5432/dental_test?schema=public" >> .env.test
-          echo "REDIS_URL=redis://localhost:6379" >> .env.test
-          echo "JWT_SECRET=test_jwt_secret_32_characters_long" >> .env.test
-          echo "SETUP_KEY=test_setup_key_16chars" >> .env.test
-          echo "NODE_ENV=test" >> .env.test
+      # No test-env setup step: test.env is committed, and the env: block on
+      # the test step below is the authoritative source for CI (it wins over
+      # test.env, which dotenv only applies to unset variables).
 
       - name: Build shared package
         run: pnpm --filter @dental/shared build

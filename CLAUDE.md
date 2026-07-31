@@ -139,6 +139,29 @@ pnpm --filter @dental/api test src/services/pdf.service.test.ts
 pnpm --filter @dental/app test src/lib/pdf-api.test.ts
 ```
 
+### Running the API test suite
+
+The backend suite deletes rows, so it runs against its own database
+(`dental_test`) — never the development one (`dental_saas`).
+
+```bash
+# One-time bootstrap: creates dental_test if absent + applies migrations
+pnpm --filter @dental/database db:test:setup
+
+pnpm --filter @dental/api test
+```
+
+- Connection settings come from the committed `test.env` at the repo root
+  (local-only values, no secrets — the name avoids the `.env*` files that are
+  deliberately kept out of version control). An already-set `DATABASE_URL` wins
+  over it, which is how CI injects its own database.
+- `docker-compose.dev.yml` also creates `dental_test` via
+  `docker/postgres/init/01-create-test-db.sql`, but Postgres only runs init
+  scripts on a **fresh** volume. On an existing volume use `db:test:setup`.
+- If `DATABASE_URL` points at a database whose name does not end in `test`, the
+  suite fails fast with an explanatory error. Override with
+  `ALLOW_NON_TEST_DB=1` only if you accept losing that database's data.
+
 ## Environment Variables
 
 Copy `.env.example` to `.env` and configure:

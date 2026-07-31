@@ -15,7 +15,15 @@
     },
     "test": {
       "dependsOn": ["build"],
-      "outputs": ["coverage/**"]
+      "outputs": ["coverage/**"],
+      "env": [
+        "DATABASE_URL",
+        "REDIS_URL",
+        "JWT_SECRET",
+        "SETUP_KEY",
+        "NODE_ENV",
+        "ALLOW_NON_TEST_DB"
+      ]
     },
     "clean": {
       "cache": false
