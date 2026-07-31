@@ -401,6 +401,42 @@ describe('AppointmentsPage', () => {
 
       expect(mockSetCurrentDate).toHaveBeenCalledWith(expect.any(Date))
     })
+
+    // Regression (#357): setMonth on day 29-31 overflows into the wrong month
+    it('should navigate to previous month from July 31', () => {
+      mockAppointmentsState.currentDate = new Date(2026, 6, 31)
+      renderAppointmentsPage()
+
+      fireEvent.click(screen.getByLabelText(/mes anterior/i))
+
+      const newDate = mockSetCurrentDate.mock.calls[0][0] as Date
+      expect(newDate.getFullYear()).toBe(2026)
+      expect(newDate.getMonth()).toBe(5) // June
+    })
+
+    it('should navigate to next month from August 31 without skipping September', () => {
+      mockAppointmentsState.currentDate = new Date(2026, 7, 31)
+      renderAppointmentsPage()
+
+      fireEvent.click(screen.getByLabelText(/mes siguiente/i))
+
+      const newDate = mockSetCurrentDate.mock.calls[0][0] as Date
+      expect(newDate.getFullYear()).toBe(2026)
+      expect(newDate.getMonth()).toBe(8) // September
+    })
+
+    it('should fetch a range spanning exactly the displayed month on May 31', () => {
+      mockAppointmentsState.currentDate = new Date(2026, 4, 31)
+      renderAppointmentsPage()
+
+      const { from, to } = mockFetchAppointments.mock.calls[0][0]
+      const fromDate = new Date(from)
+      const toDate = new Date(to)
+      expect(fromDate.getMonth()).toBe(4) // May 1st
+      expect(fromDate.getDate()).toBe(1)
+      expect(toDate.getMonth()).toBe(4) // May 31st, not June 30
+      expect(toDate.getDate()).toBe(31)
+    })
   })
 
   describe('filters', () => {

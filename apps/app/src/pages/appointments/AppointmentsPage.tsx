@@ -58,7 +58,9 @@ export function AppointmentsPage() {
     start.setDate(1) // Start of month
     start.setHours(0, 0, 0, 0)
 
-    const end = new Date(currentDate)
+    // Derive from `start` (day 1): month arithmetic on day 29-31 overflows
+    // into the wrong month (e.g. May 31 + 1 month = July 1)
+    const end = new Date(start)
     end.setMonth(end.getMonth() + 1)
     end.setDate(0) // Last day of month
     end.setHours(23, 59, 59, 999)
@@ -99,12 +101,16 @@ export function AppointmentsPage() {
 
   const handlePreviousMonth = () => {
     const newDate = new Date(currentDate)
+    // Normalize to day 1 first: setMonth on day 29-31 overflows into the
+    // wrong month (e.g. July 31 - 1 month = "June 31" = July 1)
+    newDate.setDate(1)
     newDate.setMonth(newDate.getMonth() - 1)
     setCurrentDate(newDate)
   }
 
   const handleNextMonth = () => {
     const newDate = new Date(currentDate)
+    newDate.setDate(1)
     newDate.setMonth(newDate.getMonth() + 1)
     setCurrentDate(newDate)
   }
