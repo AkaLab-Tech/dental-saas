@@ -11,6 +11,9 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Creates dental_test on a fresh volume only; see the script's header
+      # for the existing-volume path.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - dental-network
     healthcheck:
