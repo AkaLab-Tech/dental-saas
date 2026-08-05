@@ -58,8 +58,8 @@ test.describe('Budget ↔ Appointment integration (Story 5)', () => {
 
       // It always offers a "Marcar completada" confirm action. Associated budget
       // items (if any) appear with a "¿Se ejecutó en esta cita?" toggle defaulting
-      // OFF; with none associated it shows the no-items hint. Either shape is valid
-      // here — assert the confirm action is present.
+      // ON (opt-out); with none associated it shows the no-items hint. Either shape
+      // is valid here — assert the confirm action is present.
       await expect(dialog.getByRole('button', { name: /marcar completada/i })).toBeVisible()
     })
   })

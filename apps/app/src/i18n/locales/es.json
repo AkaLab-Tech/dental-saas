@@ -430,6 +430,7 @@
     "budgetItems": {
       "title": "Ítems de presupuesto",
       "selectHint": "Selecciona los ítems del presupuesto que se atenderán en esta cita.",
+      "filterHint": "Los ítems ya programados en otra cita o ya ejecutados no se muestran aquí.",
       "empty": "Este paciente no tiene ítems de presupuesto disponibles para asociar.",
       "loading": "Cargando ítems de presupuesto..."
     },

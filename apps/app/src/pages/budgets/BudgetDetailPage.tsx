@@ -608,7 +608,7 @@ export default function BudgetDetailPage() {
                     <span className="font-medium text-gray-900">{item.description}</span>
                     <span
                       className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[
-                        item.status === 'PENDING' || item.status === 'SCHEDULED'
+                        item.status === 'PENDING'
                           ? 'DRAFT'
                           : item.status === 'EXECUTED'
                           ? 'COMPLETED'

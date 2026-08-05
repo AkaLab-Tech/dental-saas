@@ -118,7 +118,7 @@ describe('AppointmentCompleteModal', () => {
   })
 
   describe('default state', () => {
-    it('renders SCHEDULED items with their checkboxes unchecked by default', async () => {
+    it('renders SCHEDULED items with their checkboxes checked by default (opt-out, not opt-in)', async () => {
       getAppointmentBudgetItemsMock.mockResolvedValue([
         makeItem({ id: 'item-1', description: 'Limpieza dental', roles: ['SCHEDULED'] }),
         makeItem({ id: 'item-2', description: 'Extracción de muela', roles: ['SCHEDULED'] }),
@@ -127,13 +127,13 @@ describe('AppointmentCompleteModal', () => {
       renderModal()
 
       await waitFor(() => expect(screen.getByText('Limpieza dental')).toBeInTheDocument())
-      expect(getScheduledItemCheckbox('Limpieza dental')).not.toBeChecked()
-      expect(getScheduledItemCheckbox('Extracción de muela')).not.toBeChecked()
+      expect(getScheduledItemCheckbox('Limpieza dental')).toBeChecked()
+      expect(getScheduledItemCheckbox('Extracción de muela')).toBeChecked()
     })
   })
 
   describe('confirm payload', () => {
-    it('sends only the toggled-on item id, not the untoggled one', async () => {
+    it('excludes an item the doctor unticks, keeping the other default-checked one', async () => {
       getAppointmentBudgetItemsMock.mockResolvedValue([
         makeItem({ id: 'item-1', description: 'Limpieza dental', roles: ['SCHEDULED'] }),
         makeItem({ id: 'item-2', description: 'Extracción de muela', roles: ['SCHEDULED'] }),
@@ -143,16 +143,16 @@ describe('AppointmentCompleteModal', () => {
       await waitFor(() => expect(screen.getByText('Limpieza dental')).toBeInTheDocument())
 
       fireEvent.click(getScheduledItemCheckbox('Limpieza dental'))
-      expect(getScheduledItemCheckbox('Limpieza dental')).toBeChecked()
-      expect(getScheduledItemCheckbox('Extracción de muela')).not.toBeChecked()
+      expect(getScheduledItemCheckbox('Limpieza dental')).not.toBeChecked()
+      expect(getScheduledItemCheckbox('Extracción de muela')).toBeChecked()
 
       fireEvent.click(screen.getByRole('button', { name: CONFIRM_BTN }))
 
       await waitFor(() => expect(completeAppointmentMock).toHaveBeenCalled())
-      expect(completeAppointmentMock).toHaveBeenCalledWith('apt-1', undefined, ['item-1'])
+      expect(completeAppointmentMock).toHaveBeenCalledWith('apt-1', undefined, ['item-2'])
     })
 
-    it('sends an empty executed-items array when nothing is toggled on (no-op execution)', async () => {
+    it('sends all default-checked item ids when nothing is toggled off', async () => {
       getAppointmentBudgetItemsMock.mockResolvedValue([
         makeItem({ id: 'item-1', description: 'Limpieza dental', roles: ['SCHEDULED'] }),
       ])
@@ -163,7 +163,7 @@ describe('AppointmentCompleteModal', () => {
       fireEvent.click(screen.getByRole('button', { name: CONFIRM_BTN }))
 
       await waitFor(() => expect(completeAppointmentMock).toHaveBeenCalled())
-      expect(completeAppointmentMock).toHaveBeenCalledWith('apt-1', undefined, [])
+      expect(completeAppointmentMock).toHaveBeenCalledWith('apt-1', undefined, ['item-1'])
     })
 
     it('passes typed notes through to completeAppointment', async () => {
@@ -196,8 +196,8 @@ describe('AppointmentCompleteModal', () => {
       renderModal()
       await waitFor(() => expect(screen.getByText('Corona dental')).toBeInTheDocument())
 
-      // Still-scheduled item stays a live, unchecked toggle.
-      expect(getScheduledItemCheckbox('Limpieza dental')).not.toBeChecked()
+      // Still-scheduled item stays a live, default-checked toggle.
+      expect(getScheduledItemCheckbox('Limpieza dental')).toBeChecked()
 
       // Already-executed item: disabled, pre-checked, badged, and not among
       // the toggleable rows (querying it as a scheduled checkbox must fail).
@@ -208,12 +208,13 @@ describe('AppointmentCompleteModal', () => {
       expect(within(executedRow).getByText(ALREADY_EXECUTED_BADGE)).toBeInTheDocument()
       expect(() => getScheduledItemCheckbox('Corona dental')).toThrow()
 
-      // Clicking the disabled checkbox must not toggle it into the payload.
+      // Clicking the disabled checkbox must not toggle it into the payload;
+      // the still-scheduled item stays in it as its default-checked state.
       fireEvent.click(executedCheckbox)
       fireEvent.click(screen.getByRole('button', { name: CONFIRM_BTN }))
 
       await waitFor(() => expect(completeAppointmentMock).toHaveBeenCalled())
-      expect(completeAppointmentMock).toHaveBeenCalledWith('apt-1', undefined, [])
+      expect(completeAppointmentMock).toHaveBeenCalledWith('apt-1', undefined, ['item-1'])
     })
   })
 

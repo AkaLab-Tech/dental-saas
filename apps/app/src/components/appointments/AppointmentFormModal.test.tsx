@@ -323,7 +323,7 @@ describe('AppointmentFormModal — budget items association', () => {
   })
 
   describe('eligible item filtering', () => {
-    it('lists only PENDING/SCHEDULED items from non-CANCELLED budgets', async () => {
+    it('lists PENDING items plus this appointment\'s own linked items, from non-CANCELLED budgets', async () => {
       const activeBudget = makeBudget({
         id: 'budget-1',
         status: 'APPROVED',
@@ -343,13 +343,17 @@ describe('AppointmentFormModal — budget items association', () => {
       })
       listBudgetsByPatientMock.mockResolvedValue({ data: [activeBudget, cancelledBudget], total: 2 })
 
+      // Create mode (no `appointment` prop): there is no "own appointment" to
+      // be linked to, so only the globally PENDING item is eligible — a
+      // SCHEDULED item is scheduled into some *other* appointment and must
+      // not be offered here (this is the defect the task fixes).
       renderModal()
       await waitForOptionsLoaded()
       fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
 
       await waitFor(() => expect(screen.getByText('Item Pending')).toBeInTheDocument())
-      expect(screen.getByText('Item Scheduled')).toBeInTheDocument()
 
+      expect(screen.queryByText('Item Scheduled')).not.toBeInTheDocument()
       expect(screen.queryByText('Item Executed')).not.toBeInTheDocument()
       expect(screen.queryByText('Item CancelledStatus')).not.toBeInTheDocument()
       expect(screen.queryByText('Item In Cancelled Budget')).not.toBeInTheDocument()
@@ -448,6 +452,57 @@ describe('AppointmentFormModal — budget items association', () => {
       await waitFor(() => expect(onSubmit).toHaveBeenCalled())
       expect(onSubmit.mock.calls[0][0]).toMatchObject({ budgetItemIds: [] })
       expect('budgetItemIds' in onSubmit.mock.calls[0][0]).toBe(true)
+    })
+  })
+
+  // Task #361: the eligibility filter and the EXECUTED lock, exercised
+  // together in edit mode against a mix of PENDING / elsewhere-SCHEDULED /
+  // this-appointment-SCHEDULED / this-appointment-EXECUTED items.
+  describe('eligible item filtering — editing mode & EXECUTED lock (task #361)', () => {
+    it('offers PENDING and this appointment\'s own linked items, hides an item SCHEDULED elsewhere, and locks the EXECUTED one checked+disabled', async () => {
+      const budget = makeBudget({
+        items: [
+          makeBudgetItem({ id: 'item-pending', description: 'Item Pending', status: 'PENDING' }),
+          makeBudgetItem({ id: 'item-elsewhere', description: 'Item Scheduled Elsewhere', status: 'SCHEDULED' }),
+          makeBudgetItem({ id: 'item-scheduled-here', description: 'Item Scheduled Here', status: 'SCHEDULED' }),
+          makeBudgetItem({ id: 'item-executed-here', description: 'Item Executed Here', status: 'EXECUTED' }),
+        ],
+      })
+      listBudgetsByPatientMock.mockResolvedValue({ data: [budget], total: 1 })
+      getAppointmentBudgetItemsMock.mockResolvedValue([
+        makeAssociatedItem({ id: 'item-scheduled-here', status: 'SCHEDULED', roles: ['SCHEDULED'] }),
+        makeAssociatedItem({ id: 'item-executed-here', status: 'EXECUTED', roles: ['EXECUTED'] }),
+      ])
+
+      const appointment = makeAppointment()
+      renderModal({ appointment })
+      await waitForOptionsLoaded()
+
+      await waitFor(() => expect(screen.getByText('Item Pending')).toBeInTheDocument())
+
+      // A PENDING item is offered, unchecked.
+      expect(getItemCheckbox('Item Pending')).not.toBeChecked()
+
+      // An item SCHEDULED into some *other* appointment is not offered at all.
+      expect(screen.queryByText('Item Scheduled Elsewhere')).not.toBeInTheDocument()
+
+      // This appointment's own SCHEDULED item is offered, pre-checked, and
+      // still a live toggle (not disabled).
+      await waitFor(() => expect(getItemCheckbox('Item Scheduled Here')).toBeChecked())
+      expect(getItemCheckbox('Item Scheduled Here')).not.toBeDisabled()
+
+      // This appointment's own EXECUTED item is offered, checked, disabled,
+      // and badged "Ya ejecutado" instead of the normal status label.
+      const executedCheckbox = getItemCheckbox('Item Executed Here')
+      expect(executedCheckbox).toBeChecked()
+      expect(executedCheckbox).toBeDisabled()
+      const executedRow = screen.getByText('Item Executed Here').closest('label')
+      expect(executedRow).not.toBeNull()
+      expect(within(executedRow!).getByText('Ya ejecutado')).toBeInTheDocument()
+
+      // Clicking the disabled EXECUTED checkbox must not toggle it off.
+      fireEvent.click(executedCheckbox)
+      expect(executedCheckbox).toBeChecked()
     })
   })
 

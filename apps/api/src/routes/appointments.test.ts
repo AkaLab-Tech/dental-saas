@@ -1947,6 +1947,156 @@ describe('Appointments API', () => {
       expect(bLinks).toHaveLength(0)
     })
 
+    // Task #361: cancelling/deleting an appointment used to leave its
+    // SCHEDULED budget items stuck SCHEDULED forever (no route ever released
+    // them). Both mutations now release the SCHEDULED set back to PENDING via
+    // the same setAppointmentBudgetItems(..., []) call the plain replace-set
+    // path above already relies on — an EXECUTED item must stay untouched.
+    describe('cancelling/deleting releases SCHEDULED budget items (task #361)', () => {
+      it('PUT status=CANCELLED releases a SCHEDULED item to PENDING, but not an EXECUTED item', async () => {
+        const budget = await createApprovedBudget(2)
+        const [itemA, itemB] = budget.items
+        const times = getFutureTime(1)
+        const appt = await prisma.appointment.create({
+          data: {
+            tenantId,
+            patientId,
+            doctorId,
+            startTime: new Date(times.startTime),
+            endTime: new Date(times.endTime),
+            duration: 30,
+          },
+        })
+        await request(app)
+          .put(`/api/appointments/${appt.id}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ budgetItemIds: [itemA.id, itemB.id] })
+        // Execute item A before cancelling.
+        await request(app)
+          .put(`/api/appointments/${appt.id}/mark-done`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ executedBudgetItemIds: [itemA.id] })
+
+        const res = await request(app)
+          .put(`/api/appointments/${appt.id}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ status: 'CANCELLED' })
+
+        expect(res.status).toBe(200)
+        expect(res.body.data.status).toBe('CANCELLED')
+
+        const itemAAfter = await prisma.budgetItem.findUnique({ where: { id: itemA.id } })
+        const itemBAfter = await prisma.budgetItem.findUnique({ where: { id: itemB.id } })
+        // Executed item is never un-executed by cancelling its appointment.
+        expect(itemAAfter?.status).toBe('EXECUTED')
+        // Plain SCHEDULED item reverts to PENDING and loses its join row.
+        expect(itemBAfter?.status).toBe('PENDING')
+
+        const aLinks = await prisma.budgetItemAppointment.findMany({ where: { budgetItemId: itemA.id } })
+        expect(aLinks.map((l) => l.role)).toEqual(['EXECUTED'])
+        const bLinks = await prisma.budgetItemAppointment.findMany({ where: { budgetItemId: itemB.id } })
+        expect(bLinks).toHaveLength(0)
+      })
+
+      it('PUT with a non-CANCELLED status leaves SCHEDULED budget items untouched (no unintended release)', async () => {
+        const budget = await createApprovedBudget(1)
+        const [item] = budget.items
+        const times = getFutureTime(1)
+        const appt = await prisma.appointment.create({
+          data: {
+            tenantId,
+            patientId,
+            doctorId,
+            startTime: new Date(times.startTime),
+            endTime: new Date(times.endTime),
+            duration: 30,
+          },
+        })
+        await request(app)
+          .put(`/api/appointments/${appt.id}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ budgetItemIds: [item.id] })
+
+        const res = await request(app)
+          .put(`/api/appointments/${appt.id}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ status: 'CONFIRMED' })
+
+        expect(res.status).toBe(200)
+        expect(res.body.data.status).toBe('CONFIRMED')
+
+        const itemAfter = await prisma.budgetItem.findUnique({ where: { id: item.id } })
+        expect(itemAfter?.status).toBe('SCHEDULED')
+        const links = await prisma.budgetItemAppointment.findMany({ where: { budgetItemId: item.id } })
+        expect(links).toHaveLength(1)
+      })
+
+      it('DELETE (soft delete) releases a SCHEDULED item to PENDING, but not an EXECUTED item', async () => {
+        const budget = await createApprovedBudget(2)
+        const [itemA, itemB] = budget.items
+        const times = getFutureTime(1)
+        const appt = await prisma.appointment.create({
+          data: {
+            tenantId,
+            patientId,
+            doctorId,
+            startTime: new Date(times.startTime),
+            endTime: new Date(times.endTime),
+            duration: 30,
+          },
+        })
+        await request(app)
+          .put(`/api/appointments/${appt.id}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ budgetItemIds: [itemA.id, itemB.id] })
+        // Execute item A before deleting.
+        await request(app)
+          .put(`/api/appointments/${appt.id}/mark-done`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ executedBudgetItemIds: [itemA.id] })
+
+        const res = await request(app)
+          .delete(`/api/appointments/${appt.id}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+
+        expect(res.status).toBe(200)
+        expect(res.body.data.isActive).toBe(false)
+        expect(res.body.data.status).toBe('CANCELLED')
+
+        const itemAAfter = await prisma.budgetItem.findUnique({ where: { id: itemA.id } })
+        const itemBAfter = await prisma.budgetItem.findUnique({ where: { id: itemB.id } })
+        expect(itemAAfter?.status).toBe('EXECUTED')
+        expect(itemBAfter?.status).toBe('PENDING')
+
+        const aLinks = await prisma.budgetItemAppointment.findMany({ where: { budgetItemId: itemA.id } })
+        expect(aLinks.map((l) => l.role)).toEqual(['EXECUTED'])
+        const bLinks = await prisma.budgetItemAppointment.findMany({ where: { budgetItemId: itemB.id } })
+        expect(bLinks).toHaveLength(0)
+      })
+
+      it('DELETE with no associated budget items still soft-deletes successfully (release is a no-op)', async () => {
+        const times = getFutureTime(1)
+        const appt = await prisma.appointment.create({
+          data: {
+            tenantId,
+            patientId,
+            doctorId,
+            startTime: new Date(times.startTime),
+            endTime: new Date(times.endTime),
+            duration: 30,
+          },
+        })
+
+        const res = await request(app)
+          .delete(`/api/appointments/${appt.id}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+
+        expect(res.status).toBe(200)
+        expect(res.body.data.isActive).toBe(false)
+        expect(res.body.data.status).toBe('CANCELLED')
+      })
+    })
+
     it('mark-done with an omitted executedBudgetItemIds leaves associated items SCHEDULED (no auto-execution)', async () => {
       const budget = await createApprovedBudget(1)
       const [item] = budget.items
