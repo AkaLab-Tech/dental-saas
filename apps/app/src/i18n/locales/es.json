@@ -780,6 +780,10 @@
       "EXECUTED": "Ejecutado",
       "CANCELLED": "Cancelado"
     },
+    "itemsInline": {
+      "showMore": "Ver {{count}} más",
+      "showLess": "Ver menos"
+    },
     "items": {
       "title": "Ítems",
       "addItem": "Agregar ítem",

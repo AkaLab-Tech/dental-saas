@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router'
 import i18n from 'i18next'
 import '@/i18n'
 import { BudgetCard } from './BudgetCard'
-import type { Budget } from '@/lib/budget-api'
+import type { Budget, BudgetItem, BudgetItemStatus } from '@/lib/budget-api'
 import { Permission } from '@dental/shared'
 
 beforeAll(async () => {
@@ -82,6 +82,25 @@ function makeBudget(overrides: Partial<Budget> = {}): Budget {
   }
 }
 
+function makeItem(overrides: Partial<BudgetItem> = {}): BudgetItem {
+  return {
+    id: 'item',
+    budgetId: 'budget-1',
+    description: 'Item',
+    toothNumber: null,
+    quantity: 1,
+    unitPrice: '100',
+    totalPrice: '100',
+    plannedAppointmentType: null,
+    status: 'PENDING',
+    notes: null,
+    order: 0,
+    createdAt: '',
+    updatedAt: '',
+    ...overrides,
+  }
+}
+
 function renderCard(budget: Budget, onDelete = vi.fn()) {
   return render(
     <MemoryRouter>
@@ -106,6 +125,10 @@ describe('BudgetCard', () => {
     renderCard(makeBudget())
     fireEvent.click(screen.getByLabelText('Actions'))
     expect(screen.getByText('Ver detalle')).toBeInTheDocument()
+    expect(screen.getByText('Ver detalle').closest('a')).toHaveAttribute(
+      'href',
+      '/patients/patient-1/budgets/budget-1'
+    )
     expect(screen.queryByText('Eliminar presupuesto')).not.toBeInTheDocument()
   })
 
@@ -177,5 +200,116 @@ describe('BudgetCard', () => {
       expect(screen.queryByText('Descargar PDF')).not.toBeInTheDocument()
     })
     expect(downloadBudgetPdfMock).toHaveBeenCalledWith('budget-99')
+  })
+
+  it('renders item descriptions and per-item status labels inline, in order', () => {
+    canMock.mockReturnValue(true)
+    renderCard(
+      makeBudget({
+        items: [
+          makeItem({ id: 'i1', description: 'Extracción molar', status: 'EXECUTED', order: 0 }),
+          makeItem({ id: 'i2', description: 'Limpieza dental', status: 'PENDING', order: 1 }),
+        ],
+      })
+    )
+    const descriptions = screen.getAllByText(/Extracción molar|Limpieza dental/)
+    expect(descriptions.map((el) => el.textContent)).toEqual(['Extracción molar', 'Limpieza dental'])
+    expect(screen.getByText('Ejecutado')).toBeInTheDocument()
+    expect(screen.getByText('Pendiente')).toBeInTheDocument()
+  })
+
+  it('preserves the given array order (ascending `order`) even when it disagrees with alphabetical or id order', () => {
+    // Descriptions and ids are deliberately NOT alphabetically or lexically
+    // sorted, so this fails if the component ever starts sorting client-side
+    // (e.g. by description or id) instead of trusting array/`order` order.
+    canMock.mockReturnValue(true)
+    renderCard(
+      makeBudget({
+        items: [
+          makeItem({ id: 'z9', description: 'Zebra filling', order: 0 }),
+          makeItem({ id: 'a1', description: 'Alpha crown', order: 1 }),
+          makeItem({ id: 'm5', description: 'Mango root canal', order: 2 }),
+        ],
+      })
+    )
+    const list = screen.getByRole('list')
+    const rowTexts = Array.from(list.querySelectorAll('li')).map((li) => li.textContent)
+    expect(rowTexts[0]).toContain('Zebra filling')
+    expect(rowTexts[1]).toContain('Alpha crown')
+    expect(rowTexts[2]).toContain('Mango root canal')
+  })
+
+  it('renders a distinct icon per item status, not colour alone (PENDING and SCHEDULED share the same colour class)', () => {
+    canMock.mockReturnValue(true)
+    const statuses: BudgetItemStatus[] = ['PENDING', 'SCHEDULED', 'IN_PROGRESS', 'EXECUTED', 'CANCELLED']
+    const items = statuses.map((status, i) =>
+      makeItem({ id: `s-${status}`, description: `Item ${status}`, status, order: i })
+    )
+    renderCard(makeBudget({ items }))
+
+    const expectedIconClass: Record<BudgetItemStatus, string> = {
+      PENDING: 'lucide-circle',
+      SCHEDULED: 'lucide-clock',
+      IN_PROGRESS: 'lucide-refresh-cw',
+      EXECUTED: 'lucide-circle-check',
+      CANCELLED: 'lucide-circle-x',
+    }
+
+    for (const status of statuses) {
+      const row = screen.getByText(`Item ${status}`).closest('li')
+      expect(row, `expected a row for ${status}`).not.toBeNull()
+      const icon = row!.querySelector(`svg.${expectedIconClass[status]}`)
+      expect(icon, `expected ${status} row to render a .${expectedIconClass[status]} icon`).not.toBeNull()
+    }
+
+    // PENDING and SCHEDULED are both styled with the same "text-gray-400"
+    // colour class, so if the icon markup ever collapsed to a shared icon
+    // too, the two states would become indistinguishable at a glance.
+    const pendingIcon = screen.getByText('Item PENDING').closest('li')!.querySelector('svg')
+    const scheduledIcon = screen.getByText('Item SCHEDULED').closest('li')!.querySelector('svg')
+    expect(pendingIcon?.getAttribute('class')).not.toEqual(scheduledIcon?.getAttribute('class'))
+  })
+
+  it('shows the tooth number when present on an item', () => {
+    canMock.mockReturnValue(true)
+    renderCard(
+      makeBudget({
+        items: [makeItem({ id: 'i1', description: 'Extracción', toothNumber: '18', order: 0 })],
+      })
+    )
+    expect(screen.getByText('Diente: 18')).toBeInTheDocument()
+  })
+
+  it('renders no item list block when the budget has zero items', () => {
+    canMock.mockReturnValue(true)
+    renderCard(makeBudget({ items: [] }))
+    expect(screen.queryByRole('list')).not.toBeInTheDocument()
+  })
+
+  it('truncates to the first 6 items and expands/collapses the rest inline', () => {
+    canMock.mockReturnValue(true)
+    const items = Array.from({ length: 8 }, (_, i) =>
+      makeItem({ id: `i${i}`, description: `Item ${i}`, order: i })
+    )
+    renderCard(makeBudget({ items }))
+
+    for (let i = 0; i < 6; i++) {
+      expect(screen.getByText(`Item ${i}`)).toBeInTheDocument()
+    }
+    expect(screen.queryByText('Item 6')).not.toBeInTheDocument()
+    expect(screen.queryByText('Item 7')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByText(/Ver 2 más/))
+    expect(screen.getByText('Item 6')).toBeInTheDocument()
+    expect(screen.getByText('Item 7')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('Ver menos'))
+    expect(screen.queryByText('Item 6')).not.toBeInTheDocument()
+    expect(screen.queryByText('Item 7')).not.toBeInTheDocument()
+    // First 6 remain visible after collapsing back.
+    for (let i = 0; i < 6; i++) {
+      expect(screen.getByText(`Item ${i}`)).toBeInTheDocument()
+    }
+    expect(screen.getByText(/Ver 2 más/)).toBeInTheDocument()
   })
 })
