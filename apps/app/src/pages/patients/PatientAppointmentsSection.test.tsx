@@ -145,7 +145,18 @@ const cancelledAppointment: Appointment = {
   ...upcomingAppointment,
   id: 'a3',
   status: 'CANCELLED',
+  type: 'Cancelada',
   isActive: false,
+}
+
+const noShowAppointment: Appointment = {
+  ...upcomingAppointment,
+  id: 'a5',
+  startTime: futureDate(2),
+  endTime: futureEndDate(2),
+  status: 'NO_SHOW',
+  type: 'Ausente',
+  isActive: true,
 }
 
 // ============================================================================
@@ -405,6 +416,151 @@ describe('PatientAppointmentsSection', () => {
       await waitFor(() => {
         expect(screen.getByText('Limpieza')).toBeInTheDocument()
       })
+    })
+
+    it('hides cancelled appointments by default in the "all" period', async () => {
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Limpieza')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByText('patients.appointments.all'))
+
+      await waitFor(() => {
+        expect(screen.getByText('Control')).toBeInTheDocument()
+      })
+      expect(screen.queryByText('Cancelada')).not.toBeInTheDocument()
+    })
+
+    it('hides cancelled appointments by default in the "past" period', async () => {
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Limpieza')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByText('patients.appointments.past'))
+
+      await waitFor(() => {
+        expect(screen.getByText('Control')).toBeInTheDocument()
+      })
+      expect(screen.queryByText('Cancelada')).not.toBeInTheDocument()
+    })
+
+    it('reveals cancelled appointments when the "show cancelled" checkbox is checked, and hides them again when unchecked', async () => {
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Limpieza')).toBeInTheDocument()
+      })
+
+      // Switch to "all" so the cancelled appointment's future startTime is in range.
+      fireEvent.click(screen.getByText('patients.appointments.all'))
+      await waitFor(() => {
+        expect(screen.getByText('Control')).toBeInTheDocument()
+      })
+      expect(screen.queryByText('Cancelada')).not.toBeInTheDocument()
+
+      const checkbox = screen.getByRole('checkbox', { name: 'appointments.showCancelled' })
+      expect(checkbox).not.toBeChecked()
+
+      fireEvent.click(checkbox)
+
+      await waitFor(() => {
+        expect(screen.getByText('Cancelada')).toBeInTheDocument()
+      })
+      expect(checkbox).toBeChecked()
+
+      fireEvent.click(checkbox)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Cancelada')).not.toBeInTheDocument()
+      })
+      expect(checkbox).not.toBeChecked()
+    })
+
+    it('does not refetch appointments when toggling the "show cancelled" checkbox', async () => {
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Limpieza')).toBeInTheDocument()
+      })
+
+      const callsBeforeToggle = mockGetAppointmentsByPatient.mock.calls.length
+
+      const checkbox = screen.getByRole('checkbox', { name: 'appointments.showCancelled' })
+      fireEvent.click(checkbox)
+      fireEvent.click(checkbox)
+
+      expect(mockGetAppointmentsByPatient.mock.calls.length).toBe(callsBeforeToggle)
+    })
+
+    it('shows cancelled appointments when CANCELLED is explicitly selected in the status filter, even with the checkbox unchecked', async () => {
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Limpieza')).toBeInTheDocument()
+      })
+
+      const checkbox = screen.getByRole('checkbox', { name: 'appointments.showCancelled' })
+      expect(checkbox).not.toBeChecked()
+
+      fireEvent.change(screen.getByDisplayValue('appointments.allStatuses'), {
+        target: { value: 'CANCELLED' },
+      })
+
+      await waitFor(() => {
+        expect(screen.getByText('Cancelada')).toBeInTheDocument()
+      })
+      expect(checkbox).not.toBeChecked()
+    })
+
+    it('keeps a NO_SHOW appointment visible with default filters — only CANCELLED is hidden', async () => {
+      mockGetAppointmentsByPatient.mockResolvedValue([
+        upcomingAppointment,
+        pastAppointment,
+        cancelledAppointment,
+        noShowAppointment,
+      ])
+
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Ausente')).toBeInTheDocument()
+      })
+      expect(screen.queryByText('Cancelada')).not.toBeInTheDocument()
+    })
+
+    it('resets the "show cancelled" checkbox via clear filters, and shows the clear-filters link when only the checkbox is checked', async () => {
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Limpieza')).toBeInTheDocument()
+      })
+
+      expect(screen.queryByText('patients.appointments.clearFilters')).not.toBeInTheDocument()
+
+      const checkbox = screen.getByRole('checkbox', { name: 'appointments.showCancelled' })
+      fireEvent.click(checkbox)
+
+      expect(checkbox).toBeChecked()
+      expect(screen.getByText('patients.appointments.clearFilters')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByText('patients.appointments.clearFilters'))
+
+      expect(checkbox).not.toBeChecked()
+      expect(screen.queryByText('patients.appointments.clearFilters')).not.toBeInTheDocument()
+    })
+
+    it('renders the "show cancelled" checkbox unchecked on mount', async () => {
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Limpieza')).toBeInTheDocument()
+      })
+
+      expect(screen.getByRole('checkbox', { name: 'appointments.showCancelled' })).not.toBeChecked()
     })
   })
 

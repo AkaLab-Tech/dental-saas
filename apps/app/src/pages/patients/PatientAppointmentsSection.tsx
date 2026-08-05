@@ -284,10 +284,11 @@ export function PatientAppointmentsSection({
   const [error, setError] = useState<string | null>(null)
 
   // Filter state
-const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('upcoming')
+  const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('upcoming')
   const [filterStatus, setFilterStatus] = useState<AppointmentStatus | ''>('')
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
+  const [showCancelled, setShowCancelled] = useState(false)
 
   // Confirmation state
   const [confirmAction, setConfirmAction] = useState<{ type: 'cancel'; appointment: Appointment } | null>(null)
@@ -330,10 +331,13 @@ const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('upcoming')
     const startTime = new Date(a.startTime)
     if (filterPeriod === 'upcoming') {
       if (startTime < now && !isToday(startTime)) return false
-      if (a.status === 'CANCELLED' && !filterStatus) return false
     } else if (filterPeriod === 'past') {
       if (startTime >= now || isToday(startTime)) return false
     }
+
+    // Cancelled appointments are hidden by default in every period, unless
+    // the user opts in via the toggle or explicitly filters for CANCELLED.
+    if (a.status === 'CANCELLED' && !showCancelled && filterStatus !== 'CANCELLED') return false
 
     // Status filter
     if (filterStatus && a.status !== filterStatus) return false
@@ -387,9 +391,10 @@ const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('upcoming')
     setFilterStatus('')
     setFilterFrom('')
     setFilterTo('')
+    setShowCancelled(false)
   }
 
-  const hasActiveFilters = filterPeriod !== 'upcoming' || filterStatus !== '' || filterFrom !== '' || filterTo !== ''
+  const hasActiveFilters = filterPeriod !== 'upcoming' || filterStatus !== '' || filterFrom !== '' || filterTo !== '' || showCancelled
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100">
@@ -484,6 +489,17 @@ const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('upcoming')
                   placeholder={t('patients.appointments.dateTo')}
                 />
               </div>
+
+              {/* Show cancelled toggle */}
+              <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={showCancelled}
+                  onChange={(e) => setShowCancelled(e.target.checked)}
+                  className="h-3.5 w-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                {t('appointments.showCancelled')}
+              </label>
 
               {/* Clear filters */}
               {hasActiveFilters && (
