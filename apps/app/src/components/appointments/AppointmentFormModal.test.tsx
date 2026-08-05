@@ -668,6 +668,32 @@ describe('AppointmentFormModal — date/time picker migration (task #233)', () =
     fireEvent.click(option)
   }
 
+  // Picks a day within the month the DatePicker opens on by default. With no
+  // date selected yet, DatePicker.tsx passes `defaultMonth={undefined}` to
+  // react-day-picker, which then falls back to the *current* system month —
+  // so a hardcoded 'julio de 2026' day button is a time bomb that only
+  // exists in the DOM while the real clock is in/near July 2026. Computing
+  // the target day relative to `new Date()` keeps this test valid at any
+  // run date. Day "1" (or "2" if today itself is the 1st) is always part of
+  // the currently displayed month and, by construction, is never "today" —
+  // avoiding the "Hoy, " prefix the es locale's `labelDayButton` adds to
+  // today's own aria-label (see react-day-picker's `locale/es.js`).
+  function pickCalendarDay() {
+    const today = new Date()
+    const day = today.getDate() === 1 ? 2 : 1
+    const date = new Date(today.getFullYear(), today.getMonth(), day)
+    // Mirrors react-day-picker's es locale day-button aria-label, which
+    // formats with date-fns' "PPPP" token — e.g. "viernes, 10 de julio de
+    // 2026". Verified to match date-fns' es output exactly.
+    const label = new Intl.DateTimeFormat('es', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }).format(date)
+    return { date, isoDate: formatDateForInputHelper(date), label }
+  }
+
   it('renders the date field as a button-triggered popover, not a native date input', async () => {
     renderModal()
     await waitForOptionsLoaded()
@@ -682,15 +708,16 @@ describe('AppointmentFormModal — date/time picker migration (task #233)', () =
     fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
     await selectDoctor()
 
+    const { isoDate, label } = pickCalendarDay()
     fireEvent.click(getDateTrigger())
-    fireEvent.click(screen.getByRole('button', { name: 'viernes, 10 de julio de 2026' }))
+    fireEvent.click(screen.getByRole('button', { name: label }))
 
     fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalled())
     const payload = onSubmit.mock.calls[0][0]
-    expect(payload.startTime).toBe(new Date('2026-07-10T09:00:00').toISOString())
-    expect(payload.endTime).toBe(new Date('2026-07-10T09:30:00').toISOString())
+    expect(payload.startTime).toBe(new Date(`${isoDate}T09:00:00`).toISOString())
+    expect(payload.endTime).toBe(new Date(`${isoDate}T09:30:00`).toISOString())
   })
 
   it('closes the DatePicker popover after selecting a day (no leftover open grid)', async () => {
@@ -700,7 +727,8 @@ describe('AppointmentFormModal — date/time picker migration (task #233)', () =
     fireEvent.click(getDateTrigger())
     expect(screen.getByRole('grid')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'viernes, 10 de julio de 2026' }))
+    const { label } = pickCalendarDay()
+    fireEvent.click(screen.getByRole('button', { name: label }))
     expect(screen.queryByRole('grid')).not.toBeInTheDocument()
   })
 
