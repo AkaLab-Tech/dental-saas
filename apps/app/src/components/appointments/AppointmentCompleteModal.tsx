@@ -53,8 +53,12 @@ export function AppointmentCompleteModal({
       .then((data) => {
         if (cancelled) return
         setItems(data)
-        // Default OFF — nothing auto-executes; the doctor must opt each item in.
-        setExecutedItemIds([])
+        // Default ON — every still-SCHEDULED item is assumed executed; the
+        // doctor opts individual items OUT rather than opting each one in
+        // (opt-in defaults left items stuck SCHEDULED forever in practice).
+        setExecutedItemIds(
+          data.filter((item) => item.roles.includes('SCHEDULED') && !item.roles.includes('EXECUTED')).map((item) => item.id)
+        )
       })
       .catch((e) => {
         if (cancelled) return

@@ -449,10 +449,18 @@ appointmentsRouter.put('/:id', requireMinRole('DOCTOR'), requireOwnership('appoi
       })
     }
 
+    const userId = req.user!.profileUserId || req.user!.userId
+
     if (budgetItemIds !== undefined) {
-      const userId = req.user!.profileUserId || req.user!.userId
       const linkResult = await setAppointmentBudgetItems(tenantId, id, budgetItemIds, userId)
       if (!linkResult.success) return sendBudgetItemsError(res, linkResult.code)
+    }
+
+    // Cancelling must not leave budget items stuck SCHEDULED forever — release
+    // them back to PENDING (an EXECUTED item is never un-executed by this).
+    if (appointmentData.status === 'CANCELLED') {
+      const releaseResult = await setAppointmentBudgetItems(tenantId, id, [], userId)
+      if (!releaseResult.success) return sendBudgetItemsError(res, releaseResult.code)
     }
 
     res.json({ success: true, data: result.appointment })
@@ -611,6 +619,12 @@ appointmentsRouter.delete('/:id', requireMinRole('DOCTOR'), requireOwnership('ap
         error: result.error,
       })
     }
+
+    // Soft-deleting must not leave budget items stuck SCHEDULED forever —
+    // release them back to PENDING (an EXECUTED item is never un-executed by this).
+    const userId = req.user!.profileUserId || req.user!.userId
+    const releaseResult = await setAppointmentBudgetItems(tenantId, id, [], userId)
+    if (!releaseResult.success) return sendBudgetItemsError(res, releaseResult.code)
 
     res.json({ success: true, data: result.appointment })
   } catch (e) {

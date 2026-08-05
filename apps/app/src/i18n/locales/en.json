@@ -430,6 +430,7 @@
     "budgetItems": {
       "title": "Budget items",
       "selectHint": "Select the budget items that will be addressed in this appointment.",
+      "filterHint": "Items already scheduled into another appointment or already executed are not shown here.",
       "empty": "This patient has no budget items available to associate.",
       "loading": "Loading budget items..."
     },

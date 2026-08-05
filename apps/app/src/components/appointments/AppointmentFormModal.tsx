@@ -14,7 +14,7 @@ import type {
 import { getStatusLabel, getAppointmentBudgetItems } from '../../lib/appointment-api'
 import * as patientApi from '../../lib/patient-api'
 import * as doctorApi from '../../lib/doctor-api'
-import { listBudgetsByPatient, type BudgetItem } from '../../lib/budget-api'
+import { listBudgetsByPatient, type BudgetItemStatus } from '../../lib/budget-api'
 import { formatDateForInput, formatCurrency } from '../../lib/format'
 import { PatientSearchCombobox, type PatientOption } from '../ui/PatientSearchCombobox'
 import { DatePicker } from '../ui/DatePicker'
@@ -26,15 +26,18 @@ interface EligibleBudgetItem {
   budgetId: string
   description: string
   toothNumber: string | null
-  status: 'PENDING' | 'SCHEDULED'
+  status: BudgetItemStatus
   unitPrice: string
   totalPrice: string
   quantity: number
 }
 
-const BUDGET_ITEM_STATUS_STYLES: Record<'PENDING' | 'SCHEDULED', string> = {
+const BUDGET_ITEM_STATUS_STYLES: Record<BudgetItemStatus, string> = {
   PENDING: 'bg-gray-100 text-gray-700 border-gray-200',
   SCHEDULED: 'bg-blue-100 text-blue-700 border-blue-200',
+  IN_PROGRESS: 'bg-blue-100 text-blue-700 border-blue-200',
+  EXECUTED: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  CANCELLED: 'bg-red-100 text-red-700 border-red-200',
 }
 
 const APPOINTMENT_STATUSES: AppointmentStatus[] = [
@@ -274,13 +277,18 @@ export function AppointmentFormModal({
         ])
         if (cancelled) return
 
+        // An item is offered only when it is still PENDING (not committed
+        // anywhere) or when it is already linked to THIS appointment — that
+        // second branch is what keeps an appointment's own SCHEDULED/EXECUTED
+        // items visible (and, for EXECUTED, checked+disabled below) instead of
+        // vanishing once they stop being globally PENDING.
+        const associatedIds = new Set(associated.map((item) => item.id))
+
         const eligible: EligibleBudgetItem[] = budgets
           .filter((budget) => budget.status !== 'CANCELLED')
           .flatMap((budget) =>
             budget.items
-              .filter((item): item is BudgetItem & { status: 'PENDING' | 'SCHEDULED' } =>
-                item.status === 'PENDING' || item.status === 'SCHEDULED'
-              )
+              .filter((item) => item.status === 'PENDING' || associatedIds.has(item.id))
               .map((item) => ({
                 id: item.id,
                 budgetId: budget.id,
@@ -612,7 +620,8 @@ export function AppointmentFormModal({
                     <ClipboardList className="h-4 w-4" />
                     {t('appointments.budgetItems.title')}
                   </label>
-                  <p className="text-xs text-gray-500 mb-2">{t('appointments.budgetItems.selectHint')}</p>
+                  <p className="text-xs text-gray-500 mb-1">{t('appointments.budgetItems.selectHint')}</p>
+                  <p className="text-xs text-gray-400 mb-2">{t('appointments.budgetItems.filterHint')}</p>
 
                   {loadingBudgetItems ? (
                     <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
@@ -623,33 +632,39 @@ export function AppointmentFormModal({
                     <p className="text-sm text-gray-500 italic py-1">{t('appointments.budgetItems.empty')}</p>
                   ) : (
                     <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-48 overflow-y-auto">
-                      {budgetItems.map((item) => (
-                        <label
-                          key={item.id}
-                          className="flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedBudgetItemIds.includes(item.id)}
-                            onChange={() => toggleBudgetItem(item.id)}
-                            className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <span className="flex-1 min-w-0">
-                            <span className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-medium text-gray-900">{item.description}</span>
-                              <span
-                                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${BUDGET_ITEM_STATUS_STYLES[item.status]}`}
-                              >
-                                {t(`budgets.itemStatus.${item.status}`)}
+                      {budgetItems.map((item) => {
+                        const isExecuted = item.status === 'EXECUTED'
+                        return (
+                          <label
+                            key={item.id}
+                            className={`flex items-start gap-2 px-3 py-2 ${
+                              isExecuted ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isExecuted || selectedBudgetItemIds.includes(item.id)}
+                              disabled={isExecuted}
+                              onChange={() => toggleBudgetItem(item.id)}
+                              className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <span className="flex-1 min-w-0">
+                              <span className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-medium text-gray-900">{item.description}</span>
+                                <span
+                                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${BUDGET_ITEM_STATUS_STYLES[item.status]}`}
+                                >
+                                  {isExecuted ? t('appointments.complete.alreadyExecuted') : t(`budgets.itemStatus.${item.status}`)}
+                                </span>
+                              </span>
+                              <span className="block text-xs text-gray-500 mt-0.5">
+                                {item.toothNumber && `${t('budgets.items.toothNumber')}: ${item.toothNumber} · `}
+                                {formatCurrency(Number(item.totalPrice), currency)}
                               </span>
                             </span>
-                            <span className="block text-xs text-gray-500 mt-0.5">
-                              {item.toothNumber && `${t('budgets.items.toothNumber')}: ${item.toothNumber} · `}
-                              {formatCurrency(Number(item.totalPrice), currency)}
-                            </span>
-                          </span>
-                        </label>
-                      ))}
+                          </label>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
