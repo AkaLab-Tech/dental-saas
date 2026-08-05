@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react'
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest'
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import i18n from 'i18next'
 import '@/i18n'
@@ -631,10 +631,22 @@ describe('AppointmentFormModal — budget items association', () => {
 describe('AppointmentFormModal — date/time picker migration (task #233)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Pin the system clock so the DatePicker popover deterministically opens
+    // on July 2026 (matching the hardcoded 'viernes, 10 de julio de 2026' day
+    // label and ISO assertions below), regardless of the real wall-clock
+    // date. `shouldAdvanceTime: true` keeps setTimeout-based polling (e.g.
+    // Testing Library's `waitFor`, used throughout this suite) working
+    // against real elapsed time even while `Date`/`Date.now()` stay faked.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-07-01T12:00:00'))
     getDoctorsMock.mockResolvedValue([mockDoctor])
     getPatientsMock.mockResolvedValue([mockPatientRecord])
     listBudgetsByPatientMock.mockResolvedValue({ data: [], total: 0 })
     getAppointmentBudgetItemsMock.mockResolvedValue([])
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   // The DatePicker's trigger button carries a fixed aria-label
