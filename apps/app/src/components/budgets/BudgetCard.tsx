@@ -1,9 +1,24 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router'
-import { FileText, MoreVertical, Eye, Trash2, Calendar, Download, Loader2 } from 'lucide-react'
+import {
+  FileText,
+  MoreVertical,
+  Eye,
+  Trash2,
+  Calendar,
+  Download,
+  Loader2,
+  Circle,
+  Clock,
+  RefreshCw,
+  CheckCircle2,
+  XCircle,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Permission } from '@dental/shared'
-import type { Budget, BudgetStatus } from '@/lib/budget-api'
+import type { Budget, BudgetItemStatus, BudgetStatus } from '@/lib/budget-api'
 import { getExecutedItemsCount } from '@/lib/budget-api'
 import { downloadBudgetPdf } from '@/lib/pdf-api'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -25,6 +40,24 @@ const STATUS_STYLES: Record<BudgetStatus, string> = {
   CANCELLED: 'bg-red-100 text-red-700 border-red-200',
 }
 
+const ITEM_STATUS_ICON = {
+  PENDING: Circle,
+  SCHEDULED: Clock,
+  IN_PROGRESS: RefreshCw,
+  EXECUTED: CheckCircle2,
+  CANCELLED: XCircle,
+} satisfies Record<BudgetItemStatus, typeof Circle>
+
+const ITEM_STATUS_COLOR: Record<BudgetItemStatus, string> = {
+  PENDING: 'text-gray-400',
+  SCHEDULED: 'text-gray-400',
+  IN_PROGRESS: 'text-blue-500',
+  EXECUTED: 'text-green-500',
+  CANCELLED: 'text-red-500',
+}
+
+const VISIBLE_ITEMS_LIMIT = 6
+
 function formatShortDate(iso: string, locale: string): string {
   return new Date(iso).toLocaleDateString(locale, {
     day: 'numeric',
@@ -39,9 +72,14 @@ export function BudgetCard({ budget, patientId, onDelete }: BudgetCardProps) {
   const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
   const [menuOpen, setMenuOpen] = useState(false)
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
+  const [showAllItems, setShowAllItems] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   const { executed, total: totalItems } = getExecutedItemsCount(budget)
+  const hiddenItemsCount = totalItems - VISIBLE_ITEMS_LIMIT
+  const visibleItems = showAllItems
+    ? budget.items
+    : budget.items.slice(0, VISIBLE_ITEMS_LIMIT)
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -166,6 +204,53 @@ export function BudgetCard({ budget, patientId, onDelete }: BudgetCardProps) {
               style={{ width: `${(executed / totalItems) * 100}%` }}
             />
           </div>
+        )}
+
+        {totalItems > 0 && (
+          <ul className="mt-3 flex flex-col gap-1.5">
+            {visibleItems.map((item) => {
+              const StatusIcon = ITEM_STATUS_ICON[item.status]
+              return (
+                <li key={item.id} className="flex items-center gap-2 text-sm text-gray-700">
+                  <StatusIcon
+                    className={`h-3.5 w-3.5 flex-shrink-0 ${ITEM_STATUS_COLOR[item.status]}`}
+                  />
+                  <span className="truncate">{item.description}</span>
+                  {item.toothNumber && (
+                    <span className="flex-shrink-0 text-xs text-gray-400">
+                      {t('budgets.items.toothNumber')}: {item.toothNumber}
+                    </span>
+                  )}
+                  <span
+                    className={`ms-auto flex-shrink-0 text-xs font-medium ${ITEM_STATUS_COLOR[item.status]}`}
+                  >
+                    {t(`budgets.itemStatus.${item.status}`)}
+                  </span>
+                </li>
+              )
+            })}
+            {hiddenItemsCount > 0 && (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => setShowAllItems((v) => !v)}
+                  className="flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                >
+                  {showAllItems ? (
+                    <>
+                      <ChevronUp className="h-3.5 w-3.5" />
+                      {t('budgets.itemsInline.showLess')}
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-3.5 w-3.5" />
+                      {t('budgets.itemsInline.showMore', { count: hiddenItemsCount })}
+                    </>
+                  )}
+                </button>
+              </li>
+            )}
+          </ul>
         )}
       </div>
     </div>

@@ -780,6 +780,10 @@
       "EXECUTED": "Executed",
       "CANCELLED": "Cancelled"
     },
+    "itemsInline": {
+      "showMore": "Show {{count}} more",
+      "showLess": "Show less"
+    },
     "items": {
       "title": "Items",
       "addItem": "Add item",

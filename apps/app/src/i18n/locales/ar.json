@@ -780,6 +780,10 @@
       "EXECUTED": "منفذ",
       "CANCELLED": "ملغى"
     },
+    "itemsInline": {
+      "showMore": "عرض {{count}} إضافية",
+      "showLess": "عرض أقل"
+    },
     "items": {
       "title": "البنود",
       "addItem": "إضافة بند",
