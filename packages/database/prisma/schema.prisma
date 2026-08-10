@@ -384,6 +384,7 @@ model Appointment {
   doctor                 Doctor                  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
   labworks               Labwork[]
   budgetItemAppointments BudgetItemAppointment[]
+  payments               PatientPayment[]
 
   @@index([tenantId])
   @@index([patientId])
@@ -521,6 +522,11 @@ model Expense {
 // PATIENT PAYMENTS (Entregas)
 // ============================================================================
 
+enum PatientPaymentKind {
+  APPOINTMENT // Auto-generated when an appointment is marked as paid
+  ADVANCE // Freestanding payment/advance not tied to a specific appointment
+}
+
 model PatientPayment {
   id        String @id @default(cuid())
   tenantId  String
@@ -535,16 +541,25 @@ model PatientPayment {
   /// User ID who registered the payment
   createdBy String?
 
+  /// Distinguishes appointment-driven payments from freestanding advances
+  kind PatientPaymentKind @default(ADVANCE)
+
+  /// Optional reference to the appointment this payment was generated for
+  appointmentId String?
+
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([patientId])
   @@index([date])
+  @@index([appointmentId])
+  @@index([patientId, kind])
   @@map("patient_payments")
 }
 

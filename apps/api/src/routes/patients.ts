@@ -631,6 +631,12 @@ const createPaymentSchema = z.object({
   note: z.string().optional(),
 })
 
+const listPaymentsQuerySchema = z.object({
+  limit: z.coerce.number().int().positive().max(100).optional(),
+  offset: z.coerce.number().int().nonnegative().optional(),
+  kind: z.enum(['ADVANCE', 'APPOINTMENT']).optional(),
+})
+
 /**
  * GET /api/patients/:id/balance
  * Get patient balance (total debt, total paid, outstanding)
@@ -662,20 +668,27 @@ patientsRouter.get('/:id/payments', requirePermission(Permission.PAYMENTS_VIEW),
   try {
     const tenantId = req.user!.tenantId!
     const { id } = req.params
-    const { limit, offset } = req.query
 
-    const result = await listPayments(tenantId, id, {
-      limit: limit ? Math.min(parseInt(String(limit), 10), 100) : undefined,
-      offset: offset ? parseInt(String(offset), 10) : undefined,
-    })
+    const parsedQuery = listPaymentsQuerySchema.safeParse(req.query)
+    if (!parsedQuery.success) {
+      res.status(400).json({
+        success: false,
+        error: 'Validation error',
+        details: parsedQuery.error.flatten().fieldErrors,
+      })
+      return
+    }
+    const { limit, offset, kind } = parsedQuery.data
+
+    const result = await listPayments(tenantId, id, { limit, offset, kind })
 
     res.json({
       success: true,
       data: result.data,
       pagination: {
         total: result.total,
-        limit: limit ? parseInt(String(limit), 10) : 50,
-        offset: offset ? parseInt(String(offset), 10) : 0,
+        limit: limit ?? 50,
+        offset: offset ?? 0,
       },
     })
   } catch (e) {

@@ -2029,6 +2029,8 @@ export const PatientPaymentScalarFieldEnum = {
   date: 'date',
   note: 'note',
   createdBy: 'createdBy',
+  kind: 'kind',
+  appointmentId: 'appointmentId',
   isActive: 'isActive',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -2327,6 +2329,20 @@ export type EnumAppointmentStatusFieldRefInput<$PrismaModel> = FieldRefInputType
  * Reference to a field of type 'AppointmentStatus[]'
  */
 export type ListEnumAppointmentStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AppointmentStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'PatientPaymentKind'
+ */
+export type EnumPatientPaymentKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PatientPaymentKind'>
+    
+
+
+/**
+ * Reference to a field of type 'PatientPaymentKind[]'
+ */
+export type ListEnumPatientPaymentKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PatientPaymentKind[]'>
     
 
 

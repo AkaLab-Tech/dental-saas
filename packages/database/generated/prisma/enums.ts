@@ -56,6 +56,14 @@ export const UserRole = {
 export type UserRole = (typeof UserRole)[keyof typeof UserRole]
 
 
+export const PatientPaymentKind = {
+  APPOINTMENT: 'APPOINTMENT',
+  ADVANCE: 'ADVANCE'
+} as const
+
+export type PatientPaymentKind = (typeof PatientPaymentKind)[keyof typeof PatientPaymentKind]
+
+
 export const BudgetStatus = {
   DRAFT: 'DRAFT',
   APPROVED: 'APPROVED',

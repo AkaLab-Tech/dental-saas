@@ -417,6 +417,10 @@ describe('Appointments API', () => {
       expect(payments).toHaveLength(1)
       expect(payments[0].amount.toNumber()).toBe(200)
       expect(payments[0].note).toBe('Pago en consulta')
+      // Payment kind discriminator (#372): auto-payments created by marking an
+      // appointment paid on CREATE carry kind=APPOINTMENT and link back to it.
+      expect(payments[0].kind).toBe('APPOINTMENT')
+      expect(payments[0].appointmentId).toBe(response.body.data.id)
     })
 
     it('should not create payment when isPaid=false', async () => {
@@ -786,6 +790,10 @@ describe('Appointments API', () => {
       expect(payments).toHaveLength(1)
       expect(payments[0].amount.toNumber()).toBe(100)
       expect(payments[0].note).toBe('Pago en consulta')
+      // Payment kind discriminator (#372): auto-payments created by marking an
+      // appointment paid on UPDATE carry kind=APPOINTMENT and link back to it.
+      expect(payments[0].kind).toBe('APPOINTMENT')
+      expect(payments[0].appointmentId).toBe(appointmentId)
     })
 
     it('should use new cost when both cost and isPaid change', async () => {

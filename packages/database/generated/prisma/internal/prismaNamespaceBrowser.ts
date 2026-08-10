@@ -324,6 +324,8 @@ export const PatientPaymentScalarFieldEnum = {
   date: 'date',
   note: 'note',
   createdBy: 'createdBy',
+  kind: 'kind',
+  appointmentId: 'appointmentId',
   isActive: 'isActive',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
