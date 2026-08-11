@@ -60,7 +60,7 @@ const appointmentFormSchemaInput = z.object({
   type: z.string().optional(),
   notes: z.string().optional(),
   cost: z.string().optional(),
-  isPaid: z.boolean().optional(),
+  paidAmount: z.string().optional(),
   status: z.enum(['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'RESCHEDULED']).optional(),
 }).refine((data) => {
   if (data.startTime && data.endTime) {
@@ -145,7 +145,7 @@ export function AppointmentFormModal({
       type: '',
       notes: '',
       cost: '',
-      isPaid: false,
+      paidAmount: '',
       status: 'SCHEDULED',
     },
   })
@@ -212,7 +212,7 @@ export function AppointmentFormModal({
         type: appointment.type || '',
         notes: appointment.notes || '',
         cost: appointment.cost?.toString() || '',
-        isPaid: appointment.isPaid || false,
+        paidAmount: appointment.cost?.toString() || '',
         status: appointment.status,
       })
     } else {
@@ -226,7 +226,7 @@ export function AppointmentFormModal({
         type: '',
         notes: '',
         cost: '',
-        isPaid: false,
+        paidAmount: '',
         status: 'SCHEDULED',
       })
     }
@@ -360,7 +360,7 @@ export function AppointmentFormModal({
       type: data.type || undefined,
       notes: data.notes || undefined,
       cost: data.cost ? parseFloat(data.cost) : undefined,
-      isPaid: data.isPaid || undefined,
+      paidAmount: data.paidAmount ? parseFloat(data.paidAmount) : undefined,
       status: data.status || undefined,
       // Edit always sends the current selection as the replace-set (an empty
       // array unassociates everything); create only sends it when non-empty.
@@ -590,24 +590,25 @@ export function AppointmentFormModal({
                 </div>
 
                 <div>
-                  <label className={`flex items-center gap-2 ${isAlreadyPaid ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-                    <input
-                      type="checkbox"
-                      {...register('isPaid')}
-                      disabled={isAlreadyPaid}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-60"
-                    />
-                    <span className="text-sm font-medium text-gray-700">
-                      {t('appointments.form.isPaid')}
-                    </span>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('appointments.form.paidAmount')} ($)
                   </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    {...register('paidAmount')}
+                    disabled={isAlreadyPaid}
+                    placeholder="0.00"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                  />
                   {isAlreadyPaid ? (
                     <p className="mt-1 text-xs text-gray-500">
                       {t('appointments.form.alreadyPaidHint')}
                     </p>
                   ) : (
                     <p className="mt-1 text-xs text-gray-500">
-                      {t('appointments.form.isPaidHint')}
+                      {t('appointments.form.paidAmountHint')}
                     </p>
                   )}
                 </div>

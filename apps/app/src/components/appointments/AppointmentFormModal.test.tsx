@@ -257,9 +257,10 @@ async function selectDoctor() {
   fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'doc-1' } })
 }
 
-// The form also has a "Pagado" checkbox, so budget item checkboxes must be
-// scoped to their row (found via the item's description text) rather than
-// queried globally.
+// The form lists one checkbox per budget item row, so budget item checkboxes
+// must be scoped to their row (found via the item's description text) rather
+// than queried globally — a global query would be ambiguous whenever more
+// than one item is rendered.
 function getItemCheckbox(description: string) {
   const row = screen.getByText(description).closest('label')
   if (!row) throw new Error(`No row found for "${description}"`)
@@ -671,6 +672,60 @@ describe('AppointmentFormModal — budget items association', () => {
         expect((screen.getAllByRole('combobox')[0] as HTMLSelectElement).value).toBe('doc-1')
       })
     })
+  })
+})
+
+// Coverage for task #373: the old "Pagado" checkbox was replaced with a
+// numeric "Monto abonado" ($) input, prefilled from the appointment's cost
+// and disabled once the appointment is already paid (isPaid derived from
+// FIFO — see appointment.service.ts).
+const PAID_AMOUNT_LABEL = 'Monto abonado ($)'
+
+function getPaidAmountInput() {
+  const label = screen.getByText(PAID_AMOUNT_LABEL)
+  const container = label.parentElement
+  if (!container) throw new Error('No paidAmount container found')
+  return within(container).getByRole('spinbutton')
+}
+
+describe('AppointmentFormModal — paidAmount input (task #373)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getDoctorsMock.mockResolvedValue([mockDoctor])
+    getPatientsMock.mockResolvedValue([mockPatientRecord])
+    listBudgetsByPatientMock.mockResolvedValue({ data: [], total: 0 })
+    getAppointmentBudgetItemsMock.mockResolvedValue([])
+  })
+
+  it('is empty and enabled when creating a new appointment', async () => {
+    renderModal()
+    await waitForOptionsLoaded()
+
+    const input = getPaidAmountInput() as HTMLInputElement
+    expect(input.value).toBe('')
+    expect(input).not.toBeDisabled()
+  })
+
+  it('is prefilled from cost and stays enabled when editing an unpaid appointment', async () => {
+    const appointment = makeAppointment({ cost: 150, isPaid: false })
+    renderModal({ appointment })
+    await waitForOptionsLoaded()
+
+    const input = getPaidAmountInput() as HTMLInputElement
+    await waitFor(() => expect(input.value).toBe('150'))
+    expect(input).not.toBeDisabled()
+    expect(screen.getByText('Se registra como pago de esta cita, separado de las entregas, y se aplica a la deuda más antigua del paciente.')).toBeInTheDocument()
+  })
+
+  it('is prefilled from cost and disabled when editing an already-paid appointment', async () => {
+    const appointment = makeAppointment({ cost: 150, isPaid: true })
+    renderModal({ appointment })
+    await waitForOptionsLoaded()
+
+    const input = getPaidAmountInput() as HTMLInputElement
+    await waitFor(() => expect(input.value).toBe('150'))
+    expect(input).toBeDisabled()
+    expect(screen.getByText('Para revertir el pago, elimine la entrega correspondiente desde la sección de pagos.')).toBeInTheDocument()
   })
 })
 

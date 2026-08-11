@@ -4,6 +4,7 @@ import { app } from '../app.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
 import { sign } from 'jsonwebtoken'
+import { getPatientBalance } from '../services/payment.service.js'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'test-secret'
 
@@ -458,6 +459,110 @@ describe('Appointments API', () => {
         })
 
       expect(response.status).toBe(201)
+
+      const payments = await prisma.patientPayment.findMany({
+        where: { tenantId, patientId },
+      })
+      expect(payments).toHaveLength(0)
+    })
+
+    it('paidAmount creates exactly one APPOINTMENT payment for that exact amount, linked to the appointment, and does not show up in Entregas (#373)', async () => {
+      const times = getFutureTime(4)
+      const response = await request(app)
+        .post('/api/appointments')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          patientId,
+          doctorId,
+          ...times,
+          cost: 150,
+          paidAmount: 60,
+        })
+
+      expect(response.status).toBe(201)
+
+      const payments = await prisma.patientPayment.findMany({
+        where: { tenantId, patientId },
+      })
+      expect(payments).toHaveLength(1)
+      expect(payments[0].amount.toNumber()).toBe(60)
+      expect(payments[0].kind).toBe('APPOINTMENT')
+      expect(payments[0].appointmentId).toBe(response.body.data.id)
+
+      // Entregas (advance payments) is a separate ledger — the day-of
+      // appointment payment must not leak into it.
+      const entregas = await request(app)
+        .get(`/api/patients/${patientId}/payments`)
+        .query({ kind: 'ADVANCE' })
+        .set('Authorization', `Bearer ${adminToken}`)
+      expect(entregas.status).toBe(200)
+      expect(entregas.body.data).toHaveLength(0)
+    })
+
+    it('paidAmount greater than cost creates a payment for the full submitted amount, with the excess reflected as patient credit', async () => {
+      const times = getFutureTime(5)
+      const response = await request(app)
+        .post('/api/appointments')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          patientId,
+          doctorId,
+          ...times,
+          cost: 100,
+          paidAmount: 150,
+        })
+
+      expect(response.status).toBe(201)
+
+      const payments = await prisma.patientPayment.findMany({
+        where: { tenantId, patientId },
+      })
+      expect(payments).toHaveLength(1)
+      expect(payments[0].amount.toNumber()).toBe(150) // exact submitted amount, no capping to cost
+
+      const balance = await getPatientBalance(tenantId, patientId)
+      expect(balance.success).toBe(true)
+      if (balance.success) {
+        expect(balance.data.credit).toBe(50) // 150 paid - 100 debt
+      }
+    })
+
+    it('paidAmount=0 creates no payment row', async () => {
+      const times = getFutureTime(6)
+      const response = await request(app)
+        .post('/api/appointments')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          patientId,
+          doctorId,
+          ...times,
+          cost: 100,
+          paidAmount: 0,
+        })
+
+      expect(response.status).toBe(201)
+      expect(response.body.data.isPaid).toBe(false)
+
+      const payments = await prisma.patientPayment.findMany({
+        where: { tenantId, patientId },
+      })
+      expect(payments).toHaveLength(0)
+    })
+
+    it('omitting paidAmount (and isPaid) creates no payment row', async () => {
+      const times = getFutureTime(7)
+      const response = await request(app)
+        .post('/api/appointments')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          patientId,
+          doctorId,
+          ...times,
+          cost: 100,
+        })
+
+      expect(response.status).toBe(201)
+      expect(response.body.data.isPaid).toBe(false)
 
       const payments = await prisma.patientPayment.findMany({
         where: { tenantId, patientId },
@@ -935,14 +1040,55 @@ describe('Appointments API', () => {
       expect(response.status).toBe(200)
       expect(response.body.data.isPaid).toBe(false)
     })
+
+    it('paidAmount on UPDATE creates exactly one APPOINTMENT payment for that exact amount, linked to the appointment', async () => {
+      const response = await request(app)
+        .put(`/api/appointments/${appointmentId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ paidAmount: 40 })
+
+      expect(response.status).toBe(200)
+
+      const payments = await prisma.patientPayment.findMany({
+        where: { tenantId, patientId },
+      })
+      expect(payments).toHaveLength(1)
+      expect(payments[0].amount.toNumber()).toBe(40)
+      expect(payments[0].kind).toBe('APPOINTMENT')
+      expect(payments[0].appointmentId).toBe(appointmentId)
+    })
+
+    it('editing an appointment that already has a recorded payment does not double-charge, even if paidAmount is sent again (#373)', async () => {
+      // First edit records a $100 day-of payment.
+      const first = await request(app)
+        .put(`/api/appointments/${appointmentId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ paidAmount: 100 })
+      expect(first.status).toBe(200)
+
+      // Editing again (e.g. changing notes) while re-sending the same
+      // paidAmount must not create a second payment for this appointment.
+      const second = await request(app)
+        .put(`/api/appointments/${appointmentId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ paidAmount: 100, notes: 'Follow-up note' })
+      expect(second.status).toBe(200)
+      expect(second.body.data.notes).toBe('Follow-up note')
+
+      const payments = await prisma.patientPayment.findMany({
+        where: { tenantId, patientId, appointmentId },
+      })
+      expect(payments).toHaveLength(1)
+      expect(payments[0].amount.toNumber()).toBe(100)
+    })
   })
 
   // ============================================================================
   // AUTO-PAYMENT WITH EXISTING CREDIT TESTS
   // ============================================================================
 
-  describe('Appointments - paid with existing patient credit', () => {
-    it('CREATE: should not create a new payment when prior credit fully covers the cost', async () => {
+  describe('Appointments - auto-payment amount is never capped by existing patient credit (#373)', () => {
+    it('CREATE: isPaid=true records the full-cost payment even when prior credit already covers it (excess stays as credit)', async () => {
       // Patient has a $200 credit (advance payment) with no debt yet.
       await prisma.patientPayment.create({
         data: { tenantId, patientId, amount: 200, date: new Date() },
@@ -963,15 +1109,29 @@ describe('Appointments API', () => {
       expect(response.status).toBe(201)
       expect(response.body.data.isPaid).toBe(true)
 
-      // Only the original advance payment should exist — no new auto-payment.
+      // isPaid:true is equivalent to paidAmount = cost: a full $100 payment
+      // is recorded regardless of the pre-existing $200 credit — no capping.
+      // Matched by appointmentId/kind rather than array position — createdAt
+      // alone is not a safe tiebreaker for rows inserted back-to-back.
       const payments = await prisma.patientPayment.findMany({
         where: { tenantId, patientId },
       })
-      expect(payments).toHaveLength(1)
-      expect(payments[0].amount.toNumber()).toBe(200)
+      expect(payments).toHaveLength(2)
+      const advance = payments.find((p) => p.appointmentId === null)
+      const autoPayment = payments.find((p) => p.appointmentId === response.body.data.id)
+      expect(advance?.amount.toNumber()).toBe(200)
+      expect(autoPayment?.amount.toNumber()).toBe(100) // full cost, uncapped
+      expect(autoPayment?.kind).toBe('APPOINTMENT')
+
+      // totalPaid (300) - totalDebt (100) = 200 credit, unchanged from the advance.
+      const balance = await getPatientBalance(tenantId, patientId)
+      expect(balance.success).toBe(true)
+      if (balance.success) {
+        expect(balance.data.credit).toBe(200)
+      }
     })
 
-    it('CREATE: should cap the auto-payment to the outstanding when credit partially covers the cost', async () => {
+    it('CREATE: isPaid=true records the full-cost payment even when partial credit already existed (remainder stays as credit)', async () => {
       // Patient has a $50 advance payment with no debt yet.
       await prisma.patientPayment.create({
         data: { tenantId, patientId, amount: 50, date: new Date() },
@@ -992,17 +1152,26 @@ describe('Appointments API', () => {
       expect(response.status).toBe(201)
       expect(response.body.data.isPaid).toBe(true)
 
-      // Auto-payment should only be $50 (the remaining outstanding), not $100.
+      // The auto-payment records the full $100 cost — not capped to the $50
+      // that was still outstanding after the pre-existing $50 advance.
       const payments = await prisma.patientPayment.findMany({
         where: { tenantId, patientId },
-        orderBy: { createdAt: 'asc' },
       })
       expect(payments).toHaveLength(2)
-      expect(payments[0].amount.toNumber()).toBe(50) // existing advance
-      expect(payments[1].amount.toNumber()).toBe(50) // capped auto-payment
+      const advance = payments.find((p) => p.appointmentId === null)
+      const autoPayment = payments.find((p) => p.appointmentId === response.body.data.id)
+      expect(advance?.amount.toNumber()).toBe(50)
+      expect(autoPayment?.amount.toNumber()).toBe(100) // full cost, uncapped
+
+      // totalPaid (150) - totalDebt (100) = 50 credit left over from the advance.
+      const balance = await getPatientBalance(tenantId, patientId)
+      expect(balance.success).toBe(true)
+      if (balance.success) {
+        expect(balance.data.credit).toBe(50)
+      }
     })
 
-    it('UPDATE: should not create a new payment when prior credit fully covers the appointment', async () => {
+    it('UPDATE: isPaid=true records the full-cost payment even when prior credit already covers the appointment (excess stays as credit)', async () => {
       // Existing unpaid appointment.
       const times = getFutureTime(22)
       const appointment = await prisma.appointment.create({
@@ -1031,14 +1200,27 @@ describe('Appointments API', () => {
       expect(response.status).toBe(200)
       expect(response.body.data.isPaid).toBe(true)
 
+      // A full $100 payment is recorded for the appointment, on top of the
+      // pre-existing $300 advance — no capping.
       const payments = await prisma.patientPayment.findMany({
         where: { tenantId, patientId },
       })
-      expect(payments).toHaveLength(1)
-      expect(payments[0].amount.toNumber()).toBe(300)
+      expect(payments).toHaveLength(2)
+      const advance = payments.find((p) => p.appointmentId === null)
+      const autoPayment = payments.find((p) => p.appointmentId === appointment.id)
+      expect(advance?.amount.toNumber()).toBe(300)
+      expect(autoPayment?.amount.toNumber()).toBe(100)
+      expect(autoPayment?.kind).toBe('APPOINTMENT')
+
+      // totalPaid (400) - totalDebt (100) = 300 credit, unchanged from the advance.
+      const balance = await getPatientBalance(tenantId, patientId)
+      expect(balance.success).toBe(true)
+      if (balance.success) {
+        expect(balance.data.credit).toBe(300)
+      }
     })
 
-    it('UPDATE: should cap the auto-payment to the outstanding when credit partially covers the appointment', async () => {
+    it('UPDATE: isPaid=true records the full-cost payment even when partial credit already existed (remainder stays as credit)', async () => {
       const times = getFutureTime(23)
       const appointment = await prisma.appointment.create({
         data: {
@@ -1066,13 +1248,22 @@ describe('Appointments API', () => {
       expect(response.status).toBe(200)
       expect(response.body.data.isPaid).toBe(true)
 
+      // The full $100 cost is recorded, not the $70 that was outstanding.
       const payments = await prisma.patientPayment.findMany({
         where: { tenantId, patientId },
-        orderBy: { createdAt: 'asc' },
       })
       expect(payments).toHaveLength(2)
-      expect(payments[0].amount.toNumber()).toBe(30)
-      expect(payments[1].amount.toNumber()).toBe(70)
+      const advance = payments.find((p) => p.appointmentId === null)
+      const autoPayment = payments.find((p) => p.appointmentId === appointment.id)
+      expect(advance?.amount.toNumber()).toBe(30)
+      expect(autoPayment?.amount.toNumber()).toBe(100)
+
+      // totalPaid (130) - totalDebt (100) = 30 credit left over from the advance.
+      const balance = await getPatientBalance(tenantId, patientId)
+      expect(balance.success).toBe(true)
+      if (balance.success) {
+        expect(balance.data.credit).toBe(30)
+      }
     })
   })
 

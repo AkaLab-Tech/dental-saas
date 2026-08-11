@@ -80,6 +80,8 @@ export interface CreateAppointmentData {
   notes?: string
   privateNotes?: string
   cost?: number
+  // Amount paid that day for this appointment; kept separate from Entregas.
+  paidAmount?: number
   isPaid?: boolean
   // Replace-set of budget item ids to associate (role SCHEDULED). Omit to
   // leave untouched; see `getAppointmentBudgetItems` for hydration on edit.
@@ -97,6 +99,7 @@ export interface UpdateAppointmentData {
   notes?: string | null
   privateNotes?: string | null
   cost?: number | null
+  paidAmount?: number
   isPaid?: boolean
   // Replace-set: provided = set associations (empty array clears them);
   // omit to leave existing associations untouched.

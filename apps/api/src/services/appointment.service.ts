@@ -3,7 +3,6 @@ import { logger } from '../utils/logger.js'
 import {
   computeFifoAllocation,
   createPayment,
-  getPatientBalance,
   getTotalPaid,
   listBillableItems,
   recalculatePaidStatus,
@@ -109,6 +108,10 @@ export interface CreateAppointmentInput {
   notes?: string
   privateNotes?: string
   cost?: number
+  // Amount paid that day for this appointment. isPaid is accepted for
+  // backward compatibility and, when paidAmount is omitted, is interpreted
+  // as paidAmount = cost.
+  paidAmount?: number
   isPaid?: boolean
   createdBy?: string
 }
@@ -124,6 +127,7 @@ export interface UpdateAppointmentInput {
   notes?: string | null
   privateNotes?: string | null
   cost?: number | null
+  paidAmount?: number
   isPaid?: boolean
 }
 
@@ -434,13 +438,14 @@ export async function createAppointment(
     },
   })
 
-  // Apply the paid transition (creates a capped PatientPayment or just
-  // reruns FIFO if existing credit already covers this appointment).
-  if (data.isPaid && data.cost && data.cost > 0) {
+  // Record the amount paid that day for this appointment (kind = APPOINTMENT,
+  // linked to it), keeping it separate from Entregas (ADVANCE payments).
+  const effectivePaidAmount = resolveEffectivePaidAmount(data.paidAmount, data.isPaid, data.cost)
+  if (effectivePaidAmount && effectivePaidAmount > 0) {
     const transition = await applyPaidTransition(
       tenantId,
       data.patientId,
-      data.cost,
+      effectivePaidAmount,
       data.startTime,
       appointment.id
     )
@@ -463,47 +468,35 @@ export async function createAppointment(
 }
 
 /**
- * Apply the "appointment marked as paid" side effect using FIFO accounting.
- *
- * The intent of the checkbox is "this appointment should end up paid", not
- * "register a payment of exactly `cost`". When the patient already has a
- * credit (overpayment / advance) that fully or partially covers the new
- * debt, sending a payment of `cost` would exceed the outstanding balance
- * and be rejected. Instead we:
- *   - recompute the patient's outstanding balance after the appointment
- *     write (the caller must have already persisted cost/isPaid changes);
- *   - create a payment for `min(cost, outstanding)` only when there is
- *     something left to cover;
- *   - otherwise skip the payment and just rerun FIFO so the existing
- *     credit gets allocated to the new item.
+ * Resolve the amount to record as paid for an appointment write, supporting
+ * the legacy `isPaid` boolean: when `paidAmount` is not sent, `isPaid: true`
+ * is interpreted as `paidAmount = cost`.
+ */
+function resolveEffectivePaidAmount(
+  paidAmount: number | undefined,
+  isPaid: boolean | undefined,
+  cost: number | null | undefined
+): number | undefined {
+  if (paidAmount !== undefined) return paidAmount
+  if (isPaid === true) return cost ?? undefined
+  return undefined
+}
+
+/**
+ * Record the amount paid on the day of the appointment as a PatientPayment
+ * (kind = APPOINTMENT, linked to the appointment). No cap against
+ * outstanding balance — paying more than the day's cost becomes credit,
+ * same as a manual `createPayment` call.
  */
 async function applyPaidTransition(
   tenantId: string,
   patientId: string,
-  cost: number,
+  paidAmount: number,
   date: Date,
   appointmentId: string
 ): Promise<{ ok: true } | { ok: false; code: AppointmentErrorCode; message: string }> {
-  const balanceResult = await getPatientBalance(tenantId, patientId)
-  if (!balanceResult.success) {
-    return {
-      ok: false,
-      code: mapPaymentErrorCode(balanceResult.code),
-      message: paymentErrorMessage(balanceResult.code),
-    }
-  }
-
-  const outstanding = balanceResult.data.outstanding
-  if (outstanding <= 0) {
-    // Patient already has enough credit to cover this appointment; just
-    // rerun FIFO so isPaid flips for the now-covered items.
-    await recalculatePaidStatus(tenantId, patientId)
-    return { ok: true }
-  }
-
-  const amount = Math.min(cost, outstanding)
   const paymentResult = await createPayment(tenantId, patientId, {
-    amount,
+    amount: paidAmount,
     date,
     note: 'Pago en consulta',
     kind: 'APPOINTMENT',
@@ -519,6 +512,19 @@ async function applyPaidTransition(
   }
 
   return { ok: true }
+}
+
+/**
+ * Whether an active APPOINTMENT-kind payment is already recorded for this
+ * appointment. Used to avoid double-charging when an appointment carrying a
+ * recorded day-of payment is edited again.
+ */
+async function hasRecordedAppointmentPayment(tenantId: string, appointmentId: string): Promise<boolean> {
+  const existingPayment = await prisma.patientPayment.findFirst({
+    where: { tenantId, appointmentId, kind: 'APPOINTMENT', isActive: true },
+    select: { id: true },
+  })
+  return existingPayment !== null
 }
 
 /**
@@ -668,12 +674,19 @@ export async function updateAppointment(
     data.cost !== undefined &&
     (existing.cost?.toNumber() ?? null) !== (data.cost ?? null)
 
-  // Auto-apply paid transition when going from unpaid to paid.
-  if (data.isPaid === true && !existing.isPaid && newCostNumber && newCostNumber > 0) {
+  // Record the amount paid that day, unless a day-of payment is already
+  // recorded for this appointment — editing it again must not double-charge.
+  const effectivePaidAmount = resolveEffectivePaidAmount(data.paidAmount, data.isPaid, newCostNumber)
+  const alreadyRecorded =
+    effectivePaidAmount && effectivePaidAmount > 0
+      ? await hasRecordedAppointmentPayment(tenantId, id)
+      : false
+
+  if (effectivePaidAmount && effectivePaidAmount > 0 && !alreadyRecorded) {
     const transition = await applyPaidTransition(
       tenantId,
       patientId,
-      newCostNumber,
+      effectivePaidAmount,
       data.startTime ?? existing.startTime,
       id
     )
