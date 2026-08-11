@@ -437,7 +437,13 @@ export async function createAppointment(
   // Apply the paid transition (creates a capped PatientPayment or just
   // reruns FIFO if existing credit already covers this appointment).
   if (data.isPaid && data.cost && data.cost > 0) {
-    const transition = await applyPaidTransition(tenantId, data.patientId, data.cost, data.startTime)
+    const transition = await applyPaidTransition(
+      tenantId,
+      data.patientId,
+      data.cost,
+      data.startTime,
+      appointment.id
+    )
     if (!transition.ok) {
       logger.warn(
         { appointmentId: appointment.id, code: transition.code },
@@ -475,7 +481,8 @@ async function applyPaidTransition(
   tenantId: string,
   patientId: string,
   cost: number,
-  date: Date
+  date: Date,
+  appointmentId: string
 ): Promise<{ ok: true } | { ok: false; code: AppointmentErrorCode; message: string }> {
   const balanceResult = await getPatientBalance(tenantId, patientId)
   if (!balanceResult.success) {
@@ -499,6 +506,8 @@ async function applyPaidTransition(
     amount,
     date,
     note: 'Pago en consulta',
+    kind: 'APPOINTMENT',
+    appointmentId,
   })
 
   if (!paymentResult.success) {
@@ -665,7 +674,8 @@ export async function updateAppointment(
       tenantId,
       patientId,
       newCostNumber,
-      data.startTime ?? existing.startTime
+      data.startTime ?? existing.startTime,
+      id
     )
 
     if (!transition.ok) {

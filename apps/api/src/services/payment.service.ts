@@ -1,4 +1,4 @@
-import { prisma, Prisma } from '@dental/database'
+import { prisma, Prisma, PatientPaymentKind } from '@dental/database'
 import { logger } from '../utils/logger.js'
 
 // Fields to include in payment responses
@@ -10,6 +10,8 @@ const PAYMENT_SELECT = {
   date: true,
   note: true,
   createdBy: true,
+  kind: true,
+  appointmentId: true,
   isActive: true,
   createdAt: true,
   updatedAt: true,
@@ -23,6 +25,8 @@ export type SafePayment = {
   date: Date
   note: string | null
   createdBy: string | null
+  kind: PatientPaymentKind
+  appointmentId: string | null
   isActive: boolean
   createdAt: Date
   updatedAt: Date
@@ -39,11 +43,14 @@ export interface CreatePaymentInput {
   date: Date
   note?: string
   createdBy?: string
+  kind?: PatientPaymentKind
+  appointmentId?: string
 }
 
 export interface ListPaymentsOptions {
   limit?: number
   offset?: number
+  kind?: PatientPaymentKind
 }
 
 /**
@@ -375,6 +382,8 @@ export async function createPayment(
       date: input.date,
       note: input.note || null,
       createdBy: input.createdBy || null,
+      kind: input.kind ?? 'ADVANCE',
+      appointmentId: input.appointmentId || null,
     },
     select: PAYMENT_SELECT,
   })
@@ -399,6 +408,7 @@ export async function listPayments(
     tenantId,
     patientId,
     isActive: true,
+    ...(options?.kind && { kind: options.kind }),
   }
 
   const [payments, total] = await Promise.all([

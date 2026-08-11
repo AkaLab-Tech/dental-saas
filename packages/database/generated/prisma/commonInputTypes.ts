@@ -426,6 +426,23 @@ export type EnumAppointmentStatusWithAggregatesFilter<$PrismaModel = never> = {
   _max?: Prisma.NestedEnumAppointmentStatusFilter<$PrismaModel>
 }
 
+export type EnumPatientPaymentKindFilter<$PrismaModel = never> = {
+  equals?: $Enums.PatientPaymentKind | Prisma.EnumPatientPaymentKindFieldRefInput<$PrismaModel>
+  in?: $Enums.PatientPaymentKind[] | Prisma.ListEnumPatientPaymentKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PatientPaymentKind[] | Prisma.ListEnumPatientPaymentKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPatientPaymentKindFilter<$PrismaModel> | $Enums.PatientPaymentKind
+}
+
+export type EnumPatientPaymentKindWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.PatientPaymentKind | Prisma.EnumPatientPaymentKindFieldRefInput<$PrismaModel>
+  in?: $Enums.PatientPaymentKind[] | Prisma.ListEnumPatientPaymentKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PatientPaymentKind[] | Prisma.ListEnumPatientPaymentKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPatientPaymentKindWithAggregatesFilter<$PrismaModel> | $Enums.PatientPaymentKind
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumPatientPaymentKindFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumPatientPaymentKindFilter<$PrismaModel>
+}
+
 export type EnumBudgetStatusFilter<$PrismaModel = never> = {
   equals?: $Enums.BudgetStatus | Prisma.EnumBudgetStatusFieldRefInput<$PrismaModel>
   in?: $Enums.BudgetStatus[] | Prisma.ListEnumBudgetStatusFieldRefInput<$PrismaModel>
@@ -863,6 +880,23 @@ export type NestedEnumAppointmentStatusWithAggregatesFilter<$PrismaModel = never
   _count?: Prisma.NestedIntFilter<$PrismaModel>
   _min?: Prisma.NestedEnumAppointmentStatusFilter<$PrismaModel>
   _max?: Prisma.NestedEnumAppointmentStatusFilter<$PrismaModel>
+}
+
+export type NestedEnumPatientPaymentKindFilter<$PrismaModel = never> = {
+  equals?: $Enums.PatientPaymentKind | Prisma.EnumPatientPaymentKindFieldRefInput<$PrismaModel>
+  in?: $Enums.PatientPaymentKind[] | Prisma.ListEnumPatientPaymentKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PatientPaymentKind[] | Prisma.ListEnumPatientPaymentKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPatientPaymentKindFilter<$PrismaModel> | $Enums.PatientPaymentKind
+}
+
+export type NestedEnumPatientPaymentKindWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.PatientPaymentKind | Prisma.EnumPatientPaymentKindFieldRefInput<$PrismaModel>
+  in?: $Enums.PatientPaymentKind[] | Prisma.ListEnumPatientPaymentKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PatientPaymentKind[] | Prisma.ListEnumPatientPaymentKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPatientPaymentKindWithAggregatesFilter<$PrismaModel> | $Enums.PatientPaymentKind
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumPatientPaymentKindFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumPatientPaymentKindFilter<$PrismaModel>
 }
 
 export type NestedEnumBudgetStatusFilter<$PrismaModel = never> = {

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
 import { app } from '../app.js'
-import { prisma } from '@dental/database'
+import { prisma, Prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
 import { sign } from 'jsonwebtoken'
 
@@ -154,6 +154,10 @@ describe('Patient Payments Routes', () => {
       expect(res.body.data).toHaveProperty('id')
       expect(Number(res.body.data.amount)).toBe(50)
       expect(res.body.data.note).toBe('First payment')
+      // POST /patients/:id/payments has no way to set kind/appointmentId —
+      // every payment created through this route defaults to a freestanding advance.
+      expect(res.body.data.kind).toBe('ADVANCE')
+      expect(res.body.data.appointmentId).toBeNull()
     })
 
     it('should accept a payment exceeding the outstanding balance and record it as an advance', async () => {
@@ -903,6 +907,583 @@ describe('Patient Payments Routes', () => {
       const outstandingValues = res.body.data.map((d: { outstanding: number }) => d.outstanding)
       const sortedDesc = [...outstandingValues].sort((a: number, b: number) => b - a)
       expect(outstandingValues).toEqual(sortedDesc)
+    })
+  })
+
+  describe('Payment kind filtering (regression + new filter)', () => {
+    let kindPatientId: string
+    let linkedAppointmentId: string
+    let appointmentPaymentId: string
+    let advancePaymentId: string
+
+    beforeAll(async () => {
+      const patient = await prisma.patient.create({
+        data: { tenantId, firstName: 'Kind', lastName: 'Filter' },
+      })
+      kindPatientId = patient.id
+
+      // Appointment-driven payment: mark an appointment as paid.
+      const appointment = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId: kindPatientId,
+          doctorId,
+          startTime: new Date('2025-10-01T10:00:00Z'),
+          endTime: new Date('2025-10-01T10:30:00Z'),
+          cost: 80,
+          status: 'COMPLETED',
+        },
+      })
+      linkedAppointmentId = appointment.id
+
+      const putRes = await request(app)
+        .put(`/api/appointments/${appointment.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ isPaid: true })
+      expect(putRes.status).toBe(200)
+
+      // Freestanding advance for the same patient.
+      const advanceRes = await request(app)
+        .post(`/api/patients/${kindPatientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 30, date: '2025-10-02', note: 'Advance' })
+      expect(advanceRes.status).toBe(201)
+      advancePaymentId = advanceRes.body.data.id
+
+      const listRes = await request(app)
+        .get(`/api/patients/${kindPatientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+      appointmentPaymentId = listRes.body.data.find(
+        (p: { kind: string; id: string }) => p.kind === 'APPOINTMENT'
+      ).id
+    })
+
+    it('with no kind param, returns both kinds — regression on the pre-existing response shape/pagination', async () => {
+      const res = await request(app)
+        .get(`/api/patients/${kindPatientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data).toHaveLength(2)
+      expect(res.body.pagination).toEqual({ total: 2, limit: 50, offset: 0 })
+
+      const kinds = res.body.data.map((p: { kind: string }) => p.kind).sort()
+      expect(kinds).toEqual(['ADVANCE', 'APPOINTMENT'])
+
+      const appointmentPayment = res.body.data.find(
+        (p: { id: string }) => p.id === appointmentPaymentId
+      )
+      expect(appointmentPayment).toMatchObject({
+        id: appointmentPaymentId,
+        kind: 'APPOINTMENT',
+        appointmentId: linkedAppointmentId,
+        note: 'Pago en consulta',
+      })
+      expect(Number(appointmentPayment.amount)).toBe(80)
+
+      const advancePayment = res.body.data.find((p: { id: string }) => p.id === advancePaymentId)
+      expect(advancePayment).toMatchObject({
+        id: advancePaymentId,
+        kind: 'ADVANCE',
+        appointmentId: null,
+        note: 'Advance',
+      })
+    })
+
+    it('?kind=ADVANCE returns only the freestanding advance', async () => {
+      const res = await request(app)
+        .get(`/api/patients/${kindPatientId}/payments?kind=ADVANCE`)
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data).toHaveLength(1)
+      expect(res.body.data[0].id).toBe(advancePaymentId)
+      expect(res.body.data[0].kind).toBe('ADVANCE')
+      expect(res.body.pagination.total).toBe(1)
+    })
+
+    it('?kind=APPOINTMENT returns only the appointment-driven payment', async () => {
+      const res = await request(app)
+        .get(`/api/patients/${kindPatientId}/payments?kind=APPOINTMENT`)
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data).toHaveLength(1)
+      expect(res.body.data[0].id).toBe(appointmentPaymentId)
+      expect(res.body.data[0].appointmentId).toBe(linkedAppointmentId)
+      expect(res.body.pagination.total).toBe(1)
+    })
+
+    it('?kind=BOGUS is rejected with 400', async () => {
+      const res = await request(app)
+        .get(`/api/patients/${kindPatientId}/payments?kind=BOGUS`)
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(400)
+    })
+  })
+
+  describe('Payment kind — tenant isolation', () => {
+    let otherTenantId: string
+    let otherAdminToken: string
+    let otherPatientId: string
+    let otherAppointmentId: string
+    let otherAppointmentPaymentId: string
+
+    beforeAll(async () => {
+      const otherTenant = await prisma.tenant.create({
+        data: { name: 'Other Payments Tenant', slug: `other-payments-${Date.now()}` },
+      })
+      otherTenantId = otherTenant.id
+
+      const hashedPassword = await hashPassword('password123')
+      const otherAdmin = await prisma.user.create({
+        data: {
+          tenantId: otherTenantId,
+          email: 'admin@other-payments-test.com',
+          firstName: 'Other',
+          lastName: 'Admin',
+          passwordHash: hashedPassword,
+          role: 'ADMIN',
+        },
+      })
+      otherAdminToken = generateToken(otherAdmin.id, otherTenantId, 'ADMIN')
+
+      const otherPatient = await prisma.patient.create({
+        data: { tenantId: otherTenantId, firstName: 'Other', lastName: 'Patient' },
+      })
+      otherPatientId = otherPatient.id
+
+      const otherDoctor = await prisma.doctor.create({
+        data: { tenantId: otherTenantId, firstName: 'Other', lastName: 'Doctor' },
+      })
+
+      const appointment = await prisma.appointment.create({
+        data: {
+          tenantId: otherTenantId,
+          patientId: otherPatientId,
+          doctorId: otherDoctor.id,
+          startTime: new Date('2025-11-01T10:00:00Z'),
+          endTime: new Date('2025-11-01T10:30:00Z'),
+          cost: 40,
+          status: 'COMPLETED',
+        },
+      })
+      otherAppointmentId = appointment.id
+
+      const putRes = await request(app)
+        .put(`/api/appointments/${appointment.id}`)
+        .set('Authorization', `Bearer ${otherAdminToken}`)
+        .send({ isPaid: true })
+      expect(putRes.status).toBe(200)
+
+      const listRes = await request(app)
+        .get(`/api/patients/${otherPatientId}/payments`)
+        .set('Authorization', `Bearer ${otherAdminToken}`)
+      otherAppointmentPaymentId = listRes.body.data[0].id
+    })
+
+    afterAll(async () => {
+      await prisma.patientPayment.deleteMany({ where: { tenantId: otherTenantId } })
+      await prisma.appointment.deleteMany({ where: { tenantId: otherTenantId } })
+      await prisma.patient.deleteMany({ where: { tenantId: otherTenantId } })
+      await prisma.doctor.deleteMany({ where: { tenantId: otherTenantId } })
+      await prisma.user.deleteMany({ where: { tenantId: otherTenantId } })
+      await prisma.tenant.delete({ where: { id: otherTenantId } }).catch(() => {})
+    })
+
+    it('the auto-generated appointmentId link always points at an appointment in the owning tenant', async () => {
+      const payment = await prisma.patientPayment.findUnique({
+        where: { id: otherAppointmentPaymentId },
+      })
+      expect(payment?.tenantId).toBe(otherTenantId)
+      expect(payment?.appointmentId).toBe(otherAppointmentId)
+
+      const linkedAppointment = await prisma.appointment.findUnique({
+        where: { id: payment!.appointmentId! },
+      })
+      expect(linkedAppointment?.tenantId).toBe(otherTenantId)
+    })
+
+    it('?kind= filtering under the main tenant never returns another tenant payment', async () => {
+      const res = await request(app)
+        .get(`/api/patients/${patientId}/payments?kind=APPOINTMENT`)
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(200)
+      expect(
+        res.body.data.find((p: { id: string }) => p.id === otherAppointmentPaymentId)
+      ).toBeUndefined()
+    })
+
+    it("another tenant's token querying the main tenant's patient gets an empty result, never the main tenant's payments", async () => {
+      const res = await request(app)
+        .get(`/api/patients/${patientId}/payments?kind=ADVANCE`)
+        .set('Authorization', `Bearer ${otherAdminToken}`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data).toEqual([])
+      expect(res.body.pagination.total).toBe(0)
+    })
+  })
+
+  describe('FIFO unaffected by payment kind (behavior-neutral regression)', () => {
+    let mixedPatientId: string
+    let apt1Id: string
+
+    beforeAll(async () => {
+      const patient = await prisma.patient.create({
+        data: { tenantId, firstName: 'MixedKind', lastName: 'Test' },
+      })
+      mixedPatientId = patient.id
+
+      const apt1 = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId: mixedPatientId,
+          doctorId,
+          startTime: new Date('2025-12-01T10:00:00Z'),
+          endTime: new Date('2025-12-01T10:30:00Z'),
+          cost: 100,
+          status: 'COMPLETED',
+        },
+      })
+      apt1Id = apt1.id
+
+      await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId: mixedPatientId,
+          doctorId,
+          startTime: new Date('2025-12-05T10:00:00Z'),
+          endTime: new Date('2025-12-05T10:30:00Z'),
+          cost: 200,
+          status: 'COMPLETED',
+        },
+      })
+    })
+
+    it('sums ADVANCE and APPOINTMENT-kind payments identically for balance and FIFO isPaid', async () => {
+      // Step 1: freestanding advance of $50.
+      const advanceRes = await request(app)
+        .post(`/api/patients/${mixedPatientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 50, date: '2025-12-02' })
+      expect(advanceRes.status).toBe(201)
+      expect(advanceRes.body.data.kind).toBe('ADVANCE')
+
+      // Step 2: mark apt1 (cost 100) as paid. Outstanding at that moment is
+      // 300 - 50 = 250, so the auto-payment is the full cost ($100, kind=APPOINTMENT).
+      const putRes = await request(app)
+        .put(`/api/appointments/${apt1Id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ isPaid: true })
+      expect(putRes.status).toBe(200)
+
+      const balanceAfterStep2 = await request(app)
+        .get(`/api/patients/${mixedPatientId}/balance`)
+        .set('Authorization', `Bearer ${adminToken}`)
+      expect(balanceAfterStep2.body.data).toEqual({
+        totalDebt: 300,
+        totalPaid: 150,
+        outstanding: 150,
+        credit: 0,
+      })
+
+      const aptsAfterStep2 = await prisma.appointment.findMany({
+        where: { tenantId, patientId: mixedPatientId },
+        orderBy: { startTime: 'asc' },
+      })
+      // FIFO summed $50 (ADVANCE) + $100 (APPOINTMENT) = $150 across the two
+      // billable items ($100, $200): apt1 fully covered, apt2 only $50 in.
+      expect(aptsAfterStep2[0].isPaid).toBe(true)
+      expect(aptsAfterStep2[1].isPaid).toBe(false)
+
+      // Step 3: a second ADVANCE of $150 brings totalPaid to exactly $300,
+      // completing apt2 via FIFO — proving ADVANCE and APPOINTMENT rows are
+      // summed together exactly as a same-kind set would have been before
+      // this task (kind is purely a label, never a filter on these sums).
+      const advance2Res = await request(app)
+        .post(`/api/patients/${mixedPatientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 150, date: '2025-12-06' })
+      expect(advance2Res.status).toBe(201)
+
+      const balanceAfterStep3 = await request(app)
+        .get(`/api/patients/${mixedPatientId}/balance`)
+        .set('Authorization', `Bearer ${adminToken}`)
+      expect(balanceAfterStep3.body.data).toEqual({
+        totalDebt: 300,
+        totalPaid: 300,
+        outstanding: 0,
+        credit: 0,
+      })
+
+      const aptsAfterStep3 = await prisma.appointment.findMany({
+        where: { tenantId, patientId: mixedPatientId },
+        orderBy: { startTime: 'asc' },
+      })
+      expect(aptsAfterStep3[0].isPaid).toBe(true)
+      expect(aptsAfterStep3[1].isPaid).toBe(true)
+
+      // Fully paid: the debtors dashboard must exclude this patient too.
+      const debtsRes = await request(app)
+        .get('/api/patients/debts')
+        .set('Authorization', `Bearer ${adminToken}`)
+      expect(
+        debtsRes.body.data.find((d: { patientId: string }) => d.patientId === mixedPatientId)
+      ).toBeUndefined()
+
+      // Sanity check on the underlying rows' kinds and the link.
+      const paymentsInDb = await prisma.patientPayment.findMany({
+        where: { tenantId, patientId: mixedPatientId },
+        orderBy: { createdAt: 'asc' },
+      })
+      expect(paymentsInDb.map((p) => p.kind)).toEqual(['ADVANCE', 'APPOINTMENT', 'ADVANCE'])
+      expect(paymentsInDb[1].appointmentId).toBe(apt1Id)
+    })
+  })
+
+  describe('Appointment deletion nulls the payment link (onDelete: SetNull)', () => {
+    it('a hard-deleted linked appointment nulls appointmentId but the payment row survives', async () => {
+      const patient = await prisma.patient.create({
+        data: { tenantId, firstName: 'SetNull', lastName: 'Test' },
+      })
+
+      const appointment = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId: patient.id,
+          doctorId,
+          startTime: new Date('2026-01-01T10:00:00Z'),
+          endTime: new Date('2026-01-01T10:30:00Z'),
+          cost: 45,
+          status: 'COMPLETED',
+        },
+      })
+
+      const putRes = await request(app)
+        .put(`/api/appointments/${appointment.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ isPaid: true })
+      expect(putRes.status).toBe(200)
+
+      const paymentsBefore = await prisma.patientPayment.findMany({
+        where: { tenantId, patientId: patient.id },
+      })
+      expect(paymentsBefore).toHaveLength(1)
+      expect(paymentsBefore[0].kind).toBe('APPOINTMENT')
+      expect(paymentsBefore[0].appointmentId).toBe(appointment.id)
+      const paymentId = paymentsBefore[0].id
+
+      // The app only ever soft-deletes appointments (isActive=false), so this
+      // exercises the FK's onDelete: SetNull directly, the way a hard row
+      // deletion (e.g. a future admin cleanup script) would.
+      await prisma.appointment.delete({ where: { id: appointment.id } })
+
+      const paymentAfter = await prisma.patientPayment.findUnique({ where: { id: paymentId } })
+      expect(paymentAfter).not.toBeNull()
+      expect(paymentAfter?.isActive).toBe(true)
+      expect(paymentAfter?.appointmentId).toBeNull()
+      expect(paymentAfter?.kind).toBe('APPOINTMENT') // the classification label survives; only the FK link is cleared
+      expect(Number(paymentAfter?.amount)).toBe(45)
+    })
+  })
+
+  describe('Backfill migration (20260810200705_add_payment_kind_discriminator)', () => {
+    // These two statements are a byte-for-byte copy of the DML block in
+    // packages/database/prisma/migrations/20260810200705_add_payment_kind_discriminator/migration.sql,
+    // with one addition: an `"id" IN (...)` filter restricting each statement
+    // to the rows created by this test. Running the literal, unscoped
+    // migration SQL against the shared dental_test database inside a test
+    // would also rewrite every 'Pago en consulta' row created by other
+    // concurrently-run test files (e.g. the auto-payment fixtures elsewhere
+    // in this very file), which is both non-deterministic for this test and
+    // destructive to theirs. The predicates and join conditions below are
+    // otherwise unmodified.
+    let backfillPatientId: string
+    let singleCandidateAppointmentId: string
+    let paymentIds: {
+      unambiguous: string
+      ambiguous: string
+      noCandidate: string
+      otherNote: string
+      noNote: string
+    }
+
+    beforeAll(async () => {
+      const patient = await prisma.patient.create({
+        data: { tenantId, firstName: 'Backfill', lastName: 'Test' },
+      })
+      backfillPatientId = patient.id
+
+      // Day 1: exactly one same-day, same-tenant, same-patient, isPaid appointment -> unambiguous link.
+      const singleCandidate = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId: backfillPatientId,
+          doctorId,
+          startTime: new Date('2025-05-01T09:00:00Z'),
+          endTime: new Date('2025-05-01T09:30:00Z'),
+          cost: 100,
+          isPaid: true,
+          status: 'COMPLETED',
+        },
+      })
+      singleCandidateAppointmentId = singleCandidate.id
+
+      // Day 2: two same-day isPaid candidates -> ambiguous, must NOT be linked.
+      await prisma.appointment.createMany({
+        data: [
+          {
+            tenantId,
+            patientId: backfillPatientId,
+            doctorId,
+            startTime: new Date('2025-05-02T09:00:00Z'),
+            endTime: new Date('2025-05-02T09:30:00Z'),
+            cost: 50,
+            isPaid: true,
+            status: 'COMPLETED',
+          },
+          {
+            tenantId,
+            patientId: backfillPatientId,
+            doctorId,
+            startTime: new Date('2025-05-02T15:00:00Z'),
+            endTime: new Date('2025-05-02T15:30:00Z'),
+            cost: 50,
+            isPaid: true,
+            status: 'COMPLETED',
+          },
+        ],
+      })
+
+      // Day 3: a same-day appointment exists but isPaid=false -> zero eligible candidates.
+      await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId: backfillPatientId,
+          doctorId,
+          startTime: new Date('2025-05-03T09:00:00Z'),
+          endTime: new Date('2025-05-03T09:30:00Z'),
+          cost: 75,
+          isPaid: false,
+          status: 'COMPLETED',
+        },
+      })
+
+      // Pre-migration-shaped payment rows: kind/appointmentId are omitted so
+      // they get the column defaults (ADVANCE / null) — exactly the shape
+      // every existing row had right before the migration's DML ran.
+      const unambiguous = await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId: backfillPatientId,
+          amount: 100,
+          date: new Date('2025-05-01T09:15:00Z'),
+          note: 'Pago en consulta',
+        },
+      })
+      const ambiguous = await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId: backfillPatientId,
+          amount: 50,
+          date: new Date('2025-05-02T10:00:00Z'),
+          note: 'Pago en consulta',
+        },
+      })
+      const noCandidate = await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId: backfillPatientId,
+          amount: 75,
+          date: new Date('2025-05-03T09:15:00Z'),
+          note: 'Pago en consulta',
+        },
+      })
+      const otherNote = await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId: backfillPatientId,
+          amount: 30,
+          date: new Date('2025-05-04T09:00:00Z'),
+          note: 'Regular advance',
+        },
+      })
+      const noNote = await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId: backfillPatientId,
+          amount: 20,
+          date: new Date('2025-05-05T09:00:00Z'),
+          note: null,
+        },
+      })
+
+      paymentIds = {
+        unambiguous: unambiguous.id,
+        ambiguous: ambiguous.id,
+        noCandidate: noCandidate.id,
+        otherNote: otherNote.id,
+        noNote: noNote.id,
+      }
+      const allIds = Object.values(paymentIds)
+
+      // Statement 1 (verbatim): note-string classification.
+      await prisma.$executeRaw`
+        UPDATE "patient_payments"
+        SET "kind" = 'APPOINTMENT'
+        WHERE "note" = 'Pago en consulta' AND "id" IN (${Prisma.join(allIds)})
+      `
+
+      // Statement 2 (verbatim): unambiguous-single-candidate-only linking.
+      await prisma.$executeRaw`
+        WITH candidates AS (
+          SELECT
+            pp."id" AS payment_id,
+            a."id" AS appointment_id,
+            COUNT(*) OVER (PARTITION BY pp."id") AS candidate_count
+          FROM "patient_payments" pp
+          JOIN "appointments" a
+            ON a."tenantId" = pp."tenantId"
+            AND a."patientId" = pp."patientId"
+            AND a."isPaid" = true
+            AND DATE(a."startTime") = DATE(pp."date")
+          WHERE pp."kind" = 'APPOINTMENT' AND pp."id" IN (${Prisma.join(allIds)})
+        )
+        UPDATE "patient_payments" pp
+        SET "appointmentId" = c.appointment_id
+        FROM candidates c
+        WHERE pp."id" = c.payment_id
+          AND c.candidate_count = 1
+      `
+    })
+
+    it('classifies note-matching rows as APPOINTMENT and leaves every other row ADVANCE', async () => {
+      const rows = await prisma.patientPayment.findMany({
+        where: { id: { in: Object.values(paymentIds) } },
+      })
+      const kindById = new Map(rows.map((r) => [r.id, r.kind]))
+
+      expect(kindById.get(paymentIds.unambiguous)).toBe('APPOINTMENT')
+      expect(kindById.get(paymentIds.ambiguous)).toBe('APPOINTMENT')
+      expect(kindById.get(paymentIds.noCandidate)).toBe('APPOINTMENT')
+      expect(kindById.get(paymentIds.otherNote)).toBe('ADVANCE')
+      expect(kindById.get(paymentIds.noNote)).toBe('ADVANCE')
+    })
+
+    it('links only the single-candidate row; ambiguous (2+) and zero-candidate rows stay unlinked, never mis-linked', async () => {
+      const rows = await prisma.patientPayment.findMany({
+        where: { id: { in: Object.values(paymentIds) } },
+      })
+      const linkById = new Map(rows.map((r) => [r.id, r.appointmentId]))
+
+      expect(linkById.get(paymentIds.unambiguous)).toBe(singleCandidateAppointmentId)
+      expect(linkById.get(paymentIds.ambiguous)).toBeNull()
+      expect(linkById.get(paymentIds.noCandidate)).toBeNull()
+      expect(linkById.get(paymentIds.otherNote)).toBeNull()
+      expect(linkById.get(paymentIds.noNote)).toBeNull()
     })
   })
 })

@@ -42,6 +42,8 @@ export type PatientPaymentMinAggregateOutputType = {
   date: Date | null
   note: string | null
   createdBy: string | null
+  kind: $Enums.PatientPaymentKind | null
+  appointmentId: string | null
   isActive: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -55,6 +57,8 @@ export type PatientPaymentMaxAggregateOutputType = {
   date: Date | null
   note: string | null
   createdBy: string | null
+  kind: $Enums.PatientPaymentKind | null
+  appointmentId: string | null
   isActive: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -68,6 +72,8 @@ export type PatientPaymentCountAggregateOutputType = {
   date: number
   note: number
   createdBy: number
+  kind: number
+  appointmentId: number
   isActive: number
   createdAt: number
   updatedAt: number
@@ -91,6 +97,8 @@ export type PatientPaymentMinAggregateInputType = {
   date?: true
   note?: true
   createdBy?: true
+  kind?: true
+  appointmentId?: true
   isActive?: true
   createdAt?: true
   updatedAt?: true
@@ -104,6 +112,8 @@ export type PatientPaymentMaxAggregateInputType = {
   date?: true
   note?: true
   createdBy?: true
+  kind?: true
+  appointmentId?: true
   isActive?: true
   createdAt?: true
   updatedAt?: true
@@ -117,6 +127,8 @@ export type PatientPaymentCountAggregateInputType = {
   date?: true
   note?: true
   createdBy?: true
+  kind?: true
+  appointmentId?: true
   isActive?: true
   createdAt?: true
   updatedAt?: true
@@ -217,6 +229,8 @@ export type PatientPaymentGroupByOutputType = {
   date: Date
   note: string | null
   createdBy: string | null
+  kind: $Enums.PatientPaymentKind
+  appointmentId: string | null
   isActive: boolean
   createdAt: Date
   updatedAt: Date
@@ -253,11 +267,14 @@ export type PatientPaymentWhereInput = {
   date?: Prisma.DateTimeFilter<"PatientPayment"> | Date | string
   note?: Prisma.StringNullableFilter<"PatientPayment"> | string | null
   createdBy?: Prisma.StringNullableFilter<"PatientPayment"> | string | null
+  kind?: Prisma.EnumPatientPaymentKindFilter<"PatientPayment"> | $Enums.PatientPaymentKind
+  appointmentId?: Prisma.StringNullableFilter<"PatientPayment"> | string | null
   isActive?: Prisma.BoolFilter<"PatientPayment"> | boolean
   createdAt?: Prisma.DateTimeFilter<"PatientPayment"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"PatientPayment"> | Date | string
   tenant?: Prisma.XOR<Prisma.TenantScalarRelationFilter, Prisma.TenantWhereInput>
   patient?: Prisma.XOR<Prisma.PatientScalarRelationFilter, Prisma.PatientWhereInput>
+  appointment?: Prisma.XOR<Prisma.AppointmentNullableScalarRelationFilter, Prisma.AppointmentWhereInput> | null
 }
 
 export type PatientPaymentOrderByWithRelationInput = {
@@ -268,11 +285,14 @@ export type PatientPaymentOrderByWithRelationInput = {
   date?: Prisma.SortOrder
   note?: Prisma.SortOrderInput | Prisma.SortOrder
   createdBy?: Prisma.SortOrderInput | Prisma.SortOrder
+  kind?: Prisma.SortOrder
+  appointmentId?: Prisma.SortOrderInput | Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   tenant?: Prisma.TenantOrderByWithRelationInput
   patient?: Prisma.PatientOrderByWithRelationInput
+  appointment?: Prisma.AppointmentOrderByWithRelationInput
 }
 
 export type PatientPaymentWhereUniqueInput = Prisma.AtLeast<{
@@ -286,11 +306,14 @@ export type PatientPaymentWhereUniqueInput = Prisma.AtLeast<{
   date?: Prisma.DateTimeFilter<"PatientPayment"> | Date | string
   note?: Prisma.StringNullableFilter<"PatientPayment"> | string | null
   createdBy?: Prisma.StringNullableFilter<"PatientPayment"> | string | null
+  kind?: Prisma.EnumPatientPaymentKindFilter<"PatientPayment"> | $Enums.PatientPaymentKind
+  appointmentId?: Prisma.StringNullableFilter<"PatientPayment"> | string | null
   isActive?: Prisma.BoolFilter<"PatientPayment"> | boolean
   createdAt?: Prisma.DateTimeFilter<"PatientPayment"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"PatientPayment"> | Date | string
   tenant?: Prisma.XOR<Prisma.TenantScalarRelationFilter, Prisma.TenantWhereInput>
   patient?: Prisma.XOR<Prisma.PatientScalarRelationFilter, Prisma.PatientWhereInput>
+  appointment?: Prisma.XOR<Prisma.AppointmentNullableScalarRelationFilter, Prisma.AppointmentWhereInput> | null
 }, "id">
 
 export type PatientPaymentOrderByWithAggregationInput = {
@@ -301,6 +324,8 @@ export type PatientPaymentOrderByWithAggregationInput = {
   date?: Prisma.SortOrder
   note?: Prisma.SortOrderInput | Prisma.SortOrder
   createdBy?: Prisma.SortOrderInput | Prisma.SortOrder
+  kind?: Prisma.SortOrder
+  appointmentId?: Prisma.SortOrderInput | Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -322,6 +347,8 @@ export type PatientPaymentScalarWhereWithAggregatesInput = {
   date?: Prisma.DateTimeWithAggregatesFilter<"PatientPayment"> | Date | string
   note?: Prisma.StringNullableWithAggregatesFilter<"PatientPayment"> | string | null
   createdBy?: Prisma.StringNullableWithAggregatesFilter<"PatientPayment"> | string | null
+  kind?: Prisma.EnumPatientPaymentKindWithAggregatesFilter<"PatientPayment"> | $Enums.PatientPaymentKind
+  appointmentId?: Prisma.StringNullableWithAggregatesFilter<"PatientPayment"> | string | null
   isActive?: Prisma.BoolWithAggregatesFilter<"PatientPayment"> | boolean
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"PatientPayment"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"PatientPayment"> | Date | string
@@ -333,11 +360,13 @@ export type PatientPaymentCreateInput = {
   date: Date | string
   note?: string | null
   createdBy?: string | null
+  kind?: $Enums.PatientPaymentKind
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   tenant: Prisma.TenantCreateNestedOneWithoutPatientPaymentsInput
   patient: Prisma.PatientCreateNestedOneWithoutPaymentsInput
+  appointment?: Prisma.AppointmentCreateNestedOneWithoutPaymentsInput
 }
 
 export type PatientPaymentUncheckedCreateInput = {
@@ -348,6 +377,8 @@ export type PatientPaymentUncheckedCreateInput = {
   date: Date | string
   note?: string | null
   createdBy?: string | null
+  kind?: $Enums.PatientPaymentKind
+  appointmentId?: string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -359,11 +390,13 @@ export type PatientPaymentUpdateInput = {
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  kind?: Prisma.EnumPatientPaymentKindFieldUpdateOperationsInput | $Enums.PatientPaymentKind
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tenant?: Prisma.TenantUpdateOneRequiredWithoutPatientPaymentsNestedInput
   patient?: Prisma.PatientUpdateOneRequiredWithoutPaymentsNestedInput
+  appointment?: Prisma.AppointmentUpdateOneWithoutPaymentsNestedInput
 }
 
 export type PatientPaymentUncheckedUpdateInput = {
@@ -374,6 +407,8 @@ export type PatientPaymentUncheckedUpdateInput = {
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  kind?: Prisma.EnumPatientPaymentKindFieldUpdateOperationsInput | $Enums.PatientPaymentKind
+  appointmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -387,6 +422,8 @@ export type PatientPaymentCreateManyInput = {
   date: Date | string
   note?: string | null
   createdBy?: string | null
+  kind?: $Enums.PatientPaymentKind
+  appointmentId?: string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -398,6 +435,7 @@ export type PatientPaymentUpdateManyMutationInput = {
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  kind?: Prisma.EnumPatientPaymentKindFieldUpdateOperationsInput | $Enums.PatientPaymentKind
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -411,6 +449,8 @@ export type PatientPaymentUncheckedUpdateManyInput = {
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  kind?: Prisma.EnumPatientPaymentKindFieldUpdateOperationsInput | $Enums.PatientPaymentKind
+  appointmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -434,6 +474,8 @@ export type PatientPaymentCountOrderByAggregateInput = {
   date?: Prisma.SortOrder
   note?: Prisma.SortOrder
   createdBy?: Prisma.SortOrder
+  kind?: Prisma.SortOrder
+  appointmentId?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -451,6 +493,8 @@ export type PatientPaymentMaxOrderByAggregateInput = {
   date?: Prisma.SortOrder
   note?: Prisma.SortOrder
   createdBy?: Prisma.SortOrder
+  kind?: Prisma.SortOrder
+  appointmentId?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -464,6 +508,8 @@ export type PatientPaymentMinOrderByAggregateInput = {
   date?: Prisma.SortOrder
   note?: Prisma.SortOrder
   createdBy?: Prisma.SortOrder
+  kind?: Prisma.SortOrder
+  appointmentId?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -557,16 +603,64 @@ export type PatientPaymentUncheckedUpdateManyWithoutPatientNestedInput = {
   deleteMany?: Prisma.PatientPaymentScalarWhereInput | Prisma.PatientPaymentScalarWhereInput[]
 }
 
+export type PatientPaymentCreateNestedManyWithoutAppointmentInput = {
+  create?: Prisma.XOR<Prisma.PatientPaymentCreateWithoutAppointmentInput, Prisma.PatientPaymentUncheckedCreateWithoutAppointmentInput> | Prisma.PatientPaymentCreateWithoutAppointmentInput[] | Prisma.PatientPaymentUncheckedCreateWithoutAppointmentInput[]
+  connectOrCreate?: Prisma.PatientPaymentCreateOrConnectWithoutAppointmentInput | Prisma.PatientPaymentCreateOrConnectWithoutAppointmentInput[]
+  createMany?: Prisma.PatientPaymentCreateManyAppointmentInputEnvelope
+  connect?: Prisma.PatientPaymentWhereUniqueInput | Prisma.PatientPaymentWhereUniqueInput[]
+}
+
+export type PatientPaymentUncheckedCreateNestedManyWithoutAppointmentInput = {
+  create?: Prisma.XOR<Prisma.PatientPaymentCreateWithoutAppointmentInput, Prisma.PatientPaymentUncheckedCreateWithoutAppointmentInput> | Prisma.PatientPaymentCreateWithoutAppointmentInput[] | Prisma.PatientPaymentUncheckedCreateWithoutAppointmentInput[]
+  connectOrCreate?: Prisma.PatientPaymentCreateOrConnectWithoutAppointmentInput | Prisma.PatientPaymentCreateOrConnectWithoutAppointmentInput[]
+  createMany?: Prisma.PatientPaymentCreateManyAppointmentInputEnvelope
+  connect?: Prisma.PatientPaymentWhereUniqueInput | Prisma.PatientPaymentWhereUniqueInput[]
+}
+
+export type PatientPaymentUpdateManyWithoutAppointmentNestedInput = {
+  create?: Prisma.XOR<Prisma.PatientPaymentCreateWithoutAppointmentInput, Prisma.PatientPaymentUncheckedCreateWithoutAppointmentInput> | Prisma.PatientPaymentCreateWithoutAppointmentInput[] | Prisma.PatientPaymentUncheckedCreateWithoutAppointmentInput[]
+  connectOrCreate?: Prisma.PatientPaymentCreateOrConnectWithoutAppointmentInput | Prisma.PatientPaymentCreateOrConnectWithoutAppointmentInput[]
+  upsert?: Prisma.PatientPaymentUpsertWithWhereUniqueWithoutAppointmentInput | Prisma.PatientPaymentUpsertWithWhereUniqueWithoutAppointmentInput[]
+  createMany?: Prisma.PatientPaymentCreateManyAppointmentInputEnvelope
+  set?: Prisma.PatientPaymentWhereUniqueInput | Prisma.PatientPaymentWhereUniqueInput[]
+  disconnect?: Prisma.PatientPaymentWhereUniqueInput | Prisma.PatientPaymentWhereUniqueInput[]
+  delete?: Prisma.PatientPaymentWhereUniqueInput | Prisma.PatientPaymentWhereUniqueInput[]
+  connect?: Prisma.PatientPaymentWhereUniqueInput | Prisma.PatientPaymentWhereUniqueInput[]
+  update?: Prisma.PatientPaymentUpdateWithWhereUniqueWithoutAppointmentInput | Prisma.PatientPaymentUpdateWithWhereUniqueWithoutAppointmentInput[]
+  updateMany?: Prisma.PatientPaymentUpdateManyWithWhereWithoutAppointmentInput | Prisma.PatientPaymentUpdateManyWithWhereWithoutAppointmentInput[]
+  deleteMany?: Prisma.PatientPaymentScalarWhereInput | Prisma.PatientPaymentScalarWhereInput[]
+}
+
+export type PatientPaymentUncheckedUpdateManyWithoutAppointmentNestedInput = {
+  create?: Prisma.XOR<Prisma.PatientPaymentCreateWithoutAppointmentInput, Prisma.PatientPaymentUncheckedCreateWithoutAppointmentInput> | Prisma.PatientPaymentCreateWithoutAppointmentInput[] | Prisma.PatientPaymentUncheckedCreateWithoutAppointmentInput[]
+  connectOrCreate?: Prisma.PatientPaymentCreateOrConnectWithoutAppointmentInput | Prisma.PatientPaymentCreateOrConnectWithoutAppointmentInput[]
+  upsert?: Prisma.PatientPaymentUpsertWithWhereUniqueWithoutAppointmentInput | Prisma.PatientPaymentUpsertWithWhereUniqueWithoutAppointmentInput[]
+  createMany?: Prisma.PatientPaymentCreateManyAppointmentInputEnvelope
+  set?: Prisma.PatientPaymentWhereUniqueInput | Prisma.PatientPaymentWhereUniqueInput[]
+  disconnect?: Prisma.PatientPaymentWhereUniqueInput | Prisma.PatientPaymentWhereUniqueInput[]
+  delete?: Prisma.PatientPaymentWhereUniqueInput | Prisma.PatientPaymentWhereUniqueInput[]
+  connect?: Prisma.PatientPaymentWhereUniqueInput | Prisma.PatientPaymentWhereUniqueInput[]
+  update?: Prisma.PatientPaymentUpdateWithWhereUniqueWithoutAppointmentInput | Prisma.PatientPaymentUpdateWithWhereUniqueWithoutAppointmentInput[]
+  updateMany?: Prisma.PatientPaymentUpdateManyWithWhereWithoutAppointmentInput | Prisma.PatientPaymentUpdateManyWithWhereWithoutAppointmentInput[]
+  deleteMany?: Prisma.PatientPaymentScalarWhereInput | Prisma.PatientPaymentScalarWhereInput[]
+}
+
+export type EnumPatientPaymentKindFieldUpdateOperationsInput = {
+  set?: $Enums.PatientPaymentKind
+}
+
 export type PatientPaymentCreateWithoutTenantInput = {
   id?: string
   amount: runtime.Decimal | runtime.DecimalJsLike | number | string
   date: Date | string
   note?: string | null
   createdBy?: string | null
+  kind?: $Enums.PatientPaymentKind
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   patient: Prisma.PatientCreateNestedOneWithoutPaymentsInput
+  appointment?: Prisma.AppointmentCreateNestedOneWithoutPaymentsInput
 }
 
 export type PatientPaymentUncheckedCreateWithoutTenantInput = {
@@ -576,6 +670,8 @@ export type PatientPaymentUncheckedCreateWithoutTenantInput = {
   date: Date | string
   note?: string | null
   createdBy?: string | null
+  kind?: $Enums.PatientPaymentKind
+  appointmentId?: string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -618,6 +714,8 @@ export type PatientPaymentScalarWhereInput = {
   date?: Prisma.DateTimeFilter<"PatientPayment"> | Date | string
   note?: Prisma.StringNullableFilter<"PatientPayment"> | string | null
   createdBy?: Prisma.StringNullableFilter<"PatientPayment"> | string | null
+  kind?: Prisma.EnumPatientPaymentKindFilter<"PatientPayment"> | $Enums.PatientPaymentKind
+  appointmentId?: Prisma.StringNullableFilter<"PatientPayment"> | string | null
   isActive?: Prisma.BoolFilter<"PatientPayment"> | boolean
   createdAt?: Prisma.DateTimeFilter<"PatientPayment"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"PatientPayment"> | Date | string
@@ -629,10 +727,12 @@ export type PatientPaymentCreateWithoutPatientInput = {
   date: Date | string
   note?: string | null
   createdBy?: string | null
+  kind?: $Enums.PatientPaymentKind
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   tenant: Prisma.TenantCreateNestedOneWithoutPatientPaymentsInput
+  appointment?: Prisma.AppointmentCreateNestedOneWithoutPaymentsInput
 }
 
 export type PatientPaymentUncheckedCreateWithoutPatientInput = {
@@ -642,6 +742,8 @@ export type PatientPaymentUncheckedCreateWithoutPatientInput = {
   date: Date | string
   note?: string | null
   createdBy?: string | null
+  kind?: $Enums.PatientPaymentKind
+  appointmentId?: string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -673,6 +775,60 @@ export type PatientPaymentUpdateManyWithWhereWithoutPatientInput = {
   data: Prisma.XOR<Prisma.PatientPaymentUpdateManyMutationInput, Prisma.PatientPaymentUncheckedUpdateManyWithoutPatientInput>
 }
 
+export type PatientPaymentCreateWithoutAppointmentInput = {
+  id?: string
+  amount: runtime.Decimal | runtime.DecimalJsLike | number | string
+  date: Date | string
+  note?: string | null
+  createdBy?: string | null
+  kind?: $Enums.PatientPaymentKind
+  isActive?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  tenant: Prisma.TenantCreateNestedOneWithoutPatientPaymentsInput
+  patient: Prisma.PatientCreateNestedOneWithoutPaymentsInput
+}
+
+export type PatientPaymentUncheckedCreateWithoutAppointmentInput = {
+  id?: string
+  tenantId: string
+  patientId: string
+  amount: runtime.Decimal | runtime.DecimalJsLike | number | string
+  date: Date | string
+  note?: string | null
+  createdBy?: string | null
+  kind?: $Enums.PatientPaymentKind
+  isActive?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type PatientPaymentCreateOrConnectWithoutAppointmentInput = {
+  where: Prisma.PatientPaymentWhereUniqueInput
+  create: Prisma.XOR<Prisma.PatientPaymentCreateWithoutAppointmentInput, Prisma.PatientPaymentUncheckedCreateWithoutAppointmentInput>
+}
+
+export type PatientPaymentCreateManyAppointmentInputEnvelope = {
+  data: Prisma.PatientPaymentCreateManyAppointmentInput | Prisma.PatientPaymentCreateManyAppointmentInput[]
+  skipDuplicates?: boolean
+}
+
+export type PatientPaymentUpsertWithWhereUniqueWithoutAppointmentInput = {
+  where: Prisma.PatientPaymentWhereUniqueInput
+  update: Prisma.XOR<Prisma.PatientPaymentUpdateWithoutAppointmentInput, Prisma.PatientPaymentUncheckedUpdateWithoutAppointmentInput>
+  create: Prisma.XOR<Prisma.PatientPaymentCreateWithoutAppointmentInput, Prisma.PatientPaymentUncheckedCreateWithoutAppointmentInput>
+}
+
+export type PatientPaymentUpdateWithWhereUniqueWithoutAppointmentInput = {
+  where: Prisma.PatientPaymentWhereUniqueInput
+  data: Prisma.XOR<Prisma.PatientPaymentUpdateWithoutAppointmentInput, Prisma.PatientPaymentUncheckedUpdateWithoutAppointmentInput>
+}
+
+export type PatientPaymentUpdateManyWithWhereWithoutAppointmentInput = {
+  where: Prisma.PatientPaymentScalarWhereInput
+  data: Prisma.XOR<Prisma.PatientPaymentUpdateManyMutationInput, Prisma.PatientPaymentUncheckedUpdateManyWithoutAppointmentInput>
+}
+
 export type PatientPaymentCreateManyTenantInput = {
   id?: string
   patientId: string
@@ -680,6 +836,8 @@ export type PatientPaymentCreateManyTenantInput = {
   date: Date | string
   note?: string | null
   createdBy?: string | null
+  kind?: $Enums.PatientPaymentKind
+  appointmentId?: string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -691,10 +849,12 @@ export type PatientPaymentUpdateWithoutTenantInput = {
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  kind?: Prisma.EnumPatientPaymentKindFieldUpdateOperationsInput | $Enums.PatientPaymentKind
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   patient?: Prisma.PatientUpdateOneRequiredWithoutPaymentsNestedInput
+  appointment?: Prisma.AppointmentUpdateOneWithoutPaymentsNestedInput
 }
 
 export type PatientPaymentUncheckedUpdateWithoutTenantInput = {
@@ -704,6 +864,8 @@ export type PatientPaymentUncheckedUpdateWithoutTenantInput = {
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  kind?: Prisma.EnumPatientPaymentKindFieldUpdateOperationsInput | $Enums.PatientPaymentKind
+  appointmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -716,6 +878,8 @@ export type PatientPaymentUncheckedUpdateManyWithoutTenantInput = {
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  kind?: Prisma.EnumPatientPaymentKindFieldUpdateOperationsInput | $Enums.PatientPaymentKind
+  appointmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -728,6 +892,8 @@ export type PatientPaymentCreateManyPatientInput = {
   date: Date | string
   note?: string | null
   createdBy?: string | null
+  kind?: $Enums.PatientPaymentKind
+  appointmentId?: string | null
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -739,10 +905,12 @@ export type PatientPaymentUpdateWithoutPatientInput = {
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  kind?: Prisma.EnumPatientPaymentKindFieldUpdateOperationsInput | $Enums.PatientPaymentKind
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tenant?: Prisma.TenantUpdateOneRequiredWithoutPatientPaymentsNestedInput
+  appointment?: Prisma.AppointmentUpdateOneWithoutPaymentsNestedInput
 }
 
 export type PatientPaymentUncheckedUpdateWithoutPatientInput = {
@@ -752,6 +920,8 @@ export type PatientPaymentUncheckedUpdateWithoutPatientInput = {
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  kind?: Prisma.EnumPatientPaymentKindFieldUpdateOperationsInput | $Enums.PatientPaymentKind
+  appointmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -764,6 +934,64 @@ export type PatientPaymentUncheckedUpdateManyWithoutPatientInput = {
   date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  kind?: Prisma.EnumPatientPaymentKindFieldUpdateOperationsInput | $Enums.PatientPaymentKind
+  appointmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type PatientPaymentCreateManyAppointmentInput = {
+  id?: string
+  tenantId: string
+  patientId: string
+  amount: runtime.Decimal | runtime.DecimalJsLike | number | string
+  date: Date | string
+  note?: string | null
+  createdBy?: string | null
+  kind?: $Enums.PatientPaymentKind
+  isActive?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type PatientPaymentUpdateWithoutAppointmentInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  amount?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  kind?: Prisma.EnumPatientPaymentKindFieldUpdateOperationsInput | $Enums.PatientPaymentKind
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  tenant?: Prisma.TenantUpdateOneRequiredWithoutPatientPaymentsNestedInput
+  patient?: Prisma.PatientUpdateOneRequiredWithoutPaymentsNestedInput
+}
+
+export type PatientPaymentUncheckedUpdateWithoutAppointmentInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  patientId?: Prisma.StringFieldUpdateOperationsInput | string
+  amount?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  kind?: Prisma.EnumPatientPaymentKindFieldUpdateOperationsInput | $Enums.PatientPaymentKind
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type PatientPaymentUncheckedUpdateManyWithoutAppointmentInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  patientId?: Prisma.StringFieldUpdateOperationsInput | string
+  amount?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  kind?: Prisma.EnumPatientPaymentKindFieldUpdateOperationsInput | $Enums.PatientPaymentKind
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -779,11 +1007,14 @@ export type PatientPaymentSelect<ExtArgs extends runtime.Types.Extensions.Intern
   date?: boolean
   note?: boolean
   createdBy?: boolean
+  kind?: boolean
+  appointmentId?: boolean
   isActive?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
+  appointment?: boolean | Prisma.PatientPayment$appointmentArgs<ExtArgs>
 }, ExtArgs["result"]["patientPayment"]>
 
 export type PatientPaymentSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -794,11 +1025,14 @@ export type PatientPaymentSelectCreateManyAndReturn<ExtArgs extends runtime.Type
   date?: boolean
   note?: boolean
   createdBy?: boolean
+  kind?: boolean
+  appointmentId?: boolean
   isActive?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
+  appointment?: boolean | Prisma.PatientPayment$appointmentArgs<ExtArgs>
 }, ExtArgs["result"]["patientPayment"]>
 
 export type PatientPaymentSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -809,11 +1043,14 @@ export type PatientPaymentSelectUpdateManyAndReturn<ExtArgs extends runtime.Type
   date?: boolean
   note?: boolean
   createdBy?: boolean
+  kind?: boolean
+  appointmentId?: boolean
   isActive?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
+  appointment?: boolean | Prisma.PatientPayment$appointmentArgs<ExtArgs>
 }, ExtArgs["result"]["patientPayment"]>
 
 export type PatientPaymentSelectScalar = {
@@ -824,23 +1061,28 @@ export type PatientPaymentSelectScalar = {
   date?: boolean
   note?: boolean
   createdBy?: boolean
+  kind?: boolean
+  appointmentId?: boolean
   isActive?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type PatientPaymentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "patientId" | "amount" | "date" | "note" | "createdBy" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["patientPayment"]>
+export type PatientPaymentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "patientId" | "amount" | "date" | "note" | "createdBy" | "kind" | "appointmentId" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["patientPayment"]>
 export type PatientPaymentInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
+  appointment?: boolean | Prisma.PatientPayment$appointmentArgs<ExtArgs>
 }
 export type PatientPaymentIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
+  appointment?: boolean | Prisma.PatientPayment$appointmentArgs<ExtArgs>
 }
 export type PatientPaymentIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
+  appointment?: boolean | Prisma.PatientPayment$appointmentArgs<ExtArgs>
 }
 
 export type $PatientPaymentPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -848,6 +1090,7 @@ export type $PatientPaymentPayload<ExtArgs extends runtime.Types.Extensions.Inte
   objects: {
     tenant: Prisma.$TenantPayload<ExtArgs>
     patient: Prisma.$PatientPayload<ExtArgs>
+    appointment: Prisma.$AppointmentPayload<ExtArgs> | null
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -869,6 +1112,14 @@ export type $PatientPaymentPayload<ExtArgs extends runtime.Types.Extensions.Inte
      * User ID who registered the payment
      */
     createdBy: string | null
+    /**
+     * Distinguishes appointment-driven payments from freestanding advances
+     */
+    kind: $Enums.PatientPaymentKind
+    /**
+     * Optional reference to the appointment this payment was generated for
+     */
+    appointmentId: string | null
     isActive: boolean
     createdAt: Date
     updatedAt: Date
@@ -1268,6 +1519,7 @@ export interface Prisma__PatientPaymentClient<T, Null = never, ExtArgs extends r
   readonly [Symbol.toStringTag]: "PrismaPromise"
   tenant<T extends Prisma.TenantDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.TenantDefaultArgs<ExtArgs>>): Prisma.Prisma__TenantClient<runtime.Types.Result.GetResult<Prisma.$TenantPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   patient<T extends Prisma.PatientDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.PatientDefaultArgs<ExtArgs>>): Prisma.Prisma__PatientClient<runtime.Types.Result.GetResult<Prisma.$PatientPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+  appointment<T extends Prisma.PatientPayment$appointmentArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.PatientPayment$appointmentArgs<ExtArgs>>): Prisma.Prisma__AppointmentClient<runtime.Types.Result.GetResult<Prisma.$AppointmentPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1304,6 +1556,8 @@ export interface PatientPaymentFieldRefs {
   readonly date: Prisma.FieldRef<"PatientPayment", 'DateTime'>
   readonly note: Prisma.FieldRef<"PatientPayment", 'String'>
   readonly createdBy: Prisma.FieldRef<"PatientPayment", 'String'>
+  readonly kind: Prisma.FieldRef<"PatientPayment", 'PatientPaymentKind'>
+  readonly appointmentId: Prisma.FieldRef<"PatientPayment", 'String'>
   readonly isActive: Prisma.FieldRef<"PatientPayment", 'Boolean'>
   readonly createdAt: Prisma.FieldRef<"PatientPayment", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"PatientPayment", 'DateTime'>
@@ -1700,6 +1954,25 @@ export type PatientPaymentDeleteManyArgs<ExtArgs extends runtime.Types.Extension
    * Limit how many PatientPayments to delete.
    */
   limit?: number
+}
+
+/**
+ * PatientPayment.appointment
+ */
+export type PatientPayment$appointmentArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Appointment
+   */
+  select?: Prisma.AppointmentSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Appointment
+   */
+  omit?: Prisma.AppointmentOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.AppointmentInclude<ExtArgs> | null
+  where?: Prisma.AppointmentWhereInput
 }
 
 /**
