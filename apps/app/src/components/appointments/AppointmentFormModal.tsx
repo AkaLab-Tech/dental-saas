@@ -108,13 +108,9 @@ export function AppointmentFormModal({
   // When editing an already-paid appointment, the input must be locked:
   // the FIFO payment can only be reversed by deleting the underlying PatientPayment.
   const isAlreadyPaid = isEditing && !!appointment?.isPaid
-  // FIFO can also have applied a recorded payment to this appointment without
-  // fully covering it (e.g. the pool got split across older visits first), in
-  // which case isPaid stays false but resubmitting would still misstate what
-  // was recorded. Lock the input and prefill from the recorded amount in
-  // that case too — see AppointmentFormModal.tsx:215 (task #373 review).
-  const recordedPaidAmount = isEditing ? appointment?.paidAmount : undefined
-  const hasRecordedPaidAmount = !!recordedPaidAmount && recordedPaidAmount > 0
+  // Keyed off the server's linked-payment check, not the FIFO-allocated
+  // paidAmount (which can read 0 despite a payment being recorded — #373).
+  const hasRecordedPaidAmount = isEditing && !!appointment?.hasRecordedPayment
   const paidAmountLocked = isAlreadyPaid || hasRecordedPaidAmount
   const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
 
@@ -210,11 +206,13 @@ export function AppointmentFormModal({
     if (appointment) {
       const startDate = new Date(appointment.startTime)
       const endDate = new Date(appointment.endTime)
-      // Prefill from the amount actually recorded for this appointment (FIFO
-      // breakdown) when there is one; otherwise fall back to cost, same as
-      // before any payment exists.
+      // Prefill from the amount actually recorded for this appointment when
+      // there is one; otherwise fall back to cost, same as before any
+      // payment exists.
       const prefillPaidAmount =
-        appointment.paidAmount && appointment.paidAmount > 0 ? appointment.paidAmount : appointment.cost
+        appointment.hasRecordedPayment && appointment.recordedPaidAmount
+          ? appointment.recordedPaidAmount
+          : appointment.cost
 
       reset({
         patientId: appointment.patientId,

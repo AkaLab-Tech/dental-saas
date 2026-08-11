@@ -68,6 +68,9 @@ export type SafeAppointment = {
   // (getAppointmentsByPatient, getAppointmentById). undefined elsewhere.
   paidAmount?: number
   outstanding?: number
+  // Actual linked-payment state (unlike paidAmount, never 0 due to FIFO pooling).
+  hasRecordedPayment?: boolean
+  recordedPaidAmount?: number
   patient?: {
     id: string
     firstName: string
@@ -108,9 +111,7 @@ export interface CreateAppointmentInput {
   notes?: string
   privateNotes?: string
   cost?: number
-  // Amount paid that day for this appointment. isPaid is accepted for
-  // backward compatibility and, when paidAmount is omitted, is interpreted
-  // as paidAmount = cost.
+  // Amount paid that day; legacy isPaid=true implies paidAmount = cost when omitted.
   paidAmount?: number
   isPaid?: boolean
   createdBy?: string
@@ -265,7 +266,7 @@ export async function listAppointments(
     orderBy: { startTime: 'asc' },
   })
 
-  return appointments as SafeAppointment[]
+  return attachRecordedPayments(tenantId, appointments as SafeAppointment[])
 }
 
 /**
@@ -320,7 +321,8 @@ export async function getAppointmentById(
   }
 
   const allocationMap = await buildPatientAllocationMap(tenantId, appointment.patientId)
-  return mergeAllocation(appointment as SafeAppointment, allocationMap)
+  const merged = mergeAllocation(appointment as SafeAppointment, allocationMap)
+  return (await attachRecordedPayments(tenantId, [merged]))[0]
 }
 
 /**
@@ -369,6 +371,26 @@ function mergeAllocation(
     outstanding: split.outstanding,
     isPaid: split.isPaid,
   }
+}
+
+async function attachRecordedPayments(
+  tenantId: string,
+  appointments: SafeAppointment[]
+): Promise<SafeAppointment[]> {
+  if (appointments.length === 0) return appointments
+  const payments = await prisma.patientPayment.findMany({
+    where: {
+      tenantId,
+      appointmentId: { in: appointments.map((a) => a.id) },
+      kind: 'APPOINTMENT',
+      isActive: true,
+    },
+    select: { appointmentId: true, amount: true },
+  })
+  return appointments.map((a) => {
+    const payment = payments.find((p) => p.appointmentId === a.id)
+    return { ...a, recordedPaidAmount: payment?.amount.toNumber() ?? 0, hasRecordedPayment: !!payment }
+  })
 }
 
 /**
@@ -438,8 +460,7 @@ export async function createAppointment(
     },
   })
 
-  // Record the amount paid that day for this appointment (kind = APPOINTMENT,
-  // linked to it), keeping it separate from Entregas (ADVANCE payments).
+  // Record the day's payment (kind = APPOINTMENT), separate from Entregas.
   const effectivePaidAmount = resolveEffectivePaidAmount(data.paidAmount, data.isPaid, data.cost)
   if (effectivePaidAmount && effectivePaidAmount > 0) {
     const transition = await applyPaidTransition(
@@ -467,11 +488,7 @@ export async function createAppointment(
   return { appointment: appointment as SafeAppointment }
 }
 
-/**
- * Resolve the amount to record as paid for an appointment write, supporting
- * the legacy `isPaid` boolean: when `paidAmount` is not sent, `isPaid: true`
- * is interpreted as `paidAmount = cost`.
- */
+// Legacy isPaid:true (no paidAmount sent) is interpreted as paidAmount = cost.
 function resolveEffectivePaidAmount(
   paidAmount: number | undefined,
   isPaid: boolean | undefined,
@@ -482,12 +499,8 @@ function resolveEffectivePaidAmount(
   return undefined
 }
 
-/**
- * Record the amount paid on the day of the appointment as a PatientPayment
- * (kind = APPOINTMENT, linked to the appointment). No cap against
- * outstanding balance — paying more than the day's cost becomes credit,
- * same as a manual `createPayment` call.
- */
+// Records the day's payment as a linked PatientPayment; no cap against
+// outstanding balance — overpaying becomes credit, same as createPayment.
 async function applyPaidTransition(
   tenantId: string,
   patientId: string,
@@ -514,11 +527,8 @@ async function applyPaidTransition(
   return { ok: true }
 }
 
-/**
- * Whether an active APPOINTMENT-kind payment is already recorded for this
- * appointment. Used to avoid double-charging when an appointment carrying a
- * recorded day-of payment is edited again.
- */
+// Whether an active APPOINTMENT-kind payment is already recorded, to avoid
+// double-charging when an already-paid appointment is edited again.
 async function hasRecordedAppointmentPayment(tenantId: string, appointmentId: string): Promise<boolean> {
   const existingPayment = await prisma.patientPayment.findFirst({
     where: { tenantId, appointmentId, kind: 'APPOINTMENT', isActive: true },
@@ -674,12 +684,9 @@ export async function updateAppointment(
     data.cost !== undefined &&
     (existing.cost?.toNumber() ?? null) !== (data.cost ?? null)
 
-  // Record the amount paid that day, unless the appointment is already paid
-  // — editing it again must not double-charge. `existing.isPaid` covers the
-  // mainstream case where FIFO already flipped it from an unlinked payment
-  // (e.g. an Entrega recorded after the visit); `hasRecordedAppointmentPayment`
-  // additionally covers linked payments on historic rows where `isPaid` may
-  // not (yet) reflect it.
+  // Skip re-recording if already paid (existing.isPaid) or already linked
+  // to a payment on this appointment (hasRecordedAppointmentPayment) — must
+  // not double-charge on re-edit.
   const effectivePaidAmount = resolveEffectivePaidAmount(data.paidAmount, data.isPaid, newCostNumber)
   const alreadyRecorded =
     effectivePaidAmount && effectivePaidAmount > 0
@@ -967,7 +974,7 @@ export async function getAppointmentsByDoctor(
     orderBy: { startTime: 'asc' },
   })
 
-  return appointments as SafeAppointment[]
+  return attachRecordedPayments(tenantId, appointments as SafeAppointment[])
 }
 
 /**
@@ -1004,5 +1011,6 @@ export async function getAppointmentsByPatient(
   })
 
   const allocationMap = await buildPatientAllocationMap(tenantId, patientId)
-  return (appointments as SafeAppointment[]).map((a) => mergeAllocation(a, allocationMap))
+  const merged = (appointments as SafeAppointment[]).map((a) => mergeAllocation(a, allocationMap))
+  return attachRecordedPayments(tenantId, merged)
 }

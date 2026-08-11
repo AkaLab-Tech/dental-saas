@@ -164,6 +164,12 @@ function makeAppointment(overrides: Partial<Appointment> = {}): Appointment {
     privateNotes: null,
     cost: null,
     isPaid: false,
+    // All four read paths always populate these (attachRecordedPayments runs
+    // unconditionally — see appointment.service.ts), so the realistic default
+    // is "no linked payment", not "field absent". A test that needs a
+    // recorded payment must opt in explicitly via overrides.
+    hasRecordedPayment: false,
+    recordedPaidAmount: 0,
     isActive: true,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
@@ -734,7 +740,12 @@ describe('AppointmentFormModal — paidAmount input (task #373)', () => {
   // prefill (`cost` only) and the old hint (`alreadyPaidHint`, gated on
   // isPaid) both missed this case entirely.
   it('is prefilled from the recorded paidAmount (not cost) and disabled when paidAmount>0 but isPaid is false (#373 reviewer fix)', async () => {
-    const appointment = makeAppointment({ cost: 150, paidAmount: 40, isPaid: false })
+    const appointment = makeAppointment({
+      cost: 150,
+      hasRecordedPayment: true,
+      recordedPaidAmount: 40,
+      isPaid: false,
+    })
     renderModal({ appointment })
     await waitForOptionsLoaded()
 
@@ -758,7 +769,13 @@ describe('AppointmentFormModal — paidAmount input (task #373)', () => {
   // independent of whichever mechanism (RHF's disabled-field exclusion, or
   // that explicit guard) ends up doing the stripping.
   it('never includes paidAmount in the submitted payload when locked, even if the DOM value is forced to differ (#373 reviewer fix)', async () => {
-    const appointment = makeAppointment({ id: 'apt-1', cost: 150, paidAmount: 40, isPaid: false })
+    const appointment = makeAppointment({
+      id: 'apt-1',
+      cost: 150,
+      hasRecordedPayment: true,
+      recordedPaidAmount: 40,
+      isPaid: false,
+    })
     const { onSubmit } = renderModal({ appointment })
     await waitForOptionsLoaded()
 

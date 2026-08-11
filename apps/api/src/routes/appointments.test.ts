@@ -641,6 +641,67 @@ describe('Appointments API', () => {
       const response = await request(app).get('/api/appointments')
       expect(response.status).toBe(401)
     })
+
+    // Reviewer finding on PR #379 (Finding 1's primary gap): listAppointments
+    // bare-casts the Prisma row and never ran the per-patient FIFO merge, so
+    // `paidAmount` was simply `undefined` here — the frontend's old
+    // `!!appointment.paidAmount` proxy could never detect a recorded payment
+    // on this route (feeds AppointmentsPage). hasRecordedPayment/
+    // recordedPaidAmount must be populated instead, independent of paidAmount.
+    it('exposes hasRecordedPayment/recordedPaidAmount per appointment, with paidAmount left undefined (#373 reviewer fix)', async () => {
+      await prisma.appointment.deleteMany({ where: { tenantId } })
+      await prisma.patientPayment.deleteMany({ where: { tenantId } })
+
+      const withPaymentTimes = getFutureTime(1, 9)
+      const withPayment = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(withPaymentTimes.startTime),
+          endTime: new Date(withPaymentTimes.endTime),
+          duration: 30,
+          cost: 80,
+        },
+      })
+      const withoutPaymentTimes = getFutureTime(1, 11)
+      const withoutPayment = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(withoutPaymentTimes.startTime),
+          endTime: new Date(withoutPaymentTimes.endTime),
+          duration: 30,
+          cost: 80,
+        },
+      })
+      await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId,
+          amount: 80,
+          date: new Date(withPaymentTimes.startTime),
+          kind: 'APPOINTMENT',
+          appointmentId: withPayment.id,
+        },
+      })
+
+      const response = await request(app)
+        .get('/api/appointments')
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(200)
+      const byId = new Map(
+        (response.body.data as Array<{ id: string; paidAmount?: number }>).map((a) => [a.id, a])
+      )
+
+      expect(byId.get(withPayment.id)).toMatchObject({ hasRecordedPayment: true, recordedPaidAmount: 80 })
+      expect(byId.get(withoutPayment.id)).toMatchObject({ hasRecordedPayment: false, recordedPaidAmount: 0 })
+      // Pins the pre-fix symptom: this route never computes the FIFO merge,
+      // so paidAmount stays absent even for the appointment with a payment.
+      expect(byId.get(withPayment.id)?.paidAmount).toBeUndefined()
+    })
   })
 
   // ============================================================================
@@ -685,6 +746,72 @@ describe('Appointments API', () => {
 
       expect(response.status).toBe(404)
       expect(response.body.error.code).toBe('NOT_FOUND')
+    })
+
+    // Reviewer finding on PR #379 (Finding 2 — the highest-value case here):
+    // FIFO allocates a patient's total payments oldest-item-first, so a
+    // payment linked directly to THIS appointment can still be entirely
+    // absorbed by an older, unpaid item, leaving the FIFO-derived
+    // `paidAmount` at 0 — the exact value the old `!!appointment.paidAmount`
+    // proxy read as "nothing recorded". hasRecordedPayment/recordedPaidAmount
+    // must reflect the real linked payment regardless of where FIFO applied it.
+    it('reports hasRecordedPayment/recordedPaidAmount correctly even when FIFO allocates the linked payment to an older appointment (#373 Finding 2)', async () => {
+      await prisma.appointment.deleteMany({ where: { tenantId, patientId } })
+      await prisma.patientPayment.deleteMany({ where: { tenantId, patientId } })
+
+      // Older, unpaid appointment: no payment linked directly to it, but
+      // first in FIFO order — it absorbs the whole pool before the newer
+      // item (which actually has a recorded payment) is reached.
+      const older = getFutureTime(1, 8)
+      await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(older.startTime),
+          endTime: new Date(older.endTime),
+          duration: 30,
+          cost: 100,
+        },
+      })
+
+      // Newer appointment: has its own $50 payment recorded directly
+      // against it, but FIFO applies the $50 pool to the older item first,
+      // leaving this one's FIFO share at 0.
+      const newer = getFutureTime(2, 8)
+      const newerApt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(newer.startTime),
+          endTime: new Date(newer.endTime),
+          duration: 30,
+          cost: 50,
+        },
+      })
+      await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId,
+          amount: 50,
+          date: new Date(newer.startTime),
+          kind: 'APPOINTMENT',
+          appointmentId: newerApt.id,
+        },
+      })
+
+      const response = await request(app)
+        .get(`/api/appointments/${newerApt.id}`)
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(200)
+      // The old proxy's failure mode: FIFO share reads 0 despite a real
+      // payment recorded against this exact appointment.
+      expect(response.body.data.paidAmount).toBe(0)
+      // The correct signal — unaffected by FIFO allocation order.
+      expect(response.body.data.hasRecordedPayment).toBe(true)
+      expect(response.body.data.recordedPaidAmount).toBe(50)
     })
   })
 
@@ -1750,6 +1877,63 @@ describe('Appointments API', () => {
       expect(response.status).toBe(200)
       expect(response.body.data.length).toBe(0)
     })
+
+    // Reviewer finding on PR #379 (Finding 1's other gap): getAppointmentsByDoctor
+    // bare-casts the Prisma row exactly like listAppointments, so `paidAmount`
+    // was simply `undefined` here too (feeds DoctorDetailPage).
+    // hasRecordedPayment/recordedPaidAmount must be populated regardless.
+    it('exposes hasRecordedPayment/recordedPaidAmount per appointment, with paidAmount left undefined (#373 reviewer fix)', async () => {
+      await prisma.appointment.deleteMany({ where: { tenantId } })
+      await prisma.patientPayment.deleteMany({ where: { tenantId } })
+
+      const withPaymentTimes = getFutureTime(1, 9)
+      const withPayment = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(withPaymentTimes.startTime),
+          endTime: new Date(withPaymentTimes.endTime),
+          duration: 30,
+          cost: 80,
+        },
+      })
+      const withoutPaymentTimes = getFutureTime(1, 11)
+      const withoutPayment = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(withoutPaymentTimes.startTime),
+          endTime: new Date(withoutPaymentTimes.endTime),
+          duration: 30,
+          cost: 80,
+        },
+      })
+      await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId,
+          amount: 80,
+          date: new Date(withPaymentTimes.startTime),
+          kind: 'APPOINTMENT',
+          appointmentId: withPayment.id,
+        },
+      })
+
+      const response = await request(app)
+        .get(`/api/appointments/by-doctor/${doctorId}`)
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(200)
+      const byId = new Map(
+        (response.body.data as Array<{ id: string; paidAmount?: number }>).map((a) => [a.id, a])
+      )
+
+      expect(byId.get(withPayment.id)).toMatchObject({ hasRecordedPayment: true, recordedPaidAmount: 80 })
+      expect(byId.get(withoutPayment.id)).toMatchObject({ hasRecordedPayment: false, recordedPaidAmount: 0 })
+      expect(byId.get(withPayment.id)?.paidAmount).toBeUndefined()
+    })
   })
 
   describe('GET /api/appointments/by-patient/:patientId', () => {
@@ -1850,6 +2034,7 @@ describe('Appointments API', () => {
   describe('Tenant Isolation', () => {
     let otherTenantId: string
     let otherAppointmentId: string
+    let otherPatientId: string
 
     beforeAll(async () => {
       // Create another tenant
@@ -1882,6 +2067,7 @@ describe('Appointments API', () => {
           lastName: 'Patient',
         },
       })
+      otherPatientId = otherPatient.id
 
       const otherDoctor = await prisma.doctor.create({
         data: {
@@ -1980,6 +2166,48 @@ describe('Appointments API', () => {
 
       expect(response.status).toBe(400)
       expect(response.body.error.code).toBe('INVALID_DOCTOR')
+    })
+
+    // Reviewer finding on PR #379: confirms attachRecordedPayments() filters
+    // by tenantId in the query itself rather than relying on appointmentId
+    // being unique across tenants. A payment row referencing this tenant's
+    // appointment id but tagged with another tenant's tenantId (never
+    // reachable through the app layer, but exactly what a tenant-scoping bug
+    // would produce) must not leak into hasRecordedPayment/recordedPaidAmount.
+    it('does not attach a payment from another tenant when computing hasRecordedPayment', async () => {
+      const times = getFutureTime(3)
+      const mainApt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          duration: 30,
+          cost: 60,
+        },
+      })
+
+      await prisma.patientPayment.create({
+        data: {
+          tenantId: otherTenantId,
+          patientId: otherPatientId,
+          amount: 60,
+          date: new Date(),
+          kind: 'APPOINTMENT',
+          appointmentId: mainApt.id,
+        },
+      })
+
+      const response = await request(app)
+        .get('/api/appointments')
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(response.status).toBe(200)
+      const found = (
+        response.body.data as Array<{ id: string; hasRecordedPayment: boolean; recordedPaidAmount: number }>
+      ).find((a) => a.id === mainApt.id)
+      expect(found).toMatchObject({ hasRecordedPayment: false, recordedPaidAmount: 0 })
     })
   })
 
