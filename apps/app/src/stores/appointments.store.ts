@@ -171,8 +171,8 @@ export const useAppointmentsStore = create<AppointmentsState & AppointmentsActio
     set({ isLoading: true, error: null })
     try {
       const newAppointment = await createAppointment(data)
-      if (data.isPaid && data.cost && Number(data.cost) > 0) {
-        // Auto-payment triggers FIFO recalculation on all patient appointments;
+      if (data.paidAmount && Number(data.paidAmount) > 0) {
+        // A payment triggers FIFO recalculation on all patient appointments;
         // refetch the full list so isPaid changes are reflected in the UI
         set({ isLoading: false })
         await get().fetchAppointments()

@@ -682,9 +682,10 @@ describe('AppointmentFormModal — budget items association', () => {
 })
 
 // Coverage for task #373: the old "Pagado" checkbox was replaced with a
-// numeric "Monto abonado" ($) input, prefilled from the appointment's cost
-// and disabled once the appointment is already paid (isPaid derived from
-// FIFO — see appointment.service.ts).
+// numeric "Monto abonado" ($) input, empty by default when creating/editing
+// an unpaid appointment, and disabled (prefilled with the recorded amount)
+// once a payment has actually been recorded (isPaid / recordedPaidAmount
+// derived from FIFO — see appointment.service.ts).
 const PAID_AMOUNT_LABEL = 'Monto abonado ($)'
 
 function getPaidAmountInput() {
@@ -858,10 +859,10 @@ describe('AppointmentFormModal — paidAmount input (task #373)', () => {
   // the input's `disabled` DOM attribute (that would just be re-testing RHF's
   // own bookkeeping, already covered above); it instead forces a DOM value
   // that diverges from the locked/prefilled one and inspects the actual
-  // payload handed to `onSubmit`, which is what `handleFormSubmit`'s explicit
-  // `!paidAmountLocked && data.paidAmount` guard is there to protect —
-  // independent of whichever mechanism (RHF's disabled-field exclusion, or
-  // that explicit guard) ends up doing the stripping.
+  // payload handed to `onSubmit`, which is what
+  // `register('paidAmount', { disabled: paidAmountLocked })` is there to
+  // protect — RHF omits a disabled field from submitted values entirely,
+  // regardless of what the DOM element's live value says.
   it('never includes paidAmount in the submitted payload when locked, even if the DOM value is forced to differ (#373 reviewer fix)', async () => {
     const appointment = makeAppointment({
       id: 'apt-1',
