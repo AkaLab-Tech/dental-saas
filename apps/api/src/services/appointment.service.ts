@@ -674,12 +674,16 @@ export async function updateAppointment(
     data.cost !== undefined &&
     (existing.cost?.toNumber() ?? null) !== (data.cost ?? null)
 
-  // Record the amount paid that day, unless a day-of payment is already
-  // recorded for this appointment — editing it again must not double-charge.
+  // Record the amount paid that day, unless the appointment is already paid
+  // — editing it again must not double-charge. `existing.isPaid` covers the
+  // mainstream case where FIFO already flipped it from an unlinked payment
+  // (e.g. an Entrega recorded after the visit); `hasRecordedAppointmentPayment`
+  // additionally covers linked payments on historic rows where `isPaid` may
+  // not (yet) reflect it.
   const effectivePaidAmount = resolveEffectivePaidAmount(data.paidAmount, data.isPaid, newCostNumber)
   const alreadyRecorded =
     effectivePaidAmount && effectivePaidAmount > 0
-      ? await hasRecordedAppointmentPayment(tenantId, id)
+      ? existing.isPaid || (await hasRecordedAppointmentPayment(tenantId, id))
       : false
 
   if (effectivePaidAmount && effectivePaidAmount > 0 && !alreadyRecorded) {

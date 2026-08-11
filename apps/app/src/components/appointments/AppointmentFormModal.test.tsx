@@ -727,6 +727,52 @@ describe('AppointmentFormModal — paidAmount input (task #373)', () => {
     expect(input).toBeDisabled()
     expect(screen.getByText('Para revertir el pago, elimine la entrega correspondiente desde la sección de pagos.')).toBeInTheDocument()
   })
+
+  // Reviewer finding on PR #379: FIFO can record a payment against this
+  // appointment (paidAmount > 0) without fully covering it — e.g. the pool
+  // got applied to an older visit first — leaving isPaid false. The old
+  // prefill (`cost` only) and the old hint (`alreadyPaidHint`, gated on
+  // isPaid) both missed this case entirely.
+  it('is prefilled from the recorded paidAmount (not cost) and disabled when paidAmount>0 but isPaid is false (#373 reviewer fix)', async () => {
+    const appointment = makeAppointment({ cost: 150, paidAmount: 40, isPaid: false })
+    renderModal({ appointment })
+    await waitForOptionsLoaded()
+
+    const input = getPaidAmountInput() as HTMLInputElement
+    await waitFor(() => expect(input.value).toBe('40'))
+    expect(input.value).not.toBe('150')
+    expect(input).toBeDisabled()
+    expect(
+      screen.getByText('Ya hay un pago registrado para esta cita. Para modificarlo, edítelo desde la sección de pagos.')
+    ).toBeInTheDocument()
+  })
+
+  // Reviewer finding on PR #379: the JSX `disabled` attribute previously used
+  // on this input does NOT stop react-hook-form from submitting its value —
+  // only `register(name, { disabled })` does. This test does not assert on
+  // the input's `disabled` DOM attribute (that would just be re-testing RHF's
+  // own bookkeeping, already covered above); it instead forces a DOM value
+  // that diverges from the locked/prefilled one and inspects the actual
+  // payload handed to `onSubmit`, which is what `handleFormSubmit`'s explicit
+  // `!paidAmountLocked && data.paidAmount` guard is there to protect —
+  // independent of whichever mechanism (RHF's disabled-field exclusion, or
+  // that explicit guard) ends up doing the stripping.
+  it('never includes paidAmount in the submitted payload when locked, even if the DOM value is forced to differ (#373 reviewer fix)', async () => {
+    const appointment = makeAppointment({ id: 'apt-1', cost: 150, paidAmount: 40, isPaid: false })
+    const { onSubmit } = renderModal({ appointment })
+    await waitForOptionsLoaded()
+
+    const input = getPaidAmountInput() as HTMLInputElement
+    await waitFor(() => expect(input.value).toBe('40'))
+
+    fireEvent.change(input, { target: { value: '999' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /guardar cambios/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const payload = onSubmit.mock.calls[0][0] as { paidAmount?: number }
+    expect(payload.paidAmount).toBeUndefined()
+  })
 })
 
 // Coverage for task #233 (date/time picker UI migration) and task #347

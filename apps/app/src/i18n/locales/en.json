@@ -420,6 +420,7 @@
       "paidAmount": "Amount paid",
       "paidAmountHint": "Recorded as this appointment's payment, kept separate from advance payments, and applied to the patient's oldest outstanding balance.",
       "alreadyPaidHint": "To reverse the payment, delete the corresponding entry from the payments section.",
+      "partialPaymentRecordedHint": "A payment is already recorded for this appointment. To change it, edit it from the payments section.",
       "closeForm": "Close form",
       "selectDoctor": "Select doctor...",
       "typePlaceholder": "E.g.: Cleaning, Check-up, Orthodontics...",

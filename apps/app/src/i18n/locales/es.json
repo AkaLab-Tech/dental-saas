@@ -420,6 +420,7 @@
       "paidAmount": "Monto abonado",
       "paidAmountHint": "Se registra como pago de esta cita, separado de las entregas, y se aplica a la deuda más antigua del paciente.",
       "alreadyPaidHint": "Para revertir el pago, elimine la entrega correspondiente desde la sección de pagos.",
+      "partialPaymentRecordedHint": "Ya hay un pago registrado para esta cita. Para modificarlo, edítelo desde la sección de pagos.",
       "closeForm": "Cerrar formulario",
       "selectDoctor": "Seleccionar doctor...",
       "typePlaceholder": "Ej: Limpieza, Revisión, Ortodoncia...",

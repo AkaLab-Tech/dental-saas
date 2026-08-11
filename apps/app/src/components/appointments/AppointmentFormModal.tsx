@@ -105,9 +105,17 @@ export function AppointmentFormModal({
   const { t } = useTranslation()
   const modalTitleId = useId()
   const isEditing = !!appointment
-  // When editing an already-paid appointment, the checkbox must be locked:
+  // When editing an already-paid appointment, the input must be locked:
   // the FIFO payment can only be reversed by deleting the underlying PatientPayment.
   const isAlreadyPaid = isEditing && !!appointment?.isPaid
+  // FIFO can also have applied a recorded payment to this appointment without
+  // fully covering it (e.g. the pool got split across older visits first), in
+  // which case isPaid stays false but resubmitting would still misstate what
+  // was recorded. Lock the input and prefill from the recorded amount in
+  // that case too — see AppointmentFormModal.tsx:215 (task #373 review).
+  const recordedPaidAmount = isEditing ? appointment?.paidAmount : undefined
+  const hasRecordedPaidAmount = !!recordedPaidAmount && recordedPaidAmount > 0
+  const paidAmountLocked = isAlreadyPaid || hasRecordedPaidAmount
   const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
 
   // State for doctor options
@@ -202,6 +210,11 @@ export function AppointmentFormModal({
     if (appointment) {
       const startDate = new Date(appointment.startTime)
       const endDate = new Date(appointment.endTime)
+      // Prefill from the amount actually recorded for this appointment (FIFO
+      // breakdown) when there is one; otherwise fall back to cost, same as
+      // before any payment exists.
+      const prefillPaidAmount =
+        appointment.paidAmount && appointment.paidAmount > 0 ? appointment.paidAmount : appointment.cost
 
       reset({
         patientId: appointment.patientId,
@@ -212,7 +225,7 @@ export function AppointmentFormModal({
         type: appointment.type || '',
         notes: appointment.notes || '',
         cost: appointment.cost?.toString() || '',
-        paidAmount: appointment.cost?.toString() || '',
+        paidAmount: prefillPaidAmount?.toString() || '',
         status: appointment.status,
       })
     } else {
@@ -360,7 +373,10 @@ export function AppointmentFormModal({
       type: data.type || undefined,
       notes: data.notes || undefined,
       cost: data.cost ? parseFloat(data.cost) : undefined,
-      paidAmount: data.paidAmount ? parseFloat(data.paidAmount) : undefined,
+      // register()'s disabled option already excludes this field's value when
+      // paidAmountLocked, but never send a stale reset()-seeded amount for an
+      // appointment that already has a payment recorded, belt and braces.
+      paidAmount: !paidAmountLocked && data.paidAmount ? parseFloat(data.paidAmount) : undefined,
       status: data.status || undefined,
       // Edit always sends the current selection as the replace-set (an empty
       // array unassociates everything); create only sends it when non-empty.
@@ -597,14 +613,17 @@ export function AppointmentFormModal({
                     type="number"
                     step="0.01"
                     min="0"
-                    {...register('paidAmount')}
-                    disabled={isAlreadyPaid}
+                    {...register('paidAmount', { disabled: paidAmountLocked })}
                     placeholder="0.00"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                   {isAlreadyPaid ? (
                     <p className="mt-1 text-xs text-gray-500">
                       {t('appointments.form.alreadyPaidHint')}
+                    </p>
+                  ) : hasRecordedPaidAmount ? (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {t('appointments.form.partialPaymentRecordedHint')}
                     </p>
                   ) : (
                     <p className="mt-1 text-xs text-gray-500">

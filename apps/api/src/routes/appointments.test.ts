@@ -1081,6 +1081,99 @@ describe('Appointments API', () => {
       expect(payments).toHaveLength(1)
       expect(payments[0].amount.toNumber()).toBe(100)
     })
+
+    // Reviewer finding on PR #379: the guard used to check only
+    // hasRecordedAppointmentPayment (a linked kind=APPOINTMENT payment). An
+    // appointment can be isPaid:true via an *unlinked* payment instead — the
+    // mainstream flow being an Entrega (advance) recorded after the visit,
+    // which createPayment's recalculatePaidStatus applies to this
+    // appointment via FIFO without ever creating a linked row. The test
+    // "should be a no-op when isPaid stays true" above does not cover this:
+    // its payment is linked. This one uses the real POST /api/patients/:id/payments
+    // endpoint (Entregas) to reproduce the unlinked case exactly.
+    it('editing an appointment marked isPaid via an unlinked Entrega payment does not double-charge when paidAmount is re-sent (#373 reviewer fix)', async () => {
+      const entrega = await request(app)
+        .post(`/api/patients/${patientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 100, date: new Date().toISOString() })
+      expect(entrega.status).toBe(201)
+
+      // Precondition: the appointment is now paid, but via an unlinked
+      // ADVANCE payment — not a kind=APPOINTMENT row tied to this appointment.
+      const flipped = await prisma.appointment.findUnique({ where: { id: appointmentId } })
+      expect(flipped?.isPaid).toBe(true)
+
+      const before = await prisma.patientPayment.findMany({ where: { tenantId, patientId } })
+      expect(before).toHaveLength(1)
+      expect(before[0].appointmentId).toBeNull()
+      expect(before[0].kind).toBe('ADVANCE')
+
+      // The form prefills paidAmount from the appointment's FIFO paidAmount
+      // (100) and re-sends it on save. With the pre-fix guard this created a
+      // second, kind=APPOINTMENT, linked payment for the full cost.
+      const response = await request(app)
+        .put(`/api/appointments/${appointmentId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ paidAmount: 100, notes: 'Re-saved after Entrega' })
+
+      expect(response.status).toBe(200)
+      expect(response.body.data.notes).toBe('Re-saved after Entrega')
+
+      const after = await prisma.patientPayment.findMany({ where: { tenantId, patientId } })
+      expect(after).toHaveLength(1)
+      expect(after[0].id).toBe(before[0].id)
+    })
+
+    // Same reviewer finding, historic-data variant: an appointment can be
+    // isPaid:true with *no* PatientPayment row at all (pre-#372 data, or an
+    // ambiguous backfill). hasRecordedAppointmentPayment alone would find
+    // nothing and let the write through; existing.isPaid must still block it.
+    it('editing a historic appointment that is isPaid:true with no PatientPayment row at all does not create a payment (#373 reviewer fix)', async () => {
+      await prisma.appointment.update({
+        where: { id: appointmentId },
+        data: { isPaid: true },
+      })
+
+      const noRows = await prisma.patientPayment.findMany({ where: { tenantId, patientId } })
+      expect(noRows).toHaveLength(0)
+
+      const response = await request(app)
+        .put(`/api/appointments/${appointmentId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ paidAmount: 100 })
+
+      expect(response.status).toBe(200)
+
+      const payments = await prisma.patientPayment.findMany({ where: { tenantId, patientId } })
+      expect(payments).toHaveLength(0)
+    })
+
+    // Legacy path: the boolean isPaid:true (rather than paidAmount) resent on
+    // an appointment already paid via an unlinked payment must also remain a
+    // no-op, pinning the backward-compatibility claim made in the PR.
+    it('resending legacy isPaid:true on an appointment already paid via an unlinked Entrega payment remains a no-op (#373)', async () => {
+      const entrega = await request(app)
+        .post(`/api/patients/${patientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 100, date: new Date().toISOString() })
+      expect(entrega.status).toBe(201)
+
+      const before = await prisma.patientPayment.findMany({ where: { tenantId, patientId } })
+      expect(before).toHaveLength(1)
+
+      const response = await request(app)
+        .put(`/api/appointments/${appointmentId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ isPaid: true, notes: 'Re-saved (legacy boolean)' })
+
+      expect(response.status).toBe(200)
+      expect(response.body.data.isPaid).toBe(true)
+      expect(response.body.data.notes).toBe('Re-saved (legacy boolean)')
+
+      const after = await prisma.patientPayment.findMany({ where: { tenantId, patientId } })
+      expect(after).toHaveLength(1)
+      expect(after[0].id).toBe(before[0].id)
+    })
   })
 
   // ============================================================================
