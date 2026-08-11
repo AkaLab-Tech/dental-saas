@@ -206,13 +206,11 @@ export function AppointmentFormModal({
     if (appointment) {
       const startDate = new Date(appointment.startTime)
       const endDate = new Date(appointment.endTime)
-      // Prefill from the amount actually recorded for this appointment when
-      // there is one; otherwise fall back to cost, same as before any
-      // payment exists.
-      const prefillPaidAmount =
-        appointment.hasRecordedPayment && appointment.recordedPaidAmount
-          ? appointment.recordedPaidAmount
-          : appointment.cost
+      // Empty by default: editing/rescheduling an unpaid appointment must
+      // submit nothing. A locked field is the one exception — it displays
+      // the recorded amount read-only (register()'s `disabled` keeps it out
+      // of the submit payload regardless).
+      const lockedPaidAmount = paidAmountLocked ? appointment.recordedPaidAmount : undefined
 
       reset({
         patientId: appointment.patientId,
@@ -223,7 +221,7 @@ export function AppointmentFormModal({
         type: appointment.type || '',
         notes: appointment.notes || '',
         cost: appointment.cost?.toString() || '',
-        paidAmount: prefillPaidAmount?.toString() || '',
+        paidAmount: lockedPaidAmount?.toString() || '',
         status: appointment.status,
       })
     } else {
@@ -241,7 +239,7 @@ export function AppointmentFormModal({
         status: 'SCHEDULED',
       })
     }
-  }, [appointment, isOpen, defaultDate, defaultPatientId, reset])
+  }, [appointment, isOpen, defaultDate, defaultPatientId, reset, paidAmountLocked])
 
   // Re-apply the doctor pre-selection once the doctors list finishes loading.
   // On a cold edit-mount, the identity-gated reset() above can run before
@@ -371,10 +369,9 @@ export function AppointmentFormModal({
       type: data.type || undefined,
       notes: data.notes || undefined,
       cost: data.cost ? parseFloat(data.cost) : undefined,
-      // register()'s disabled option already excludes this field's value when
-      // paidAmountLocked, but never send a stale reset()-seeded amount for an
-      // appointment that already has a payment recorded, belt and braces.
-      paidAmount: !paidAmountLocked && data.paidAmount ? parseFloat(data.paidAmount) : undefined,
+      // No default value + register()'s `disabled` excluding locked fields
+      // from RHF's data means only an operator-typed amount is ever sent.
+      paidAmount: data.paidAmount ? parseFloat(data.paidAmount) : undefined,
       status: data.status || undefined,
       // Edit always sends the current selection as the replace-set (an empty
       // array unassociates everything); create only sends it when non-empty.

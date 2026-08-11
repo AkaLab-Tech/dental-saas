@@ -569,6 +569,52 @@ describe('Appointments API', () => {
       })
       expect(payments).toHaveLength(0)
     })
+
+    // Write-path response coverage (#373 fix cycle 3): createAppointment's
+    // no-payment fall-through return now routes through
+    // attachRecordedPayments too, not just the auto-payment branch (which
+    // already used getAppointmentById). Confirms the CREATE response itself
+    // — not just a follow-up GET — carries hasRecordedPayment/
+    // recordedPaidAmount, so a client that opens the edit modal right after
+    // creating (using the create response, not a refetch) still renders the
+    // paid-amount field's locked/unlocked state correctly.
+    it('create response includes hasRecordedPayment/recordedPaidAmount on the plain (no-payment) fall-through path', async () => {
+      const times = getFutureTime(8)
+      const response = await request(app)
+        .post('/api/appointments')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          patientId,
+          doctorId,
+          ...times,
+          cost: 100,
+        })
+
+      expect(response.status).toBe(201)
+      expect(response.body.data.hasRecordedPayment).toBe(false)
+      expect(response.body.data.recordedPaidAmount).toBe(0)
+    })
+
+    // Create equivalent of the PUT write-path assertion below: a paid
+    // creation must reflect the recorded payment in the create response
+    // itself, matching what a subsequent GET would show.
+    it('create response reflects the recorded payment when the appointment is created already paid', async () => {
+      const times = getFutureTime(9)
+      const response = await request(app)
+        .post('/api/appointments')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          patientId,
+          doctorId,
+          ...times,
+          cost: 120,
+          paidAmount: 120,
+        })
+
+      expect(response.status).toBe(201)
+      expect(response.body.data.hasRecordedPayment).toBe(true)
+      expect(response.body.data.recordedPaidAmount).toBe(120)
+    })
   })
 
   // ============================================================================
@@ -1185,6 +1231,33 @@ describe('Appointments API', () => {
       expect(payments[0].appointmentId).toBe(appointmentId)
     })
 
+    // Core regression test for the design-change fix (fix cycle 3, #373
+    // round-3 critical): with the old frontend prefill-from-`cost` design,
+    // rescheduling/editing an unpaid appointment without ever touching the
+    // paid-amount field would still submit `paidAmount: cost`, and the
+    // server would happily record it as a real payment — silently charging
+    // the patient for a routine reschedule. This pins the server side of
+    // that fix: when the request genuinely omits `paidAmount` (the frontend
+    // no longer has a default to leak), editing an unpaid appointment with a
+    // non-zero cost — touching only unrelated fields like startTime/notes —
+    // must create zero PatientPayment rows.
+    it('editing/rescheduling an unpaid appointment without sending paidAmount creates zero payment rows (#373 design-change regression)', async () => {
+      const rescheduled = getFutureTime(11, 14)
+      const response = await request(app)
+        .put(`/api/appointments/${appointmentId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ startTime: rescheduled.startTime, endTime: rescheduled.endTime, notes: 'Rescheduled at patient request' })
+
+      expect(response.status).toBe(200)
+      expect(response.body.data.notes).toBe('Rescheduled at patient request')
+      expect(response.body.data.isPaid).toBe(false)
+
+      const payments = await prisma.patientPayment.findMany({
+        where: { tenantId, patientId },
+      })
+      expect(payments).toHaveLength(0)
+    })
+
     it('editing an appointment that already has a recorded payment does not double-charge, even if paidAmount is sent again (#373)', async () => {
       // First edit records a $100 day-of payment.
       const first = await request(app)
@@ -1207,6 +1280,41 @@ describe('Appointments API', () => {
       })
       expect(payments).toHaveLength(1)
       expect(payments[0].amount.toNumber()).toBe(100)
+    })
+
+    // Write-path response coverage (#373 fix cycle 3): updateAppointment's
+    // no-transition fall-through return (cost unchanged, no new payment) now
+    // routes through attachRecordedPayments too. Before this fix, that
+    // branch returned the bare Prisma row, so hasRecordedPayment/
+    // recordedPaidAmount were simply absent from a notes-only edit's
+    // response — the edit modal would re-open on the PUT response (no
+    // refetch) believing the field should be unlocked, exactly the
+    // double-charge risk this whole design change closes.
+    it('a notes-only edit of an appointment with a recorded payment returns hasRecordedPayment/recordedPaidAmount intact, without sending paidAmount again', async () => {
+      const recorded = await request(app)
+        .put(`/api/appointments/${appointmentId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ paidAmount: 40 })
+      expect(recorded.status).toBe(200)
+
+      // Notes-only edit: no paidAmount, no cost change, no isPaid — exercises
+      // the fall-through branch exclusively.
+      const response = await request(app)
+        .put(`/api/appointments/${appointmentId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ notes: 'Notes-only edit, payment untouched' })
+
+      expect(response.status).toBe(200)
+      expect(response.body.data.notes).toBe('Notes-only edit, payment untouched')
+      expect(response.body.data.hasRecordedPayment).toBe(true)
+      expect(response.body.data.recordedPaidAmount).toBe(40)
+
+      // Still exactly one payment — the notes-only edit must not touch it.
+      const payments = await prisma.patientPayment.findMany({
+        where: { tenantId, patientId, appointmentId },
+      })
+      expect(payments).toHaveLength(1)
+      expect(payments[0].amount.toNumber()).toBe(40)
     })
 
     // Reviewer finding on PR #379: the guard used to check only

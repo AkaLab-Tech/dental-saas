@@ -712,19 +712,71 @@ describe('AppointmentFormModal — paidAmount input (task #373)', () => {
     expect(input).not.toBeDisabled()
   })
 
-  it('is prefilled from cost and stays enabled when editing an unpaid appointment', async () => {
+  // Design-change coverage (fix cycle 3, #373): prefilling from `cost`
+  // conflated "what this visit costs" with "what was paid today" — a
+  // routine reschedule of an unpaid appointment would silently submit a
+  // full-cost payment because RHF passes an untouched registered default
+  // straight through on submit. The field now starts empty in every case
+  // except a locked (already-recorded) read-only display.
+  it('starts empty and stays enabled when editing an unpaid appointment (no recorded payment)', async () => {
     const appointment = makeAppointment({ cost: 150, isPaid: false })
     renderModal({ appointment })
     await waitForOptionsLoaded()
 
     const input = getPaidAmountInput() as HTMLInputElement
-    await waitFor(() => expect(input.value).toBe('150'))
+    // Give any (incorrect) async prefill effect a chance to land before
+    // asserting the negative — waitFor alone would pass instantly on an
+    // already-empty value without ever having watched for a stray write.
+    await waitFor(() => expect(screen.getAllByRole('combobox')[0]).not.toBeDisabled())
+    expect(input.value).toBe('')
+    expect(input.value).not.toBe('150')
     expect(input).not.toBeDisabled()
     expect(screen.getByText('Se registra como pago de esta cita, separado de las entregas, y se aplica a la deuda más antigua del paciente.')).toBeInTheDocument()
   })
 
-  it('is prefilled from cost and disabled when editing an already-paid appointment', async () => {
-    const appointment = makeAppointment({ cost: 150, isPaid: true })
+  // Core regression test for the design change: with the old `cost` prefill,
+  // rescheduling an unpaid appointment without ever touching the paid-amount
+  // field would still submit `paidAmount: cost` (RHF passes through the
+  // untouched registered default), silently charging the patient — the #373
+  // round-3 critical. Pins that no default means nothing gets sent.
+  it('omits paidAmount from the submit payload when editing/rescheduling an unpaid appointment without touching the field', async () => {
+    const appointment = makeAppointment({
+      cost: 150,
+      isPaid: false,
+      hasRecordedPayment: false,
+      recordedPaidAmount: 0,
+      notes: 'Original notes',
+    })
+    const { onSubmit } = renderModal({ appointment })
+    await waitForOptionsLoaded()
+
+    // Confirm the field really is untouched/empty before submitting, so a
+    // failure here can't be misread as "field had a value but it got
+    // stripped" — the payload assertion below is about the field never being
+    // populated in the first place.
+    const input = getPaidAmountInput() as HTMLInputElement
+    expect(input.value).toBe('')
+
+    // Change something unrelated (simulating a reschedule/notes edit) and
+    // submit without ever interacting with the paid-amount field.
+    fireEvent.change(screen.getByPlaceholderText('Notas adicionales sobre la cita...'), {
+      target: { value: 'Rescheduled to next week' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /guardar cambios/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const payload = onSubmit.mock.calls[0][0] as { paidAmount?: number; notes?: string }
+    expect(payload.paidAmount).toBeUndefined()
+    expect(payload.notes).toBe('Rescheduled to next week')
+  })
+
+  it('shows the recorded paidAmount (not cost) and is disabled when editing an already-paid appointment', async () => {
+    const appointment = makeAppointment({
+      cost: 150,
+      isPaid: true,
+      hasRecordedPayment: true,
+      recordedPaidAmount: 150,
+    })
     renderModal({ appointment })
     await waitForOptionsLoaded()
 
@@ -732,6 +784,48 @@ describe('AppointmentFormModal — paidAmount input (task #373)', () => {
     await waitFor(() => expect(input.value).toBe('150'))
     expect(input).toBeDisabled()
     expect(screen.getByText('Para revertir el pago, elimine la entrega correspondiente desde la sección de pagos.')).toBeInTheDocument()
+  })
+
+  it('shows the recorded 0 (not cost) when editing an already-paid appointment with no linked payment', async () => {
+    // isPaid can be true (legacy data, or a FIFO edge case) while the server
+    // still reports no linked payment — the field must not fall back to
+    // `cost` in that case either; it is locked and mirrors recordedPaidAmount
+    // verbatim (0 renders as "0", not blank — `0?.toString() || ''`
+    // evaluates the truthy non-empty string "0", not the empty-string
+    // branch). Never contributes to the payload either way (locked).
+    const appointment = makeAppointment({
+      cost: 150,
+      isPaid: true,
+      hasRecordedPayment: false,
+      recordedPaidAmount: 0,
+    })
+    renderModal({ appointment })
+    await waitForOptionsLoaded()
+
+    const input = getPaidAmountInput() as HTMLInputElement
+    await waitFor(() => expect(input.value).toBe('0'))
+    expect(input.value).not.toBe('150')
+    expect(input).toBeDisabled()
+  })
+
+  it('stays empty when editing an already-paid appointment with recordedPaidAmount entirely absent from the response', async () => {
+    // Distinct from the "0" case above: an appointment payload that omits
+    // recordedPaidAmount altogether (undefined, not 0) renders the field
+    // truly blank, not "0" — and it must not fall back to `cost`.
+    const appointment = makeAppointment({
+      cost: 150,
+      isPaid: true,
+      hasRecordedPayment: false,
+      recordedPaidAmount: undefined,
+    })
+    renderModal({ appointment })
+    await waitForOptionsLoaded()
+
+    const input = getPaidAmountInput() as HTMLInputElement
+    await waitFor(() => expect(screen.getAllByRole('combobox')[0]).not.toBeDisabled())
+    expect(input.value).toBe('')
+    expect(input.value).not.toBe('150')
+    expect(input).toBeDisabled()
   })
 
   // Reviewer finding on PR #379: FIFO can record a payment against this

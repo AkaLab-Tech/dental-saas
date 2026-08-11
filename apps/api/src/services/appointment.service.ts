@@ -485,7 +485,7 @@ export async function createAppointment(
   }
 
   logger.info(`Appointment created: ${appointment.id} for tenant ${tenantId}`)
-  return { appointment: appointment as SafeAppointment }
+  return { appointment: (await attachRecordedPayments(tenantId, [appointment as SafeAppointment]))[0] }
 }
 
 // Legacy isPaid:true (no paidAmount sent) is interpreted as paidAmount = cost.
@@ -727,7 +727,7 @@ export async function updateAppointment(
   }
 
   logger.info(`Appointment updated: ${id}`)
-  return { appointment: appointment as SafeAppointment }
+  return { appointment: (await attachRecordedPayments(tenantId, [appointment as SafeAppointment]))[0] }
 }
 
 /**
