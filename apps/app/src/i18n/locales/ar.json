@@ -1078,6 +1078,11 @@
     "paymentCreated": "تم تسجيل الدفعة بنجاح",
     "paymentDeleted": "تم حذف الدفعة بنجاح",
     "noOutstandingBalance": "لا يوجد رصيد مستحق",
+    "statement": {
+      "appointmentsDebt": "دين من المواعيد المنجزة",
+      "remainingBudget": "الميزانية المتبقية",
+      "remainingBudgetDisclaimer": "توقّع للعلاج المخطط له وغير المنجز — ليس دينًا."
+    },
     "debtors": {
       "title": "ديون المرضى",
       "subtitle": "المرضى الذين لديهم رصيد مستحق، مرتبين حسب المبلغ المستحق",

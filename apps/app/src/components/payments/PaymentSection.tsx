@@ -6,15 +6,16 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { useAuthStore } from '@/stores/auth.store'
 import { formatCurrency } from '@/lib/format'
 import {
-  getPatientBalance,
+  getAccountStatement,
   getPatientPayments,
   createPayment,
   deletePayment,
   type Payment,
-  type PatientBalance,
+  type AccountStatement as AccountStatementData,
   type CreatePaymentData,
 } from '@/lib/payment-api'
 import { PaymentFormModal } from './PaymentFormModal'
+import { AccountStatement } from './AccountStatement'
 
 // ============================================================================
 // Main Component
@@ -41,7 +42,7 @@ export function PaymentSection({
   const { can } = usePermissions()
   const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
 
-  const [balance, setBalance] = useState<PatientBalance | null>(null)
+  const [statement, setStatement] = useState<AccountStatementData | null>(null)
   const [payments, setPayments] = useState<Payment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -57,11 +58,11 @@ export function PaymentSection({
   const fetchData = useCallback(async () => {
     setError(null)
     try {
-      const [balanceData, paymentsData] = await Promise.all([
-        getPatientBalance(patientId),
+      const [statementData, paymentsData] = await Promise.all([
+        getAccountStatement(patientId),
         getPatientPayments(patientId, { limit: 50, kind: 'ADVANCE' }),
       ])
-      setBalance(balanceData)
+      setStatement(statementData)
       setPayments(paymentsData.data)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error loading payments')
@@ -119,7 +120,7 @@ export function PaymentSection({
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-lg font-semibold text-gray-900">{t('payments.title')}</h2>
         <div className="flex items-center gap-1.5">
-          {can(Permission.PAYMENTS_CREATE) && balance && (
+          {can(Permission.PAYMENTS_CREATE) && statement && (
             <button
               onClick={() => setIsFormOpen(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
@@ -149,31 +150,8 @@ export function PaymentSection({
         </div>
       )}
 
-      {/* Balance Summary */}
-      {balance && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4 text-center">
-          <div className="bg-gray-50 px-2 py-3 rounded-lg">
-            <p className="text-xs text-gray-500 mb-1">{t('payments.totalDebt')}</p>
-            <p className="text-base font-bold text-gray-900 leading-tight">{fmtCurrency(balance.totalDebt)}</p>
-          </div>
-          <div className="bg-gray-50 px-2 py-3 rounded-lg">
-            <p className="text-xs text-gray-500 mb-1">{t('payments.totalPaid')}</p>
-            <p className="text-base font-bold text-green-600 leading-tight">{fmtCurrency(balance.totalPaid)}</p>
-          </div>
-          <div className="bg-gray-50 px-2 py-3 rounded-lg">
-            <p className="text-xs text-gray-500 mb-1">{t('payments.outstanding')}</p>
-            <p className={`text-base font-bold leading-tight ${balance.outstanding > 0 ? 'text-amber-600' : 'text-green-600'}`}>
-              {fmtCurrency(balance.outstanding)}
-            </p>
-          </div>
-          <div className="bg-green-50 px-2 py-3 rounded-lg">
-            <p className="text-xs text-gray-500 mb-1">{t('payments.credit')}</p>
-            <p className="text-base font-bold leading-tight text-green-600">
-              {fmtCurrency(balance.credit)}
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Account Statement */}
+      {statement && <AccountStatement statement={statement} formatCurrency={fmtCurrency} />}
 
       {/* Payments List */}
       {payments.length === 0 ? (
@@ -226,7 +204,7 @@ export function PaymentSection({
       )}
 
       {/* Payment Form Modal */}
-      {balance && (
+      {statement && (
         <PaymentFormModal
           isOpen={isFormOpen}
           onClose={() => setIsFormOpen(false)}

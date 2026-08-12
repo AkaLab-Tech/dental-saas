@@ -1078,6 +1078,11 @@
     "paymentCreated": "Entrega registrada exitosamente",
     "paymentDeleted": "Entrega eliminada exitosamente",
     "noOutstandingBalance": "No hay saldo pendiente",
+    "statement": {
+      "appointmentsDebt": "Deuda por consultas realizadas",
+      "remainingBudget": "Presupuesto restante",
+      "remainingBudgetDisclaimer": "Proyección de tratamiento pendiente — no es deuda."
+    },
     "debtors": {
       "title": "Deudas de pacientes",
       "subtitle": "Pacientes con saldo pendiente, ordenados por monto adeudado",
