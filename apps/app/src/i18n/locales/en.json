@@ -1055,6 +1055,7 @@
   },
   "payments": {
     "title": "Payments",
+    "subtitle": "Advances on account of future treatments",
     "newPayment": "New Payment",
     "noPayments": "No payments registered",
     "totalDebt": "Total debt",
