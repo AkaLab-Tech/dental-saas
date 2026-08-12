@@ -3,7 +3,6 @@ import { logger } from '../utils/logger.js'
 import {
   computeFifoAllocation,
   createPayment,
-  getPatientBalance,
   getTotalPaid,
   listBillableItems,
   recalculatePaidStatus,
@@ -69,6 +68,9 @@ export type SafeAppointment = {
   // (getAppointmentsByPatient, getAppointmentById). undefined elsewhere.
   paidAmount?: number
   outstanding?: number
+  // Actual linked-payment state (unlike paidAmount, never 0 due to FIFO pooling).
+  hasRecordedPayment?: boolean
+  recordedPaidAmount?: number
   patient?: {
     id: string
     firstName: string
@@ -109,6 +111,8 @@ export interface CreateAppointmentInput {
   notes?: string
   privateNotes?: string
   cost?: number
+  // Amount paid that day; legacy isPaid=true implies paidAmount = cost when omitted.
+  paidAmount?: number
   isPaid?: boolean
   createdBy?: string
 }
@@ -124,6 +128,7 @@ export interface UpdateAppointmentInput {
   notes?: string | null
   privateNotes?: string | null
   cost?: number | null
+  paidAmount?: number
   isPaid?: boolean
 }
 
@@ -261,7 +266,7 @@ export async function listAppointments(
     orderBy: { startTime: 'asc' },
   })
 
-  return appointments as SafeAppointment[]
+  return attachRecordedPayments(tenantId, appointments as SafeAppointment[])
 }
 
 /**
@@ -316,7 +321,8 @@ export async function getAppointmentById(
   }
 
   const allocationMap = await buildPatientAllocationMap(tenantId, appointment.patientId)
-  return mergeAllocation(appointment as SafeAppointment, allocationMap)
+  const merged = mergeAllocation(appointment as SafeAppointment, allocationMap)
+  return (await attachRecordedPayments(tenantId, [merged]))[0]
 }
 
 /**
@@ -365,6 +371,26 @@ function mergeAllocation(
     outstanding: split.outstanding,
     isPaid: split.isPaid,
   }
+}
+
+async function attachRecordedPayments(
+  tenantId: string,
+  appointments: SafeAppointment[]
+): Promise<SafeAppointment[]> {
+  if (appointments.length === 0) return appointments
+  const payments = await prisma.patientPayment.findMany({
+    where: {
+      tenantId,
+      appointmentId: { in: appointments.map((a) => a.id) },
+      kind: 'APPOINTMENT',
+      isActive: true,
+    },
+    select: { appointmentId: true, amount: true },
+  })
+  return appointments.map((a) => {
+    const payment = payments.find((p) => p.appointmentId === a.id)
+    return { ...a, recordedPaidAmount: payment?.amount.toNumber() ?? 0, hasRecordedPayment: !!payment }
+  })
 }
 
 /**
@@ -434,13 +460,13 @@ export async function createAppointment(
     },
   })
 
-  // Apply the paid transition (creates a capped PatientPayment or just
-  // reruns FIFO if existing credit already covers this appointment).
-  if (data.isPaid && data.cost && data.cost > 0) {
+  // Record the day's payment (kind = APPOINTMENT), separate from Entregas.
+  const effectivePaidAmount = resolveEffectivePaidAmount(data.paidAmount, data.isPaid, data.cost)
+  if (effectivePaidAmount && effectivePaidAmount > 0) {
     const transition = await applyPaidTransition(
       tenantId,
       data.patientId,
-      data.cost,
+      effectivePaidAmount,
       data.startTime,
       appointment.id
     )
@@ -459,51 +485,31 @@ export async function createAppointment(
   }
 
   logger.info(`Appointment created: ${appointment.id} for tenant ${tenantId}`)
-  return { appointment: appointment as SafeAppointment }
+  return { appointment: (await attachRecordedPayments(tenantId, [appointment as SafeAppointment]))[0] }
 }
 
-/**
- * Apply the "appointment marked as paid" side effect using FIFO accounting.
- *
- * The intent of the checkbox is "this appointment should end up paid", not
- * "register a payment of exactly `cost`". When the patient already has a
- * credit (overpayment / advance) that fully or partially covers the new
- * debt, sending a payment of `cost` would exceed the outstanding balance
- * and be rejected. Instead we:
- *   - recompute the patient's outstanding balance after the appointment
- *     write (the caller must have already persisted cost/isPaid changes);
- *   - create a payment for `min(cost, outstanding)` only when there is
- *     something left to cover;
- *   - otherwise skip the payment and just rerun FIFO so the existing
- *     credit gets allocated to the new item.
- */
+// Legacy isPaid:true (no paidAmount sent) is interpreted as paidAmount = cost.
+function resolveEffectivePaidAmount(
+  paidAmount: number | undefined,
+  isPaid: boolean | undefined,
+  cost: number | null | undefined
+): number | undefined {
+  if (paidAmount !== undefined) return paidAmount
+  if (isPaid === true) return cost ?? undefined
+  return undefined
+}
+
+// Records the day's payment as a linked PatientPayment; no cap against
+// outstanding balance — overpaying becomes credit, same as createPayment.
 async function applyPaidTransition(
   tenantId: string,
   patientId: string,
-  cost: number,
+  paidAmount: number,
   date: Date,
   appointmentId: string
 ): Promise<{ ok: true } | { ok: false; code: AppointmentErrorCode; message: string }> {
-  const balanceResult = await getPatientBalance(tenantId, patientId)
-  if (!balanceResult.success) {
-    return {
-      ok: false,
-      code: mapPaymentErrorCode(balanceResult.code),
-      message: paymentErrorMessage(balanceResult.code),
-    }
-  }
-
-  const outstanding = balanceResult.data.outstanding
-  if (outstanding <= 0) {
-    // Patient already has enough credit to cover this appointment; just
-    // rerun FIFO so isPaid flips for the now-covered items.
-    await recalculatePaidStatus(tenantId, patientId)
-    return { ok: true }
-  }
-
-  const amount = Math.min(cost, outstanding)
   const paymentResult = await createPayment(tenantId, patientId, {
-    amount,
+    amount: paidAmount,
     date,
     note: 'Pago en consulta',
     kind: 'APPOINTMENT',
@@ -519,6 +525,16 @@ async function applyPaidTransition(
   }
 
   return { ok: true }
+}
+
+// Whether an active APPOINTMENT-kind payment is already recorded, to avoid
+// double-charging when an already-paid appointment is edited again.
+async function hasRecordedAppointmentPayment(tenantId: string, appointmentId: string): Promise<boolean> {
+  const existingPayment = await prisma.patientPayment.findFirst({
+    where: { tenantId, appointmentId, kind: 'APPOINTMENT', isActive: true },
+    select: { id: true },
+  })
+  return existingPayment !== null
 }
 
 /**
@@ -668,12 +684,20 @@ export async function updateAppointment(
     data.cost !== undefined &&
     (existing.cost?.toNumber() ?? null) !== (data.cost ?? null)
 
-  // Auto-apply paid transition when going from unpaid to paid.
-  if (data.isPaid === true && !existing.isPaid && newCostNumber && newCostNumber > 0) {
+  // Skip re-recording if already paid (existing.isPaid) or already linked
+  // to a payment on this appointment (hasRecordedAppointmentPayment) — must
+  // not double-charge on re-edit.
+  const effectivePaidAmount = resolveEffectivePaidAmount(data.paidAmount, data.isPaid, newCostNumber)
+  const alreadyRecorded =
+    effectivePaidAmount && effectivePaidAmount > 0
+      ? existing.isPaid || (await hasRecordedAppointmentPayment(tenantId, id))
+      : false
+
+  if (effectivePaidAmount && effectivePaidAmount > 0 && !alreadyRecorded) {
     const transition = await applyPaidTransition(
       tenantId,
       patientId,
-      newCostNumber,
+      effectivePaidAmount,
       data.startTime ?? existing.startTime,
       id
     )
@@ -703,7 +727,7 @@ export async function updateAppointment(
   }
 
   logger.info(`Appointment updated: ${id}`)
-  return { appointment: appointment as SafeAppointment }
+  return { appointment: (await attachRecordedPayments(tenantId, [appointment as SafeAppointment]))[0] }
 }
 
 /**
@@ -950,7 +974,7 @@ export async function getAppointmentsByDoctor(
     orderBy: { startTime: 'asc' },
   })
 
-  return appointments as SafeAppointment[]
+  return attachRecordedPayments(tenantId, appointments as SafeAppointment[])
 }
 
 /**
@@ -987,5 +1011,6 @@ export async function getAppointmentsByPatient(
   })
 
   const allocationMap = await buildPatientAllocationMap(tenantId, patientId)
-  return (appointments as SafeAppointment[]).map((a) => mergeAllocation(a, allocationMap))
+  const merged = (appointments as SafeAppointment[]).map((a) => mergeAllocation(a, allocationMap))
+  return attachRecordedPayments(tenantId, merged)
 }

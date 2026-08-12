@@ -68,6 +68,10 @@ const createAppointmentSchema = z.object({
   notes: z.string().max(5000).optional(),
   privateNotes: z.string().max(5000).optional(),
   cost: costSchema,
+  // Amount the patient pays that day for this appointment; kept separate from
+  // Entregas (advance payments). isPaid is accepted for backward compatibility
+  // and interpreted as paidAmount = cost.
+  paidAmount: costSchema,
   isPaid: z.boolean().optional(),
   // Replace-set of associated budget items (SCHEDULED). Omit to leave associations untouched.
   budgetItemIds: z.array(z.string()).optional(),
@@ -84,6 +88,7 @@ const updateAppointmentSchema = z.object({
   notes: z.string().max(5000).optional().nullable(),
   privateNotes: z.string().max(5000).optional().nullable(),
   cost: costSchema,
+  paidAmount: costSchema,
   isPaid: z.boolean().optional(),
   // Replace-set of associated budget items (SCHEDULED). Omit to leave associations untouched.
   budgetItemIds: z.array(z.string()).optional(),

@@ -341,6 +341,105 @@ describe('appointments.store', () => {
         })
       ).rejects.toThrow('Conflict')
     })
+
+    // Task #373 (reviewer fix, cycle 4): a paid create runs pooled FIFO on
+    // the server, which can flip `isPaid`/`recordedPaidAmount` on *other*,
+    // already-cached appointments (e.g. an older unpaid visit the pool paid
+    // off first). The append-only branch below would leave that stale object
+    // in the store; only a full refetch reflects the flip. This is the exact
+    // branch the reviewer found dead (gated on the removed `data.isPaid`).
+    const staleOlderAppointment: Appointment = {
+      ...mockAppointment2,
+      id: 'appointment-older',
+      isPaid: false,
+      hasRecordedPayment: false,
+      recordedPaidAmount: 0,
+    }
+
+    const flippedOlderAppointment: Appointment = {
+      ...staleOlderAppointment,
+      isPaid: true,
+      hasRecordedPayment: true,
+      recordedPaidAmount: 75,
+    }
+
+    const newlyCreatedAppointment: Appointment = {
+      ...mockAppointment,
+      id: 'appointment-new',
+    }
+
+    it('refetches the full list so a FIFO-flipped older appointment is no longer stale (paidAmount > 0)', async () => {
+      useAppointmentsStore.setState({
+        appointments: [staleOlderAppointment],
+        calendarAppointments: [staleOlderAppointment],
+      })
+      ;(createAppointment as Mock).mockResolvedValue(newlyCreatedAppointment)
+      ;(getAppointments as Mock).mockResolvedValue([flippedOlderAppointment, newlyCreatedAppointment])
+      ;(getAppointmentStats as Mock).mockResolvedValue(mockStats)
+
+      const result = await useAppointmentsStore.getState().addAppointment({
+        patientId: 'patient-789',
+        doctorId: 'doctor-101',
+        startTime: '2024-01-15T10:00:00Z',
+        endTime: '2024-01-15T11:00:00Z',
+        paidAmount: 100,
+      })
+
+      expect(result).toEqual(newlyCreatedAppointment)
+      expect(getAppointments).toHaveBeenCalledTimes(1)
+
+      // The essential property: the store's appointments array is exactly
+      // the freshly fetched list — the stale, still-unpaid cached object
+      // from before the create does not survive.
+      const state = useAppointmentsStore.getState()
+      expect(state.appointments).toEqual([flippedOlderAppointment, newlyCreatedAppointment])
+      const olderInStore = state.appointments.find((a) => a.id === 'appointment-older')
+      expect(olderInStore?.isPaid).toBe(true)
+      expect(olderInStore?.hasRecordedPayment).toBe(true)
+      expect(olderInStore?.recordedPaidAmount).toBe(75)
+    })
+
+    it('does not refetch the full list when paidAmount is absent (append branch preserved)', async () => {
+      useAppointmentsStore.setState({
+        appointments: [staleOlderAppointment],
+        calendarAppointments: [staleOlderAppointment],
+      })
+      ;(createAppointment as Mock).mockResolvedValue(newlyCreatedAppointment)
+      ;(getAppointmentStats as Mock).mockResolvedValue(mockStats)
+
+      await useAppointmentsStore.getState().addAppointment({
+        patientId: 'patient-789',
+        doctorId: 'doctor-101',
+        startTime: '2024-01-15T10:00:00Z',
+        endTime: '2024-01-15T11:00:00Z',
+      })
+
+      expect(getAppointments).not.toHaveBeenCalled()
+      const state = useAppointmentsStore.getState()
+      expect(state.appointments).toEqual([staleOlderAppointment, newlyCreatedAppointment])
+      expect(state.calendarAppointments).toEqual([staleOlderAppointment, newlyCreatedAppointment])
+    })
+
+    it('does not refetch the full list when paidAmount is 0 (append branch preserved)', async () => {
+      useAppointmentsStore.setState({
+        appointments: [staleOlderAppointment],
+        calendarAppointments: [staleOlderAppointment],
+      })
+      ;(createAppointment as Mock).mockResolvedValue(newlyCreatedAppointment)
+      ;(getAppointmentStats as Mock).mockResolvedValue(mockStats)
+
+      await useAppointmentsStore.getState().addAppointment({
+        patientId: 'patient-789',
+        doctorId: 'doctor-101',
+        startTime: '2024-01-15T10:00:00Z',
+        endTime: '2024-01-15T11:00:00Z',
+        paidAmount: 0,
+      })
+
+      expect(getAppointments).not.toHaveBeenCalled()
+      const state = useAppointmentsStore.getState()
+      expect(state.appointments).toEqual([staleOlderAppointment, newlyCreatedAppointment])
+    })
   })
 
   describe('editAppointment', () => {

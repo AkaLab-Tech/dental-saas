@@ -164,6 +164,12 @@ function makeAppointment(overrides: Partial<Appointment> = {}): Appointment {
     privateNotes: null,
     cost: null,
     isPaid: false,
+    // All four read paths always populate these (attachRecordedPayments runs
+    // unconditionally — see appointment.service.ts), so the realistic default
+    // is "no linked payment", not "field absent". A test that needs a
+    // recorded payment must opt in explicitly via overrides.
+    hasRecordedPayment: false,
+    recordedPaidAmount: 0,
     isActive: true,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
@@ -257,9 +263,10 @@ async function selectDoctor() {
   fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'doc-1' } })
 }
 
-// The form also has a "Pagado" checkbox, so budget item checkboxes must be
-// scoped to their row (found via the item's description text) rather than
-// queried globally.
+// The form lists one checkbox per budget item row, so budget item checkboxes
+// must be scoped to their row (found via the item's description text) rather
+// than queried globally — a global query would be ambiguous whenever more
+// than one item is rendered.
 function getItemCheckbox(description: string) {
   const row = screen.getByText(description).closest('label')
   if (!row) throw new Error(`No row found for "${description}"`)
@@ -671,6 +678,212 @@ describe('AppointmentFormModal — budget items association', () => {
         expect((screen.getAllByRole('combobox')[0] as HTMLSelectElement).value).toBe('doc-1')
       })
     })
+  })
+})
+
+// Coverage for task #373: the old "Pagado" checkbox was replaced with a
+// numeric "Monto abonado" ($) input, empty by default when creating/editing
+// an unpaid appointment, and disabled (prefilled with the recorded amount)
+// once a payment has actually been recorded (isPaid / recordedPaidAmount
+// derived from FIFO — see appointment.service.ts).
+const PAID_AMOUNT_LABEL = 'Monto abonado ($)'
+
+function getPaidAmountInput() {
+  const label = screen.getByText(PAID_AMOUNT_LABEL)
+  const container = label.parentElement
+  if (!container) throw new Error('No paidAmount container found')
+  return within(container).getByRole('spinbutton')
+}
+
+describe('AppointmentFormModal — paidAmount input (task #373)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getDoctorsMock.mockResolvedValue([mockDoctor])
+    getPatientsMock.mockResolvedValue([mockPatientRecord])
+    listBudgetsByPatientMock.mockResolvedValue({ data: [], total: 0 })
+    getAppointmentBudgetItemsMock.mockResolvedValue([])
+  })
+
+  it('is empty and enabled when creating a new appointment', async () => {
+    renderModal()
+    await waitForOptionsLoaded()
+
+    const input = getPaidAmountInput() as HTMLInputElement
+    expect(input.value).toBe('')
+    expect(input).not.toBeDisabled()
+  })
+
+  // Design-change coverage (fix cycle 3, #373): prefilling from `cost`
+  // conflated "what this visit costs" with "what was paid today" — a
+  // routine reschedule of an unpaid appointment would silently submit a
+  // full-cost payment because RHF passes an untouched registered default
+  // straight through on submit. The field now starts empty in every case
+  // except a locked (already-recorded) read-only display.
+  it('starts empty and stays enabled when editing an unpaid appointment (no recorded payment)', async () => {
+    const appointment = makeAppointment({ cost: 150, isPaid: false })
+    renderModal({ appointment })
+    await waitForOptionsLoaded()
+
+    const input = getPaidAmountInput() as HTMLInputElement
+    // Give any (incorrect) async prefill effect a chance to land before
+    // asserting the negative — waitFor alone would pass instantly on an
+    // already-empty value without ever having watched for a stray write.
+    await waitFor(() => expect(screen.getAllByRole('combobox')[0]).not.toBeDisabled())
+    expect(input.value).toBe('')
+    expect(input.value).not.toBe('150')
+    expect(input).not.toBeDisabled()
+    expect(screen.getByText('Se registra como pago de esta cita, separado de las entregas, y se aplica a la deuda más antigua del paciente.')).toBeInTheDocument()
+  })
+
+  // Core regression test for the design change: with the old `cost` prefill,
+  // rescheduling an unpaid appointment without ever touching the paid-amount
+  // field would still submit `paidAmount: cost` (RHF passes through the
+  // untouched registered default), silently charging the patient — the #373
+  // round-3 critical. Pins that no default means nothing gets sent.
+  it('omits paidAmount from the submit payload when editing/rescheduling an unpaid appointment without touching the field', async () => {
+    const appointment = makeAppointment({
+      cost: 150,
+      isPaid: false,
+      hasRecordedPayment: false,
+      recordedPaidAmount: 0,
+      notes: 'Original notes',
+    })
+    const { onSubmit } = renderModal({ appointment })
+    await waitForOptionsLoaded()
+
+    // Confirm the field really is untouched/empty before submitting, so a
+    // failure here can't be misread as "field had a value but it got
+    // stripped" — the payload assertion below is about the field never being
+    // populated in the first place.
+    const input = getPaidAmountInput() as HTMLInputElement
+    expect(input.value).toBe('')
+
+    // Change something unrelated (simulating a reschedule/notes edit) and
+    // submit without ever interacting with the paid-amount field.
+    fireEvent.change(screen.getByPlaceholderText('Notas adicionales sobre la cita...'), {
+      target: { value: 'Rescheduled to next week' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /guardar cambios/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const payload = onSubmit.mock.calls[0][0] as { paidAmount?: number; notes?: string }
+    expect(payload.paidAmount).toBeUndefined()
+    expect(payload.notes).toBe('Rescheduled to next week')
+  })
+
+  it('shows the recorded paidAmount (not cost) and is disabled when editing an already-paid appointment', async () => {
+    const appointment = makeAppointment({
+      cost: 150,
+      isPaid: true,
+      hasRecordedPayment: true,
+      recordedPaidAmount: 150,
+    })
+    renderModal({ appointment })
+    await waitForOptionsLoaded()
+
+    const input = getPaidAmountInput() as HTMLInputElement
+    await waitFor(() => expect(input.value).toBe('150'))
+    expect(input).toBeDisabled()
+    expect(screen.getByText('Para revertir el pago, elimine la entrega correspondiente desde la sección de pagos.')).toBeInTheDocument()
+  })
+
+  it('shows the recorded 0 (not cost) when editing an already-paid appointment with no linked payment', async () => {
+    // isPaid can be true (legacy data, or a FIFO edge case) while the server
+    // still reports no linked payment — the field must not fall back to
+    // `cost` in that case either; it is locked and mirrors recordedPaidAmount
+    // verbatim (0 renders as "0", not blank — `0?.toString() || ''`
+    // evaluates the truthy non-empty string "0", not the empty-string
+    // branch). Never contributes to the payload either way (locked).
+    const appointment = makeAppointment({
+      cost: 150,
+      isPaid: true,
+      hasRecordedPayment: false,
+      recordedPaidAmount: 0,
+    })
+    renderModal({ appointment })
+    await waitForOptionsLoaded()
+
+    const input = getPaidAmountInput() as HTMLInputElement
+    await waitFor(() => expect(input.value).toBe('0'))
+    expect(input.value).not.toBe('150')
+    expect(input).toBeDisabled()
+  })
+
+  it('stays empty when editing an already-paid appointment with recordedPaidAmount entirely absent from the response', async () => {
+    // Distinct from the "0" case above: an appointment payload that omits
+    // recordedPaidAmount altogether (undefined, not 0) renders the field
+    // truly blank, not "0" — and it must not fall back to `cost`.
+    const appointment = makeAppointment({
+      cost: 150,
+      isPaid: true,
+      hasRecordedPayment: false,
+      recordedPaidAmount: undefined,
+    })
+    renderModal({ appointment })
+    await waitForOptionsLoaded()
+
+    const input = getPaidAmountInput() as HTMLInputElement
+    await waitFor(() => expect(screen.getAllByRole('combobox')[0]).not.toBeDisabled())
+    expect(input.value).toBe('')
+    expect(input.value).not.toBe('150')
+    expect(input).toBeDisabled()
+  })
+
+  // Reviewer finding on PR #379: FIFO can record a payment against this
+  // appointment (paidAmount > 0) without fully covering it — e.g. the pool
+  // got applied to an older visit first — leaving isPaid false. The old
+  // prefill (`cost` only) and the old hint (`alreadyPaidHint`, gated on
+  // isPaid) both missed this case entirely.
+  it('is prefilled from the recorded paidAmount (not cost) and disabled when paidAmount>0 but isPaid is false (#373 reviewer fix)', async () => {
+    const appointment = makeAppointment({
+      cost: 150,
+      hasRecordedPayment: true,
+      recordedPaidAmount: 40,
+      isPaid: false,
+    })
+    renderModal({ appointment })
+    await waitForOptionsLoaded()
+
+    const input = getPaidAmountInput() as HTMLInputElement
+    await waitFor(() => expect(input.value).toBe('40'))
+    expect(input.value).not.toBe('150')
+    expect(input).toBeDisabled()
+    expect(
+      screen.getByText('Ya hay un pago registrado para esta cita. Para modificarlo, edítelo desde la sección de pagos.')
+    ).toBeInTheDocument()
+  })
+
+  // Reviewer finding on PR #379: the JSX `disabled` attribute previously used
+  // on this input does NOT stop react-hook-form from submitting its value —
+  // only `register(name, { disabled })` does. This test does not assert on
+  // the input's `disabled` DOM attribute (that would just be re-testing RHF's
+  // own bookkeeping, already covered above); it instead forces a DOM value
+  // that diverges from the locked/prefilled one and inspects the actual
+  // payload handed to `onSubmit`, which is what
+  // `register('paidAmount', { disabled: paidAmountLocked })` is there to
+  // protect — RHF omits a disabled field from submitted values entirely,
+  // regardless of what the DOM element's live value says.
+  it('never includes paidAmount in the submitted payload when locked, even if the DOM value is forced to differ (#373 reviewer fix)', async () => {
+    const appointment = makeAppointment({
+      id: 'apt-1',
+      cost: 150,
+      hasRecordedPayment: true,
+      recordedPaidAmount: 40,
+      isPaid: false,
+    })
+    const { onSubmit } = renderModal({ appointment })
+    await waitForOptionsLoaded()
+
+    const input = getPaidAmountInput() as HTMLInputElement
+    await waitFor(() => expect(input.value).toBe('40'))
+
+    fireEvent.change(input, { target: { value: '999' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /guardar cambios/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const payload = onSubmit.mock.calls[0][0] as { paidAmount?: number }
+    expect(payload.paidAmount).toBeUndefined()
   })
 })
 
