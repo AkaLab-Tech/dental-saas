@@ -33,13 +33,6 @@ export function AccountStatement({ statement, formatCurrency }: AccountStatement
           <p className="text-base font-bold leading-tight text-green-600">
             {formatCurrency(statement.advancesCredit)}
           </p>
-          {statement.advancesTotal > 0 && (
-            <p className="text-xs text-gray-400 mt-1">
-              {t('payments.statement.advancesAppliedHint', {
-                amount: formatCurrency(statement.advancesTotal),
-              })}
-            </p>
-          )}
         </div>
       </div>
 

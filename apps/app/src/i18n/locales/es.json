@@ -1081,8 +1081,7 @@
     "statement": {
       "appointmentsDebt": "Deuda por consultas realizadas",
       "remainingBudget": "Presupuesto restante",
-      "remainingBudgetDisclaimer": "Proyección de tratamiento pendiente — no es deuda.",
-      "advancesAppliedHint": "de las cuales {{amount}} entregadas"
+      "remainingBudgetDisclaimer": "Proyección de tratamiento pendiente — no es deuda."
     },
     "debtors": {
       "title": "Deudas de pacientes",

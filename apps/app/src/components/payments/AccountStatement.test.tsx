@@ -157,19 +157,51 @@ describe('AccountStatement', () => {
     })
   })
 
-  describe('"de las cuales X entregadas" hint', () => {
-    it('shows the hint under the credit figure when advancesTotal > 0', () => {
-      renderStatement(makeStatement({ advancesCredit: 80, advancesTotal: 30 }))
+  // REGRESSION GUARD: a previous version rendered a "de las cuales X
+  // entregadas" ("of which X were advances") hint under the credit figure,
+  // using advancesTotal (sum of ALL active ADVANCE payments, applied or
+  // not) as if it were a subset of advancesCredit (Math.max(0, totalPaid -
+  // totalBilled), the unapplied leftover only). Whenever totalBilled > 0,
+  // advancesTotal can legitimately exceed advancesCredit, so the hint read
+  // as a bigger "subset" than the figure it sat under (reviewer repro:
+  // "Saldo a favor USD 200.00 de las cuales USD 500.00 entregadas"). The
+  // hint was removed entirely — the individual entregas are already listed
+  // in the payments list below the statement. This must never come back.
+  describe('does not render a stale/misleading fourth number under the credit figure', () => {
+    it('never renders advancesTotal, even when it exceeds advancesCredit and totalBilled > 0', () => {
+      // advancesCredit (200) < advancesTotal (500) is the realistic case:
+      // totalBilled (300) > 0 means some advances were already applied,
+      // leaving less credit than was ever deposited. 500 does not collide
+      // with any other figure/formatted substring rendered by this
+      // component (debt=0, projection=0, credit=200).
+      const { container } = renderStatement(
+        makeStatement({
+          appointmentsDebt: 0,
+          advancesCredit: 200,
+          remainingBudgetProjection: 0,
+          totalBilled: 300,
+          totalPaid: 500,
+          advancesTotal: 500,
+        })
+      )
 
-      expect(screen.getByText(/de las cuales/)).toBeInTheDocument()
-      expect(screen.getByText(/USD\s*30\.00/)).toBeInTheDocument()
-    })
+      const rendered = container.textContent ?? ''
 
-    it('does not show the hint when advancesTotal is 0', () => {
-      renderStatement(makeStatement({ advancesCredit: 0, advancesTotal: 0 }))
+      // The correct figure (advancesCredit) renders — fails loudly if the
+      // two numbers were ever swapped instead of the hint being removed.
+      expect(valueFor('Saldo a favor')).toMatch(/USD\s*200\.00/)
 
-      expect(screen.queryByText(/de las cuales/)).not.toBeInTheDocument()
+      // The forbidden number (advancesTotal) must not appear anywhere.
+      expect(rendered).not.toContain(formatCurrency(500, 'USD'))
+      expect(rendered).not.toMatch(/500/)
 
+      // No subset-implying copy in any language this component could render.
+      expect(rendered).not.toMatch(/de las cuales/)
+      expect(rendered).not.toMatch(/of which/)
+      expect(rendered).not.toMatch(/منها/)
+
+      // The credit card is back to exactly one value line (label + amount),
+      // no secondary hint paragraph.
       const creditCard = screen.getByText('Saldo a favor').closest('.rounded-lg') as HTMLElement
       expect(creditCard.querySelectorAll('p')).toHaveLength(2)
     })

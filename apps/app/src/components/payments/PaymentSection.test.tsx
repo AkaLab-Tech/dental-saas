@@ -87,9 +87,8 @@ function renderSection(props: Partial<Parameters<typeof PaymentSection>[0]> = {}
   return render(<PaymentSection patientId="patient-1" {...props} />)
 }
 
-// Locates the value <p> for a statement figure regardless of whether an
-// optional secondary hint line follows it (the credit card renders a 3rd <p>
-// only when advancesTotal > 0), so tests don't accidentally match the hint.
+// Locates the value <p> for a statement figure (the label's own card always
+// renders exactly a label + value pair).
 function statementValueFor(label: string): string | null | undefined {
   const card = screen.getByText(label).closest('.rounded-lg') as HTMLElement
   return card.querySelectorAll('p')[1]?.textContent

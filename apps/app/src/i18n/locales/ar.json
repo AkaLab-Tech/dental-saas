@@ -1081,8 +1081,7 @@
     "statement": {
       "appointmentsDebt": "دين من المواعيد المنجزة",
       "remainingBudget": "الميزانية المتبقية",
-      "remainingBudgetDisclaimer": "توقّع للعلاج المخطط له وغير المنجز — ليس دينًا.",
-      "advancesAppliedHint": "منها {{amount}} كدفعات مقدمة"
+      "remainingBudgetDisclaimer": "توقّع للعلاج المخطط له وغير المنجز — ليس دينًا."
     },
     "debtors": {
       "title": "ديون المرضى",

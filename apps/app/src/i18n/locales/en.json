@@ -1072,8 +1072,7 @@
     "statement": {
       "appointmentsDebt": "Debt from performed appointments",
       "remainingBudget": "Remaining budget",
-      "remainingBudgetDisclaimer": "Projection of pending treatment — not a debt.",
-      "advancesAppliedHint": "of which {{amount}} were advances"
+      "remainingBudgetDisclaimer": "Projection of pending treatment — not a debt."
     },
     "debtors": {
       "title": "Patient Debts",
