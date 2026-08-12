@@ -13,6 +13,8 @@ export interface Payment {
   note: string | null
   createdBy: string | null
   isActive: boolean
+  kind: 'APPOINTMENT' | 'ADVANCE'
+  appointmentId: string | null
   createdAt: string
   updatedAt: string
 }
@@ -74,12 +76,13 @@ export async function getPatientBalance(patientId: string): Promise<PatientBalan
 
 export async function getPatientPayments(
   patientId: string,
-  params?: { limit?: number; offset?: number }
+  params?: { limit?: number; offset?: number; kind?: 'APPOINTMENT' | 'ADVANCE' }
 ): Promise<PaymentListResponse> {
   const queryParams = new URLSearchParams()
 
   if (params?.limit) queryParams.set('limit', String(params.limit))
   if (params?.offset) queryParams.set('offset', String(params.offset))
+  if (params?.kind) queryParams.set('kind', params.kind)
 
   const queryString = queryParams.toString()
   const url = `/patients/${patientId}/payments${queryString ? `?${queryString}` : ''}`

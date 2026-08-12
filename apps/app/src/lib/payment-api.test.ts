@@ -28,6 +28,8 @@ const mockPayment: Payment = {
   note: 'Partial cash payment',
   createdBy: 'user-1',
   isActive: true,
+  kind: 'ADVANCE',
+  appointmentId: null,
   createdAt: '2026-02-15T00:00:00Z',
   updatedAt: '2026-02-15T00:00:00Z',
 }
@@ -36,6 +38,7 @@ const mockBalance: PatientBalance = {
   totalDebt: 500,
   totalPaid: 150,
   outstanding: 350,
+  credit: 0,
 }
 
 const mockPagination = {
@@ -97,6 +100,40 @@ describe('payment-api', () => {
       expect(apiClient.get).toHaveBeenCalledWith(
         '/patients/patient-789/payments?limit=5'
       )
+    })
+
+    it('should forward the kind filter on the query string when passed', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [mockPayment], pagination: mockPagination },
+      })
+
+      await getPatientPayments('patient-789', { kind: 'ADVANCE' })
+
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/patients/patient-789/payments?kind=ADVANCE'
+      )
+    })
+
+    it('should combine kind with limit and offset on the query string', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [mockPayment], pagination: mockPagination },
+      })
+
+      await getPatientPayments('patient-789', { limit: 50, offset: 0, kind: 'APPOINTMENT' })
+
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/patients/patient-789/payments?limit=50&kind=APPOINTMENT'
+      )
+    })
+
+    it('should omit the kind param entirely when not passed', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [], pagination: mockPagination },
+      })
+
+      await getPatientPayments('patient-789', {})
+
+      expect(apiClient.get).toHaveBeenCalledWith('/patients/patient-789/payments')
     })
   })
 

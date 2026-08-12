@@ -59,7 +59,7 @@ export function PaymentSection({
     try {
       const [balanceData, paymentsData] = await Promise.all([
         getPatientBalance(patientId),
-        getPatientPayments(patientId, { limit: 50 }),
+        getPatientPayments(patientId, { limit: 50, kind: 'ADVANCE' }),
       ])
       setBalance(balanceData)
       setPayments(paymentsData.data)
@@ -116,7 +116,7 @@ export function PaymentSection({
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-1">
         <h2 className="text-lg font-semibold text-gray-900">{t('payments.title')}</h2>
         <div className="flex items-center gap-1.5">
           {can(Permission.PAYMENTS_CREATE) && balance && (
@@ -139,6 +139,7 @@ export function PaymentSection({
           )}
         </div>
       </div>
+      <p className="text-sm text-gray-500 mb-4">{t('payments.subtitle')}</p>
 
       {/* Error */}
       {error && (
@@ -150,7 +151,7 @@ export function PaymentSection({
 
       {/* Balance Summary */}
       {balance && (
-        <div className="grid grid-cols-3 gap-2 mb-4 text-center">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4 text-center">
           <div className="bg-gray-50 px-2 py-3 rounded-lg">
             <p className="text-xs text-gray-500 mb-1">{t('payments.totalDebt')}</p>
             <p className="text-base font-bold text-gray-900 leading-tight">{fmtCurrency(balance.totalDebt)}</p>
@@ -159,21 +160,18 @@ export function PaymentSection({
             <p className="text-xs text-gray-500 mb-1">{t('payments.totalPaid')}</p>
             <p className="text-base font-bold text-green-600 leading-tight">{fmtCurrency(balance.totalPaid)}</p>
           </div>
-          {balance.credit > 0 ? (
-            <div className="bg-green-50 px-2 py-3 rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">{t('payments.credit')}</p>
-              <p className="text-base font-bold leading-tight text-green-600">
-                {fmtCurrency(balance.credit)}
-              </p>
-            </div>
-          ) : (
-            <div className="bg-gray-50 px-2 py-3 rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">{t('payments.outstanding')}</p>
-              <p className={`text-base font-bold leading-tight ${balance.outstanding > 0 ? 'text-amber-600' : 'text-green-600'}`}>
-                {fmtCurrency(balance.outstanding)}
-              </p>
-            </div>
-          )}
+          <div className="bg-gray-50 px-2 py-3 rounded-lg">
+            <p className="text-xs text-gray-500 mb-1">{t('payments.outstanding')}</p>
+            <p className={`text-base font-bold leading-tight ${balance.outstanding > 0 ? 'text-amber-600' : 'text-green-600'}`}>
+              {fmtCurrency(balance.outstanding)}
+            </p>
+          </div>
+          <div className="bg-green-50 px-2 py-3 rounded-lg">
+            <p className="text-xs text-gray-500 mb-1">{t('payments.credit')}</p>
+            <p className="text-base font-bold leading-tight text-green-600">
+              {fmtCurrency(balance.credit)}
+            </p>
+          </div>
         </div>
       )}
 
