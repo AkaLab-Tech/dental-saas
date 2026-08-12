@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
 import { app } from '../app.js'
 import { prisma, Prisma } from '@dental/database'
+import { Permission, UserRole, hasPermission } from '@dental/shared'
 import { hashPassword } from '../services/auth.service.js'
 import { sign } from 'jsonwebtoken'
 
@@ -1484,6 +1485,719 @@ describe('Patient Payments Routes', () => {
       expect(linkById.get(paymentIds.noCandidate)).toBeNull()
       expect(linkById.get(paymentIds.otherNote)).toBeNull()
       expect(linkById.get(paymentIds.noNote)).toBeNull()
+    })
+  })
+
+  // ==========================================================================
+  // GET /api/patients/:id/statement — three-number account statement
+  // ==========================================================================
+  describe('GET /api/patients/:id/statement', () => {
+    // Every patient below is created fresh so the numbers are exact and do not
+    // depend on the fixtures of the other suites in this file.
+    let emptyPatientId: string
+    let performedWorkPatientId: string
+    let labworkOnlyPatientId: string
+    let convenioPatientId: string
+    let advancePatientId: string
+    let mixedKindPatientId: string
+    let budgetFilterPatientId: string
+    // Budget rows of budgetFilterPatient that the per-exclusion tests toggle.
+    let executedItemId: string
+    let cancelledItemId: string
+    let draftBudgetId: string
+    let cancelledBudgetId: string
+    let inactiveBudgetId: string
+    const createdPatientIds: string[] = []
+
+    type BudgetItemSeed = {
+      status: 'PENDING' | 'SCHEDULED' | 'IN_PROGRESS' | 'EXECUTED' | 'CANCELLED'
+      totalPrice: number
+    }
+
+    async function seedBudget(input: {
+      patientId: string
+      status: 'DRAFT' | 'APPROVED' | 'PARTIAL' | 'COMPLETED' | 'CANCELLED'
+      isActive?: boolean
+      items: BudgetItemSeed[]
+      tenantId?: string
+    }) {
+      return prisma.budget.create({
+        data: {
+          tenantId: input.tenantId ?? tenantId,
+          patientId: input.patientId,
+          status: input.status,
+          isActive: input.isActive ?? true,
+          totalAmount: input.items.reduce((sum, i) => sum + i.totalPrice, 0),
+          items: {
+            create: input.items.map((item, index) => ({
+              description: `Item ${index + 1}`,
+              quantity: 1,
+              unitPrice: item.totalPrice,
+              totalPrice: item.totalPrice,
+              status: item.status,
+              order: index,
+            })),
+          },
+        },
+        include: { items: { orderBy: { order: 'asc' } } },
+      })
+    }
+
+    async function createStatementPatient(firstName: string) {
+      const patient = await prisma.patient.create({
+        data: { tenantId, firstName, lastName: 'Statement' },
+      })
+      createdPatientIds.push(patient.id)
+      return patient.id
+    }
+
+    async function getStatement(patientId: string, token = adminToken) {
+      const res = await request(app)
+        .get(`/api/patients/${patientId}/statement`)
+        .set('Authorization', `Bearer ${token}`)
+      expect(res.status).toBe(200)
+      return res.body.data
+    }
+
+    async function getBalance(patientId: string, token = adminToken) {
+      const res = await request(app)
+        .get(`/api/patients/${patientId}/balance`)
+        .set('Authorization', `Bearer ${token}`)
+      expect(res.status).toBe(200)
+      return res.body.data
+    }
+
+    beforeAll(async () => {
+      // 1. Nothing at all: no billable items, no payments, no budgets.
+      emptyPatientId = await createStatementPatient('EmptyStatement')
+
+      // 2. Performed work (appointment 300 + labwork 100) partially paid (150),
+      //    plus a live 5000 budget that must stay out of the debt figure.
+      performedWorkPatientId = await createStatementPatient('PerformedWork')
+      await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId: performedWorkPatientId,
+          doctorId,
+          startTime: new Date('2026-02-01T10:00:00Z'),
+          endTime: new Date('2026-02-01T10:30:00Z'),
+          cost: 300,
+          status: 'COMPLETED',
+        },
+      })
+      await prisma.labwork.create({
+        data: {
+          tenantId,
+          patientId: performedWorkPatientId,
+          lab: 'Statement Lab',
+          date: new Date('2026-02-10T10:00:00Z'),
+          price: 100,
+          priceIncludedInAppointment: false,
+        },
+      })
+      await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId: performedWorkPatientId,
+          amount: 150,
+          date: new Date('2026-02-05T10:00:00Z'),
+          kind: 'ADVANCE',
+        },
+      })
+      await seedBudget({
+        patientId: performedWorkPatientId,
+        status: 'APPROVED',
+        items: [
+          { status: 'PENDING', totalPrice: 3000 },
+          { status: 'PENDING', totalPrice: 2000 },
+        ],
+      })
+
+      // 3. Labwork only: one standalone labwork (billable) and one whose price
+      //    is already included in an appointment (not billable).
+      labworkOnlyPatientId = await createStatementPatient('LabworkOnly')
+      await prisma.labwork.create({
+        data: {
+          tenantId,
+          patientId: labworkOnlyPatientId,
+          lab: 'Statement Lab',
+          date: new Date('2026-03-01T10:00:00Z'),
+          price: 80,
+          priceIncludedInAppointment: false,
+        },
+      })
+      await prisma.labwork.create({
+        data: {
+          tenantId,
+          patientId: labworkOnlyPatientId,
+          lab: 'Statement Lab',
+          date: new Date('2026-03-02T10:00:00Z'),
+          price: 999,
+          priceIncludedInAppointment: true,
+        },
+      })
+
+      // 4. Convenio-style: a large approved plan, nothing performed yet.
+      convenioPatientId = await createStatementPatient('Convenio')
+      await seedBudget({
+        patientId: convenioPatientId,
+        status: 'APPROVED',
+        items: [
+          { status: 'PENDING', totalPrice: 9000 },
+          { status: 'SCHEDULED', totalPrice: 3000 },
+        ],
+      })
+
+      // 5. Advance larger than the performed work: FIFO consumes 100 of the 250.
+      advancePatientId = await createStatementPatient('AdvanceCredit')
+      await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId: advancePatientId,
+          doctorId,
+          startTime: new Date('2026-04-05T10:00:00Z'),
+          endTime: new Date('2026-04-05T10:30:00Z'),
+          cost: 100,
+          status: 'COMPLETED',
+        },
+      })
+      await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId: advancePatientId,
+          amount: 250,
+          date: new Date('2026-04-01T10:00:00Z'),
+          kind: 'ADVANCE',
+        },
+      })
+
+      // 6. Mixed payment kinds: an APPOINTMENT payment covers the visit and a
+      //    separate ADVANCE is the only thing left as credit.
+      mixedKindPatientId = await createStatementPatient('MixedKind')
+      const mixedAppointment = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId: mixedKindPatientId,
+          doctorId,
+          startTime: new Date('2026-05-05T10:00:00Z'),
+          endTime: new Date('2026-05-05T10:30:00Z'),
+          cost: 200,
+          status: 'COMPLETED',
+          isPaid: true,
+        },
+      })
+      await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId: mixedKindPatientId,
+          amount: 200,
+          date: new Date('2026-05-05T10:00:00Z'),
+          kind: 'APPOINTMENT',
+          appointmentId: mixedAppointment.id,
+        },
+      })
+      await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId: mixedKindPatientId,
+          amount: 40,
+          date: new Date('2026-05-06T10:00:00Z'),
+          kind: 'ADVANCE',
+        },
+      })
+
+      // 7. Budget filter matrix. Expected projection (baseline):
+      //    APPROVED active  -> PENDING 100 + SCHEDULED 50 + IN_PROGRESS 25 = 175
+      //                        (EXECUTED 1000 and CANCELLED 500 excluded)
+      //    PARTIAL active   -> PENDING 200                                 = 200
+      //    DRAFT active     -> PENDING 400                                 =   0
+      //    CANCELLED active -> PENDING 800                                 =   0
+      //    APPROVED inactive-> PENDING 1600                                =   0
+      //    COMPLETED active -> EXECUTED 3200                               =   0
+      //    total                                                           = 375
+      budgetFilterPatientId = await createStatementPatient('BudgetFilter')
+      const approvedBudget = await seedBudget({
+        patientId: budgetFilterPatientId,
+        status: 'APPROVED',
+        items: [
+          { status: 'PENDING', totalPrice: 100 },
+          { status: 'SCHEDULED', totalPrice: 50 },
+          { status: 'IN_PROGRESS', totalPrice: 25 },
+          { status: 'EXECUTED', totalPrice: 1000 },
+          { status: 'CANCELLED', totalPrice: 500 },
+        ],
+      })
+      executedItemId = approvedBudget.items[3].id
+      cancelledItemId = approvedBudget.items[4].id
+
+      await seedBudget({
+        patientId: budgetFilterPatientId,
+        status: 'PARTIAL',
+        items: [{ status: 'PENDING', totalPrice: 200 }],
+      })
+      draftBudgetId = (
+        await seedBudget({
+          patientId: budgetFilterPatientId,
+          status: 'DRAFT',
+          items: [{ status: 'PENDING', totalPrice: 400 }],
+        })
+      ).id
+      cancelledBudgetId = (
+        await seedBudget({
+          patientId: budgetFilterPatientId,
+          status: 'CANCELLED',
+          items: [{ status: 'PENDING', totalPrice: 800 }],
+        })
+      ).id
+      inactiveBudgetId = (
+        await seedBudget({
+          patientId: budgetFilterPatientId,
+          status: 'APPROVED',
+          isActive: false,
+          items: [{ status: 'PENDING', totalPrice: 1600 }],
+        })
+      ).id
+      await seedBudget({
+        patientId: budgetFilterPatientId,
+        status: 'COMPLETED',
+        items: [{ status: 'EXECUTED', totalPrice: 3200 }],
+      })
+    })
+
+    afterAll(async () => {
+      await prisma.budget.deleteMany({ where: { patientId: { in: createdPatientIds } } })
+      await prisma.patientPayment.deleteMany({ where: { patientId: { in: createdPatientIds } } })
+      await prisma.labwork.deleteMany({ where: { patientId: { in: createdPatientIds } } })
+      await prisma.appointment.deleteMany({ where: { patientId: { in: createdPatientIds } } })
+      await prisma.patient.deleteMany({ where: { id: { in: createdPatientIds } } })
+    })
+
+    describe('response shape', () => {
+      it('returns the three headline numbers as separate, individually named fields', async () => {
+        const data = await getStatement(performedWorkPatientId)
+
+        // toEqual pins the exact key set: three headline numbers plus the raw
+        // components, and nothing else.
+        expect(data).toEqual({
+          appointmentsDebt: 250,
+          advancesCredit: 0,
+          remainingBudgetProjection: 5000,
+          totalBilled: 400,
+          totalPaid: 150,
+          advancesTotal: 150,
+        })
+      })
+
+      it('returns zeros (never null, never an error) for a patient with no work, payments or budget', async () => {
+        const data = await getStatement(emptyPatientId)
+
+        expect(data).toEqual({
+          appointmentsDebt: 0,
+          advancesCredit: 0,
+          remainingBudgetProjection: 0,
+          totalBilled: 0,
+          totalPaid: 0,
+          advancesTotal: 0,
+        })
+        expect(data.remainingBudgetProjection).toBe(0)
+      })
+
+      it('returns 404 PATIENT_NOT_FOUND for a non-existent patient id', async () => {
+        const res = await request(app)
+          .get('/api/patients/non-existent-id/statement')
+          .set('Authorization', `Bearer ${adminToken}`)
+
+        expect(res.status).toBe(404)
+        expect(res.body).toEqual({ success: false, error: 'Patient not found' })
+      })
+    })
+
+    describe('remaining budget is never folded into debt', () => {
+      it('keeps the 5000 budget out of appointmentsDebt, totalBilled and advancesCredit', async () => {
+        const data = await getStatement(performedWorkPatientId)
+
+        // Performed work is 300 (appointment) + 100 (labwork) = 400, paid 150.
+        expect(data.appointmentsDebt).toBe(250)
+        expect(data.totalBilled).toBe(400)
+        expect(data.advancesCredit).toBe(0)
+        // The budget shows up in exactly one field and nowhere else.
+        expect(data.remainingBudgetProjection).toBe(5000)
+        expect(Object.values(data).filter((v) => v === 5000)).toHaveLength(1)
+      })
+
+      it('shows appointmentsDebt 0 and a non-zero projection for a convenio-style patient', async () => {
+        const data = await getStatement(convenioPatientId)
+
+        expect(data.appointmentsDebt).toBe(0)
+        expect(data.totalBilled).toBe(0)
+        expect(data.remainingBudgetProjection).toBe(12000)
+
+        // The debt endpoint agrees: a plan on paper is not an outstanding balance.
+        const balance = await getBalance(convenioPatientId)
+        expect(balance.outstanding).toBe(0)
+        expect(balance.totalDebt).toBe(0)
+      })
+    })
+
+    describe('appointmentsDebt covers every billable item that was already performed', () => {
+      it('includes standalone labwork debt and excludes labwork already priced into an appointment', async () => {
+        const data = await getStatement(labworkOnlyPatientId)
+
+        // 80 standalone labwork counts; the 999 one is already inside an
+        // appointment cost, so counting it would double-bill the patient.
+        expect(data.appointmentsDebt).toBe(80)
+        expect(data.totalBilled).toBe(80)
+      })
+
+      it('sums appointment cost and labwork price into a single performed-work debt', async () => {
+        const data = await getStatement(performedWorkPatientId)
+
+        // 300 appointment + 100 labwork - 150 paid
+        expect(data.totalBilled).toBe(400)
+        expect(data.appointmentsDebt).toBe(250)
+      })
+    })
+
+    describe('advancesCredit', () => {
+      it('does not double-count an advance already consumed by FIFO', async () => {
+        const data = await getStatement(advancePatientId)
+
+        // 250 advance against 100 of performed work: 100 is consumed by FIFO
+        // and only the 150 left over is credit.
+        expect(data.appointmentsDebt).toBe(0)
+        expect(data.advancesCredit).toBe(150)
+        expect(data.advancesTotal).toBe(250)
+        expect(data.totalBilled).toBe(100)
+        expect(data.totalPaid).toBe(250)
+      })
+
+      it('counts only ADVANCE-kind payments in advancesTotal while credit stays kind-agnostic', async () => {
+        const data = await getStatement(mixedKindPatientId)
+
+        // 200 APPOINTMENT payment + 40 ADVANCE against 200 of performed work.
+        expect(data.totalPaid).toBe(240)
+        expect(data.advancesTotal).toBe(40)
+        expect(data.appointmentsDebt).toBe(0)
+        expect(data.advancesCredit).toBe(40)
+      })
+    })
+
+    describe('reconciliation with GET /balance', () => {
+      it('matches the balance endpoint for every fixture (debt === outstanding, credit === credit)', async () => {
+        const fixtures: [string, string][] = [
+          ['empty', emptyPatientId],
+          ['performedWork', performedWorkPatientId],
+          ['labworkOnly', labworkOnlyPatientId],
+          ['convenio', convenioPatientId],
+          ['advance', advancePatientId],
+          ['mixedKind', mixedKindPatientId],
+          ['budgetFilter', budgetFilterPatientId],
+        ]
+
+        for (const [label, id] of fixtures) {
+          const [statement, balance] = await Promise.all([getStatement(id), getBalance(id)])
+
+          expect({
+            label,
+            appointmentsDebt: statement.appointmentsDebt,
+            advancesCredit: statement.advancesCredit,
+            totalBilled: statement.totalBilled,
+            totalPaid: statement.totalPaid,
+          }).toEqual({
+            label,
+            appointmentsDebt: balance.outstanding,
+            advancesCredit: balance.credit,
+            totalBilled: balance.totalDebt,
+            totalPaid: balance.totalPaid,
+          })
+        }
+      })
+    })
+
+    describe('remainingBudgetProjection filters', () => {
+      it('counts only live items on live budgets (APPROVED and PARTIAL included)', async () => {
+        const data = await getStatement(budgetFilterPatientId)
+
+        // 100 PENDING + 50 SCHEDULED + 25 IN_PROGRESS (APPROVED) + 200 PENDING (PARTIAL)
+        expect(data.remainingBudgetProjection).toBe(375)
+        // Nothing planned has been performed, so there is no debt either way.
+        expect(data.appointmentsDebt).toBe(0)
+        expect(data.totalBilled).toBe(0)
+      })
+
+      it('excludes an EXECUTED item', async () => {
+        await prisma.budgetItem.update({
+          where: { id: executedItemId },
+          data: { status: 'PENDING' },
+        })
+        try {
+          const data = await getStatement(budgetFilterPatientId)
+          expect(data.remainingBudgetProjection).toBe(1375)
+        } finally {
+          await prisma.budgetItem.update({
+            where: { id: executedItemId },
+            data: { status: 'EXECUTED' },
+          })
+        }
+        expect((await getStatement(budgetFilterPatientId)).remainingBudgetProjection).toBe(375)
+      })
+
+      it('excludes a CANCELLED item', async () => {
+        await prisma.budgetItem.update({
+          where: { id: cancelledItemId },
+          data: { status: 'PENDING' },
+        })
+        try {
+          const data = await getStatement(budgetFilterPatientId)
+          expect(data.remainingBudgetProjection).toBe(875)
+        } finally {
+          await prisma.budgetItem.update({
+            where: { id: cancelledItemId },
+            data: { status: 'CANCELLED' },
+          })
+        }
+        expect((await getStatement(budgetFilterPatientId)).remainingBudgetProjection).toBe(375)
+      })
+
+      it('excludes every item of a DRAFT budget', async () => {
+        await prisma.budget.update({ where: { id: draftBudgetId }, data: { status: 'APPROVED' } })
+        try {
+          const data = await getStatement(budgetFilterPatientId)
+          expect(data.remainingBudgetProjection).toBe(775)
+        } finally {
+          await prisma.budget.update({ where: { id: draftBudgetId }, data: { status: 'DRAFT' } })
+        }
+        expect((await getStatement(budgetFilterPatientId)).remainingBudgetProjection).toBe(375)
+      })
+
+      it('excludes every item of a CANCELLED budget', async () => {
+        await prisma.budget.update({
+          where: { id: cancelledBudgetId },
+          data: { status: 'APPROVED' },
+        })
+        try {
+          const data = await getStatement(budgetFilterPatientId)
+          expect(data.remainingBudgetProjection).toBe(1175)
+        } finally {
+          await prisma.budget.update({
+            where: { id: cancelledBudgetId },
+            data: { status: 'CANCELLED' },
+          })
+        }
+        expect((await getStatement(budgetFilterPatientId)).remainingBudgetProjection).toBe(375)
+      })
+
+      it('excludes every item of a soft-deleted (isActive false) budget', async () => {
+        await prisma.budget.update({ where: { id: inactiveBudgetId }, data: { isActive: true } })
+        try {
+          const data = await getStatement(budgetFilterPatientId)
+          expect(data.remainingBudgetProjection).toBe(1975)
+        } finally {
+          await prisma.budget.update({ where: { id: inactiveBudgetId }, data: { isActive: false } })
+        }
+        expect((await getStatement(budgetFilterPatientId)).remainingBudgetProjection).toBe(375)
+      })
+
+      it('includes a COMPLETED budget but contributes 0 because all its items are EXECUTED', async () => {
+        const completed = await prisma.budget.findFirst({
+          where: { patientId: budgetFilterPatientId, status: 'COMPLETED' },
+          include: { items: true },
+        })
+        expect(completed).not.toBeNull()
+        expect(completed!.items).toHaveLength(1)
+
+        await prisma.budgetItem.update({
+          where: { id: completed!.items[0].id },
+          data: { status: 'PENDING' },
+        })
+        try {
+          // The 3200 only appears once the item stops being EXECUTED, which
+          // proves the budget itself was never filtered out by its status.
+          const data = await getStatement(budgetFilterPatientId)
+          expect(data.remainingBudgetProjection).toBe(3575)
+        } finally {
+          await prisma.budgetItem.update({
+            where: { id: completed!.items[0].id },
+            data: { status: 'EXECUTED' },
+          })
+        }
+        expect((await getStatement(budgetFilterPatientId)).remainingBudgetProjection).toBe(375)
+      })
+    })
+
+    describe('authorization', () => {
+      it('allows the lowest tenant role that holds PAYMENTS_VIEW (STAFF)', async () => {
+        expect(hasPermission(UserRole.STAFF, Permission.PAYMENTS_VIEW)).toBe(true)
+
+        const res = await request(app)
+          .get(`/api/patients/${performedWorkPatientId}/statement`)
+          .set('Authorization', `Bearer ${staffToken}`)
+
+        expect(res.status).toBe(200)
+        expect(res.body.data.appointmentsDebt).toBe(250)
+      })
+
+      it('rejects a token whose role lacks PAYMENTS_VIEW with 403', async () => {
+        // Every tenant role from STAFF up holds PAYMENTS_VIEW, so SUPER_ADMIN
+        // (deliberately empty tenant permission set) is the only role that can
+        // exercise the requirePermission gate on this route.
+        expect(hasPermission(UserRole.SUPER_ADMIN, Permission.PAYMENTS_VIEW)).toBe(false)
+        const noPermissionToken = generateToken('super-admin-id', tenantId, 'SUPER_ADMIN')
+
+        const res = await request(app)
+          .get(`/api/patients/${performedWorkPatientId}/statement`)
+          .set('Authorization', `Bearer ${noPermissionToken}`)
+
+        expect(res.status).toBe(403)
+        expect(res.body.required).toBe(Permission.PAYMENTS_VIEW)
+
+        // Same gate, same answer as the sibling /balance route.
+        const balanceRes = await request(app)
+          .get(`/api/patients/${performedWorkPatientId}/balance`)
+          .set('Authorization', `Bearer ${noPermissionToken}`)
+        expect(balanceRes.status).toBe(403)
+      })
+
+      it('rejects an unauthenticated request with 401', async () => {
+        const res = await request(app).get(`/api/patients/${performedWorkPatientId}/statement`)
+
+        expect(res.status).toBe(401)
+      })
+    })
+
+    describe('tenant isolation', () => {
+      let isolationTenantId: string
+      let isolationAdminToken: string
+      let isolationPatientId: string
+
+      beforeAll(async () => {
+        const otherTenant = await prisma.tenant.create({
+          data: { name: 'Other Statement Tenant', slug: `other-statement-${Date.now()}` },
+        })
+        isolationTenantId = otherTenant.id
+
+        const otherAdmin = await prisma.user.create({
+          data: {
+            tenantId: isolationTenantId,
+            email: 'admin@other-statement-test.com',
+            firstName: 'Other',
+            lastName: 'Admin',
+            passwordHash: await hashPassword('password123'),
+            role: 'ADMIN',
+          },
+        })
+        isolationAdminToken = generateToken(otherAdmin.id, isolationTenantId, 'ADMIN')
+
+        const otherPatient = await prisma.patient.create({
+          data: { tenantId: isolationTenantId, firstName: 'Other', lastName: 'Statement' },
+        })
+        isolationPatientId = otherPatient.id
+
+        await seedBudget({
+          patientId: isolationPatientId,
+          status: 'APPROVED',
+          tenantId: isolationTenantId,
+          items: [{ status: 'PENDING', totalPrice: 7777 }],
+        })
+      })
+
+      afterAll(async () => {
+        await prisma.budget.deleteMany({ where: { tenantId: isolationTenantId } })
+        await prisma.patient.deleteMany({ where: { tenantId: isolationTenantId } })
+        await prisma.user.deleteMany({ where: { tenantId: isolationTenantId } })
+        await prisma.tenant.delete({ where: { id: isolationTenantId } }).catch(() => {})
+      })
+
+      it("returns 404 when asking for another tenant's patient", async () => {
+        const res = await request(app)
+          .get(`/api/patients/${isolationPatientId}/statement`)
+          .set('Authorization', `Bearer ${adminToken}`)
+
+        expect(res.status).toBe(404)
+        expect(res.body).toEqual({ success: false, error: 'Patient not found' })
+      })
+
+      it("returns 404 when another tenant's token asks for this tenant's patient", async () => {
+        const res = await request(app)
+          .get(`/api/patients/${performedWorkPatientId}/statement`)
+          .set('Authorization', `Bearer ${isolationAdminToken}`)
+
+        expect(res.status).toBe(404)
+        expect(res.body).toEqual({ success: false, error: 'Patient not found' })
+      })
+
+      it("never leaks another tenant's budget into the projection", async () => {
+        const own = await getStatement(isolationPatientId, isolationAdminToken)
+        expect(own.remainingBudgetProjection).toBe(7777)
+
+        // The main tenant's patients are unaffected by the 7777 next door.
+        const data = await getStatement(budgetFilterPatientId)
+        expect(data.remainingBudgetProjection).toBe(375)
+      })
+    })
+
+    describe('bounded query count (no N+1 over budgets)', () => {
+      let manyBudgetsPatientId: string
+
+      // Counts the budget aggregates the service issues while still running the
+      // real query. vi.spyOn cannot be used here: the Prisma model delegate is
+      // a proxy, so the replacement loses its binding (request 500s) and
+      // mockRestore leaves the property undefined. Instead the bound original
+      // is captured once and reinstalled by hand.
+      type AggregateFn = typeof prisma.budgetItem.aggregate
+      const originalAggregate = prisma.budgetItem.aggregate.bind(prisma.budgetItem) as AggregateFn
+      let aggregateCalls = 0
+
+      beforeAll(() => {
+        prisma.budgetItem.aggregate = ((args: Parameters<AggregateFn>[0]) => {
+          aggregateCalls++
+          return originalAggregate(args)
+        }) as AggregateFn
+      })
+
+      afterAll(() => {
+        prisma.budgetItem.aggregate = originalAggregate
+      })
+
+      beforeAll(async () => {
+        manyBudgetsPatientId = await createStatementPatient('ManyBudgets')
+        await seedBudget({
+          patientId: manyBudgetsPatientId,
+          status: 'APPROVED',
+          items: [{ status: 'PENDING', totalPrice: 100 }],
+        })
+      })
+
+      it('issues exactly one budgetItem aggregate for a patient with 1 budget', async () => {
+        aggregateCalls = 0
+        const data = await getStatement(manyBudgetsPatientId)
+
+        expect(data.remainingBudgetProjection).toBe(100)
+        expect(aggregateCalls).toBe(1)
+      })
+
+      it('still issues exactly one budgetItem aggregate with 10 budgets and 30 items', async () => {
+        for (let i = 0; i < 9; i++) {
+          await seedBudget({
+            patientId: manyBudgetsPatientId,
+            status: 'APPROVED',
+            items: [
+              { status: 'PENDING', totalPrice: 60 },
+              { status: 'SCHEDULED', totalPrice: 40 },
+              { status: 'EXECUTED', totalPrice: 5000 },
+            ],
+          })
+        }
+
+        aggregateCalls = 0
+        const data = await getStatement(manyBudgetsPatientId)
+
+        // 100 (first budget) + 9 * (60 + 40); the 9 * 5000 EXECUTED stay out.
+        expect(data.remainingBudgetProjection).toBe(1000)
+        // Query count does not scale with budget count: one aggregate at N=1
+        // and one at N=10.
+        expect(aggregateCalls).toBe(1)
+      })
     })
   })
 })
