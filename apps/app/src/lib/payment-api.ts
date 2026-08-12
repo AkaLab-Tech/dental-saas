@@ -26,6 +26,19 @@ export interface PatientBalance {
   credit: number
 }
 
+// The three numbers are deliberately kept apart: remainingBudgetProjection is
+// a projection of planned work, never debt, and must never be folded into any
+// other field or summed with them in the UI (mirrors apps/api's
+// PatientAccountStatement).
+export interface AccountStatement {
+  appointmentsDebt: number
+  advancesCredit: number
+  remainingBudgetProjection: number
+  totalBilled: number
+  totalPaid: number
+  advancesTotal: number
+}
+
 export interface CreatePaymentData {
   amount: number
   date: string
@@ -55,6 +68,11 @@ interface BalanceResponse {
   data: PatientBalance
 }
 
+interface AccountStatementResponse {
+  success: boolean
+  data: AccountStatement
+}
+
 interface PaymentResponse {
   success: boolean
   data: Payment
@@ -71,6 +89,11 @@ interface DebtorsResponse {
 
 export async function getPatientBalance(patientId: string): Promise<PatientBalance> {
   const response = await apiClient.get<BalanceResponse>(`/patients/${patientId}/balance`)
+  return response.data.data
+}
+
+export async function getAccountStatement(patientId: string): Promise<AccountStatement> {
+  const response = await apiClient.get<AccountStatementResponse>(`/patients/${patientId}/statement`)
   return response.data.data
 }
 

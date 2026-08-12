@@ -1069,6 +1069,12 @@
     "paymentCreated": "Payment registered successfully",
     "paymentDeleted": "Payment deleted successfully",
     "noOutstandingBalance": "No outstanding balance",
+    "statement": {
+      "appointmentsDebt": "Debt from performed appointments",
+      "remainingBudget": "Remaining budget",
+      "remainingBudgetDisclaimer": "Projection of pending treatment — not a debt.",
+      "advancesAppliedHint": "of which {{amount}} were advances"
+    },
     "debtors": {
       "title": "Patient Debts",
       "subtitle": "Patients with an outstanding balance, sorted by amount owed",

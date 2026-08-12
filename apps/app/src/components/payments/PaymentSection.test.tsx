@@ -4,7 +4,7 @@ import i18n from 'i18next'
 import '@/i18n'
 import { Permission } from '@dental/shared'
 import { PaymentSection } from './PaymentSection'
-import type { PatientBalance, Payment } from '@/lib/payment-api'
+import type { AccountStatement, Payment } from '@/lib/payment-api'
 
 beforeAll(async () => {
   await i18n.changeLanguage('es')
@@ -14,7 +14,7 @@ beforeAll(async () => {
 // Mocks
 // ============================================================================
 
-const getPatientBalanceMock = vi.fn()
+const getAccountStatementMock = vi.fn()
 const getPatientPaymentsMock = vi.fn()
 const createPaymentMock = vi.fn()
 const deletePaymentMock = vi.fn()
@@ -23,7 +23,7 @@ vi.mock('@/lib/payment-api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/payment-api')>('@/lib/payment-api')
   return {
     ...actual,
-    getPatientBalance: (...args: unknown[]) => getPatientBalanceMock(...args),
+    getAccountStatement: (...args: unknown[]) => getAccountStatementMock(...args),
     getPatientPayments: (...args: unknown[]) => getPatientPaymentsMock(...args),
     createPayment: (...args: unknown[]) => createPaymentMock(...args),
     deletePayment: (...args: unknown[]) => deletePaymentMock(...args),
@@ -48,12 +48,14 @@ vi.mock('@/stores/auth.store', () => ({
 // Test data
 // ============================================================================
 
-function makeBalance(overrides: Partial<PatientBalance> = {}): PatientBalance {
+function makeStatement(overrides: Partial<AccountStatement> = {}): AccountStatement {
   return {
-    totalDebt: 100,
-    totalPaid: 100,
-    outstanding: 0,
-    credit: 0,
+    appointmentsDebt: 0,
+    advancesCredit: 0,
+    remainingBudgetProjection: 0,
+    totalBilled: 0,
+    totalPaid: 0,
+    advancesTotal: 0,
     ...overrides,
   }
 }
@@ -85,6 +87,14 @@ function renderSection(props: Partial<Parameters<typeof PaymentSection>[0]> = {}
   return render(<PaymentSection patientId="patient-1" {...props} />)
 }
 
+// Locates the value <p> for a statement figure regardless of whether an
+// optional secondary hint line follows it (the credit card renders a 3rd <p>
+// only when advancesTotal > 0), so tests don't accidentally match the hint.
+function statementValueFor(label: string): string | null | undefined {
+  const card = screen.getByText(label).closest('.rounded-lg') as HTMLElement
+  return card.querySelectorAll('p')[1]?.textContent
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -93,12 +103,15 @@ describe('PaymentSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     canMock.mockReturnValue(true)
+    getAccountStatementMock.mockResolvedValue(makeStatement())
     getPatientPaymentsMock.mockResolvedValue(emptyPayments)
   })
 
   describe('"Nueva Entrega" button', () => {
     it('renders when the patient has zero outstanding debt (fully settled)', async () => {
-      getPatientBalanceMock.mockResolvedValue(makeBalance({ totalDebt: 100, totalPaid: 100, outstanding: 0, credit: 0 }))
+      getAccountStatementMock.mockResolvedValue(
+        makeStatement({ appointmentsDebt: 0, advancesCredit: 0, remainingBudgetProjection: 0 })
+      )
 
       renderSection()
 
@@ -108,7 +121,9 @@ describe('PaymentSection', () => {
     })
 
     it('renders when the patient already has a credit balance (no outstanding debt at all)', async () => {
-      getPatientBalanceMock.mockResolvedValue(makeBalance({ totalDebt: 0, totalPaid: 50, outstanding: 0, credit: 50 }))
+      getAccountStatementMock.mockResolvedValue(
+        makeStatement({ appointmentsDebt: 0, advancesCredit: 50, remainingBudgetProjection: 0 })
+      )
 
       renderSection()
 
@@ -117,8 +132,10 @@ describe('PaymentSection', () => {
       })
     })
 
-    it('still renders when the patient owes money (outstanding > 0)', async () => {
-      getPatientBalanceMock.mockResolvedValue(makeBalance({ totalDebt: 200, totalPaid: 50, outstanding: 150, credit: 0 }))
+    it('still renders when the patient owes money (appointmentsDebt > 0)', async () => {
+      getAccountStatementMock.mockResolvedValue(
+        makeStatement({ appointmentsDebt: 150, advancesCredit: 0, remainingBudgetProjection: 0 })
+      )
 
       renderSection()
 
@@ -127,18 +144,56 @@ describe('PaymentSection', () => {
       })
     })
 
-    it('does not render when the user lacks PAYMENTS_CREATE, regardless of balance', async () => {
+    it('does not render when the user lacks PAYMENTS_CREATE, regardless of the statement', async () => {
       canMock.mockImplementation((perm: Permission) => perm !== Permission.PAYMENTS_CREATE)
-      getPatientBalanceMock.mockResolvedValue(makeBalance({ totalDebt: 200, totalPaid: 50, outstanding: 150, credit: 0 }))
+      getAccountStatementMock.mockResolvedValue(
+        makeStatement({ appointmentsDebt: 150, advancesCredit: 0, remainingBudgetProjection: 0 })
+      )
 
       renderSection()
 
       // Wait for the section to finish loading (title always renders once
-      // balance/payments resolve) before asserting the button's absence.
+      // the statement/payments resolve) before asserting the button's absence.
       await waitFor(() => {
         expect(screen.getByText('Entregas')).toBeInTheDocument()
       })
       expect(screen.queryByText('Nueva Entrega')).not.toBeInTheDocument()
+    })
+
+    it('does not render when the initial statement fetch fails', async () => {
+      getAccountStatementMock.mockRejectedValue(new Error('network fail'))
+
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('network fail')).toBeInTheDocument()
+      })
+      expect(screen.queryByText('Nueva Entrega')).not.toBeInTheDocument()
+      expect(screen.queryByText('Deuda por consultas realizadas')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('loading state', () => {
+    it('shows a loading spinner until the initial statement/payments fetch resolves', async () => {
+      let resolveStatement: (value: AccountStatement) => void = () => {}
+      getAccountStatementMock.mockImplementation(
+        () =>
+          new Promise<AccountStatement>((resolve) => {
+            resolveStatement = resolve
+          })
+      )
+
+      const { container } = renderSection()
+
+      expect(container.querySelector('.animate-spin')).toBeInTheDocument()
+      expect(screen.queryByText('Entregas')).not.toBeInTheDocument()
+
+      resolveStatement(makeStatement())
+
+      await waitFor(() => {
+        expect(screen.getByText('Entregas')).toBeInTheDocument()
+      })
+      expect(container.querySelector('.animate-spin')).not.toBeInTheDocument()
     })
   })
 
@@ -146,8 +201,6 @@ describe('PaymentSection', () => {
   // permanent subtitle explaining that framing.
   describe('subtitle (task #374)', () => {
     it('renders the advance-framed subtitle beneath the title', async () => {
-      getPatientBalanceMock.mockResolvedValue(makeBalance())
-
       renderSection()
 
       await waitFor(() => {
@@ -164,8 +217,6 @@ describe('PaymentSection', () => {
   // defense-in-depth client filter.
   describe('advances-only filtering (task #374)', () => {
     it('requests only ADVANCE-kind payments from the API', async () => {
-      getPatientBalanceMock.mockResolvedValue(makeBalance())
-
       renderSection()
 
       await waitFor(() => {
@@ -173,20 +224,20 @@ describe('PaymentSection', () => {
       })
     })
 
-    it('re-requests ADVANCE-kind payments on every refresh (refreshKey bump)', async () => {
-      getPatientBalanceMock.mockResolvedValue(makeBalance())
-
+    it('re-requests ADVANCE-kind payments and the account statement on every refresh (refreshKey bump)', async () => {
       const { rerender } = renderSection({ refreshKey: 0 })
       await waitFor(() => expect(getPatientPaymentsMock).toHaveBeenCalledTimes(1))
+      expect(getAccountStatementMock).toHaveBeenCalledTimes(1)
 
       rerender(<PaymentSection patientId="patient-1" refreshKey={1} />)
 
       await waitFor(() => expect(getPatientPaymentsMock).toHaveBeenCalledTimes(2))
       expect(getPatientPaymentsMock).toHaveBeenLastCalledWith('patient-1', { limit: 50, kind: 'ADVANCE' })
+      expect(getAccountStatementMock).toHaveBeenCalledTimes(2)
+      expect(getAccountStatementMock).toHaveBeenLastCalledWith('patient-1')
     })
 
     it('renders the ADVANCE-kind payments returned by the (already-filtered) API response, with no "Pago en consulta" note anywhere', async () => {
-      getPatientBalanceMock.mockResolvedValue(makeBalance({ totalDebt: 150, totalPaid: 90, outstanding: 60, credit: 0 }))
       getPatientPaymentsMock.mockResolvedValue({
         data: [
           makePayment({ id: 'adv-1', amount: 40, note: 'Anticipo', kind: 'ADVANCE', appointmentId: null }),
@@ -205,69 +256,64 @@ describe('PaymentSection', () => {
     })
   })
 
-  // Task #374: the balance summary went from 3 mutually-exclusive tiles to
-  // 4 permanent ones — outstanding and credit are always both visible.
-  describe('balance summary tiles (task #374)', () => {
-    it('shows both "Saldo pendiente" and "Saldo a favor" simultaneously when there is a credit balance', async () => {
-      getPatientBalanceMock.mockResolvedValue(makeBalance({ totalDebt: 0, totalPaid: 80, outstanding: 0, credit: 80 }))
+  // Task #376: the 4-tile balance summary from #374 was replaced by the
+  // 3-figure AccountStatement (appointmentsDebt / advancesCredit /
+  // remainingBudgetProjection), sourced from getAccountStatement instead of
+  // getPatientBalance. Component-level details (formatting, the advances
+  // hint, the disclaimer, the non-aggregation guard) live in
+  // AccountStatement.test.tsx; this describe block only pins the wiring
+  // between PaymentSection and that component.
+  describe('account statement (task #376)', () => {
+    it('renders all three statement figures, individually labelled, at the same time', async () => {
+      getAccountStatementMock.mockResolvedValue(
+        makeStatement({ appointmentsDebt: 120, advancesCredit: 45, remainingBudgetProjection: 30, advancesTotal: 45 })
+      )
 
       renderSection()
 
       await waitFor(() => {
-        expect(screen.getByText('Saldo a favor')).toBeInTheDocument()
-      })
-      expect(screen.getByText('Saldo pendiente')).toBeInTheDocument()
-
-      const creditValue = screen.getByText('Saldo a favor').parentElement?.querySelector('p:last-child')
-      expect(creditValue?.textContent).toMatch(/USD\s*80\.00/)
-
-      const outstandingValue = screen.getByText('Saldo pendiente').parentElement?.querySelector('p:last-child')
-      expect(outstandingValue?.textContent).toMatch(/USD\s*0\.00/)
-    })
-
-    it('shows the credit tile with a value of 0 (not hidden) when there is no credit', async () => {
-      getPatientBalanceMock.mockResolvedValue(makeBalance({ totalDebt: 100, totalPaid: 40, outstanding: 60, credit: 0 }))
-
-      renderSection()
-
-      await waitFor(() => {
-        expect(screen.getByText('Saldo pendiente')).toBeInTheDocument()
+        expect(screen.getByText('Deuda por consultas realizadas')).toBeInTheDocument()
       })
       expect(screen.getByText('Saldo a favor')).toBeInTheDocument()
+      expect(screen.getByText('Presupuesto restante')).toBeInTheDocument()
 
-      const outstandingValue = screen.getByText('Saldo pendiente').parentElement?.querySelector('p:last-child')
-      expect(outstandingValue?.textContent).toMatch(/USD\s*60\.00/)
-
-      const creditValue = screen.getByText('Saldo a favor').parentElement?.querySelector('p:last-child')
-      expect(creditValue?.textContent).toMatch(/USD\s*0\.00/)
+      expect(statementValueFor('Deuda por consultas realizadas')).toMatch(/USD\s*120\.00/)
+      expect(statementValueFor('Saldo a favor')).toMatch(/USD\s*45\.00/)
+      expect(statementValueFor('Presupuesto restante')).toMatch(/USD\s*30\.00/)
     })
 
-    it('always shows all 4 permanent tiles: total debt, total paid, outstanding, and credit', async () => {
-      getPatientBalanceMock.mockResolvedValue(makeBalance({ totalDebt: 100, totalPaid: 40, outstanding: 60, credit: 0 }))
+    it('renders each figure as 0 (not hidden, not blank) when the patient has no balance activity at all', async () => {
+      getAccountStatementMock.mockResolvedValue(makeStatement())
 
       renderSection()
 
       await waitFor(() => {
-        expect(screen.getByText('Total adeudado')).toBeInTheDocument()
+        expect(screen.getByText('Deuda por consultas realizadas')).toBeInTheDocument()
       })
-      expect(screen.getByText('Total pagado')).toBeInTheDocument()
-      expect(screen.getByText('Saldo pendiente')).toBeInTheDocument()
       expect(screen.getByText('Saldo a favor')).toBeInTheDocument()
+      expect(screen.getByText('Presupuesto restante')).toBeInTheDocument()
+
+      expect(statementValueFor('Deuda por consultas realizadas')).toMatch(/USD\s*0\.00/)
+      expect(statementValueFor('Saldo a favor')).toMatch(/USD\s*0\.00/)
+      expect(statementValueFor('Presupuesto restante')).toMatch(/USD\s*0\.00/)
     })
   })
 
   // Task #374: creating/deleting an advance still triggers the parent
   // refresh callback so sibling sections (appointments, labworks) can
-  // re-fetch after the server recalculates FIFO allocation.
-  describe('onPaymentsChange callback (task #374)', () => {
-    it('fires onPaymentsChange after successfully creating a payment', async () => {
+  // re-fetch after the server recalculates FIFO allocation. Task #376: the
+  // same refresh must also re-pull the account statement, since a new/removed
+  // advance changes appointmentsDebt/advancesCredit.
+  describe('onPaymentsChange callback (task #374 / #376)', () => {
+    it('fires onPaymentsChange and re-fetches the account statement after successfully creating a payment', async () => {
       const onPaymentsChange = vi.fn()
-      getPatientBalanceMock.mockResolvedValue(makeBalance({ totalDebt: 100, totalPaid: 40, outstanding: 60, credit: 0 }))
       createPaymentMock.mockResolvedValue(
         makePayment({ id: 'new-pay', amount: 25, kind: 'ADVANCE' })
       )
 
       renderSection({ onPaymentsChange })
+
+      await waitFor(() => expect(getAccountStatementMock).toHaveBeenCalledTimes(1))
 
       const newPaymentButton = await screen.findByText('Nueva Entrega')
       fireEvent.click(newPaymentButton)
@@ -285,14 +331,14 @@ describe('PaymentSection', () => {
       await waitFor(() => {
         expect(onPaymentsChange).toHaveBeenCalledTimes(1)
       })
-      // fetchData is re-run after create, so the ADVANCE-only filter is
-      // re-applied on refresh too.
+      // fetchData is re-run after create, so both the ADVANCE-only filter
+      // and the account statement are re-fetched on refresh too.
       expect(getPatientPaymentsMock).toHaveBeenLastCalledWith('patient-1', { limit: 50, kind: 'ADVANCE' })
+      expect(getAccountStatementMock).toHaveBeenCalledTimes(2)
     })
 
     it('does not fire onPaymentsChange when createPayment rejects', async () => {
       const onPaymentsChange = vi.fn()
-      getPatientBalanceMock.mockResolvedValue(makeBalance())
       createPaymentMock.mockRejectedValue(new Error('boom'))
 
       renderSection({ onPaymentsChange })
@@ -311,10 +357,9 @@ describe('PaymentSection', () => {
       expect(screen.getByText('boom')).toBeInTheDocument()
     })
 
-    it('fires onPaymentsChange after successfully deleting a payment', async () => {
+    it('fires onPaymentsChange and re-fetches the account statement after successfully deleting a payment', async () => {
       const onPaymentsChange = vi.fn()
       const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
-      getPatientBalanceMock.mockResolvedValue(makeBalance({ totalDebt: 100, totalPaid: 40, outstanding: 60, credit: 0 }))
       getPatientPaymentsMock.mockResolvedValue({
         data: [makePayment({ id: 'pay-del', amount: 40, kind: 'ADVANCE' })],
         pagination: { total: 1, limit: 50, offset: 0 },
@@ -322,6 +367,8 @@ describe('PaymentSection', () => {
       deletePaymentMock.mockResolvedValue(undefined)
 
       renderSection({ onPaymentsChange })
+
+      await waitFor(() => expect(getAccountStatementMock).toHaveBeenCalledTimes(1))
 
       const deleteButton = await screen.findByTitle('Eliminar')
       fireEvent.click(deleteButton)
@@ -333,6 +380,7 @@ describe('PaymentSection', () => {
       await waitFor(() => {
         expect(onPaymentsChange).toHaveBeenCalledTimes(1)
       })
+      expect(getAccountStatementMock).toHaveBeenCalledTimes(2)
 
       confirmSpy.mockRestore()
     })
@@ -340,7 +388,6 @@ describe('PaymentSection', () => {
     it('does not call deletePayment or onPaymentsChange when the confirm dialog is cancelled', async () => {
       const onPaymentsChange = vi.fn()
       const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
-      getPatientBalanceMock.mockResolvedValue(makeBalance())
       getPatientPaymentsMock.mockResolvedValue({
         data: [makePayment({ id: 'pay-keep', amount: 40, kind: 'ADVANCE' })],
         pagination: { total: 1, limit: 50, offset: 0 },
@@ -361,7 +408,6 @@ describe('PaymentSection', () => {
     it('does not fire onPaymentsChange when deletePayment rejects', async () => {
       const onPaymentsChange = vi.fn()
       const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
-      getPatientBalanceMock.mockResolvedValue(makeBalance())
       getPatientPaymentsMock.mockResolvedValue({
         data: [makePayment({ id: 'pay-fail', amount: 40, kind: 'ADVANCE' })],
         pagination: { total: 1, limit: 50, offset: 0 },
@@ -383,12 +429,11 @@ describe('PaymentSection', () => {
     })
   })
 
-  // PAYMENTS_DELETE gating is unchanged by task #374; pinned here alongside
-  // the existing PAYMENTS_CREATE gating test above.
-  describe('PAYMENTS_DELETE gating (unchanged by task #374)', () => {
+  // PAYMENTS_DELETE gating is unchanged by task #374/#376; pinned here
+  // alongside the existing PAYMENTS_CREATE gating test above.
+  describe('PAYMENTS_DELETE gating (unchanged by task #374/#376)', () => {
     it('does not render the delete button when the user lacks PAYMENTS_DELETE', async () => {
       canMock.mockImplementation((perm: Permission) => perm !== Permission.PAYMENTS_DELETE)
-      getPatientBalanceMock.mockResolvedValue(makeBalance())
       getPatientPaymentsMock.mockResolvedValue({
         data: [makePayment({ id: 'pay-1', amount: 40, kind: 'ADVANCE' })],
         pagination: { total: 1, limit: 50, offset: 0 },
@@ -407,9 +452,8 @@ describe('PaymentSection', () => {
   // responsive card grid (grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3).
   describe('payments list layout (task #218)', () => {
     it('renders the payments list as a responsive grid instead of a single-column stack', async () => {
-      // Amounts (77 / 33) are chosen to be distinct from the balance-summary
-      // tile values (150 / 50 / 100) so the query below can't match both.
-      getPatientBalanceMock.mockResolvedValue(makeBalance({ totalDebt: 150, totalPaid: 50, outstanding: 100, credit: 0 }))
+      // Amounts (77 / 33) are chosen to be distinct from the statement
+      // values (0 by default) so the query below can't match both.
       getPatientPaymentsMock.mockResolvedValue({
         data: [makePayment({ id: 'pay-1', amount: 77 }), makePayment({ id: 'pay-2', amount: 33 })],
         pagination: { total: 2, limit: 50, offset: 0 },
@@ -425,9 +469,6 @@ describe('PaymentSection', () => {
     })
 
     it('still renders the empty state (not the grid) when there are no payments', async () => {
-      getPatientBalanceMock.mockResolvedValue(makeBalance({ totalDebt: 100, totalPaid: 100, outstanding: 0, credit: 0 }))
-      getPatientPaymentsMock.mockResolvedValue(emptyPayments)
-
       renderSection()
 
       await waitFor(() => {
