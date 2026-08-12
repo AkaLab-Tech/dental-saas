@@ -279,6 +279,93 @@ export async function getPatientBalance(
   return { success: true, data: { totalDebt, totalPaid, outstanding, credit } }
 }
 
+/**
+ * Three-number account statement for a patient. The numbers are deliberately
+ * kept apart: remainingBudgetProjection is a projection of planned work, never
+ * debt, and is not folded into any other field.
+ */
+export interface PatientAccountStatement {
+  /**
+   * Outstanding on work already performed (appointments with a cost and
+   * labworks not included in an appointment — both are billable, so both count
+   * as "lo que ya se realizo"). Derived from the same FIFO allocation as
+   * getPatientBalance/listDebtors, so the figures never drift.
+   */
+  appointmentsDebt: number
+  /** Unapplied payments left after FIFO, i.e. the "saldo a favor". */
+  advancesCredit: number
+  /** Planned-but-not-performed budget work. A projection, never debt. */
+  remainingBudgetProjection: number
+  /** Total cost of the billable items behind appointmentsDebt. */
+  totalBilled: number
+  /** Total of active payments of any kind. */
+  totalPaid: number
+  /** Share of totalPaid recorded as entregas (kind = ADVANCE), applied or not. */
+  advancesTotal: number
+}
+
+/**
+ * Get the three-number account statement for a patient: what is owed on work
+ * already performed, what is left over as credit, and what remains planned in
+ * live budgets.
+ */
+export async function getPatientAccountStatement(
+  tenantId: string,
+  patientId: string
+): Promise<
+  { success: true; data: PatientAccountStatement } | { success: false; code: PaymentErrorCode }
+> {
+  const patient = await prisma.patient.findFirst({
+    where: { id: patientId, tenantId },
+    select: { id: true },
+  })
+
+  if (!patient) {
+    return { success: false, code: 'PATIENT_NOT_FOUND' }
+  }
+
+  const [items, totalPaid, advancesAgg, budgetItemsAgg] = await Promise.all([
+    getBillableItems(tenantId, patientId),
+    getTotalPaid(tenantId, patientId),
+    prisma.patientPayment.aggregate({
+      where: { tenantId, patientId, isActive: true, kind: 'ADVANCE' },
+      _sum: { amount: true },
+    }),
+    // Single grouped aggregate over the join: bounded query count regardless
+    // of how many budgets the patient has.
+    prisma.budgetItem.aggregate({
+      where: {
+        status: { notIn: ['EXECUTED', 'CANCELLED'] },
+        budget: {
+          tenantId,
+          patientId,
+          isActive: true,
+          status: { notIn: ['DRAFT', 'CANCELLED'] },
+        },
+      },
+      _sum: { totalPrice: true },
+    }),
+  ])
+
+  const allocations = computeFifoAllocation(items, totalPaid)
+  const appointmentsDebt = allocations.reduce((sum, a) => sum + a.outstanding, 0)
+  const totalBilled = items.reduce((sum, item) => sum + item.cost, 0)
+
+  return {
+    success: true,
+    data: {
+      appointmentsDebt,
+      // Whatever FIFO could not apply to performed work. Advances already
+      // consumed by an item are part of paidAmount, never counted here.
+      advancesCredit: Math.max(0, totalPaid - totalBilled),
+      remainingBudgetProjection: budgetItemsAgg._sum.totalPrice?.toNumber() || 0,
+      totalBilled,
+      totalPaid,
+      advancesTotal: advancesAgg._sum.amount?.toNumber() || 0,
+    },
+  }
+}
+
 export interface Debtor {
   patientId: string
   name: string

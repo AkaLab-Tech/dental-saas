@@ -25,6 +25,7 @@ import {
   listPayments,
   deletePayment,
   getPatientBalance,
+  getPatientAccountStatement,
   listDebtors,
 } from '../services/payment.service.js'
 import { createBudget, listBudgetsByPatient } from '../services/budget.service.js'
@@ -659,6 +660,34 @@ patientsRouter.get('/:id/balance', requirePermission(Permission.PAYMENTS_VIEW), 
     next(e)
   }
 })
+
+/**
+ * GET /api/patients/:id/statement
+ * Get the patient account statement (debt on performed work, credit,
+ * remaining budget projection)
+ */
+patientsRouter.get(
+  '/:id/statement',
+  requirePermission(Permission.PAYMENTS_VIEW),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.user!.tenantId!
+      const { id } = req.params
+
+      const result = await getPatientAccountStatement(tenantId, id)
+
+      if (!result.success) {
+        const status = result.code === 'PATIENT_NOT_FOUND' ? 404 : 500
+        res.status(status).json({ success: false, error: 'Patient not found' })
+        return
+      }
+
+      res.json({ success: true, data: result.data })
+    } catch (e) {
+      next(e)
+    }
+  }
+)
 
 /**
  * GET /api/patients/:id/payments
