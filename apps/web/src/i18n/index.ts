@@ -51,8 +51,10 @@ export const i18nReady = i18n
     resources,
     fallbackLng: defaultLanguage,
     supportedLngs: languages.map((l) => l.code),
-    // Strip region from detected locales ('en-US' -> 'en') so the cookie value
-    // always matches apps/app's base codes.
+    // `load` only governs which translation resources get loaded (it makes
+    // resolvedLanguage a base code); it does NOT touch the value the detector
+    // caches into the cookie/localStorage. `convertDetectedLanguage` below is
+    // what keeps the persisted cookie value a base code matching apps/app's.
     load: "languageOnly",
     defaultNS: "translation",
     interpolation: {
@@ -72,6 +74,12 @@ export const i18nReady = i18n
         secure: protocol === "https:",
       },
       lookupLocalStorage: "language",
+      // Strip region ('en-US' -> 'en') from whatever value gets detected
+      // (cookie, localStorage, or navigator) before it is cached back out, so
+      // the persisted cookie value is always a base code and cannot drift
+      // from apps/app's. Also makes i18n.language itself a base code so it
+      // matches LanguageSelector.tsx's <option> values directly.
+      convertDetectedLanguage: (lng: string) => lng.split("-")[0],
     },
     initImmediate: false,
   })

@@ -28,6 +28,10 @@ function detectionOptions(i18n: I18n): DetectorOptions {
   return i18n.options.detection as DetectorOptions
 }
 
+function clearCookie() {
+  document.cookie = 'language=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
+}
+
 describe('apps/web i18n bootstrap', () => {
   afterEach(() => {
     Object.defineProperty(window, 'location', {
@@ -35,6 +39,7 @@ describe('apps/web i18n bootstrap', () => {
       writable: true,
       configurable: true,
     })
+    clearCookie()
     vi.resetModules()
   })
 
@@ -96,6 +101,21 @@ describe('apps/web i18n bootstrap', () => {
       expect(order[0]).toBe('cookie')
       expect(order.indexOf('cookie')).toBeLessThan(order.indexOf('localStorage'))
       expect(order.indexOf('localStorage')).toBeLessThan(order.indexOf('navigator'))
+    })
+
+    // Review fix cycle 1 (PR #386, finding 2): the detector caches whatever
+    // value it detects, untouched by `load: 'languageOnly'` (that option only
+    // affects resource loading). Without `convertDetectedLanguage`, a browser
+    // reporting 'en-US' would persist 'en-US' into the cookie, which
+    // LanguageSelector.tsx's <option> values (and apps/app's) do not match.
+    it('strips the region from a detected cookie value ("en-US" -> "en"), matching apps/app', async () => {
+      stubLocation('alveodent.com', 'https:')
+      document.cookie = 'language=en-US; path=/'
+      vi.resetModules()
+      const { default: i18n, i18nReady } = await import('./index')
+      await i18nReady
+      expect(i18n.language).toBe('en')
+      expect(i18n.resolvedLanguage).toBe('en')
     })
   })
 
