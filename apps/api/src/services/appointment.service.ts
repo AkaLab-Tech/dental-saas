@@ -71,6 +71,7 @@ export type SafeAppointment = {
   // Actual linked-payment state (unlike paidAmount, never 0 due to FIFO pooling).
   hasRecordedPayment?: boolean
   recordedPaidAmount?: number
+  recordedPaymentId?: string | null
   patient?: {
     id: string
     firstName: string
@@ -385,11 +386,16 @@ async function attachRecordedPayments(
       kind: 'APPOINTMENT',
       isActive: true,
     },
-    select: { appointmentId: true, amount: true },
+    select: { id: true, appointmentId: true, amount: true },
   })
   return appointments.map((a) => {
     const payment = payments.find((p) => p.appointmentId === a.id)
-    return { ...a, recordedPaidAmount: payment?.amount.toNumber() ?? 0, hasRecordedPayment: !!payment }
+    return {
+      ...a,
+      recordedPaidAmount: payment?.amount.toNumber() ?? 0,
+      hasRecordedPayment: !!payment,
+      recordedPaymentId: payment?.id ?? null,
+    }
   })
 }
 

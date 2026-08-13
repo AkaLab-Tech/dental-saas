@@ -614,6 +614,33 @@ describe('Appointments API', () => {
       expect(response.status).toBe(201)
       expect(response.body.data.hasRecordedPayment).toBe(true)
       expect(response.body.data.recordedPaidAmount).toBe(120)
+
+      // task #384: the create response also surfaces the id of the linked
+      // payment itself, so a client can offer to reverse it (DELETE
+      // /api/patients/:patientId/payments/:paymentId) without a refetch.
+      expect(response.body.data.recordedPaymentId).toBeTypeOf('string')
+      const payment = await prisma.patientPayment.findFirst({
+        where: { tenantId, patientId, appointmentId: response.body.data.id, kind: 'APPOINTMENT' },
+      })
+      expect(payment).not.toBeNull()
+      expect(response.body.data.recordedPaymentId).toBe(payment!.id)
+    })
+
+    it('create response has recordedPaymentId: null when no payment is recorded (#384)', async () => {
+      const times = getFutureTime(10)
+      const response = await request(app)
+        .post('/api/appointments')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          patientId,
+          doctorId,
+          ...times,
+          cost: 100,
+        })
+
+      expect(response.status).toBe(201)
+      expect(response.body.data.hasRecordedPayment).toBe(false)
+      expect(response.body.data.recordedPaymentId).toBeNull()
     })
   })
 
@@ -836,7 +863,7 @@ describe('Appointments API', () => {
           cost: 50,
         },
       })
-      await prisma.patientPayment.create({
+      const linkedPayment = await prisma.patientPayment.create({
         data: {
           tenantId,
           patientId,
@@ -858,6 +885,9 @@ describe('Appointments API', () => {
       // The correct signal — unaffected by FIFO allocation order.
       expect(response.body.data.hasRecordedPayment).toBe(true)
       expect(response.body.data.recordedPaidAmount).toBe(50)
+      // task #384: recordedPaymentId also tracks the real linked payment,
+      // not whatever FIFO happened to allocate to this appointment.
+      expect(response.body.data.recordedPaymentId).toBe(linkedPayment.id)
     })
   })
 

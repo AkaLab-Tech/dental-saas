@@ -53,6 +53,7 @@ export interface Appointment {
   // Actual linked-payment state; use this (not paidAmount) to lock/prefill.
   hasRecordedPayment?: boolean
   recordedPaidAmount?: number
+  recordedPaymentId?: string | null
   isActive: boolean
   createdAt: string
   updatedAt: string
