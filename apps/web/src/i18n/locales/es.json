@@ -1,0 +1,21 @@
+{
+  "nav": {
+    "home": "Inicio",
+    "pricing": "Precios",
+    "features": "Características",
+    "openMenu": "Abrir menú",
+    "closeMenu": "Cerrar menú"
+  },
+  "cta": {
+    "login": "Iniciar Sesión",
+    "startFree": "Comenzar Gratis"
+  },
+  "hero": {
+    "titlePrefix": "Gestiona tu clínica dental de forma",
+    "titleHighlight": "inteligente",
+    "subtitle": "Simplifica la administración de pacientes, citas, tratamientos y facturación con nuestra plataforma todo-en-uno diseñada para profesionales dentales.",
+    "primaryCta": "Comenzar Prueba Gratis",
+    "secondaryCta": "Ver Características",
+    "trialNote": "14 días gratis • Sin tarjeta de crédito"
+  }
+}

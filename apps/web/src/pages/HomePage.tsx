@@ -1,9 +1,11 @@
 import { Link } from "react-router";
+import { useTranslation } from "react-i18next";
 import { Header } from "../components/Header";
 import { Footer } from "../components/Footer";
 import { Testimonials } from "../components/Testimonials";
 
 export function HomePage() {
+  const { t } = useTranslation();
   const appUrl = __APP_URL__;
 
   return (
@@ -16,31 +18,25 @@ export function HomePage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center max-w-3xl mx-auto">
               <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-                Gestiona tu clínica dental de forma{" "}
-                <span className="text-blue-600">inteligente</span>
+                {t("hero.titlePrefix")}{" "}
+                <span className="text-blue-600">{t("hero.titleHighlight")}</span>
               </h1>
-              <p className="text-xl text-gray-600 mb-8">
-                Simplifica la administración de pacientes, citas, tratamientos y
-                facturación con nuestra plataforma todo-en-uno diseñada para
-                profesionales dentales.
-              </p>
+              <p className="text-xl text-gray-600 mb-8">{t("hero.subtitle")}</p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <a
                   href={`${appUrl}/register`}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold text-lg transition-colors"
                 >
-                  Comenzar Prueba Gratis
+                  {t("hero.primaryCta")}
                 </a>
                 <Link
                   to="/caracteristicas"
                   className="border border-gray-300 hover:border-gray-400 text-gray-700 px-8 py-3 rounded-lg font-semibold text-lg transition-colors"
                 >
-                  Ver Características
+                  {t("hero.secondaryCta")}
                 </Link>
               </div>
-              <p className="text-sm text-gray-500 mt-4">
-                14 días gratis • Sin tarjeta de crédito
-              </p>
+              <p className="text-sm text-gray-500 mt-4">{t("hero.trialNote")}</p>
             </div>
           </div>
         </section>

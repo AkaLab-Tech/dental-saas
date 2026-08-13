@@ -22,6 +22,14 @@ export type LanguageCode = (typeof languages)[number]['code']
 
 export const defaultLanguage: LanguageCode = 'es'
 
+// The product (app.alveodent.com) and the landing (alveodent.com) share the
+// language preference via a parent-domain cookie. A `Domain=.alveodent.com`
+// cookie is rejected by browsers when set from localhost, so fall back to a
+// host-only cookie (cookieDomain undefined) outside that domain.
+const { hostname, protocol } = window.location
+const cookieDomain =
+  hostname === 'alveodent.com' || hostname.endsWith('.alveodent.com') ? '.alveodent.com' : undefined
+
 // Update document direction when language changes
 const updateDocumentDirection = (lng: string) => {
   const language = languages.find((l) => l.code === lng)
@@ -48,10 +56,18 @@ export const i18nReady = i18n
       escapeValue: false, // React already escapes values
     },
     detection: {
-      // localStorage (the user's saved app preference) takes priority over the
-      // browser's navigator language; navigator is only used on first visit.
-      order: ['localStorage', 'navigator'],
-      caches: ['localStorage'],
+      // The shared cookie takes priority so a preference set on the landing
+      // page wins; localStorage and navigator are fallbacks.
+      order: ['cookie', 'localStorage', 'navigator'],
+      caches: ['cookie', 'localStorage'],
+      lookupCookie: 'language',
+      cookieDomain,
+      cookieMinutes: 60 * 24 * 365,
+      cookieOptions: {
+        path: '/',
+        sameSite: 'lax',
+        secure: protocol === 'https:',
+      },
       lookupLocalStorage: 'language',
     },
     // Ensure synchronous initialization when resources are bundled
