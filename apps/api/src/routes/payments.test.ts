@@ -283,6 +283,89 @@ describe('Patient Payments Routes', () => {
 
       expect(res.status).toBe(404)
     })
+
+    // task #384: reversing the kind=APPOINTMENT payment recorded on a
+    // consultation. Same DELETE route as any other payment, but this pins the
+    // full round trip a client relies on: soft-delete + recalculatePaidStatus
+    // taking the appointment back to unpaid, not just a 200 status code.
+    describe('reversing a consultation (kind=APPOINTMENT) payment (#384)', () => {
+      let consultPatientId: string
+      let consultAppointmentId: string
+      let consultPaymentId: string
+
+      beforeAll(async () => {
+        const patient = await prisma.patient.create({
+          data: { tenantId, firstName: 'Consult', lastName: 'Reversal' },
+        })
+        consultPatientId = patient.id
+
+        const createRes = await request(app)
+          .post('/api/appointments')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({
+            patientId: consultPatientId,
+            doctorId,
+            startTime: new Date('2025-11-01T10:00:00Z').toISOString(),
+            endTime: new Date('2025-11-01T10:30:00Z').toISOString(),
+            cost: 75,
+            paidAmount: 75,
+          })
+        expect(createRes.status).toBe(201)
+        consultAppointmentId = createRes.body.data.id
+        expect(createRes.body.data.hasRecordedPayment).toBe(true)
+        consultPaymentId = createRes.body.data.recordedPaymentId
+
+        const paymentInDb = await prisma.patientPayment.findUnique({ where: { id: consultPaymentId } })
+        expect(paymentInDb).toMatchObject({
+          kind: 'APPOINTMENT',
+          appointmentId: consultAppointmentId,
+          isActive: true,
+        })
+
+        // Appointment starts out fully paid via the linked payment.
+        const before = await request(app)
+          .get(`/api/appointments/${consultAppointmentId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+        expect(before.body.data.isPaid).toBe(true)
+        expect(before.body.data.paidAmount).toBe(75)
+      })
+
+      it('denies a STAFF token (no PAYMENTS_DELETE) with 403 and leaves the payment untouched', async () => {
+        expect(hasPermission(UserRole.STAFF, Permission.PAYMENTS_DELETE)).toBe(false)
+
+        const res = await request(app)
+          .delete(`/api/patients/${consultPatientId}/payments/${consultPaymentId}`)
+          .set('Authorization', `Bearer ${staffToken}`)
+
+        expect(res.status).toBe(403)
+
+        const paymentInDb = await prisma.patientPayment.findUnique({ where: { id: consultPaymentId } })
+        expect(paymentInDb?.isActive).toBe(true)
+      })
+
+      it('ADMIN reversal returns 200, soft-deletes the payment, and takes the appointment back to unpaid', async () => {
+        const res = await request(app)
+          .delete(`/api/patients/${consultPatientId}/payments/${consultPaymentId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+
+        expect(res.status).toBe(200)
+
+        // Soft-deleted, not hard-deleted.
+        const paymentInDb = await prisma.patientPayment.findUnique({ where: { id: consultPaymentId } })
+        expect(paymentInDb).not.toBeNull()
+        expect(paymentInDb?.isActive).toBe(false)
+
+        // recalculatePaidStatus ran: the appointment falls back to unpaid,
+        // with paidAmount recomputed to 0 now that the pool is empty.
+        const after = await request(app)
+          .get(`/api/appointments/${consultAppointmentId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+        expect(after.body.data.isPaid).toBe(false)
+        expect(after.body.data.paidAmount).toBe(0)
+        expect(after.body.data.hasRecordedPayment).toBe(false)
+        expect(after.body.data.recordedPaymentId).toBeNull()
+      })
+    })
   })
 
   describe('FIFO allocation logic', () => {

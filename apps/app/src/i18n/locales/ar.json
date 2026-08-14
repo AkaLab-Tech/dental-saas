@@ -1078,6 +1078,9 @@
     "paymentCreated": "تم تسجيل الدفعة بنجاح",
     "paymentDeleted": "تم حذف الدفعة بنجاح",
     "noOutstandingBalance": "لا يوجد رصيد مستحق",
+    "consultationPayment": "دفعة في الاستشارة",
+    "reverseConsultationPayment": "التراجع عن دفعة الاستشارة",
+    "reverseConsultationConfirm": "هل تريد التراجع عن الدفعة المسجلة في هذا الموعد؟ سيتم إعادة حساب رصيد المريض.",
     "statement": {
       "appointmentsDebt": "دين من المواعيد المنجزة",
       "remainingBudget": "الميزانية المتبقية",

@@ -14,6 +14,7 @@ import {
   CheckCircle,
   FileText,
   Loader2,
+  Undo2,
 } from 'lucide-react'
 import { Permission } from '@dental/shared'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -30,6 +31,7 @@ import {
 } from '@/lib/appointment-api'
 import { AppointmentCompleteModal } from '@/components/appointments/AppointmentCompleteModal'
 import { downloadAppointmentPdf } from '@/lib/pdf-api'
+import { deletePayment } from '@/lib/payment-api'
 import { formatCurrency } from '@/lib/format'
 import i18n from '@/i18n'
 
@@ -42,6 +44,7 @@ interface PatientAppointmentsSectionProps {
   onNewAppointment: () => void
   onEditAppointment: (appointment: Appointment) => void
   refreshKey?: number
+  onPaymentsChange?: () => void
 }
 
 type FilterPeriod = 'upcoming' | 'past' | 'all'
@@ -56,17 +59,21 @@ function PatientAppointmentCard({
   onComplete,
   onCancel,
   onError,
+  onPaymentReversed,
 }: {
   appointment: Appointment
   onEdit: (a: Appointment) => void
   onComplete: (a: Appointment) => void
   onCancel: (a: Appointment) => void
   onError?: (msg: string) => void
+  onPaymentReversed: () => void
 }) {
   const { t } = useTranslation()
+  const { can } = usePermissions()
   const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
   const [showMenu, setShowMenu] = useState(false)
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
+  const [isReversingPayment, setIsReversingPayment] = useState(false)
   const [menuPos, setMenuPos] = useState<CSSProperties>({})
   const menuRef = useRef<HTMLDivElement>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
@@ -173,6 +180,29 @@ function PatientAppointmentCard({
                 <Trash2 className="h-3.5 w-3.5" />
                 {t('appointments.cancelAppointment')}
               </button>
+              {appointment.hasRecordedPayment && can(Permission.PAYMENTS_DELETE) && (
+                <button
+                  onClick={async () => {
+                    if (!appointment.recordedPaymentId) return
+                    if (!confirm(t('payments.reverseConsultationConfirm'))) return
+                    setIsReversingPayment(true)
+                    try {
+                      await deletePayment(appointment.patientId, appointment.recordedPaymentId)
+                      onPaymentReversed()
+                    } catch (e) {
+                      onError?.(e instanceof Error ? e.message : 'Error')
+                    } finally {
+                      setIsReversingPayment(false)
+                      setShowMenu(false)
+                    }
+                  }}
+                  disabled={isReversingPayment}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                >
+                  {isReversingPayment ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />}
+                  {t('payments.reverseConsultationPayment')}
+                </button>
+              )}
             </div>,
             document.body
           )}
@@ -252,6 +282,13 @@ function PatientAppointmentCard({
           </div>
         )
       })()}
+
+      {/* Consultation payment (kind=APPOINTMENT payment recorded on this appointment) */}
+      {appointment.hasRecordedPayment && (
+        <div className="mt-1 text-[11px] text-gray-500">
+          {t('payments.consultationPayment')}: {formatCurrency(appointment.recordedPaidAmount ?? 0, currency)}
+        </div>
+      )}
     </div>
   )
 }
@@ -265,6 +302,7 @@ export function PatientAppointmentsSection({
   onNewAppointment,
   onEditAppointment,
   refreshKey = 0,
+  onPaymentsChange,
 }: PatientAppointmentsSectionProps) {
   const { t } = useTranslation()
   const { can } = usePermissions()
@@ -370,6 +408,11 @@ export function PatientAppointmentsSection({
 
   const handleCancel = (appointment: Appointment) => {
     setConfirmAction({ type: 'cancel', appointment })
+  }
+
+  const handlePaymentReversed = async () => {
+    await fetchAppointments()
+    onPaymentsChange?.()
   }
 
   const executeAction = async () => {
@@ -535,6 +578,7 @@ export function PatientAppointmentsSection({
                   onComplete={handleComplete}
                   onCancel={handleCancel}
                   onError={setError}
+                  onPaymentReversed={handlePaymentReversed}
                 />
               ))}
             </div>

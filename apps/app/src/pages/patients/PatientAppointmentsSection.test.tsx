@@ -11,6 +11,11 @@ import type { Appointment } from '@/lib/appointment-api'
 const mockGetAppointmentsByPatient = vi.fn()
 const mockMarkAppointmentDone = vi.fn()
 const mockDeleteAppointment = vi.fn()
+const mockDeletePayment = vi.fn()
+
+vi.mock('@/lib/payment-api', () => ({
+  deletePayment: (...args: unknown[]) => mockDeletePayment(...args),
+}))
 
 vi.mock('@/lib/appointment-api', () => ({
   getAppointmentsByPatient: (...args: unknown[]) => mockGetAppointmentsByPatient(...args),
@@ -54,10 +59,17 @@ vi.mock('@/lib/format', () => ({
 }))
 
 let mockCanPermission = true
+// #384: independently controls Permission.PAYMENTS_DELETE, gating the
+// "Revertir pago de consulta" kebab-menu item. Defaults to granted so
+// existing tests (which never touch payment reversal) are unaffected.
+let mockCanDeletePayments = true
 vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: () => ({
-    can: (permission: string) =>
-      mockCanPermission && permission === Permission.APPOINTMENTS_CREATE,
+    can: (permission: string) => {
+      if (permission === Permission.APPOINTMENTS_CREATE) return mockCanPermission
+      if (permission === Permission.PAYMENTS_DELETE) return mockCanDeletePayments
+      return false
+    },
   }),
 }))
 
@@ -159,6 +171,17 @@ const noShowAppointment: Appointment = {
   isActive: true,
 }
 
+// #384: an appointment with a recorded (kind=APPOINTMENT) consultation
+// payment linked to it.
+const paidConsultationAppointment: Appointment = {
+  ...upcomingAppointment,
+  id: 'a6',
+  type: 'Consulta pagada',
+  hasRecordedPayment: true,
+  recordedPaidAmount: 75,
+  recordedPaymentId: 'pay-1',
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -182,6 +205,7 @@ describe('PatientAppointmentsSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockCanPermission = true
+    mockCanDeletePayments = true
     localStorage.clear()
     mockGetAppointmentsByPatient.mockResolvedValue([upcomingAppointment])
   })
@@ -671,6 +695,130 @@ describe('PatientAppointmentsSection', () => {
         expect(mockDeleteAppointment).toHaveBeenCalledWith('a1')
       })
       expect(mockGetAppointmentsByPatient).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  // --------------------------------------------------------------------------
+  // Consultation payment reversal (#384)
+  // --------------------------------------------------------------------------
+
+  describe('consultation payment reversal', () => {
+    beforeEach(() => {
+      localStorage.setItem('patient-appointments-collapsed', 'false')
+      mockGetAppointmentsByPatient.mockResolvedValue([paidConsultationAppointment])
+    })
+
+    it('renders the "Pago en consulta" line when hasRecordedPayment is true', async () => {
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
+      })
+
+      expect(
+        screen.getByText(
+          (_content, element) => element?.textContent === 'payments.consultationPayment: $75'
+        )
+      ).toBeInTheDocument()
+    })
+
+    it('does not render the payment line when hasRecordedPayment is false', async () => {
+      mockGetAppointmentsByPatient.mockResolvedValue([upcomingAppointment])
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Limpieza')).toBeInTheDocument()
+      })
+
+      expect(screen.queryByText(/payments\.consultationPayment/)).not.toBeInTheDocument()
+    })
+
+    it('hides the reversal menu item when the user lacks PAYMENTS_DELETE', async () => {
+      mockCanDeletePayments = false
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByLabelText('common.options'))
+      expect(screen.queryByText('payments.reverseConsultationPayment')).not.toBeInTheDocument()
+    })
+
+    it('shows the reversal menu item for a holder of PAYMENTS_DELETE', async () => {
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByLabelText('common.options'))
+      expect(screen.getByText('payments.reverseConsultationPayment')).toBeInTheDocument()
+    })
+
+    it('cancelling the confirm dialog does not call deletePayment', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(false)
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByLabelText('common.options'))
+      fireEvent.click(screen.getByText('payments.reverseConsultationPayment'))
+
+      expect(window.confirm).toHaveBeenCalledWith('payments.reverseConsultationConfirm')
+      expect(mockDeletePayment).not.toHaveBeenCalled()
+    })
+
+    it('confirming calls deletePayment with the patient and recorded payment ids, then refreshes and bubbles onPaymentsChange', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      mockDeletePayment.mockResolvedValue(undefined)
+      const onPaymentsChange = vi.fn()
+
+      renderSection({ onPaymentsChange })
+
+      await waitFor(() => {
+        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
+      })
+
+      const callsBeforeReversal = mockGetAppointmentsByPatient.mock.calls.length
+
+      fireEvent.click(screen.getByLabelText('common.options'))
+      await act(async () => {
+        fireEvent.click(screen.getByText('payments.reverseConsultationPayment'))
+      })
+
+      expect(mockDeletePayment).toHaveBeenCalledWith('p1', 'pay-1')
+      await waitFor(() => {
+        expect(onPaymentsChange).toHaveBeenCalledTimes(1)
+      })
+      // The card's own appointments list is re-fetched (feeds the "Pago en
+      // consulta" line / hasRecordedPayment), independent of onPaymentsChange
+      // (which only refreshes the sibling payments tab).
+      expect(mockGetAppointmentsByPatient.mock.calls.length).toBeGreaterThan(callsBeforeReversal)
+    })
+
+    it('a rejected deletePayment surfaces the error via onError and does not fire onPaymentsChange', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      mockDeletePayment.mockRejectedValue(new Error('Cannot reverse payment'))
+      const onPaymentsChange = vi.fn()
+
+      renderSection({ onPaymentsChange })
+
+      await waitFor(() => {
+        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByLabelText('common.options'))
+      await act(async () => {
+        fireEvent.click(screen.getByText('payments.reverseConsultationPayment'))
+      })
+
+      await waitFor(() => {
+        expect(screen.getByText('Cannot reverse payment')).toBeInTheDocument()
+      })
+      expect(onPaymentsChange).not.toHaveBeenCalled()
     })
   })
 

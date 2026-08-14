@@ -895,6 +895,7 @@ export default function PatientDetailPage() {
                 setIsAppointmentFormOpen(true)
               }}
               refreshKey={appointmentsRefreshKey}
+              onPaymentsChange={() => setPaymentsRefreshKey((k) => k + 1)}
             />
           </div>
 
