@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router";
+import { useTranslation } from "react-i18next";
+import { LanguageSelector } from "./LanguageSelector";
 
 export function Header() {
+  const { t } = useTranslation();
   const appUrl = __APP_URL__;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -45,35 +48,36 @@ export function Header() {
               to="/"
               className="text-gray-600 hover:text-gray-900 transition-colors"
             >
-              Inicio
+              {t("nav.home")}
             </Link>
             <Link
               to="/precios"
               className="text-gray-600 hover:text-gray-900 transition-colors"
             >
-              Precios
+              {t("nav.pricing")}
             </Link>
             <Link
               to="/caracteristicas"
               className="text-gray-600 hover:text-gray-900 transition-colors"
             >
-              Características
+              {t("nav.features")}
             </Link>
           </div>
 
           {/* Desktop CTA Buttons */}
           <div className="hidden md:flex items-center gap-4">
+            <LanguageSelector />
             <a
               href={`${appUrl}/login`}
               className="text-gray-600 hover:text-gray-900 transition-colors font-medium"
             >
-              Iniciar Sesión
+              {t("cta.login")}
             </a>
             <a
               href={`${appUrl}/register`}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
             >
-              Comenzar Gratis
+              {t("cta.startFree")}
             </a>
           </div>
 
@@ -85,7 +89,7 @@ export function Header() {
             className="md:hidden p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
             aria-expanded={mobileMenuOpen}
             aria-controls="mobile-menu"
-            aria-label={mobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
+            aria-label={mobileMenuOpen ? t("nav.closeMenu") : t("nav.openMenu")}
           >
             {mobileMenuOpen ? (
               <svg
@@ -133,34 +137,37 @@ export function Header() {
               onClick={() => setMobileMenuOpen(false)}
               className="block px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors"
             >
-              Inicio
+              {t("nav.home")}
             </Link>
             <Link
               to="/precios"
               onClick={() => setMobileMenuOpen(false)}
               className="block px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors"
             >
-              Precios
+              {t("nav.pricing")}
             </Link>
             <Link
               to="/caracteristicas"
               onClick={() => setMobileMenuOpen(false)}
               className="block px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors"
             >
-              Características
+              {t("nav.features")}
             </Link>
+            <div className="px-4 py-2">
+              <LanguageSelector />
+            </div>
             <div className="pt-4 space-y-2 border-t border-gray-100">
               <a
                 href={`${appUrl}/login`}
                 className="block px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors font-medium"
               >
-                Iniciar Sesión
+                {t("cta.login")}
               </a>
               <a
                 href={`${appUrl}/register`}
                 className="block mx-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-center rounded-lg font-medium transition-colors"
               >
-                Comenzar Gratis
+                {t("cta.startFree")}
               </a>
             </div>
           </div>

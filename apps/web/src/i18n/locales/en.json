@@ -1,0 +1,21 @@
+{
+  "nav": {
+    "home": "Home",
+    "pricing": "Pricing",
+    "features": "Features",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
+  },
+  "cta": {
+    "login": "Log In",
+    "startFree": "Start Free"
+  },
+  "hero": {
+    "titlePrefix": "Manage your dental clinic",
+    "titleHighlight": "smartly",
+    "subtitle": "Simplify patient management, appointments, treatments, and billing with our all-in-one platform designed for dental professionals.",
+    "primaryCta": "Start Free Trial",
+    "secondaryCta": "See Features",
+    "trialNote": "14 days free • No credit card required"
+  }
+}
