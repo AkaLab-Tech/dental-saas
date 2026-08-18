@@ -48,6 +48,35 @@ vi.mock('../../stores/auth.store', () => ({
   useAuthStore: (selector: (s: unknown) => unknown) => selector({ user: { tenant: { currency: 'USD' } } }),
 }))
 
+// Task #239: the modal reads `settings` / `fetchSettings` off the settings
+// store via selectors (`useSettingsStore((s) => s.settings)`), unlike the
+// destructured `useSettingsStore()` call used elsewhere in the app — so the
+// mock below must actually apply the selector against a controllable state
+// object rather than just returning a fixed value regardless of the
+// selector passed in (mirrors the useAuthStore mock above).
+const settingsStoreState: {
+  settings: {
+    appointmentTypeDurations: { type: string; duration: number }[]
+    defaultAppointmentDuration: number
+  } | null
+  fetchSettings: () => Promise<void>
+} = {
+  settings: null,
+  fetchSettings: vi.fn(),
+}
+
+vi.mock('../../stores/settings.store', () => ({
+  useSettingsStore: (selector: (s: typeof settingsStoreState) => unknown) =>
+    selector(settingsStoreState),
+}))
+
+// Reset the settings-store mock before every test in this file so a value
+// set by one describe block's tests can never leak into another's.
+beforeEach(() => {
+  settingsStoreState.settings = null
+  settingsStoreState.fetchSettings = vi.fn()
+})
+
 // Test double for the patient combobox: mirrors the real component's public
 // contract (selectedPatient / onSelect / onClear) without the debounced
 // search internals, which are exercised by PatientSearchCombobox's own tests.
@@ -1058,6 +1087,194 @@ describe('AppointmentFormModal — date/time picker migration (task #233)', () =
     const [startTrigger, endTrigger] = getTimeTriggers()
     expect(startTrigger).toHaveAttribute('aria-haspopup', 'listbox')
     expect(endTrigger).toHaveAttribute('aria-haspopup', 'listbox')
+  })
+})
+
+// Coverage for task #239: a per-tenant map of appointment type -> duration
+// (minutes), used to suggest `endTime` from the entered `type` + `startTime`.
+// These tests assert on the durations in the submitted payload (endTime -
+// startTime, in minutes) rather than on the TimePicker's displayed text,
+// since the trigger only exposes a locale-formatted label — the ISO
+// timestamps actually handed to `onSubmit` are the real, unambiguous
+// contract (same technique the date/time picker suite above uses).
+describe('AppointmentFormModal — appointment type duration auto-fill (task #239)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getDoctorsMock.mockResolvedValue([mockDoctor])
+    getPatientsMock.mockResolvedValue([mockPatientRecord])
+    listBudgetsByPatientMock.mockResolvedValue({ data: [], total: 0 })
+    getAppointmentBudgetItemsMock.mockResolvedValue([])
+    settingsStoreState.settings = null
+    settingsStoreState.fetchSettings = vi.fn().mockResolvedValue(undefined)
+  })
+
+  function getTypeInput() {
+    return screen.getByPlaceholderText('Ej: Limpieza, Revisión, Ortodoncia...')
+  }
+
+  function durationMinutes(payload: { startTime?: string; endTime?: string }): number {
+    const start = new Date(payload.startTime as string)
+    const end = new Date(payload.endTime as string)
+    return (end.getTime() - start.getTime()) / 60000
+  }
+
+  it("auto-sets endTime to startTime plus the configured type's duration", async () => {
+    settingsStoreState.settings = {
+      appointmentTypeDurations: [{ type: 'Limpieza', duration: 45 }],
+      defaultAppointmentDuration: 30,
+    }
+    const { onSubmit } = renderModal()
+    await waitForOptionsLoaded()
+
+    fireEvent.change(getTypeInput(), { target: { value: 'Limpieza' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+    await selectDoctor()
+    fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect(durationMinutes(onSubmit.mock.calls[0][0])).toBe(45)
+  })
+
+  it('matches the configured type case-insensitively and ignoring surrounding whitespace', async () => {
+    settingsStoreState.settings = {
+      appointmentTypeDurations: [{ type: 'Limpieza', duration: 45 }],
+      defaultAppointmentDuration: 30,
+    }
+    const { onSubmit } = renderModal()
+    await waitForOptionsLoaded()
+
+    fireEvent.change(getTypeInput(), { target: { value: '  limpieza  ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+    await selectDoctor()
+    fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect(durationMinutes(onSubmit.mock.calls[0][0])).toBe(45)
+  })
+
+  it('falls back to the tenant defaultAppointmentDuration for an unconfigured type', async () => {
+    settingsStoreState.settings = {
+      appointmentTypeDurations: [{ type: 'Limpieza', duration: 45 }],
+      defaultAppointmentDuration: 50,
+    }
+    const { onSubmit } = renderModal()
+    await waitForOptionsLoaded()
+
+    fireEvent.change(getTypeInput(), { target: { value: 'Consulta' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+    await selectDoctor()
+    fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect(durationMinutes(onSubmit.mock.calls[0][0])).toBe(50)
+  })
+
+  it('falls back to the tenant defaultAppointmentDuration when the type is left empty', async () => {
+    settingsStoreState.settings = {
+      appointmentTypeDurations: [{ type: 'Limpieza', duration: 45 }],
+      defaultAppointmentDuration: 50,
+    }
+    const { onSubmit } = renderModal()
+    await waitForOptionsLoaded()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+    await selectDoctor()
+    fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect(durationMinutes(onSubmit.mock.calls[0][0])).toBe(50)
+  })
+
+  it('does not overwrite an existing appointment\'s saved endTime on hydration, even when its type has a configured duration', async () => {
+    settingsStoreState.settings = {
+      appointmentTypeDurations: [{ type: 'Limpieza', duration: 90 }],
+      defaultAppointmentDuration: 30,
+    }
+    // Saved as a 30-minute visit; the configured duration for "Limpieza" is
+    // now 90 minutes, but opening the modal to edit must not silently
+    // stretch it — the effect only kicks in once dirtyFields.type is true.
+    const appointment = makeAppointment({
+      type: 'Limpieza',
+      startTime: '2026-03-10T13:00:00.000Z',
+      endTime: '2026-03-10T13:30:00.000Z',
+    })
+    const { onSubmit } = renderModal({ appointment })
+    await waitForOptionsLoaded()
+
+    fireEvent.click(screen.getByRole('button', { name: /guardar cambios/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect(durationMinutes(onSubmit.mock.calls[0][0])).toBe(30)
+  })
+
+  it('lets the user manually change endTime after an auto-fill (auto-fill is a suggestion, not a lock)', async () => {
+    settingsStoreState.settings = {
+      appointmentTypeDurations: [{ type: 'Limpieza', duration: 45 }],
+      defaultAppointmentDuration: 30,
+    }
+    const { onSubmit } = renderModal()
+    await waitForOptionsLoaded()
+
+    fireEvent.change(getTypeInput(), { target: { value: 'Limpieza' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+    await selectDoctor()
+
+    // Manually override the auto-filled endTime via the TimePicker.
+    const endTrigger = screen.getByRole('combobox', { name: 'Hora de fin' })
+    fireEvent.click(endTrigger)
+    const option = screen.getAllByRole('option').find((el) => el.textContent === '11:15')
+    if (!option) throw new Error('No TimePicker option found for "11:15"')
+    fireEvent.click(option)
+
+    fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const payload = onSubmit.mock.calls[0][0] as { endTime: string }
+    const expectedDate = formatDateForInputHelper(new Date())
+    expect(payload.endTime).toBe(new Date(`${expectedDate}T11:15:00`).toISOString())
+  })
+
+  it('behaves as before (no crash, submit still works with the hardcoded 30-minute fallback) when settings fail to load, and never retries the failed fetch', async () => {
+    // Mirrors the real store: fetchSettings always resolves (it catches
+    // internally), it just never populates `settings` on failure.
+    settingsStoreState.settings = null
+    settingsStoreState.fetchSettings = vi.fn().mockResolvedValue(undefined)
+
+    const { onSubmit } = renderModal()
+    await waitForOptionsLoaded()
+
+    // Interact with several fields — each causes a re-render — to exercise
+    // the single-attempt guard (settingsFetchAttemptedRef in the component).
+    // A prior implementation re-ran fetchSettings on every such re-render.
+    fireEvent.change(getTypeInput(), { target: { value: 'Limpieza' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+    await selectDoctor()
+    fireEvent.change(screen.getByPlaceholderText('Notas adicionales sobre la cita...'), {
+      target: { value: 'Some notes' },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect(durationMinutes(onSubmit.mock.calls[0][0])).toBe(30)
+    expect(settingsStoreState.fetchSettings).toHaveBeenCalledTimes(1)
+  })
+
+  it('behaves as before (falls back to defaultAppointmentDuration) when settings load with an empty appointmentTypeDurations array', async () => {
+    settingsStoreState.settings = {
+      appointmentTypeDurations: [],
+      defaultAppointmentDuration: 30,
+    }
+    const { onSubmit } = renderModal()
+    await waitForOptionsLoaded()
+
+    fireEvent.change(getTypeInput(), { target: { value: 'Limpieza' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+    await selectDoctor()
+    fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect(durationMinutes(onSubmit.mock.calls[0][0])).toBe(30)
   })
 })
 

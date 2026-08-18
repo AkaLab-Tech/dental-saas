@@ -890,6 +890,15 @@
     "defaultDuration": "المدة الافتراضية",
     "bufferTime": "الوقت بين المواعيد (دقائق)",
     "bufferTimeHelp": "وقت الراحة بين المواعيد المتتالية",
+    "appointmentTypeDurations": {
+      "title": "المدة حسب نوع الموعد",
+      "description": "حدد مدة معينة لكل نوع من أنواع المواعيد. ستُستخدم لاقتراح وقت الانتهاء عند إنشاء موعد.",
+      "typePlaceholder": "مثال: تنظيف",
+      "durationColumn": "المدة",
+      "add": "إضافة نوع",
+      "remove": "إزالة",
+      "duplicateType": "يوجد بالفعل نوع موعد بهذا الاسم"
+    },
     "notifications": "الإشعارات",
     "emailNotifications": "استلام إشعارات البريد الإلكتروني",
     "smsNotifications": "استلام إشعارات الرسائل النصية",

@@ -1873,6 +1873,7 @@ export const TenantSettingsScalarFieldEnum = {
   timeFormat: 'timeFormat',
   defaultAppointmentDuration: 'defaultAppointmentDuration',
   appointmentBuffer: 'appointmentBuffer',
+  appointmentTypeDurations: 'appointmentTypeDurations',
   businessHours: 'businessHours',
   workingDays: 'workingDays',
   emailNotifications: 'emailNotifications',

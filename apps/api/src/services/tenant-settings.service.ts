@@ -17,6 +17,7 @@ export interface TenantSettingsInput {
   timeFormat?: string
   defaultAppointmentDuration?: number
   appointmentBuffer?: number
+  appointmentTypeDurations?: { type: string; duration: number }[]
   businessHours?: Record<number, { start: string; end: string }>
   workingDays?: number[]
   emailNotifications?: boolean
@@ -80,6 +81,9 @@ export const TenantSettingsService = {
         }),
         ...(data.appointmentBuffer !== undefined && {
           appointmentBuffer: data.appointmentBuffer,
+        }),
+        ...(data.appointmentTypeDurations !== undefined && {
+          appointmentTypeDurations: data.appointmentTypeDurations,
         }),
         ...(data.businessHours !== undefined && { businessHours: data.businessHours }),
         ...(data.workingDays !== undefined && { workingDays: data.workingDays }),

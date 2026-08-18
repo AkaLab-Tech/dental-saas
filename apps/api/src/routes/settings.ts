@@ -13,6 +13,22 @@ const updateSettingsSchema = z.object({
   timeFormat: z.enum(['12h', '24h']).optional(),
   defaultAppointmentDuration: z.number().min(5).max(240).optional(),
   appointmentBuffer: z.number().min(0).max(60).optional(),
+  appointmentTypeDurations: z
+    .array(
+      z.object({
+        type: z.string().min(1).max(60),
+        duration: z.number().int().min(5).max(240),
+      })
+    )
+    .max(20)
+    .refine(
+      (entries) => {
+        const normalized = entries.map((entry) => entry.type.trim().toLowerCase())
+        return new Set(normalized).size === normalized.length
+      },
+      { message: 'Appointment type names must be unique' }
+    )
+    .optional(),
   businessHours: z
     .record(
       z.string(),
@@ -81,6 +97,7 @@ router.get(
           timeFormat: settings.timeFormat,
           defaultAppointmentDuration: settings.defaultAppointmentDuration,
           appointmentBuffer: settings.appointmentBuffer,
+          appointmentTypeDurations: settings.appointmentTypeDurations,
           businessHours: settings.businessHours,
           workingDays: settings.workingDays,
           emailNotifications: settings.emailNotifications,
@@ -140,6 +157,7 @@ router.put(
           timeFormat: settings.timeFormat,
           defaultAppointmentDuration: settings.defaultAppointmentDuration,
           appointmentBuffer: settings.appointmentBuffer,
+          appointmentTypeDurations: settings.appointmentTypeDurations,
           businessHours: settings.businessHours,
           workingDays: settings.workingDays,
           emailNotifications: settings.emailNotifications,

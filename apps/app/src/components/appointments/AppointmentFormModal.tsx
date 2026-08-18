@@ -20,6 +20,7 @@ import { PatientSearchCombobox, type PatientOption } from '../ui/PatientSearchCo
 import { DatePicker } from '../ui/DatePicker'
 import { TimePicker } from '../ui/TimePicker'
 import { useAuthStore } from '../../stores/auth.store'
+import { useSettingsStore } from '../../stores/settings.store'
 
 interface EligibleBudgetItem {
   id: string
@@ -113,6 +114,28 @@ export function AppointmentFormModal({
   const hasRecordedPaidAmount = isEditing && !!appointment?.hasRecordedPayment
   const paidAmountLocked = isAlreadyPaid || hasRecordedPaidAmount
   const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
+  const typeListId = useId()
+
+  // Settings drive the per-type end-time auto-fill below. Loaded lazily since
+  // SettingsPage is the only other caller of fetchSettings — if loading
+  // fails, the effect below simply falls back to today's manual behaviour.
+  // A single attempt per modal-open avoids retry-looping on failure: the
+  // store flips isLoading back to false on error, which would otherwise look
+  // identical to "never tried" and re-trigger the fetch forever.
+  const settings = useSettingsStore((s) => s.settings)
+  const fetchSettings = useSettingsStore((s) => s.fetchSettings)
+  const settingsFetchAttemptedRef = useRef(false)
+
+  useEffect(() => {
+    if (!isOpen) {
+      settingsFetchAttemptedRef.current = false
+      return
+    }
+    if (!settings && !settingsFetchAttemptedRef.current) {
+      settingsFetchAttemptedRef.current = true
+      fetchSettings()
+    }
+  }, [isOpen, settings, fetchSettings])
 
   // State for doctor options
   const [doctors, setDoctors] = useState<DoctorOption[]>([])
@@ -155,6 +178,8 @@ export function AppointmentFormModal({
   })
 
   const watchedPatientId = watch('patientId')
+  const watchedType = watch('type')
+  const watchedStartTime = watch('startTime')
 
   // Fetch doctors (and resolve patient name if needed) when modal opens
   useEffect(() => {
@@ -253,6 +278,24 @@ export function AppointmentFormModal({
     if (dirtyFields.doctorId) return
     setValue('doctorId', appointment.doctorId, { shouldDirty: false })
   }, [isOpen, loadingOptions, appointment, dirtyFields.doctorId, setValue])
+
+  // Suggest an end time from the entered type's configured duration (falling
+  // back to the tenant default). In edit mode this only kicks in once the
+  // user has actively edited the type themselves — never on the identity
+  // reset() above — so opening an existing appointment never silently moves
+  // its saved end time. The end time input stays editable either way.
+  useEffect(() => {
+    if (!isOpen) return
+    if (isEditing && !dirtyFields.type) return
+    if (!watchedStartTime) return
+
+    const duration = resolveTypeDuration(
+      watchedType || '',
+      settings?.appointmentTypeDurations,
+      settings?.defaultAppointmentDuration ?? 30
+    )
+    setValue('endTime', addMinutesToTime(watchedStartTime, duration), { shouldValidate: true })
+  }, [isOpen, isEditing, dirtyFields.type, watchedType, watchedStartTime, settings, setValue])
 
   // Clear selected patient when modal closes
   useEffect(() => {
@@ -560,9 +603,15 @@ export function AppointmentFormModal({
                   <input
                     type="text"
                     {...register('type')}
+                    list={typeListId}
                     placeholder={t('appointments.form.typePlaceholder')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
+                  <datalist id={typeListId}>
+                    {settings?.appointmentTypeDurations?.map((entry) => (
+                      <option key={entry.type} value={entry.type} />
+                    ))}
+                  </datalist>
                 </div>
 
                 {isEditing && (
@@ -728,6 +777,32 @@ export function AppointmentFormModal({
 // Helper functions
 function formatTimeForInput(date: Date): string {
   return date.toTimeString().slice(0, 5)
+}
+
+// Matches the free-text `type` field against configured durations
+// case-insensitively, ignoring surrounding whitespace.
+function resolveTypeDuration(
+  type: string,
+  appointmentTypeDurations: { type: string; duration: number }[] | undefined,
+  fallbackDuration: number
+): number {
+  const normalized = type.trim().toLowerCase()
+  if (normalized) {
+    const match = appointmentTypeDurations?.find(
+      (entry) => entry.type.trim().toLowerCase() === normalized
+    )
+    if (match) return match.duration
+  }
+  return fallbackDuration
+}
+
+function addMinutesToTime(time: string, minutes: number): string {
+  const match = /^(\d{2}):(\d{2})$/.exec(time)
+  if (!match) return time
+  const totalMinutes = (Number(match[1]) * 60 + Number(match[2]) + minutes + 24 * 60) % (24 * 60)
+  const hours = Math.floor(totalMinutes / 60)
+  const mins = totalMinutes % 60
+  return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`
 }
 
 export default AppointmentFormModal

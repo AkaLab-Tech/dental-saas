@@ -338,6 +338,53 @@ describe('Appointments API', () => {
       expect(response.body.error.code).toBe('TIME_CONFLICT')
     })
 
+    // Task #239 risk note: the client can now auto-fill a longer endTime
+    // from a per-type duration (e.g. a 90-minute "Cirugia" type) instead of
+    // the old fixed 30-minute default. Conflict detection is purely a
+    // server-side overlap check on the submitted startTime/endTime — it has
+    // no notion of how the client derived those timestamps — so a longer
+    // slot must still be rejected against an appointment that starts inside
+    // it, even though a fixed 30-minute assumption would have missed the
+    // overlap entirely.
+    it('should return 409 for a time conflict against a longer (auto-filled) duration slot', async () => {
+      const start = new Date()
+      start.setDate(start.getDate() + 5)
+      start.setHours(10, 0, 0, 0)
+      const end = new Date(start)
+      end.setMinutes(end.getMinutes() + 90) // e.g. a configured "Cirugia" duration
+
+      // First appointment: 10:00-11:30 (90 minutes)
+      await request(app)
+        .post('/api/appointments')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          patientId,
+          doctorId,
+          startTime: start.toISOString(),
+          endTime: end.toISOString(),
+        })
+
+      // Second appointment starts at 10:45 — inside the 90-minute window,
+      // but past where a fixed 30-minute slot (10:00-10:30) would have ended.
+      const overlapStart = new Date(start)
+      overlapStart.setMinutes(overlapStart.getMinutes() + 45)
+      const overlapEnd = new Date(overlapStart)
+      overlapEnd.setMinutes(overlapEnd.getMinutes() + 30)
+
+      const response = await request(app)
+        .post('/api/appointments')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          patientId: patient2Id,
+          doctorId,
+          startTime: overlapStart.toISOString(),
+          endTime: overlapEnd.toISOString(),
+        })
+
+      expect(response.status).toBe(409)
+      expect(response.body.error.code).toBe('TIME_CONFLICT')
+    })
+
     it('should allow same time with different doctor', async () => {
       const times = getFutureTime(4, 10)
 

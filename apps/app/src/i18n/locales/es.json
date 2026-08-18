@@ -890,6 +890,15 @@
     "defaultDuration": "Duración por defecto",
     "bufferTime": "Tiempo entre citas (minutos)",
     "bufferTimeHelp": "Tiempo de descanso entre citas consecutivas",
+    "appointmentTypeDurations": {
+      "title": "Duración por tipo de cita",
+      "description": "Define una duración específica para cada tipo de cita. Se usará para sugerir la hora de fin al crear una cita.",
+      "typePlaceholder": "Ej: Limpieza",
+      "durationColumn": "Duración",
+      "add": "Agregar tipo",
+      "remove": "Eliminar",
+      "duplicateType": "Ya existe un tipo de cita con ese nombre"
+    },
     "notifications": "Notificaciones",
     "emailNotifications": "Recibir notificaciones por email",
     "smsNotifications": "Recibir notificaciones por SMS",

@@ -82,6 +82,7 @@ export type TenantSettingsCountAggregateOutputType = {
   timeFormat: number
   defaultAppointmentDuration: number
   appointmentBuffer: number
+  appointmentTypeDurations: number
   businessHours: number
   workingDays: number
   emailNotifications: number
@@ -151,6 +152,7 @@ export type TenantSettingsCountAggregateInputType = {
   timeFormat?: true
   defaultAppointmentDuration?: true
   appointmentBuffer?: true
+  appointmentTypeDurations?: true
   businessHours?: true
   workingDays?: true
   emailNotifications?: true
@@ -257,6 +259,7 @@ export type TenantSettingsGroupByOutputType = {
   timeFormat: string
   defaultAppointmentDuration: number
   appointmentBuffer: number
+  appointmentTypeDurations: runtime.JsonValue
   businessHours: runtime.JsonValue
   workingDays: runtime.JsonValue
   emailNotifications: boolean
@@ -299,6 +302,7 @@ export type TenantSettingsWhereInput = {
   timeFormat?: Prisma.StringFilter<"TenantSettings"> | string
   defaultAppointmentDuration?: Prisma.IntFilter<"TenantSettings"> | number
   appointmentBuffer?: Prisma.IntFilter<"TenantSettings"> | number
+  appointmentTypeDurations?: Prisma.JsonFilter<"TenantSettings">
   businessHours?: Prisma.JsonFilter<"TenantSettings">
   workingDays?: Prisma.JsonFilter<"TenantSettings">
   emailNotifications?: Prisma.BoolFilter<"TenantSettings"> | boolean
@@ -319,6 +323,7 @@ export type TenantSettingsOrderByWithRelationInput = {
   timeFormat?: Prisma.SortOrder
   defaultAppointmentDuration?: Prisma.SortOrder
   appointmentBuffer?: Prisma.SortOrder
+  appointmentTypeDurations?: Prisma.SortOrder
   businessHours?: Prisma.SortOrder
   workingDays?: Prisma.SortOrder
   emailNotifications?: Prisma.SortOrder
@@ -342,6 +347,7 @@ export type TenantSettingsWhereUniqueInput = Prisma.AtLeast<{
   timeFormat?: Prisma.StringFilter<"TenantSettings"> | string
   defaultAppointmentDuration?: Prisma.IntFilter<"TenantSettings"> | number
   appointmentBuffer?: Prisma.IntFilter<"TenantSettings"> | number
+  appointmentTypeDurations?: Prisma.JsonFilter<"TenantSettings">
   businessHours?: Prisma.JsonFilter<"TenantSettings">
   workingDays?: Prisma.JsonFilter<"TenantSettings">
   emailNotifications?: Prisma.BoolFilter<"TenantSettings"> | boolean
@@ -362,6 +368,7 @@ export type TenantSettingsOrderByWithAggregationInput = {
   timeFormat?: Prisma.SortOrder
   defaultAppointmentDuration?: Prisma.SortOrder
   appointmentBuffer?: Prisma.SortOrder
+  appointmentTypeDurations?: Prisma.SortOrder
   businessHours?: Prisma.SortOrder
   workingDays?: Prisma.SortOrder
   emailNotifications?: Prisma.SortOrder
@@ -389,6 +396,7 @@ export type TenantSettingsScalarWhereWithAggregatesInput = {
   timeFormat?: Prisma.StringWithAggregatesFilter<"TenantSettings"> | string
   defaultAppointmentDuration?: Prisma.IntWithAggregatesFilter<"TenantSettings"> | number
   appointmentBuffer?: Prisma.IntWithAggregatesFilter<"TenantSettings"> | number
+  appointmentTypeDurations?: Prisma.JsonWithAggregatesFilter<"TenantSettings">
   businessHours?: Prisma.JsonWithAggregatesFilter<"TenantSettings">
   workingDays?: Prisma.JsonWithAggregatesFilter<"TenantSettings">
   emailNotifications?: Prisma.BoolWithAggregatesFilter<"TenantSettings"> | boolean
@@ -407,6 +415,7 @@ export type TenantSettingsCreateInput = {
   timeFormat?: string
   defaultAppointmentDuration?: number
   appointmentBuffer?: number
+  appointmentTypeDurations?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   businessHours?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   workingDays?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   emailNotifications?: boolean
@@ -427,6 +436,7 @@ export type TenantSettingsUncheckedCreateInput = {
   timeFormat?: string
   defaultAppointmentDuration?: number
   appointmentBuffer?: number
+  appointmentTypeDurations?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   businessHours?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   workingDays?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   emailNotifications?: boolean
@@ -445,6 +455,7 @@ export type TenantSettingsUpdateInput = {
   timeFormat?: Prisma.StringFieldUpdateOperationsInput | string
   defaultAppointmentDuration?: Prisma.IntFieldUpdateOperationsInput | number
   appointmentBuffer?: Prisma.IntFieldUpdateOperationsInput | number
+  appointmentTypeDurations?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   businessHours?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   workingDays?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   emailNotifications?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -465,6 +476,7 @@ export type TenantSettingsUncheckedUpdateInput = {
   timeFormat?: Prisma.StringFieldUpdateOperationsInput | string
   defaultAppointmentDuration?: Prisma.IntFieldUpdateOperationsInput | number
   appointmentBuffer?: Prisma.IntFieldUpdateOperationsInput | number
+  appointmentTypeDurations?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   businessHours?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   workingDays?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   emailNotifications?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -484,6 +496,7 @@ export type TenantSettingsCreateManyInput = {
   timeFormat?: string
   defaultAppointmentDuration?: number
   appointmentBuffer?: number
+  appointmentTypeDurations?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   businessHours?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   workingDays?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   emailNotifications?: boolean
@@ -502,6 +515,7 @@ export type TenantSettingsUpdateManyMutationInput = {
   timeFormat?: Prisma.StringFieldUpdateOperationsInput | string
   defaultAppointmentDuration?: Prisma.IntFieldUpdateOperationsInput | number
   appointmentBuffer?: Prisma.IntFieldUpdateOperationsInput | number
+  appointmentTypeDurations?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   businessHours?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   workingDays?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   emailNotifications?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -521,6 +535,7 @@ export type TenantSettingsUncheckedUpdateManyInput = {
   timeFormat?: Prisma.StringFieldUpdateOperationsInput | string
   defaultAppointmentDuration?: Prisma.IntFieldUpdateOperationsInput | number
   appointmentBuffer?: Prisma.IntFieldUpdateOperationsInput | number
+  appointmentTypeDurations?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   businessHours?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   workingDays?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   emailNotifications?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -545,6 +560,7 @@ export type TenantSettingsCountOrderByAggregateInput = {
   timeFormat?: Prisma.SortOrder
   defaultAppointmentDuration?: Prisma.SortOrder
   appointmentBuffer?: Prisma.SortOrder
+  appointmentTypeDurations?: Prisma.SortOrder
   businessHours?: Prisma.SortOrder
   workingDays?: Prisma.SortOrder
   emailNotifications?: Prisma.SortOrder
@@ -643,6 +659,7 @@ export type TenantSettingsCreateWithoutTenantInput = {
   timeFormat?: string
   defaultAppointmentDuration?: number
   appointmentBuffer?: number
+  appointmentTypeDurations?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   businessHours?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   workingDays?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   emailNotifications?: boolean
@@ -661,6 +678,7 @@ export type TenantSettingsUncheckedCreateWithoutTenantInput = {
   timeFormat?: string
   defaultAppointmentDuration?: number
   appointmentBuffer?: number
+  appointmentTypeDurations?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   businessHours?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   workingDays?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   emailNotifications?: boolean
@@ -695,6 +713,7 @@ export type TenantSettingsUpdateWithoutTenantInput = {
   timeFormat?: Prisma.StringFieldUpdateOperationsInput | string
   defaultAppointmentDuration?: Prisma.IntFieldUpdateOperationsInput | number
   appointmentBuffer?: Prisma.IntFieldUpdateOperationsInput | number
+  appointmentTypeDurations?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   businessHours?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   workingDays?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   emailNotifications?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -713,6 +732,7 @@ export type TenantSettingsUncheckedUpdateWithoutTenantInput = {
   timeFormat?: Prisma.StringFieldUpdateOperationsInput | string
   defaultAppointmentDuration?: Prisma.IntFieldUpdateOperationsInput | number
   appointmentBuffer?: Prisma.IntFieldUpdateOperationsInput | number
+  appointmentTypeDurations?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   businessHours?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   workingDays?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   emailNotifications?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -734,6 +754,7 @@ export type TenantSettingsSelect<ExtArgs extends runtime.Types.Extensions.Intern
   timeFormat?: boolean
   defaultAppointmentDuration?: boolean
   appointmentBuffer?: boolean
+  appointmentTypeDurations?: boolean
   businessHours?: boolean
   workingDays?: boolean
   emailNotifications?: boolean
@@ -754,6 +775,7 @@ export type TenantSettingsSelectCreateManyAndReturn<ExtArgs extends runtime.Type
   timeFormat?: boolean
   defaultAppointmentDuration?: boolean
   appointmentBuffer?: boolean
+  appointmentTypeDurations?: boolean
   businessHours?: boolean
   workingDays?: boolean
   emailNotifications?: boolean
@@ -774,6 +796,7 @@ export type TenantSettingsSelectUpdateManyAndReturn<ExtArgs extends runtime.Type
   timeFormat?: boolean
   defaultAppointmentDuration?: boolean
   appointmentBuffer?: boolean
+  appointmentTypeDurations?: boolean
   businessHours?: boolean
   workingDays?: boolean
   emailNotifications?: boolean
@@ -794,6 +817,7 @@ export type TenantSettingsSelectScalar = {
   timeFormat?: boolean
   defaultAppointmentDuration?: boolean
   appointmentBuffer?: boolean
+  appointmentTypeDurations?: boolean
   businessHours?: boolean
   workingDays?: boolean
   emailNotifications?: boolean
@@ -805,7 +829,7 @@ export type TenantSettingsSelectScalar = {
   updatedAt?: boolean
 }
 
-export type TenantSettingsOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "language" | "dateFormat" | "timeFormat" | "defaultAppointmentDuration" | "appointmentBuffer" | "businessHours" | "workingDays" | "emailNotifications" | "smsNotifications" | "appointmentReminders" | "reminderHoursBefore" | "autoLockMinutes" | "createdAt" | "updatedAt", ExtArgs["result"]["tenantSettings"]>
+export type TenantSettingsOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "language" | "dateFormat" | "timeFormat" | "defaultAppointmentDuration" | "appointmentBuffer" | "appointmentTypeDurations" | "businessHours" | "workingDays" | "emailNotifications" | "smsNotifications" | "appointmentReminders" | "reminderHoursBefore" | "autoLockMinutes" | "createdAt" | "updatedAt", ExtArgs["result"]["tenantSettings"]>
 export type TenantSettingsInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
 }
@@ -829,6 +853,10 @@ export type $TenantSettingsPayload<ExtArgs extends runtime.Types.Extensions.Inte
     timeFormat: string
     defaultAppointmentDuration: number
     appointmentBuffer: number
+    /**
+     * Per-appointment-type durations: [{ type: "Limpieza", duration: 45 }]
+     */
+    appointmentTypeDurations: runtime.JsonValue
     businessHours: runtime.JsonValue
     workingDays: runtime.JsonValue
     emailNotifications: boolean
@@ -1269,6 +1297,7 @@ export interface TenantSettingsFieldRefs {
   readonly timeFormat: Prisma.FieldRef<"TenantSettings", 'String'>
   readonly defaultAppointmentDuration: Prisma.FieldRef<"TenantSettings", 'Int'>
   readonly appointmentBuffer: Prisma.FieldRef<"TenantSettings", 'Int'>
+  readonly appointmentTypeDurations: Prisma.FieldRef<"TenantSettings", 'Json'>
   readonly businessHours: Prisma.FieldRef<"TenantSettings", 'Json'>
   readonly workingDays: Prisma.FieldRef<"TenantSettings", 'Json'>
   readonly emailNotifications: Prisma.FieldRef<"TenantSettings", 'Boolean'>

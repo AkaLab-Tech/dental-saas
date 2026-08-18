@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Loader2, Lock } from 'lucide-react'
+import { Loader2, Lock, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useSettingsStore } from '@/stores/settings.store'
 import type { TenantSettings, UpdateSettingsData } from '@/lib/settings-api'
@@ -52,6 +52,7 @@ export function PreferencesForm({ settings, canEdit }: PreferencesFormProps) {
     timeFormat: '24h',
     defaultAppointmentDuration: 30,
     appointmentBuffer: 0,
+    appointmentTypeDurations: [],
     emailNotifications: true,
     smsNotifications: false,
     appointmentReminders: true,
@@ -70,6 +71,7 @@ export function PreferencesForm({ settings, canEdit }: PreferencesFormProps) {
         timeFormat: settings.timeFormat,
         defaultAppointmentDuration: settings.defaultAppointmentDuration,
         appointmentBuffer: settings.appointmentBuffer,
+        appointmentTypeDurations: settings.appointmentTypeDurations,
         emailNotifications: settings.emailNotifications,
         smsNotifications: settings.smsNotifications,
         appointmentReminders: settings.appointmentReminders,
@@ -90,6 +92,35 @@ export function PreferencesForm({ settings, canEdit }: PreferencesFormProps) {
     setFormData((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : type === 'number' ? Number(value) : value,
+    }))
+  }
+
+  const appointmentTypeDurations = formData.appointmentTypeDurations ?? []
+
+  const handleAddTypeDuration = () => {
+    setFormData((prev) => ({
+      ...prev,
+      appointmentTypeDurations: [...(prev.appointmentTypeDurations ?? []), { type: '', duration: 30 }],
+    }))
+  }
+
+  const handleRemoveTypeDuration = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      appointmentTypeDurations: (prev.appointmentTypeDurations ?? []).filter((_, i) => i !== index),
+    }))
+  }
+
+  const handleTypeDurationChange = (
+    index: number,
+    field: 'type' | 'duration',
+    value: string | number
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      appointmentTypeDurations: (prev.appointmentTypeDurations ?? []).map((entry, i) =>
+        i === index ? { ...entry, [field]: value } : entry
+      ),
     }))
   }
 
@@ -237,6 +268,65 @@ export function PreferencesForm({ settings, canEdit }: PreferencesFormProps) {
               {t('settings.bufferTimeHelp')}
             </p>
           </div>
+        </div>
+
+        {/* Per-appointment-type durations */}
+        <div className="mt-6">
+          <h4 className="text-sm font-medium text-gray-900">
+            {t('settings.appointmentTypeDurations.title')}
+          </h4>
+          <p className="mt-1 text-xs text-gray-500">
+            {t('settings.appointmentTypeDurations.description')}
+          </p>
+
+          <div className="mt-3 space-y-2">
+            {appointmentTypeDurations.map((entry, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={entry.type}
+                  onChange={(e) => handleTypeDurationChange(index, 'type', e.target.value)}
+                  disabled={!canEdit}
+                  placeholder={t('settings.appointmentTypeDurations.typePlaceholder')}
+                  className="flex-1 rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                />
+                <select
+                  value={entry.duration}
+                  onChange={(e) => handleTypeDurationChange(index, 'duration', Number(e.target.value))}
+                  disabled={!canEdit}
+                  aria-label={t('settings.appointmentTypeDurations.durationColumn')}
+                  className="w-40 rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                >
+                  {DURATION_KEYS.map((dur) => (
+                    <option key={dur.value} value={dur.value}>
+                      {t(dur.labelKey)}
+                    </option>
+                  ))}
+                </select>
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTypeDuration(index)}
+                    aria-label={t('settings.appointmentTypeDurations.remove')}
+                    className="p-2 text-gray-400 hover:text-red-600 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {canEdit && (
+            <button
+              type="button"
+              onClick={handleAddTypeDuration}
+              className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700"
+            >
+              <Plus className="h-4 w-4" />
+              {t('settings.appointmentTypeDurations.add')}
+            </button>
+          )}
         </div>
       </div>
 
