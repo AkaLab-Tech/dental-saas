@@ -97,7 +97,13 @@ export function PreferencesForm({ settings, canEdit }: PreferencesFormProps) {
 
   const appointmentTypeDurations = formData.appointmentTypeDurations ?? []
 
+  // Row indices (into appointmentTypeDurations) whose normalized type
+  // collides with another row's. Cleared on any row edit so a stale
+  // highlight never survives past the change that would fix it.
+  const [duplicateTypeIndexes, setDuplicateTypeIndexes] = useState<Set<number>>(new Set())
+
   const handleAddTypeDuration = () => {
+    setDuplicateTypeIndexes(new Set())
     setFormData((prev) => ({
       ...prev,
       appointmentTypeDurations: [...(prev.appointmentTypeDurations ?? []), { type: '', duration: 30 }],
@@ -105,6 +111,7 @@ export function PreferencesForm({ settings, canEdit }: PreferencesFormProps) {
   }
 
   const handleRemoveTypeDuration = (index: number) => {
+    setDuplicateTypeIndexes(new Set())
     setFormData((prev) => ({
       ...prev,
       appointmentTypeDurations: (prev.appointmentTypeDurations ?? []).filter((_, i) => i !== index),
@@ -116,6 +123,7 @@ export function PreferencesForm({ settings, canEdit }: PreferencesFormProps) {
     field: 'type' | 'duration',
     value: string | number
   ) => {
+    setDuplicateTypeIndexes(new Set())
     setFormData((prev) => ({
       ...prev,
       appointmentTypeDurations: (prev.appointmentTypeDurations ?? []).map((entry, i) =>
@@ -127,7 +135,36 @@ export function PreferencesForm({ settings, canEdit }: PreferencesFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!canEdit) return
-    await updateSettings(formData)
+
+    const rows = formData.appointmentTypeDurations ?? []
+
+    // Duplicate check runs on the pre-filter rows so flagged indices line up
+    // with the rendered rows; blank rows never collide (they're dropped below).
+    const seenAt = new Map<string, number>()
+    const duplicates = new Set<number>()
+    rows.forEach((entry, index) => {
+      const normalized = entry.type.trim().toLowerCase()
+      if (!normalized) return
+      const firstIndex = seenAt.get(normalized)
+      if (firstIndex !== undefined) {
+        duplicates.add(firstIndex)
+        duplicates.add(index)
+      } else {
+        seenAt.set(normalized, index)
+      }
+    })
+
+    if (duplicates.size > 0) {
+      setDuplicateTypeIndexes(duplicates)
+      return
+    }
+
+    setDuplicateTypeIndexes(new Set())
+    const cleanedTypeDurations = rows
+      .map((entry) => ({ ...entry, type: entry.type.trim() }))
+      .filter((entry) => entry.type.length > 0)
+
+    await updateSettings({ ...formData, appointmentTypeDurations: cleanedTypeDurations })
   }
 
   if (!settings) {
@@ -281,37 +318,44 @@ export function PreferencesForm({ settings, canEdit }: PreferencesFormProps) {
 
           <div className="mt-3 space-y-2">
             {appointmentTypeDurations.map((entry, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={entry.type}
-                  onChange={(e) => handleTypeDurationChange(index, 'type', e.target.value)}
-                  disabled={!canEdit}
-                  placeholder={t('settings.appointmentTypeDurations.typePlaceholder')}
-                  className="flex-1 rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                />
-                <select
-                  value={entry.duration}
-                  onChange={(e) => handleTypeDurationChange(index, 'duration', Number(e.target.value))}
-                  disabled={!canEdit}
-                  aria-label={t('settings.appointmentTypeDurations.durationColumn')}
-                  className="w-40 rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                >
-                  {DURATION_KEYS.map((dur) => (
-                    <option key={dur.value} value={dur.value}>
-                      {t(dur.labelKey)}
-                    </option>
-                  ))}
-                </select>
-                {canEdit && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveTypeDuration(index)}
-                    aria-label={t('settings.appointmentTypeDurations.remove')}
-                    className="p-2 text-gray-400 hover:text-red-600 rounded-lg transition-colors"
+              <div key={index} className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={entry.type}
+                    onChange={(e) => handleTypeDurationChange(index, 'type', e.target.value)}
+                    disabled={!canEdit}
+                    placeholder={t('settings.appointmentTypeDurations.typePlaceholder')}
+                    className="flex-1 rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  />
+                  <select
+                    value={entry.duration}
+                    onChange={(e) => handleTypeDurationChange(index, 'duration', Number(e.target.value))}
+                    disabled={!canEdit}
+                    aria-label={t('settings.appointmentTypeDurations.durationColumn')}
+                    className="w-40 rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                    {DURATION_KEYS.map((dur) => (
+                      <option key={dur.value} value={dur.value}>
+                        {t(dur.labelKey)}
+                      </option>
+                    ))}
+                  </select>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTypeDuration(index)}
+                      aria-label={t('settings.appointmentTypeDurations.remove')}
+                      className="p-2 text-gray-400 hover:text-red-600 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                {duplicateTypeIndexes.has(index) && (
+                  <p className="text-xs text-red-600">
+                    {t('settings.appointmentTypeDurations.duplicateType')}
+                  </p>
                 )}
               </div>
             ))}

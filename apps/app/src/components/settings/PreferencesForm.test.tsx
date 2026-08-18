@@ -48,15 +48,21 @@ const ADD_LABEL = 'Agregar tipo'
 const REMOVE_LABEL = 'Eliminar'
 const DURATION_LABEL = 'Duración'
 const SAVE_LABEL = 'Guardar Cambios'
+const DUPLICATE_MESSAGE = 'Ya existe un tipo de cita con ese nombre'
 
 function getRows() {
   return screen.queryAllByPlaceholderText(TYPE_PLACEHOLDER).map((typeInput) => {
     const row = typeInput.closest('div')
     if (!row) throw new Error('No row container found for a type-duration entry')
+    // The duplicate-type message (if any) is a sibling of `row`, not a
+    // descendant — both live inside a shared per-entry wrapper div.
+    const container = row.parentElement
+    if (!container) throw new Error('No wrapper container found for a type-duration entry')
     return {
       typeInput: typeInput as HTMLInputElement,
       durationSelect: within(row).getByRole('combobox', { name: DURATION_LABEL }) as HTMLSelectElement,
       row,
+      container,
     }
   })
 }
@@ -193,5 +199,152 @@ describe('PreferencesForm — appointment type durations (task #239)', () => {
     const spinner = document.querySelector('.animate-spin')
     expect(spinner).toBeInTheDocument()
     expect(screen.queryByPlaceholderText(TYPE_PLACEHOLDER)).not.toBeInTheDocument()
+  })
+
+  // Review-fix cycle 1 (PR #393): the row editor could build a payload the
+  // API rejects with 400 — blank rows and duplicate types — which, because
+  // PUT /api/settings is all-or-nothing, silently discarded the user's
+  // unrelated preference edits in the same submit too.
+  describe('blank rows and duplicate-type validation (review fix)', () => {
+    it('drops a blank/whitespace-only row from the payload without blocking submit', () => {
+      render(<PreferencesForm settings={mockSettings} canEdit={true} />)
+
+      fireEvent.click(screen.getByRole('button', { name: ADD_LABEL }))
+      const newRow = getRows()[2]
+      fireEvent.change(newRow.typeInput, { target: { value: '   ' } })
+
+      fireEvent.click(screen.getByRole('button', { name: SAVE_LABEL }))
+
+      expect(mockUpdateSettings).toHaveBeenCalledTimes(1)
+      const payload = mockUpdateSettings.mock.calls[0][0]
+      expect(payload.appointmentTypeDurations).toEqual([
+        { type: 'Limpieza', duration: 30 },
+        { type: 'Extraccion', duration: 60 },
+      ])
+      // The rest of the preferences payload still ships.
+      expect(payload.language).toBe('es')
+      expect(payload.defaultAppointmentDuration).toBe(30)
+    })
+
+    it('blocks submit entirely when two rows share a type, and shows the duplicate message on both', () => {
+      render(<PreferencesForm settings={mockSettings} canEdit={true} />)
+
+      const [firstRow] = getRows()
+      fireEvent.click(screen.getByRole('button', { name: ADD_LABEL }))
+      const newRow = getRows()[2]
+      fireEvent.change(newRow.typeInput, { target: { value: 'Limpieza' } })
+
+      fireEvent.click(screen.getByRole('button', { name: SAVE_LABEL }))
+
+      expect(mockUpdateSettings).not.toHaveBeenCalled()
+      expect(within(firstRow.container).getByText(DUPLICATE_MESSAGE)).toBeInTheDocument()
+      expect(within(getRows()[2].container).getByText(DUPLICATE_MESSAGE)).toBeInTheDocument()
+      // The untouched middle row is not flagged.
+      expect(within(getRows()[1].container).queryByText(DUPLICATE_MESSAGE)).not.toBeInTheDocument()
+    })
+
+    it('detects duplicates case-insensitively and ignoring surrounding whitespace', () => {
+      render(<PreferencesForm settings={mockSettings} canEdit={true} />)
+
+      const [firstRow] = getRows()
+      fireEvent.click(screen.getByRole('button', { name: ADD_LABEL }))
+      const newRow = getRows()[2]
+      fireEvent.change(newRow.typeInput, { target: { value: '  limpieza  ' } })
+
+      fireEvent.click(screen.getByRole('button', { name: SAVE_LABEL }))
+
+      expect(mockUpdateSettings).not.toHaveBeenCalled()
+      expect(within(firstRow.container).getByText(DUPLICATE_MESSAGE)).toBeInTheDocument()
+      expect(within(getRows()[2].container).getByText(DUPLICATE_MESSAGE)).toBeInTheDocument()
+    })
+
+    it('clears the duplicate highlight as soon as the offending row is fixed, and the next submit succeeds', () => {
+      render(<PreferencesForm settings={mockSettings} canEdit={true} />)
+
+      fireEvent.click(screen.getByRole('button', { name: ADD_LABEL }))
+      let newRow = getRows()[2]
+      fireEvent.change(newRow.typeInput, { target: { value: 'Limpieza' } })
+      fireEvent.click(screen.getByRole('button', { name: SAVE_LABEL }))
+
+      expect(mockUpdateSettings).not.toHaveBeenCalled()
+      expect(within(getRows()[0].container).getByText(DUPLICATE_MESSAGE)).toBeInTheDocument()
+
+      // Fix the offending row's type — the highlight must disappear on this
+      // edit alone, before any resubmit.
+      newRow = getRows()[2]
+      fireEvent.change(newRow.typeInput, { target: { value: 'Ortodoncia' } })
+
+      expect(within(getRows()[0].container).queryByText(DUPLICATE_MESSAGE)).not.toBeInTheDocument()
+      expect(within(getRows()[2].container).queryByText(DUPLICATE_MESSAGE)).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: SAVE_LABEL }))
+
+      expect(mockUpdateSettings).toHaveBeenCalledTimes(1)
+      const payload = mockUpdateSettings.mock.calls[0][0]
+      expect(payload.appointmentTypeDurations).toEqual([
+        { type: 'Limpieza', duration: 30 },
+        { type: 'Extraccion', duration: 60 },
+        { type: 'Ortodoncia', duration: 30 },
+      ])
+    })
+
+    it('trims surrounding whitespace off kept rows in the submitted payload', () => {
+      render(<PreferencesForm settings={mockSettings} canEdit={true} />)
+
+      const [firstRow] = getRows()
+      fireEvent.change(firstRow.typeInput, { target: { value: '  Limpieza dental  ' } })
+
+      fireEvent.click(screen.getByRole('button', { name: SAVE_LABEL }))
+
+      expect(mockUpdateSettings).toHaveBeenCalledTimes(1)
+      const payload = mockUpdateSettings.mock.calls[0][0]
+      expect(payload.appointmentTypeDurations).toEqual([
+        { type: 'Limpieza dental', duration: 30 },
+        { type: 'Extraccion', duration: 60 },
+      ])
+    })
+
+    it('does not lose unrelated in-form edits when a duplicate blocks the submit — they ship on the next successful submit', () => {
+      render(<PreferencesForm settings={mockSettings} canEdit={true} />)
+
+      // Unrelated edits: date format, appointment buffer, and a notification
+      // pref. (Deliberately not the language select — changing it mutates
+      // the shared i18n singleton across the whole test file via
+      // handleChange's `i18n.changeLanguage`, which would leak into other
+      // tests/assertions here.)
+      fireEvent.change(screen.getByLabelText('Formato de Fecha'), { target: { value: 'YYYY-MM-DD' } })
+      fireEvent.change(screen.getByLabelText('Tiempo entre citas (minutos)'), {
+        target: { value: '15' },
+      })
+      fireEvent.click(screen.getByRole('checkbox', { name: /Recibir notificaciones por email/i }))
+
+      // Introduce a duplicate so submit is blocked.
+      fireEvent.click(screen.getByRole('button', { name: ADD_LABEL }))
+      const newRow = getRows()[2]
+      fireEvent.change(newRow.typeInput, { target: { value: 'Extraccion' } })
+
+      fireEvent.click(screen.getByRole('button', { name: SAVE_LABEL }))
+      expect(mockUpdateSettings).not.toHaveBeenCalled()
+
+      // The unrelated edits are still reflected in the form, not reverted.
+      expect((screen.getByLabelText('Formato de Fecha') as HTMLSelectElement).value).toBe('YYYY-MM-DD')
+      expect((screen.getByLabelText('Tiempo entre citas (minutos)') as HTMLInputElement).value).toBe('15')
+      expect(screen.getByRole('checkbox', { name: /Recibir notificaciones por email/i })).not.toBeChecked()
+
+      // Fix the duplicate and resubmit: the unrelated edits ship this time.
+      fireEvent.change(newRow.typeInput, { target: { value: 'Blanqueamiento' } })
+      fireEvent.click(screen.getByRole('button', { name: SAVE_LABEL }))
+
+      expect(mockUpdateSettings).toHaveBeenCalledTimes(1)
+      const payload = mockUpdateSettings.mock.calls[0][0]
+      expect(payload.dateFormat).toBe('YYYY-MM-DD')
+      expect(payload.appointmentBuffer).toBe(15)
+      expect(payload.emailNotifications).toBe(false)
+      expect(payload.appointmentTypeDurations).toEqual([
+        { type: 'Limpieza', duration: 30 },
+        { type: 'Extraccion', duration: 60 },
+        { type: 'Blanqueamiento', duration: 30 },
+      ])
+    })
   })
 })
