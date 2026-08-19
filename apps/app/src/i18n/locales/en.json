@@ -890,6 +890,15 @@
     "defaultDuration": "Default duration",
     "bufferTime": "Buffer time (minutes)",
     "bufferTimeHelp": "Rest time between consecutive appointments",
+    "appointmentTypeDurations": {
+      "title": "Duration by appointment type",
+      "description": "Set a specific duration for each appointment type. It will be used to suggest the end time when creating an appointment.",
+      "typePlaceholder": "e.g. Cleaning",
+      "durationColumn": "Duration",
+      "add": "Add type",
+      "remove": "Remove",
+      "duplicateType": "An appointment type with that name already exists"
+    },
     "notifications": "Notifications",
     "emailNotifications": "Receive email notifications",
     "smsNotifications": "Receive SMS notifications",

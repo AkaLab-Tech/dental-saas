@@ -121,6 +121,10 @@ describe('Settings Routes', () => {
       expect(res.body.settings.defaultAppointmentDuration).toBe(30)
       expect(res.body.settings.emailNotifications).toBe(true)
       expect(res.body.settings.workingDays).toEqual([1, 2, 3, 4, 5])
+      // Task #239: TenantSettings.appointmentTypeDurations defaults to the
+      // empty array (Prisma column default `Json @default("[]")`) for a
+      // tenant that has never set it.
+      expect(res.body.settings.appointmentTypeDurations).toEqual([])
     })
 
     it('should allow staff to read settings', async () => {
@@ -244,6 +248,150 @@ describe('Settings Routes', () => {
         .send({ defaultAppointmentDuration: 500 })
 
       expect(res.status).toBe(400)
+    })
+
+    // Task #239: per-tenant map of appointment type -> duration (minutes).
+    describe('appointmentTypeDurations', () => {
+      it('should accept a valid appointmentTypeDurations array and return the stored value', async () => {
+        const appointmentTypeDurations = [
+          { type: 'Limpieza', duration: 30 },
+          { type: 'Extraccion', duration: 60 },
+        ]
+
+        const res = await request(app)
+          .put('/api/settings')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ appointmentTypeDurations })
+
+        expect(res.status).toBe(200)
+        expect(res.body.settings.appointmentTypeDurations).toEqual(appointmentTypeDurations)
+      })
+
+      it('should accept the 5 minute minimum and 240 minute maximum durations', async () => {
+        const appointmentTypeDurations = [
+          { type: 'Muy corta', duration: 5 },
+          { type: 'Muy larga', duration: 240 },
+        ]
+
+        const res = await request(app)
+          .put('/api/settings')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ appointmentTypeDurations })
+
+        expect(res.status).toBe(200)
+        expect(res.body.settings.appointmentTypeDurations).toEqual(appointmentTypeDurations)
+      })
+
+      it('should reject a duration below the 5 minute minimum', async () => {
+        const res = await request(app)
+          .put('/api/settings')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ appointmentTypeDurations: [{ type: 'Rapida', duration: 4 }] })
+
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('Validation Error')
+      })
+
+      it('should reject a duration above the 240 minute maximum', async () => {
+        const res = await request(app)
+          .put('/api/settings')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ appointmentTypeDurations: [{ type: 'Cirugia larga', duration: 241 }] })
+
+        expect(res.status).toBe(400)
+        expect(res.body.error).toBe('Validation Error')
+      })
+
+      it('should reject duplicate type names, case-insensitively', async () => {
+        const res = await request(app)
+          .put('/api/settings')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({
+            appointmentTypeDurations: [
+              { type: 'Limpieza', duration: 30 },
+              { type: 'limpieza', duration: 45 },
+            ],
+          })
+
+        expect(res.status).toBe(400)
+        expect(res.body.details).toBeDefined()
+        expect(res.body.details[0].message).toContain('Appointment type names must be unique')
+      })
+
+      it('should reject more than 20 entries', async () => {
+        const appointmentTypeDurations = Array.from({ length: 21 }, (_, i) => ({
+          type: `Tipo ${i}`,
+          duration: 30,
+        }))
+
+        const res = await request(app)
+          .put('/api/settings')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ appointmentTypeDurations })
+
+        expect(res.status).toBe(400)
+      })
+
+      it('should accept exactly 20 entries', async () => {
+        const appointmentTypeDurations = Array.from({ length: 20 }, (_, i) => ({
+          type: `Tipo ${i}`,
+          duration: 30,
+        }))
+
+        const res = await request(app)
+          .put('/api/settings')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ appointmentTypeDurations })
+
+        expect(res.status).toBe(200)
+        expect(res.body.settings.appointmentTypeDurations).toHaveLength(20)
+      })
+
+      it('should reject an empty type string', async () => {
+        const res = await request(app)
+          .put('/api/settings')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ appointmentTypeDurations: [{ type: '', duration: 30 }] })
+
+        expect(res.status).toBe(400)
+      })
+
+      it('should reject a type string longer than 60 characters', async () => {
+        const res = await request(app)
+          .put('/api/settings')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ appointmentTypeDurations: [{ type: 'a'.repeat(61), duration: 30 }] })
+
+        expect(res.status).toBe(400)
+      })
+
+      it('should accept a type string at exactly 60 characters', async () => {
+        const type = 'a'.repeat(60)
+        const res = await request(app)
+          .put('/api/settings')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ appointmentTypeDurations: [{ type, duration: 30 }] })
+
+        expect(res.status).toBe(200)
+        expect(res.body.settings.appointmentTypeDurations).toEqual([{ type, duration: 30 }])
+      })
+
+      it('should accept an empty array, clearing previously configured types', async () => {
+        // Seed a non-empty value first so this exercises actually clearing it,
+        // not merely never having set it.
+        await request(app)
+          .put('/api/settings')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ appointmentTypeDurations: [{ type: 'Consulta', duration: 20 }] })
+
+        const res = await request(app)
+          .put('/api/settings')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ appointmentTypeDurations: [] })
+
+        expect(res.status).toBe(200)
+        expect(res.body.settings.appointmentTypeDurations).toEqual([])
+      })
     })
 
     it('should reject businessHours where end time is before start time', async () => {

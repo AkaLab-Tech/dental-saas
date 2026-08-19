@@ -172,6 +172,9 @@ model TenantSettings {
   defaultAppointmentDuration Int @default(30) // minutes
   appointmentBuffer          Int @default(0) // minutes between appointments
 
+  /// Per-appointment-type durations: [{ type: "Limpieza", duration: 45 }]
+  appointmentTypeDurations Json @default("[]")
+
   // Business hours (JSON: { mon: { start: "09:00", end: "18:00" }, ... })
   businessHours Json @default("{}")
 

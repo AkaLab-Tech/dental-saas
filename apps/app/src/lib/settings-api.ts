@@ -11,6 +11,7 @@ export interface TenantSettings {
   timeFormat: '12h' | '24h'
   defaultAppointmentDuration: number
   appointmentBuffer: number
+  appointmentTypeDurations: { type: string; duration: number }[]
   businessHours: Record<string, { start: string; end: string }>
   workingDays: number[]
   emailNotifications: boolean
@@ -41,6 +42,7 @@ export interface UpdateSettingsData {
   timeFormat?: '12h' | '24h'
   defaultAppointmentDuration?: number
   appointmentBuffer?: number
+  appointmentTypeDurations?: { type: string; duration: number }[]
   businessHours?: Record<string, { start: string; end: string }>
   workingDays?: number[]
   emailNotifications?: boolean
