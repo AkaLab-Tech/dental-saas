@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import request from 'supertest'
-import { app } from '../app.js'
+import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
 import { sign } from 'jsonwebtoken'
@@ -79,7 +78,7 @@ describe('requireOwnership middleware', () => {
   })
 
   it('lets a doctor edit a patient they created', async () => {
-    const res = await request(app)
+    const res = await api()
       .put(`/api/patients/${ownedPatientId}`)
       .set('Authorization', `Bearer ${doctorAToken}`)
       .send({ firstName: 'OwnedUpdated' })
@@ -88,7 +87,7 @@ describe('requireOwnership middleware', () => {
   })
 
   it('forbids a doctor from editing a patient another doctor created (403)', async () => {
-    const res = await request(app)
+    const res = await api()
       .put(`/api/patients/${ownedPatientId}`)
       .set('Authorization', `Bearer ${doctorBToken}`)
       .send({ firstName: 'Hijacked' })
@@ -97,7 +96,7 @@ describe('requireOwnership middleware', () => {
   })
 
   it('lets a CLINIC_ADMIN edit any patient (ownership bypass)', async () => {
-    const res = await request(app)
+    const res = await api()
       .put(`/api/patients/${ownedPatientId}`)
       .set('Authorization', `Bearer ${clinicAdminToken}`)
       .send({ firstName: 'AdminEdited' })
@@ -105,7 +104,7 @@ describe('requireOwnership middleware', () => {
   })
 
   it('lets a doctor edit an appointment they are assigned to even if they did not create it', async () => {
-    const res = await request(app)
+    const res = await api()
       .put(`/api/appointments/${assignedApptId}`)
       .set('Authorization', `Bearer ${doctorAToken}`)
       .send({ notes: 'Seen by assigned doctor' })
@@ -113,7 +112,7 @@ describe('requireOwnership middleware', () => {
   })
 
   it('forbids an unrelated doctor from editing that appointment (403)', async () => {
-    const res = await request(app)
+    const res = await api()
       .put(`/api/appointments/${assignedApptId}`)
       .set('Authorization', `Bearer ${doctorBToken}`)
       .send({ notes: 'Should be blocked' })

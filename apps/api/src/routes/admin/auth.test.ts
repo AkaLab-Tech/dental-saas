@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
-import request from 'supertest'
 import crypto from 'crypto'
-import { app } from '../../app.js'
+import { api } from '../../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword, hashToken } from '../../services/auth.service.js'
 
@@ -51,7 +50,7 @@ describe('Admin Auth - Password Recovery', () => {
 
   describe('POST /api/admin/auth/forgot-password', () => {
     it('should return 200 for valid super admin email', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/admin/auth/forgot-password')
         .send({ email: testEmail })
 
@@ -68,7 +67,7 @@ describe('Admin Auth - Password Recovery', () => {
     })
 
     it('should return 200 for non-existent email (security)', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/admin/auth/forgot-password')
         .send({ email: 'nonexistent@test.com' })
 
@@ -79,7 +78,7 @@ describe('Admin Auth - Password Recovery', () => {
     })
 
     it('should return 400 for invalid email format', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/admin/auth/forgot-password')
         .send({ email: 'not-an-email' })
 
@@ -89,7 +88,7 @@ describe('Admin Auth - Password Recovery', () => {
 
     it('should invalidate previous tokens when requesting a new one', async () => {
       // Request first token
-      await request(app)
+      await api()
         .post('/api/admin/auth/forgot-password')
         .send({ email: testEmail })
 
@@ -99,7 +98,7 @@ describe('Admin Auth - Password Recovery', () => {
       expect(firstToken).not.toBeNull()
 
       // Request second token
-      await request(app)
+      await api()
         .post('/api/admin/auth/forgot-password')
         .send({ email: testEmail })
 
@@ -133,7 +132,7 @@ describe('Admin Auth - Password Recovery', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/admin/auth/forgot-password')
         .send({ email: 'regular@test.com' })
 
@@ -164,7 +163,7 @@ describe('Admin Auth - Password Recovery', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/admin/auth/forgot-password')
         .send({ email: 'inactive-admin@test.com' })
 
@@ -195,7 +194,7 @@ describe('Admin Auth - Password Recovery', () => {
       })
 
       const newPassword = 'NewPassword456!'
-      const response = await request(app)
+      const response = await api()
         .post('/api/admin/auth/reset-password')
         .send({ token: plainToken, password: newPassword })
 
@@ -223,7 +222,7 @@ describe('Admin Auth - Password Recovery', () => {
     })
 
     it('should return 400 for invalid token', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/admin/auth/reset-password')
         .send({ token: 'invalid-token', password: 'NewPassword456!' })
 
@@ -243,7 +242,7 @@ describe('Admin Auth - Password Recovery', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/admin/auth/reset-password')
         .send({ token: plainToken, password: 'NewPassword456!' })
 
@@ -264,7 +263,7 @@ describe('Admin Auth - Password Recovery', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/admin/auth/reset-password')
         .send({ token: plainToken, password: 'NewPassword456!' })
 
@@ -283,7 +282,7 @@ describe('Admin Auth - Password Recovery', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/admin/auth/reset-password')
         .send({ token: plainToken, password: 'weak' })
 
@@ -313,7 +312,7 @@ describe('Admin Auth - Password Recovery', () => {
       })
 
       // Reset password
-      await request(app)
+      await api()
         .post('/api/admin/auth/reset-password')
         .send({ token: plainToken, password: 'NewPassword789!' })
 

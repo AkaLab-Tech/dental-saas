@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import request from 'supertest'
 import jwt from 'jsonwebtoken'
-import { app } from '../../app.js'
+import { api } from '../../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../../services/auth.service.js'
 
@@ -127,13 +126,13 @@ describe('Admin Stats Routes', () => {
 
   describe('GET /api/admin/stats', () => {
     it('should return 401 without authentication', async () => {
-      const response = await request(app).get('/api/admin/stats')
+      const response = await api().get('/api/admin/stats')
 
       expect(response.status).toBe(401)
     })
 
     it('should return platform stats with correct structure', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/admin/stats')
         .set('Authorization', `Bearer ${superAdminToken}`)
 
@@ -157,7 +156,7 @@ describe('Admin Stats Routes', () => {
     })
 
     it('should count appointments by startTime (not createdAt)', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/admin/stats')
         .set('Authorization', `Bearer ${superAdminToken}`)
 
@@ -167,7 +166,7 @@ describe('Admin Stats Routes', () => {
     })
 
     it('should include users grouped by role', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/admin/stats')
         .set('Authorization', `Bearer ${superAdminToken}`)
 
@@ -181,13 +180,13 @@ describe('Admin Stats Routes', () => {
 
   describe('GET /api/admin/stats/top-tenants', () => {
     it('should return 401 without authentication', async () => {
-      const response = await request(app).get('/api/admin/stats/top-tenants')
+      const response = await api().get('/api/admin/stats/top-tenants')
 
       expect(response.status).toBe(401)
     })
 
     it('should return top tenants with correct structure', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/admin/stats/top-tenants')
         .set('Authorization', `Bearer ${superAdminToken}`)
 
@@ -197,7 +196,7 @@ describe('Admin Stats Routes', () => {
     })
 
     it('should return tenants with patient and appointment counts', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/admin/stats/top-tenants')
         .set('Authorization', `Bearer ${superAdminToken}`)
 
@@ -215,7 +214,7 @@ describe('Admin Stats Routes', () => {
     })
 
     it('should limit results to 10 tenants', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/admin/stats/top-tenants')
         .set('Authorization', `Bearer ${superAdminToken}`)
 
@@ -224,7 +223,7 @@ describe('Admin Stats Routes', () => {
     })
 
     it('should only include active tenants', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/admin/stats/top-tenants')
         .set('Authorization', `Bearer ${superAdminToken}`)
 
@@ -255,7 +254,7 @@ describe('Admin Stats Routes', () => {
       })
 
       try {
-        const response = await request(app)
+        const response = await api()
           .get('/api/admin/stats/top-tenants')
           .set('Authorization', `Bearer ${superAdminToken}`)
 
@@ -272,13 +271,13 @@ describe('Admin Stats Routes', () => {
 
   describe('GET /api/admin/stats/recent-activity', () => {
     it('should return 401 without authentication', async () => {
-      const response = await request(app).get('/api/admin/stats/recent-activity')
+      const response = await api().get('/api/admin/stats/recent-activity')
 
       expect(response.status).toBe(401)
     })
 
     it('should return activity with correct structure', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/admin/stats/recent-activity')
         .set('Authorization', `Bearer ${superAdminToken}`)
 
@@ -288,7 +287,7 @@ describe('Admin Stats Routes', () => {
     })
 
     it('should return activity items with type discriminator', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/admin/stats/recent-activity')
         .set('Authorization', `Bearer ${superAdminToken}`)
 
@@ -304,7 +303,7 @@ describe('Admin Stats Routes', () => {
     })
 
     it('should include tenant_created activities with name', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/admin/stats/recent-activity')
         .set('Authorization', `Bearer ${superAdminToken}`)
 
@@ -319,7 +318,7 @@ describe('Admin Stats Routes', () => {
     })
 
     it('should include user_created activities with email and tenantName', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/admin/stats/recent-activity')
         .set('Authorization', `Bearer ${superAdminToken}`)
 
@@ -335,7 +334,7 @@ describe('Admin Stats Routes', () => {
     })
 
     it('should limit results to 15 activities', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/admin/stats/recent-activity')
         .set('Authorization', `Bearer ${superAdminToken}`)
 
@@ -344,7 +343,7 @@ describe('Admin Stats Routes', () => {
     })
 
     it('should sort activities by createdAt descending', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/admin/stats/recent-activity')
         .set('Authorization', `Bearer ${superAdminToken}`)
 

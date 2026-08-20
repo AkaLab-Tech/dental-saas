@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import request from 'supertest'
-import { app } from '../app.js'
+import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
 import { sign } from 'jsonwebtoken'
@@ -96,7 +95,7 @@ describe('Labworks Routes - Permission Tests', () => {
       price: 100,
     }
 
-    const response = await request(app)
+    const response = await api()
       .post('/api/labworks')
       .set('Authorization', `Bearer ${adminToken}`)
       .send(labworkData)
@@ -121,7 +120,7 @@ describe('Labworks Routes - Permission Tests', () => {
         price: 150,
       }
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/labworks')
         .set('Authorization', `Bearer ${adminToken}`)
         .send(labworkData)
@@ -139,7 +138,7 @@ describe('Labworks Routes - Permission Tests', () => {
         price: 200,
       }
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/labworks')
         .set('Authorization', `Bearer ${staffToken}`)
         .send(labworkData)
@@ -156,7 +155,7 @@ describe('Labworks Routes - Permission Tests', () => {
         isPaid: true,
       }
 
-      const response = await request(app)
+      const response = await api()
         .put(`/api/labworks/${testLabworkId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send(updateData)
@@ -170,7 +169,7 @@ describe('Labworks Routes - Permission Tests', () => {
         isPaid: true,
       }
 
-      const response = await request(app)
+      const response = await api()
         .put(`/api/labworks/${testLabworkId}`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send(updateData)
@@ -182,7 +181,7 @@ describe('Labworks Routes - Permission Tests', () => {
 
   describe('DELETE /api/labworks/:id (Delete)', () => {
     it('should deny STAFF from deleting labwork', async () => {
-      const response = await request(app)
+      const response = await api()
         .delete(`/api/labworks/${testLabworkId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -199,14 +198,14 @@ describe('Labworks Routes - Permission Tests', () => {
         price: 50,
       }
 
-      const createResponse = await request(app)
+      const createResponse = await api()
         .post('/api/labworks')
         .set('Authorization', `Bearer ${adminToken}`)
         .send(labworkData)
 
       const labworkId = createResponse.body.data.id
 
-      const deleteResponse = await request(app)
+      const deleteResponse = await api()
         .delete(`/api/labworks/${labworkId}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -216,7 +215,7 @@ describe('Labworks Routes - Permission Tests', () => {
 
   describe('GET /api/labworks (View)', () => {
     it('should allow STAFF to view labworks', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/labworks')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -225,7 +224,7 @@ describe('Labworks Routes - Permission Tests', () => {
     })
 
     it('should allow ADMIN to view labworks', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/labworks')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -265,7 +264,7 @@ describe('Labworks Routes - Permission Tests', () => {
     })
 
     it('should create labwork linked to appointment', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/labworks')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -284,7 +283,7 @@ describe('Labworks Routes - Permission Tests', () => {
 
     it('should update labwork to unlink appointment', async () => {
       // Create linked labwork
-      const createRes = await request(app)
+      const createRes = await api()
         .post('/api/labworks')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -298,7 +297,7 @@ describe('Labworks Routes - Permission Tests', () => {
       const labworkId = createRes.body.data.id
 
       // Unlink
-      const updateRes = await request(app)
+      const updateRes = await api()
         .put(`/api/labworks/${labworkId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ appointmentId: null })
@@ -309,7 +308,7 @@ describe('Labworks Routes - Permission Tests', () => {
     })
 
     it('should return new fields in labwork response', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/labworks')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -472,7 +471,7 @@ describe('GET /api/labworks?search= (server-side search by lab and patient)', ()
   })
 
   it('filters by lab name when search matches the lab field', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks?search=Acme')
       .set('Authorization', `Bearer ${staffToken}`)
 
@@ -482,7 +481,7 @@ describe('GET /api/labworks?search= (server-side search by lab and patient)', ()
   })
 
   it('is case-insensitive when matching the lab field', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks?search=aCmE')
       .set('Authorization', `Bearer ${staffToken}`)
 
@@ -492,7 +491,7 @@ describe('GET /api/labworks?search= (server-side search by lab and patient)', ()
   })
 
   it('filters by patient first name when search matches firstName', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks?search=Maria')
       .set('Authorization', `Bearer ${staffToken}`)
 
@@ -503,7 +502,7 @@ describe('GET /api/labworks?search= (server-side search by lab and patient)', ()
   })
 
   it('filters by patient last name when search matches lastName, case-insensitively', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks?search=smith')
       .set('Authorization', `Bearer ${staffToken}`)
 
@@ -513,7 +512,7 @@ describe('GET /api/labworks?search= (server-side search by lab and patient)', ()
   })
 
   it('returns an empty list when search matches nothing', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks?search=NoSuchLabOrPatientAtAll')
       .set('Authorization', `Bearer ${staffToken}`)
 
@@ -523,7 +522,7 @@ describe('GET /api/labworks?search= (server-side search by lab and patient)', ()
   })
 
   it('excludes soft-deleted labworks even when their lab name matches the search term', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks?search=Acme')
       .set('Authorization', `Bearer ${staffToken}`)
 
@@ -532,7 +531,7 @@ describe('GET /api/labworks?search= (server-side search by lab and patient)', ()
   })
 
   it('does not leak matches from another tenant', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks?search=Acme')
       .set('Authorization', `Bearer ${staffToken}`)
 
@@ -545,7 +544,7 @@ describe('GET /api/labworks?search= (server-side search by lab and patient)', ()
     // should return that single row; search=smith + isPaid=false should
     // return nothing, proving isPaid keeps filtering alongside search rather
     // than being ignored once search is present.
-    const paidResponse = await request(app)
+    const paidResponse = await api()
       .get('/api/labworks?search=smith&isPaid=true')
       .set('Authorization', `Bearer ${staffToken}`)
 
@@ -555,7 +554,7 @@ describe('GET /api/labworks?search= (server-side search by lab and patient)', ()
 
     // Same search term but isPaid=false must exclude that same row, proving
     // search doesn't override/ignore the isPaid filter.
-    const unpaidResponse = await request(app)
+    const unpaidResponse = await api()
       .get('/api/labworks?search=smith&isPaid=false')
       .set('Authorization', `Bearer ${staffToken}`)
 
@@ -566,7 +565,7 @@ describe('GET /api/labworks?search= (server-side search by lab and patient)', ()
   it('returns the full unfiltered set when search is omitted (existing behavior unchanged)', async () => {
     // 4 active labworks were seeded in this describe block (a 5th is
     // soft-deleted and excluded by the default isActive filter).
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks')
       .set('Authorization', `Bearer ${staffToken}`)
 
@@ -700,7 +699,7 @@ describe('GET /api/labworks/labs (Lab name autocomplete)', () => {
   })
 
   it('allows STAFF to read the endpoint (200)', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/labs')
       .set('Authorization', `Bearer ${staffToken}`)
 
@@ -709,7 +708,7 @@ describe('GET /api/labworks/labs (Lab name autocomplete)', () => {
   })
 
   it('returns distinct, alphabetically sorted, active-only lab names for the tenant', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/labs')
       .set('Authorization', `Bearer ${staffToken}`)
 
@@ -718,7 +717,7 @@ describe('GET /api/labworks/labs (Lab name autocomplete)', () => {
   })
 
   it('de-duplicates a lab name that appears on multiple active labworks (only one entry)', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/labs')
       .set('Authorization', `Bearer ${staffToken}`)
 
@@ -727,7 +726,7 @@ describe('GET /api/labworks/labs (Lab name autocomplete)', () => {
   })
 
   it('excludes lab names that only exist on inactive (soft-deleted) labworks', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/labs')
       .set('Authorization', `Bearer ${staffToken}`)
 
@@ -735,7 +734,7 @@ describe('GET /api/labworks/labs (Lab name autocomplete)', () => {
   })
 
   it('does not leak lab names from another tenant', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/labs')
       .set('Authorization', `Bearer ${staffToken}`)
 
@@ -743,7 +742,7 @@ describe('GET /api/labworks/labs (Lab name autocomplete)', () => {
   })
 
   it('returns an empty array for a tenant with no labworks', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/labs')
       .set('Authorization', `Bearer ${emptyTenantStaffToken}`)
 
@@ -752,7 +751,7 @@ describe('GET /api/labworks/labs (Lab name autocomplete)', () => {
   })
 
   it('resolves to the /labs handler rather than being swallowed by /:id (route ordering)', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/labs')
       .set('Authorization', `Bearer ${staffToken}`)
 
@@ -864,7 +863,7 @@ describe('GET /api/labworks?overdue= (overdue filter & stats)', () => {
 
   describe('GET /api/labworks?overdue=true', () => {
     it('returns only the active, undelivered, strictly-past labwork', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/labworks?overdue=true')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -874,7 +873,7 @@ describe('GET /api/labworks?overdue= (overdue filter & stats)', () => {
     })
 
     it('excludes a labwork due today (boundary: due today is not overdue)', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/labworks?overdue=true')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -883,7 +882,7 @@ describe('GET /api/labworks?overdue= (overdue filter & stats)', () => {
     })
 
     it('excludes a future-dated labwork', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/labworks?overdue=true')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -892,7 +891,7 @@ describe('GET /api/labworks?overdue= (overdue filter & stats)', () => {
     })
 
     it('excludes a delivered labwork even if its date is in the past', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/labworks?overdue=true')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -901,7 +900,7 @@ describe('GET /api/labworks?overdue= (overdue filter & stats)', () => {
     })
 
     it('excludes a soft-deleted (inactive) labwork even if its date is in the past', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/labworks?overdue=true')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -910,7 +909,7 @@ describe('GET /api/labworks?overdue= (overdue filter & stats)', () => {
     })
 
     it('returns the correct pagination total for the overdue-filtered set', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/labworks?overdue=true')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -920,7 +919,7 @@ describe('GET /api/labworks?overdue= (overdue filter & stats)', () => {
 
   describe('GET /api/labworks?overdue=false / omitted (route parsing regression)', () => {
     it('returns the full unfiltered active set when overdue is explicitly false', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/labworks?overdue=false')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -932,7 +931,7 @@ describe('GET /api/labworks?overdue= (overdue filter & stats)', () => {
     })
 
     it('returns the same full unfiltered active set when overdue is omitted entirely', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/labworks')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -944,7 +943,7 @@ describe('GET /api/labworks?overdue= (overdue filter & stats)', () => {
 
   describe('GET /api/labworks/stats — overdue count', () => {
     it('reports the overdue count alongside the other stats fields', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/labworks/stats')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -968,13 +967,13 @@ describe('GET /api/labworks?overdue= (overdue filter & stats)', () => {
       })
       const adminToken = generateToken(adminUser.id, tenantId, 'ADMIN')
 
-      const updateResponse = await request(app)
+      const updateResponse = await api()
         .put(`/api/labworks/${overdueLabworkId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ isDelivered: true })
       expect(updateResponse.status).toBe(200)
 
-      const statsResponse = await request(app)
+      const statsResponse = await api()
         .get('/api/labworks/stats')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -983,7 +982,7 @@ describe('GET /api/labworks?overdue= (overdue filter & stats)', () => {
       // Restore state for any tests that might run after this one in the
       // same describe block (none currently do, but keeps this test
       // self-contained rather than leaking mutated state).
-      await request(app)
+      await api()
         .put(`/api/labworks/${overdueLabworkId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ isDelivered: false })
@@ -994,7 +993,7 @@ describe('GET /api/labworks?overdue= (overdue filter & stats)', () => {
       // before yesterday must exclude it from the overdue count.
       const farPastTo = daysFromToday(-10).toISOString().slice(0, 10)
 
-      const response = await request(app)
+      const response = await api()
         .get(`/api/labworks/stats?to=${farPastTo}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -1198,14 +1197,14 @@ describe('GET /api/labworks/export (CSV export)', () => {
   })
 
   it('rejects an unauthenticated request (401), same as GET /', async () => {
-    const response = await request(app).get('/api/labworks/export')
+    const response = await api().get('/api/labworks/export')
 
     expect(response.status).toBe(401)
   })
 
   describe('permission boundary (requires Permission.DATA_EXPORT, ADMIN+ only)', () => {
     it('denies STAFF (403)', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/labworks/export')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -1214,7 +1213,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
     })
 
     it('denies DOCTOR (403)', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/labworks/export')
         .set('Authorization', `Bearer ${doctorToken}`)
 
@@ -1223,7 +1222,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
     })
 
     it('denies CLINIC_ADMIN (403)', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/labworks/export')
         .set('Authorization', `Bearer ${clinicAdminToken}`)
 
@@ -1232,7 +1231,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
     })
 
     it('allows ADMIN (200)', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/labworks/export')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1240,7 +1239,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
     })
 
     it('allows OWNER (200)', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/labworks/export')
         .set('Authorization', `Bearer ${ownerToken}`)
 
@@ -1249,7 +1248,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   })
 
   it('responds with a text/csv content type (charset=utf-8)', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/export')
       .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1257,7 +1256,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   })
 
   it('responds with a Content-Disposition attachment header naming a .csv file', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/export')
       .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1267,7 +1266,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   })
 
   it('resolves to the /export handler rather than being swallowed by /:id (route ordering)', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/export')
       .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1279,7 +1278,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   })
 
   it('prepends a UTF-8 BOM before the header row', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/export')
       .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1288,7 +1287,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   })
 
   it('includes all active labworks for the tenant when no filters are applied', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/export')
       .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1303,7 +1302,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   })
 
   it('escapes the comma in a lab name and the embedded quote in a note (RFC4180)', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/export')
       .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1313,7 +1312,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   })
 
   it('resolves the assigned doctor name and patient name into their respective columns', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/export')
       .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1324,7 +1323,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   })
 
   it('renders Sí/No for isPaid/isDelivered and leaves empty columns for a labwork with no patient/doctor/phone/note', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/export')
       .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1337,7 +1336,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   })
 
   it('applies the search filter, returning only labworks matching the lab or patient name', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/export?search=Budget')
       .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1348,7 +1347,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   })
 
   it('applies the isPaid filter', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/export?isPaid=true')
       .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1360,7 +1359,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   })
 
   it('applies the isDelivered filter', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/export?isDelivered=false')
       .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1371,7 +1370,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   })
 
   it('applies the patientId filter', async () => {
-    const response = await request(app)
+    const response = await api()
       .get(`/api/labworks/export?patientId=${garciaPatientId}`)
       .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1382,7 +1381,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   })
 
   it('applies the from/to date-range filter', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/export?from=2026-02-01&to=2026-02-28')
       .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1393,7 +1392,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   })
 
   it('applies the overdue filter (active, undelivered, strictly-past labworks only)', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/export?overdue=true')
       .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1408,7 +1407,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   })
 
   it('never leaks another tenant\'s labworks into the export', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/export')
       .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1418,7 +1417,7 @@ describe('GET /api/labworks/export (CSV export)', () => {
   })
 
   it('returns just the header row (no data rows) when filters match nothing', async () => {
-    const response = await request(app)
+    const response = await api()
       .get('/api/labworks/export?search=NoSuchLabAtAll')
       .set('Authorization', `Bearer ${adminToken}`)
 

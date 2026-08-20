@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import request from 'supertest'
 import jwt from 'jsonwebtoken'
 import { prisma } from '@dental/database'
-import { app } from '../app.js'
+import { api } from '../test/http.js'
 import { ExportService } from '../services/export.service.js'
 
 describe('Export Routes', () => {
@@ -187,7 +186,7 @@ describe('Export Routes', () => {
 
   describe('GET /api/export', () => {
     it('should export all tenant data as OWNER', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/export')
         .set('Authorization', `Bearer ${ownerToken}`)
 
@@ -234,7 +233,7 @@ describe('Export Routes', () => {
     })
 
     it('should export all tenant data as ADMIN', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/export')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -244,7 +243,7 @@ describe('Export Routes', () => {
     })
 
     it('should deny export to STAFF users', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/export')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -252,7 +251,7 @@ describe('Export Routes', () => {
     })
 
     it('should require authentication', async () => {
-      const res = await request(app).get('/api/export')
+      const res = await api().get('/api/export')
 
       expect(res.status).toBe(401)
     })

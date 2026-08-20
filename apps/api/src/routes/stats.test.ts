@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import request from 'supertest'
-import { app } from '../app.js'
+import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
 import { sign } from 'jsonwebtoken'
@@ -197,7 +196,7 @@ describe('Stats API', () => {
 
   describe('GET /api/stats/overview', () => {
     it('should return overview stats for authenticated user', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/stats/overview')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -216,7 +215,7 @@ describe('Stats API', () => {
     })
 
     it('should return 401 without authentication', async () => {
-      const res = await request(app).get('/api/stats/overview')
+      const res = await api().get('/api/stats/overview')
 
       expect(res.status).toBe(401)
     })
@@ -228,7 +227,7 @@ describe('Stats API', () => {
 
   describe('GET /api/stats/appointments', () => {
     it('should return appointment stats for current month by default', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/stats/appointments')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -245,7 +244,7 @@ describe('Stats API', () => {
       const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
       const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString()
 
-      const res = await request(app)
+      const res = await api()
         .get('/api/stats/appointments')
         .query({ startDate, endDate })
         .set('Authorization', `Bearer ${staffToken}`)
@@ -255,7 +254,7 @@ describe('Stats API', () => {
     })
 
     it('should return 400 for invalid date format', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/stats/appointments')
         .query({ startDate: 'invalid-date' })
         .set('Authorization', `Bearer ${staffToken}`)
@@ -264,7 +263,7 @@ describe('Stats API', () => {
     })
 
     it('should return 400 when startDate is after endDate', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/stats/appointments')
         .query({
           startDate: '2026-01-31T00:00:00.000Z',
@@ -283,7 +282,7 @@ describe('Stats API', () => {
 
   describe('GET /api/stats/revenue', () => {
     it('should return revenue stats with default 6 months', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/stats/revenue')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -297,7 +296,7 @@ describe('Stats API', () => {
     })
 
     it('should accept custom months parameter', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/stats/revenue')
         .query({ months: '12' })
         .set('Authorization', `Bearer ${staffToken}`)
@@ -307,7 +306,7 @@ describe('Stats API', () => {
     })
 
     it('should return 400 for invalid months parameter', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/stats/revenue')
         .query({ months: '100' }) // exceeds max of 24
         .set('Authorization', `Bearer ${staffToken}`)
@@ -322,7 +321,7 @@ describe('Stats API', () => {
 
   describe('GET /api/stats/patients-growth', () => {
     it('should return patients growth stats', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/stats/patients-growth')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -337,7 +336,7 @@ describe('Stats API', () => {
     })
 
     it('should accept custom months parameter', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/stats/patients-growth')
         .query({ months: '12' })
         .set('Authorization', `Bearer ${staffToken}`)
@@ -353,7 +352,7 @@ describe('Stats API', () => {
 
   describe('GET /api/stats/doctors-performance', () => {
     it('should return doctor performance stats for admin', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/stats/doctors-performance')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -371,7 +370,7 @@ describe('Stats API', () => {
     })
 
     it('should return doctor performance stats for owner', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/stats/doctors-performance')
         .set('Authorization', `Bearer ${ownerToken}`)
 
@@ -380,7 +379,7 @@ describe('Stats API', () => {
     })
 
     it('should return 403 for staff user (insufficient role)', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/stats/doctors-performance')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -388,7 +387,7 @@ describe('Stats API', () => {
     })
 
     it('should return 400 for invalid startDate format', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/stats/doctors-performance')
         .query({ startDate: 'not-a-date' })
         .set('Authorization', `Bearer ${adminToken}`)
@@ -521,7 +520,7 @@ describe('Stats API', () => {
     })
 
     it('computes billed commission over the requested date range, crediting a shared labwork in full to both doctors', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/stats/doctors-performance')
         .query({ startDate: rangeStartIso, endDate: rangeEndIso })
         .set('Authorization', `Bearer ${adminToken}`)
@@ -583,40 +582,40 @@ describe('Stats API', () => {
     })
 
     it('lets a doctor read their OWN scoped stats', async () => {
-      const res = await request(app)
+      const res = await api()
         .get(`/api/stats/overview?doctorId=${doctorId}`)
         .set('Authorization', `Bearer ${doctorUserToken}`)
       expect(res.status).toBe(200)
     })
 
     it('forbids a doctor from reading another doctor\'s stats (403)', async () => {
-      const res = await request(app)
+      const res = await api()
         .get(`/api/stats/overview?doctorId=${otherDoctorId}`)
         .set('Authorization', `Bearer ${doctorUserToken}`)
       expect(res.status).toBe(403)
     })
 
     it('also forbids cross-doctor access on revenue and upcoming', async () => {
-      const revenue = await request(app)
+      const revenue = await api()
         .get(`/api/stats/revenue?doctorId=${otherDoctorId}`)
         .set('Authorization', `Bearer ${doctorUserToken}`)
       expect(revenue.status).toBe(403)
 
-      const upcoming = await request(app)
+      const upcoming = await api()
         .get(`/api/stats/upcoming?doctorId=${otherDoctorId}`)
         .set('Authorization', `Bearer ${doctorUserToken}`)
       expect(upcoming.status).toBe(403)
     })
 
     it('still lets a non-admin view tenant-wide stats (no doctorId)', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/stats/overview')
         .set('Authorization', `Bearer ${doctorUserToken}`)
       expect(res.status).toBe(200)
     })
 
     it('lets an admin read any doctor\'s scoped stats', async () => {
-      const res = await request(app)
+      const res = await api()
         .get(`/api/stats/overview?doctorId=${otherDoctorId}`)
         .set('Authorization', `Bearer ${adminToken}`)
       expect(res.status).toBe(200)

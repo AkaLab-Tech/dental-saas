@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
-import request from 'supertest'
-import { app } from '../app.js'
+import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
 import { sign } from 'jsonwebtoken'
@@ -173,7 +172,7 @@ describe('Appointments API', () => {
   describe('POST /api/appointments', () => {
     it('should create an appointment with valid data (ADMIN)', async () => {
       const times = getFutureTime(1)
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -196,7 +195,7 @@ describe('Appointments API', () => {
 
     it('should create an appointment with minimal data', async () => {
       const times = getFutureTime(2)
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -217,7 +216,7 @@ describe('Appointments API', () => {
       const end = new Date(start)
       end.setHours(15, 0, 0, 0) // 1 hour = 60 minutes
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -232,7 +231,7 @@ describe('Appointments API', () => {
     })
 
     it('should return 400 for missing required fields', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -246,7 +245,7 @@ describe('Appointments API', () => {
     })
 
     it('should return 400 for invalid date format', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -267,7 +266,7 @@ describe('Appointments API', () => {
       const end = new Date(start)
       end.setHours(13, 0, 0, 0) // Before start
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -283,7 +282,7 @@ describe('Appointments API', () => {
 
     it('should return 400 for invalid patient', async () => {
       const times = getFutureTime(1)
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -298,7 +297,7 @@ describe('Appointments API', () => {
 
     it('should return 400 for invalid doctor', async () => {
       const times = getFutureTime(1)
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -315,7 +314,7 @@ describe('Appointments API', () => {
       const times = getFutureTime(3, 10)
 
       // Create first appointment
-      await request(app)
+      await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -325,7 +324,7 @@ describe('Appointments API', () => {
         })
 
       // Try to create overlapping appointment
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -354,7 +353,7 @@ describe('Appointments API', () => {
       end.setMinutes(end.getMinutes() + 90) // e.g. a configured "Cirugia" duration
 
       // First appointment: 10:00-11:30 (90 minutes)
-      await request(app)
+      await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -371,7 +370,7 @@ describe('Appointments API', () => {
       const overlapEnd = new Date(overlapStart)
       overlapEnd.setMinutes(overlapEnd.getMinutes() + 30)
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -389,7 +388,7 @@ describe('Appointments API', () => {
       const times = getFutureTime(4, 10)
 
       // Create first appointment with doctor1
-      await request(app)
+      await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -399,7 +398,7 @@ describe('Appointments API', () => {
         })
 
       // Create appointment at same time with doctor2
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -413,7 +412,7 @@ describe('Appointments API', () => {
 
     it('should return 403 for STAFF role', async () => {
       const times = getFutureTime(1)
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${staffToken}`)
         .send({
@@ -427,7 +426,7 @@ describe('Appointments API', () => {
 
     it('should return 401 without auth token', async () => {
       const times = getFutureTime(1)
-      const response = await request(app).post('/api/appointments').send({
+      const response = await api().post('/api/appointments').send({
         patientId,
         doctorId,
         ...times,
@@ -444,7 +443,7 @@ describe('Appointments API', () => {
   describe('POST /api/appointments - auto-payment', () => {
     it('should auto-create payment when isPaid=true and cost > 0', async () => {
       const times = getFutureTime(1)
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -473,7 +472,7 @@ describe('Appointments API', () => {
 
     it('should not create payment when isPaid=false', async () => {
       const times = getFutureTime(2)
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -495,7 +494,7 @@ describe('Appointments API', () => {
 
     it('should not create payment when isPaid=true but no cost', async () => {
       const times = getFutureTime(3)
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -515,7 +514,7 @@ describe('Appointments API', () => {
 
     it('paidAmount creates exactly one APPOINTMENT payment for that exact amount, linked to the appointment, and does not show up in Entregas (#373)', async () => {
       const times = getFutureTime(4)
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -538,7 +537,7 @@ describe('Appointments API', () => {
 
       // Entregas (advance payments) is a separate ledger — the day-of
       // appointment payment must not leak into it.
-      const entregas = await request(app)
+      const entregas = await api()
         .get(`/api/patients/${patientId}/payments`)
         .query({ kind: 'ADVANCE' })
         .set('Authorization', `Bearer ${adminToken}`)
@@ -548,7 +547,7 @@ describe('Appointments API', () => {
 
     it('paidAmount greater than cost creates a payment for the full submitted amount, with the excess reflected as patient credit', async () => {
       const times = getFutureTime(5)
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -576,7 +575,7 @@ describe('Appointments API', () => {
 
     it('paidAmount=0 creates no payment row', async () => {
       const times = getFutureTime(6)
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -598,7 +597,7 @@ describe('Appointments API', () => {
 
     it('omitting paidAmount (and isPaid) creates no payment row', async () => {
       const times = getFutureTime(7)
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -627,7 +626,7 @@ describe('Appointments API', () => {
     // paid-amount field's locked/unlocked state correctly.
     it('create response includes hasRecordedPayment/recordedPaidAmount on the plain (no-payment) fall-through path', async () => {
       const times = getFutureTime(8)
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -647,7 +646,7 @@ describe('Appointments API', () => {
     // itself, matching what a subsequent GET would show.
     it('create response reflects the recorded payment when the appointment is created already paid', async () => {
       const times = getFutureTime(9)
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -675,7 +674,7 @@ describe('Appointments API', () => {
 
     it('create response has recordedPaymentId: null when no payment is recorded (#384)', async () => {
       const times = getFutureTime(10)
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -712,7 +711,7 @@ describe('Appointments API', () => {
     })
 
     it('should list active appointments (STAFF)', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/appointments')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -722,7 +721,7 @@ describe('Appointments API', () => {
     })
 
     it('should list all appointments including inactive', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/appointments?includeInactive=true')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -731,7 +730,7 @@ describe('Appointments API', () => {
     })
 
     it('should filter by doctor', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/appointments?doctorId=${doctorId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -740,7 +739,7 @@ describe('Appointments API', () => {
     })
 
     it('should filter by patient', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/appointments?patientId=${patientId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -749,7 +748,7 @@ describe('Appointments API', () => {
     })
 
     it('should filter by status', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/appointments?status=COMPLETED')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -758,7 +757,7 @@ describe('Appointments API', () => {
     })
 
     it('should return 401 without auth token', async () => {
-      const response = await request(app).get('/api/appointments')
+      const response = await api().get('/api/appointments')
       expect(response.status).toBe(401)
     })
 
@@ -807,7 +806,7 @@ describe('Appointments API', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .get('/api/appointments')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -848,7 +847,7 @@ describe('Appointments API', () => {
     })
 
     it('should get appointment by ID (STAFF)', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -860,7 +859,7 @@ describe('Appointments API', () => {
     })
 
     it('should return 404 for non-existent appointment', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/appointments/non-existent-id')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -921,7 +920,7 @@ describe('Appointments API', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .get(`/api/appointments/${newerApt.id}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -961,7 +960,7 @@ describe('Appointments API', () => {
     })
 
     it('should update appointment (ADMIN)', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -977,7 +976,7 @@ describe('Appointments API', () => {
     })
 
     it('should update status', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -989,7 +988,7 @@ describe('Appointments API', () => {
     })
 
     it('should update patient and doctor', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -1003,7 +1002,7 @@ describe('Appointments API', () => {
     })
 
     it('should return 400 for invalid patient on update', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -1015,7 +1014,7 @@ describe('Appointments API', () => {
     })
 
     it('should return 400 for immutable fields', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -1041,7 +1040,7 @@ describe('Appointments API', () => {
       })
 
       // Try to update first appointment to conflict
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -1055,14 +1054,14 @@ describe('Appointments API', () => {
 
     it('should not conflict with itself when updating same time slot', async () => {
       // Get the current appointment's times
-      const getRes = await request(app)
+      const getRes = await api()
         .get(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
       const { startTime, endTime } = getRes.body.data
 
       // Re-send the exact same startTime and endTime (as the frontend does)
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ startTime, endTime, notes: 'Updated without time change' })
@@ -1074,7 +1073,7 @@ describe('Appointments API', () => {
 
     it('should allow updating to a free time slot', async () => {
       const freeTimes = getFutureTime(8, 16)
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -1087,7 +1086,7 @@ describe('Appointments API', () => {
     })
 
     it('should return 403 for STAFF role', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ type: 'New Type' })
@@ -1096,7 +1095,7 @@ describe('Appointments API', () => {
     })
 
     it('should return 404 for non-existent appointment', async () => {
-      const response = await request(app)
+      const response = await api()
         .put('/api/appointments/non-existent-id')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ type: 'New Type' })
@@ -1130,7 +1129,7 @@ describe('Appointments API', () => {
     })
 
     it('should auto-create payment when isPaid transitions from false to true', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ isPaid: true })
@@ -1152,7 +1151,7 @@ describe('Appointments API', () => {
     })
 
     it('should use new cost when both cost and isPaid change', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ cost: 250, isPaid: true })
@@ -1185,7 +1184,7 @@ describe('Appointments API', () => {
       })
 
       // Mark the newer appointment as paid (cost 100)
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ isPaid: true })
@@ -1205,13 +1204,13 @@ describe('Appointments API', () => {
 
     it('should reject attempt to unmark an already paid appointment', async () => {
       // First mark it paid via the FIFO flow
-      await request(app)
+      await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ isPaid: true })
 
       // Now try to unmark it
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ isPaid: false })
@@ -1228,13 +1227,13 @@ describe('Appointments API', () => {
 
     it('should be a no-op when isPaid stays true', async () => {
       // Mark paid first
-      await request(app)
+      await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ isPaid: true })
 
       // Send another update with isPaid still true
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ isPaid: true, notes: 'Re-saved' })
@@ -1257,7 +1256,7 @@ describe('Appointments API', () => {
         data: { cost: null },
       })
 
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ isPaid: true })
@@ -1272,7 +1271,7 @@ describe('Appointments API', () => {
 
     it('should recalculate FIFO when cost changes alone', async () => {
       // Pay 100 first
-      await request(app)
+      await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ isPaid: true })
@@ -1282,7 +1281,7 @@ describe('Appointments API', () => {
       expect(before?.isPaid).toBe(true)
 
       // Raise cost to 200 — payment of 100 no longer covers the full amount.
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ cost: 200 })
@@ -1292,7 +1291,7 @@ describe('Appointments API', () => {
     })
 
     it('paidAmount on UPDATE creates exactly one APPOINTMENT payment for that exact amount, linked to the appointment', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ paidAmount: 40 })
@@ -1320,7 +1319,7 @@ describe('Appointments API', () => {
     // must create zero PatientPayment rows.
     it('editing/rescheduling an unpaid appointment without sending paidAmount creates zero payment rows (#373 design-change regression)', async () => {
       const rescheduled = getFutureTime(11, 14)
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ startTime: rescheduled.startTime, endTime: rescheduled.endTime, notes: 'Rescheduled at patient request' })
@@ -1337,7 +1336,7 @@ describe('Appointments API', () => {
 
     it('editing an appointment that already has a recorded payment does not double-charge, even if paidAmount is sent again (#373)', async () => {
       // First edit records a $100 day-of payment.
-      const first = await request(app)
+      const first = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ paidAmount: 100 })
@@ -1345,7 +1344,7 @@ describe('Appointments API', () => {
 
       // Editing again (e.g. changing notes) while re-sending the same
       // paidAmount must not create a second payment for this appointment.
-      const second = await request(app)
+      const second = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ paidAmount: 100, notes: 'Follow-up note' })
@@ -1368,7 +1367,7 @@ describe('Appointments API', () => {
     // refetch) believing the field should be unlocked, exactly the
     // double-charge risk this whole design change closes.
     it('a notes-only edit of an appointment with a recorded payment returns hasRecordedPayment/recordedPaidAmount intact, without sending paidAmount again', async () => {
-      const recorded = await request(app)
+      const recorded = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ paidAmount: 40 })
@@ -1376,7 +1375,7 @@ describe('Appointments API', () => {
 
       // Notes-only edit: no paidAmount, no cost change, no isPaid — exercises
       // the fall-through branch exclusively.
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ notes: 'Notes-only edit, payment untouched' })
@@ -1404,7 +1403,7 @@ describe('Appointments API', () => {
     // its payment is linked. This one uses the real POST /api/patients/:id/payments
     // endpoint (Entregas) to reproduce the unlinked case exactly.
     it('editing an appointment marked isPaid via an unlinked Entrega payment does not double-charge when paidAmount is re-sent (#373 reviewer fix)', async () => {
-      const entrega = await request(app)
+      const entrega = await api()
         .post(`/api/patients/${patientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 100, date: new Date().toISOString() })
@@ -1423,7 +1422,7 @@ describe('Appointments API', () => {
       // The form prefills paidAmount from the appointment's FIFO paidAmount
       // (100) and re-sends it on save. With the pre-fix guard this created a
       // second, kind=APPOINTMENT, linked payment for the full cost.
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ paidAmount: 100, notes: 'Re-saved after Entrega' })
@@ -1449,7 +1448,7 @@ describe('Appointments API', () => {
       const noRows = await prisma.patientPayment.findMany({ where: { tenantId, patientId } })
       expect(noRows).toHaveLength(0)
 
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ paidAmount: 100 })
@@ -1464,7 +1463,7 @@ describe('Appointments API', () => {
     // an appointment already paid via an unlinked payment must also remain a
     // no-op, pinning the backward-compatibility claim made in the PR.
     it('resending legacy isPaid:true on an appointment already paid via an unlinked Entrega payment remains a no-op (#373)', async () => {
-      const entrega = await request(app)
+      const entrega = await api()
         .post(`/api/patients/${patientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 100, date: new Date().toISOString() })
@@ -1473,7 +1472,7 @@ describe('Appointments API', () => {
       const before = await prisma.patientPayment.findMany({ where: { tenantId, patientId } })
       expect(before).toHaveLength(1)
 
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ isPaid: true, notes: 'Re-saved (legacy boolean)' })
@@ -1500,7 +1499,7 @@ describe('Appointments API', () => {
       })
 
       const times = getFutureTime(20)
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -1543,7 +1542,7 @@ describe('Appointments API', () => {
       })
 
       const times = getFutureTime(21)
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -1597,7 +1596,7 @@ describe('Appointments API', () => {
         data: { tenantId, patientId, amount: 300, date: new Date() },
       })
 
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointment.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ isPaid: true })
@@ -1645,7 +1644,7 @@ describe('Appointments API', () => {
         data: { tenantId, patientId, amount: 30, date: new Date() },
       })
 
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointment.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ isPaid: true })
@@ -1695,7 +1694,7 @@ describe('Appointments API', () => {
     })
 
     it('should soft delete appointment (ADMIN)', async () => {
-      const response = await request(app)
+      const response = await api()
         .delete(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1707,12 +1706,12 @@ describe('Appointments API', () => {
 
     it('should return 400 when deleting already inactive', async () => {
       // First delete
-      await request(app)
+      await api()
         .delete(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
       // Try to delete again
-      const response = await request(app)
+      const response = await api()
         .delete(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1721,7 +1720,7 @@ describe('Appointments API', () => {
     })
 
     it('should return 403 for STAFF role', async () => {
-      const response = await request(app)
+      const response = await api()
         .delete(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -1729,7 +1728,7 @@ describe('Appointments API', () => {
     })
 
     it('should return 404 for non-existent appointment', async () => {
-      const response = await request(app)
+      const response = await api()
         .delete('/api/appointments/non-existent-id')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1762,7 +1761,7 @@ describe('Appointments API', () => {
     })
 
     it('should restore deleted appointment (ADMIN)', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}/restore`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1774,12 +1773,12 @@ describe('Appointments API', () => {
 
     it('should return 400 when restoring active appointment', async () => {
       // First restore
-      await request(app)
+      await api()
         .put(`/api/appointments/${appointmentId}/restore`)
         .set('Authorization', `Bearer ${adminToken}`)
 
       // Try to restore again
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}/restore`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1804,7 +1803,7 @@ describe('Appointments API', () => {
       })
 
       // Try to restore - should fail due to conflict
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}/restore`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1813,7 +1812,7 @@ describe('Appointments API', () => {
     })
 
     it('should return 403 for STAFF role', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}/restore`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -1845,7 +1844,7 @@ describe('Appointments API', () => {
     })
 
     it('should mark appointment as done (ADMIN)', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}/mark-done`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({})
@@ -1856,7 +1855,7 @@ describe('Appointments API', () => {
     })
 
     it('should mark done with notes', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}/mark-done`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -1875,7 +1874,7 @@ describe('Appointments API', () => {
         data: { isActive: false },
       })
 
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}/mark-done`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({})
@@ -1885,7 +1884,7 @@ describe('Appointments API', () => {
     })
 
     it('should return 403 for STAFF role', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${appointmentId}/mark-done`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({})
@@ -1930,7 +1929,7 @@ describe('Appointments API', () => {
       const to = new Date(from)
       to.setDate(to.getDate() + 7)
 
-      const response = await request(app)
+      const response = await api()
         .get(`/api/appointments/calendar?from=${from.toISOString()}&to=${to.toISOString()}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -1945,7 +1944,7 @@ describe('Appointments API', () => {
       const to = new Date(from)
       to.setDate(to.getDate() + 7)
 
-      const response = await request(app)
+      const response = await api()
         .get(`/api/appointments/calendar?from=${from.toISOString()}&to=${to.toISOString()}&doctorId=${doctorId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -1954,7 +1953,7 @@ describe('Appointments API', () => {
     })
 
     it('should return 400 without date range', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/appointments/calendar')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -1999,7 +1998,7 @@ describe('Appointments API', () => {
     })
 
     it('should get appointment stats', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/appointments/stats')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -2015,7 +2014,7 @@ describe('Appointments API', () => {
     })
 
     it('should filter stats by doctor', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/appointments/stats?doctorId=${doctorId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -2044,7 +2043,7 @@ describe('Appointments API', () => {
     })
 
     it('should get appointments by doctor', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/appointments/by-doctor/${doctorId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -2055,7 +2054,7 @@ describe('Appointments API', () => {
     })
 
     it('should return empty for invalid doctor', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/appointments/by-doctor/invalid-id')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -2106,7 +2105,7 @@ describe('Appointments API', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .get(`/api/appointments/by-doctor/${doctorId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -2137,7 +2136,7 @@ describe('Appointments API', () => {
     })
 
     it('should get appointments by patient', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/appointments/by-patient/${patientId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -2148,7 +2147,7 @@ describe('Appointments API', () => {
     })
 
     it('should return empty for invalid patient', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/appointments/by-patient/invalid-id')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -2195,7 +2194,7 @@ describe('Appointments API', () => {
         data: { tenantId, patientId, amount: 150, date: new Date() },
       })
 
-      const response = await request(app)
+      const response = await api()
         .get(`/api/appointments/by-patient/${patientId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -2286,7 +2285,7 @@ describe('Appointments API', () => {
     })
 
     it('should not access appointments from other tenant', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/appointments/${otherAppointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -2294,7 +2293,7 @@ describe('Appointments API', () => {
     })
 
     it('should not update appointments from other tenant', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/appointments/${otherAppointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ type: 'Hacked' })
@@ -2303,7 +2302,7 @@ describe('Appointments API', () => {
     })
 
     it('should not delete appointments from other tenant', async () => {
-      const response = await request(app)
+      const response = await api()
         .delete(`/api/appointments/${otherAppointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -2314,7 +2313,7 @@ describe('Appointments API', () => {
       const otherPatient = await prisma.patient.findFirst({ where: { tenantId: otherTenantId } })
       const times = getFutureTime(1)
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -2340,7 +2339,7 @@ describe('Appointments API', () => {
       const otherDoctor = await prisma.doctor.findFirst({ where: { tenantId: otherTenantId } })
       const times = getFutureTime(1)
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -2384,7 +2383,7 @@ describe('Appointments API', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .get('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -2502,7 +2501,7 @@ describe('Appointments API', () => {
       const [itemA, itemB] = budget.items
       const times = getFutureTime(3)
 
-      const createRes = await request(app)
+      const createRes = await api()
         .post('/api/appointments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ patientId, doctorId, ...times, budgetItemIds: [itemA.id, itemB.id] })
@@ -2523,7 +2522,7 @@ describe('Appointments API', () => {
       expect(itemsAfterCreate.map((i) => i.status)).toEqual(['SCHEDULED', 'SCHEDULED'])
 
       // Confirm only item A as executed at mark-done time.
-      const markDoneRes = await request(app)
+      const markDoneRes = await api()
         .put(`/api/appointments/${apptId}/mark-done`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ executedBudgetItemIds: [itemA.id] })
@@ -2545,7 +2544,7 @@ describe('Appointments API', () => {
       expect(budgetAfterFirst?.status).toBe('PARTIAL')
 
       // Confirm the second item too.
-      const confirmSecond = await request(app)
+      const confirmSecond = await api()
         .put(`/api/appointments/${apptId}/mark-done`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ executedBudgetItemIds: [itemB.id] })
@@ -2571,7 +2570,7 @@ describe('Appointments API', () => {
         },
       })
 
-      const res = await request(app)
+      const res = await api()
         .put(`/api/appointments/${appt.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ budgetItemIds: [item.id] })
@@ -2595,12 +2594,12 @@ describe('Appointments API', () => {
           duration: 30,
         },
       })
-      await request(app)
+      await api()
         .put(`/api/appointments/${appt.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ budgetItemIds: [item.id] })
 
-      const res = await request(app)
+      const res = await api()
         .put(`/api/appointments/${appt.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ notes: 'No budgetItemIds field in this payload' })
@@ -2626,17 +2625,17 @@ describe('Appointments API', () => {
           duration: 30,
         },
       })
-      await request(app)
+      await api()
         .put(`/api/appointments/${appt.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ budgetItemIds: [itemA.id, itemB.id] })
       // Execute item A before clearing.
-      await request(app)
+      await api()
         .put(`/api/appointments/${appt.id}/mark-done`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ executedBudgetItemIds: [itemA.id] })
 
-      const res = await request(app)
+      const res = await api()
         .put(`/api/appointments/${appt.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ budgetItemIds: [] })
@@ -2672,17 +2671,17 @@ describe('Appointments API', () => {
             duration: 30,
           },
         })
-        await request(app)
+        await api()
           .put(`/api/appointments/${appt.id}`)
           .set('Authorization', `Bearer ${adminToken}`)
           .send({ budgetItemIds: [itemA.id, itemB.id] })
         // Execute item A before cancelling.
-        await request(app)
+        await api()
           .put(`/api/appointments/${appt.id}/mark-done`)
           .set('Authorization', `Bearer ${adminToken}`)
           .send({ executedBudgetItemIds: [itemA.id] })
 
-        const res = await request(app)
+        const res = await api()
           .put(`/api/appointments/${appt.id}`)
           .set('Authorization', `Bearer ${adminToken}`)
           .send({ status: 'CANCELLED' })
@@ -2717,12 +2716,12 @@ describe('Appointments API', () => {
             duration: 30,
           },
         })
-        await request(app)
+        await api()
           .put(`/api/appointments/${appt.id}`)
           .set('Authorization', `Bearer ${adminToken}`)
           .send({ budgetItemIds: [item.id] })
 
-        const res = await request(app)
+        const res = await api()
           .put(`/api/appointments/${appt.id}`)
           .set('Authorization', `Bearer ${adminToken}`)
           .send({ status: 'CONFIRMED' })
@@ -2750,17 +2749,17 @@ describe('Appointments API', () => {
             duration: 30,
           },
         })
-        await request(app)
+        await api()
           .put(`/api/appointments/${appt.id}`)
           .set('Authorization', `Bearer ${adminToken}`)
           .send({ budgetItemIds: [itemA.id, itemB.id] })
         // Execute item A before deleting.
-        await request(app)
+        await api()
           .put(`/api/appointments/${appt.id}/mark-done`)
           .set('Authorization', `Bearer ${adminToken}`)
           .send({ executedBudgetItemIds: [itemA.id] })
 
-        const res = await request(app)
+        const res = await api()
           .delete(`/api/appointments/${appt.id}`)
           .set('Authorization', `Bearer ${adminToken}`)
 
@@ -2792,7 +2791,7 @@ describe('Appointments API', () => {
           },
         })
 
-        const res = await request(app)
+        const res = await api()
           .delete(`/api/appointments/${appt.id}`)
           .set('Authorization', `Bearer ${adminToken}`)
 
@@ -2817,12 +2816,12 @@ describe('Appointments API', () => {
           status: 'IN_PROGRESS',
         },
       })
-      await request(app)
+      await api()
         .put(`/api/appointments/${appt.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ budgetItemIds: [item.id] })
 
-      const res = await request(app)
+      const res = await api()
         .put(`/api/appointments/${appt.id}/mark-done`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({})
@@ -2847,12 +2846,12 @@ describe('Appointments API', () => {
           duration: 30,
         },
       })
-      await request(app)
+      await api()
         .put(`/api/appointments/${appt.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ budgetItemIds: [item.id] })
 
-      const res = await request(app)
+      const res = await api()
         .put(`/api/appointments/${appt.id}/mark-done`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ executedBudgetItemIds: [] })
@@ -2878,7 +2877,7 @@ describe('Appointments API', () => {
       })
       // Never associated to this appointment.
 
-      const res = await request(app)
+      const res = await api()
         .put(`/api/appointments/${appt.id}/mark-done`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ executedBudgetItemIds: [item.id] })
@@ -2906,12 +2905,12 @@ describe('Appointments API', () => {
           duration: 30,
         },
       })
-      await request(app)
+      await api()
         .put(`/api/appointments/${appt.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ budgetItemIds: [itemA.id, itemB.id] })
 
-      const res = await request(app)
+      const res = await api()
         .put(`/api/appointments/${appt.id}/mark-done`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ executedBudgetItemIds: [itemA.id] })
@@ -2944,7 +2943,7 @@ describe('Appointments API', () => {
         },
       })
 
-      const res = await request(app)
+      const res = await api()
         .put(`/api/appointments/${appt.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ budgetItemIds: [item.id] })
@@ -2968,7 +2967,7 @@ describe('Appointments API', () => {
         },
       })
 
-      const res = await request(app)
+      const res = await api()
         .put(`/api/appointments/${appt.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ budgetItemIds: [validItem.id, otherTenantBudgetItemId] })
@@ -2977,7 +2976,7 @@ describe('Appointments API', () => {
       expect(res.body.error.code).toBe('ITEM_NOT_FOUND')
 
       // Rollback: the valid id from this tenant must not have been linked either.
-      const getRes = await request(app)
+      const getRes = await api()
         .get(`/api/appointments/${appt.id}/budget-items`)
         .set('Authorization', `Bearer ${adminToken}`)
       expect(getRes.status).toBe(200)
@@ -2987,7 +2986,7 @@ describe('Appointments API', () => {
     })
 
     it('returns 404 APPOINTMENT_NOT_FOUND from GET /:id/budget-items for a non-existent appointment', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/appointments/does-not-exist/budget-items')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -3009,12 +3008,12 @@ describe('Appointments API', () => {
           duration: 30,
         },
       })
-      await request(app)
+      await api()
         .put(`/api/appointments/${appt.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ budgetItemIds: [item.id] })
 
-      const res = await request(app)
+      const res = await api()
         .get(`/api/appointments/${appt.id}/budget-items`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -3039,7 +3038,7 @@ describe('Appointments API', () => {
         },
       })
 
-      const res = await request(app)
+      const res = await api()
         .put(`/api/appointments/${appt.id}`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ budgetItemIds: [item.id] })
@@ -3063,12 +3062,12 @@ describe('Appointments API', () => {
           duration: 30,
         },
       })
-      await request(app)
+      await api()
         .put(`/api/appointments/${appt.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ budgetItemIds: [item.id] })
 
-      const res = await request(app)
+      const res = await api()
         .put(`/api/appointments/${appt.id}/mark-done`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ executedBudgetItemIds: [item.id] })
@@ -3091,7 +3090,7 @@ describe('Appointments API', () => {
         },
       })
 
-      const res = await request(app)
+      const res = await api()
         .put(`/api/appointments/${appt.id}`)
         .set('Authorization', `Bearer ${doctorToken}`)
         .send({ budgetItemIds: [item.id] })

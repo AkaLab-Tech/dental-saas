@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import request from 'supertest'
-import { app } from '../app.js'
+import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
 import { sign } from 'jsonwebtoken'
@@ -182,7 +181,7 @@ describe('PDF Endpoints Integration', () => {
 
   describe('GET /api/appointments/:id/pdf', () => {
     it('should download appointment receipt PDF as ADMIN', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/appointments/${appointmentId}/pdf`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -196,7 +195,7 @@ describe('PDF Endpoints Integration', () => {
     })
 
     it('should download appointment receipt PDF as STAFF', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/appointments/${appointmentId}/pdf`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -205,7 +204,7 @@ describe('PDF Endpoints Integration', () => {
     })
 
     it('should return 404 for non-existent appointment', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/appointments/non-existent-id/pdf')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -215,7 +214,7 @@ describe('PDF Endpoints Integration', () => {
     })
 
     it('should return 401 without authentication', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/appointments/${appointmentId}/pdf`)
 
       expect(response.status).toBe(401)
@@ -242,7 +241,7 @@ describe('PDF Endpoints Integration', () => {
       })
       const otherToken = generateToken(otherUser.id, otherTenant.id, 'ADMIN')
 
-      const response = await request(app)
+      const response = await api()
         .get(`/api/appointments/${appointmentId}/pdf`)
         .set('Authorization', `Bearer ${otherToken}`)
 
@@ -260,7 +259,7 @@ describe('PDF Endpoints Integration', () => {
 
   describe('GET /api/labworks/:id/pdf', () => {
     it('should download labwork order PDF as ADMIN', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/labworks/${labworkId}/pdf`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -274,7 +273,7 @@ describe('PDF Endpoints Integration', () => {
     })
 
     it('should download labwork order PDF as STAFF', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/labworks/${labworkId}/pdf`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -283,7 +282,7 @@ describe('PDF Endpoints Integration', () => {
     })
 
     it('should return 404 for non-existent labwork', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/labworks/non-existent-id/pdf')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -293,7 +292,7 @@ describe('PDF Endpoints Integration', () => {
     })
 
     it('should return 401 without authentication', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/labworks/${labworkId}/pdf`)
 
       expect(response.status).toBe(401)
@@ -320,7 +319,7 @@ describe('PDF Endpoints Integration', () => {
       })
       const otherToken = generateToken(otherUser.id, otherTenant.id, 'ADMIN')
 
-      const response = await request(app)
+      const response = await api()
         .get(`/api/labworks/${labworkId}/pdf`)
         .set('Authorization', `Bearer ${otherToken}`)
 
@@ -340,7 +339,7 @@ describe('PDF Endpoints Integration', () => {
 
   describe('GET /api/patients/:id/history-pdf', () => {
     it('should download patient history PDF as ADMIN', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/patients/${patientId}/history-pdf`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -355,7 +354,7 @@ describe('PDF Endpoints Integration', () => {
     })
 
     it('should download patient history PDF as STAFF', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/patients/${patientId}/history-pdf`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -364,7 +363,7 @@ describe('PDF Endpoints Integration', () => {
     })
 
     it('should return 404 for non-existent patient', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/patients/non-existent-id/history-pdf')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -374,7 +373,7 @@ describe('PDF Endpoints Integration', () => {
     })
 
     it('should return 401 without authentication', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/patients/${patientId}/history-pdf`)
 
       expect(response.status).toBe(401)
@@ -403,7 +402,7 @@ describe('PDF Endpoints Integration', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .get(`/api/patients/${patientId}/history-pdf`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -423,7 +422,7 @@ describe('PDF Endpoints Integration', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .get(`/api/patients/${emptyPatient.id}/history-pdf`)
         .set('Authorization', `Bearer ${adminToken}`)
 

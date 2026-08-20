@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import request from 'supertest'
-import { app } from '../app.js'
+import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
 import { sign } from 'jsonwebtoken'
@@ -72,7 +71,7 @@ describe('PIN Authentication Routes', () => {
 
   describe('GET /api/auth/profiles', () => {
     it('should return profiles when authenticated', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/auth/profiles')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -89,7 +88,7 @@ describe('PIN Authentication Routes', () => {
     })
 
     it('should return 401 without JWT', async () => {
-      const res = await request(app).get('/api/auth/profiles')
+      const res = await api().get('/api/auth/profiles')
 
       expect(res.status).toBe(401)
     })
@@ -107,7 +106,7 @@ describe('PIN Authentication Routes', () => {
         },
       })
 
-      const res = await request(app)
+      const res = await api()
         .get('/api/auth/profiles')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -125,7 +124,7 @@ describe('PIN Authentication Routes', () => {
 
   describe('PUT /api/users/:id/pin', () => {
     it('should allow user to set their own PIN', async () => {
-      const res = await request(app)
+      const res = await api()
         .put(`/api/users/${staffUserId}/pin`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ pin: '1234' })
@@ -135,7 +134,7 @@ describe('PIN Authentication Routes', () => {
     })
 
     it('should allow ADMIN to set PIN for another user', async () => {
-      const res = await request(app)
+      const res = await api()
         .put(`/api/users/${staffUserId}/pin`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ pin: '5678' })
@@ -145,7 +144,7 @@ describe('PIN Authentication Routes', () => {
     })
 
     it('should reject non-ADMIN setting PIN for another user', async () => {
-      const res = await request(app)
+      const res = await api()
         .put(`/api/users/${adminUserId}/pin`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ pin: '1234' })
@@ -154,7 +153,7 @@ describe('PIN Authentication Routes', () => {
     })
 
     it('should reject invalid PIN format', async () => {
-      const res = await request(app)
+      const res = await api()
         .put(`/api/users/${staffUserId}/pin`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ pin: '12' })
@@ -163,7 +162,7 @@ describe('PIN Authentication Routes', () => {
     })
 
     it('should reject non-numeric PIN', async () => {
-      const res = await request(app)
+      const res = await api()
         .put(`/api/users/${staffUserId}/pin`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ pin: 'abcd' })
@@ -187,7 +186,7 @@ describe('PIN Authentication Routes', () => {
     })
 
     it('should return profileToken with correct PIN', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/auth/pin-login')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ userId: adminUserId, pin: '9999' })
@@ -202,7 +201,7 @@ describe('PIN Authentication Routes', () => {
     })
 
     it('should reject incorrect PIN', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/auth/pin-login')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ userId: adminUserId, pin: '0000' })
@@ -218,7 +217,7 @@ describe('PIN Authentication Routes', () => {
         data: { pinHash: null },
       })
 
-      const res = await request(app)
+      const res = await api()
         .post('/api/auth/pin-login')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ userId: staffUserId, pin: '1234' })
@@ -228,7 +227,7 @@ describe('PIN Authentication Routes', () => {
     })
 
     it('should reject unknown user', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/auth/pin-login')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ userId: 'nonexistent-user', pin: '1234' })
@@ -238,7 +237,7 @@ describe('PIN Authentication Routes', () => {
     })
 
     it('should return 401 without JWT', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/auth/pin-login')
         .send({ userId: adminUserId, pin: '9999' })
 
@@ -246,7 +245,7 @@ describe('PIN Authentication Routes', () => {
     })
 
     it('should reject invalid PIN format', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/auth/pin-login')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ userId: adminUserId, pin: '12' })
@@ -267,7 +266,7 @@ describe('PIN Authentication Routes', () => {
         data: { pinHash: null },
       })
 
-      const res = await request(app)
+      const res = await api()
         .post('/api/auth/setup-pin')
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ userId: staffUserId, pin: '4321' })
@@ -279,7 +278,7 @@ describe('PIN Authentication Routes', () => {
     })
 
     it('should reject if PIN already set', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/auth/setup-pin')
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ userId: staffUserId, pin: '1111' })
@@ -289,7 +288,7 @@ describe('PIN Authentication Routes', () => {
     })
 
     it('should return 401 without JWT', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/auth/setup-pin')
         .send({ userId: staffUserId, pin: '1234' })
 
@@ -297,7 +296,7 @@ describe('PIN Authentication Routes', () => {
     })
 
     it('should reject invalid PIN format', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/auth/setup-pin')
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ userId: staffUserId, pin: 'ab' })
@@ -312,7 +311,7 @@ describe('PIN Authentication Routes', () => {
 
   describe('GET /api/auth/me (hasPinSet)', () => {
     it('should include hasPinSet in response', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/auth/me')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -321,7 +320,7 @@ describe('PIN Authentication Routes', () => {
     })
 
     it('should not include pinHash in response', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/auth/me')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -337,7 +336,7 @@ describe('PIN Authentication Routes', () => {
   describe('X-Profile-Token middleware', () => {
     it('should override role when valid profile token is sent', async () => {
       // First get a profile token by PIN login
-      const loginRes = await request(app)
+      const loginRes = await api()
         .post('/api/auth/pin-login')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ userId: adminUserId, pin: '9999' })
@@ -346,7 +345,7 @@ describe('PIN Authentication Routes', () => {
       const { profileToken } = loginRes.body
 
       // Use profile token on an endpoint that uses requireAuth
-      const res = await request(app)
+      const res = await api()
         .get('/api/auth/profiles')
         .set('Authorization', `Bearer ${adminToken}`)
         .set('X-Profile-Token', profileToken)
@@ -365,7 +364,7 @@ describe('PIN Authentication Routes', () => {
       // Wait for token to expire
       await new Promise((r) => setTimeout(r, 1500))
 
-      const res = await request(app)
+      const res = await api()
         .get('/api/auth/profiles')
         .set('Authorization', `Bearer ${adminToken}`)
         .set('X-Profile-Token', invalidToken)

@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import request from 'supertest'
-import { app } from './app.js'
+import { api } from './test/http.js'
 import { env } from './config/env.js'
 
 // Regression coverage for the CORS wrapper added in app.ts:
@@ -14,7 +13,7 @@ import { env } from './config/env.js'
 describe('CORS policy (app.ts)', () => {
   describe('/api/public/budgets — scoped to PUBLIC_WEB_URL', () => {
     it('sets Access-Control-Allow-Origin to PUBLIC_WEB_URL on a GET request', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/public/budgets/some-token')
         .set('Origin', env.PUBLIC_WEB_URL)
 
@@ -22,7 +21,7 @@ describe('CORS policy (app.ts)', () => {
     })
 
     it('answers an OPTIONS preflight with a success status and the same Allow-Origin', async () => {
-      const res = await request(app)
+      const res = await api()
         .options('/api/public/budgets/some-token')
         .set('Origin', env.PUBLIC_WEB_URL)
         .set('Access-Control-Request-Method', 'GET')
@@ -32,7 +31,7 @@ describe('CORS policy (app.ts)', () => {
     })
 
     it('does not reflect an arbitrary Origin — Allow-Origin stays the static PUBLIC_WEB_URL, never the caller-supplied origin', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/public/budgets/some-token')
         .set('Origin', 'http://evil.com')
 
@@ -41,7 +40,7 @@ describe('CORS policy (app.ts)', () => {
     })
 
     it('rejects a spoofed evil Origin the same way on an OPTIONS preflight', async () => {
-      const res = await request(app)
+      const res = await api()
         .options('/api/public/budgets/some-token')
         .set('Origin', 'http://evil.com')
         .set('Access-Control-Request-Method', 'GET')
@@ -58,7 +57,7 @@ describe('CORS policy (app.ts)', () => {
       // caller's Origin and never the public-budgets scoped value.
       expect(env.CORS_ORIGIN).toBe('*')
 
-      const res = await request(app)
+      const res = await api()
         .get('/api/health')
         .set('Origin', env.PUBLIC_WEB_URL)
 
@@ -67,7 +66,7 @@ describe('CORS policy (app.ts)', () => {
     })
 
     it('GET /api/health still responds normally through the global CORS wrapper', async () => {
-      const res = await request(app).get('/api/health')
+      const res = await api().get('/api/health')
 
       expect(res.status).toBe(200)
       expect(res.body.status).toBe('ok')

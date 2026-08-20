@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import request from 'supertest'
 import jwt from 'jsonwebtoken'
 import { prisma } from '@dental/database'
-import { app } from '../app.js'
+import { api } from '../test/http.js'
 
 describe('Settings Routes', () => {
   let tenantId: string
@@ -103,13 +102,13 @@ describe('Settings Routes', () => {
 
   describe('GET /api/settings', () => {
     it('should return 401 without auth', async () => {
-      const res = await request(app).get('/api/settings')
+      const res = await api().get('/api/settings')
 
       expect(res.status).toBe(401)
     })
 
     it('should return default settings for new tenant', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/settings')
         .set('Authorization', `Bearer ${ownerToken}`)
 
@@ -128,7 +127,7 @@ describe('Settings Routes', () => {
     })
 
     it('should allow staff to read settings', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/settings')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -139,7 +138,7 @@ describe('Settings Routes', () => {
 
   describe('PUT /api/settings', () => {
     it('should return 401 without auth', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/settings')
         .send({ language: 'en' })
 
@@ -147,7 +146,7 @@ describe('Settings Routes', () => {
     })
 
     it('should return 403 for staff trying to update', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/settings')
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ language: 'en' })
@@ -156,7 +155,7 @@ describe('Settings Routes', () => {
     })
 
     it('should update language setting', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/settings')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({ language: 'en' })
@@ -166,7 +165,7 @@ describe('Settings Routes', () => {
     })
 
     it('should update multiple settings', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/settings')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({
@@ -182,7 +181,7 @@ describe('Settings Routes', () => {
     })
 
     it('should update notification settings', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/settings')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({
@@ -203,7 +202,7 @@ describe('Settings Routes', () => {
         '2': { start: '08:00', end: '17:00' },
       }
 
-      const res = await request(app)
+      const res = await api()
         .put('/api/settings')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({ businessHours })
@@ -213,7 +212,7 @@ describe('Settings Routes', () => {
     })
 
     it('should update working days', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/settings')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({ workingDays: [1, 2, 3, 4, 5, 6] })
@@ -223,7 +222,7 @@ describe('Settings Routes', () => {
     })
 
     it('should reject invalid language', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/settings')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({ language: 'invalid' })
@@ -233,7 +232,7 @@ describe('Settings Routes', () => {
     })
 
     it('should reject invalid date format', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/settings')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({ dateFormat: 'invalid' })
@@ -242,7 +241,7 @@ describe('Settings Routes', () => {
     })
 
     it('should reject appointment duration out of range', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/settings')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({ defaultAppointmentDuration: 500 })
@@ -258,7 +257,7 @@ describe('Settings Routes', () => {
           { type: 'Extraccion', duration: 60 },
         ]
 
-        const res = await request(app)
+        const res = await api()
           .put('/api/settings')
           .set('Authorization', `Bearer ${ownerToken}`)
           .send({ appointmentTypeDurations })
@@ -273,7 +272,7 @@ describe('Settings Routes', () => {
           { type: 'Muy larga', duration: 240 },
         ]
 
-        const res = await request(app)
+        const res = await api()
           .put('/api/settings')
           .set('Authorization', `Bearer ${ownerToken}`)
           .send({ appointmentTypeDurations })
@@ -283,7 +282,7 @@ describe('Settings Routes', () => {
       })
 
       it('should reject a duration below the 5 minute minimum', async () => {
-        const res = await request(app)
+        const res = await api()
           .put('/api/settings')
           .set('Authorization', `Bearer ${ownerToken}`)
           .send({ appointmentTypeDurations: [{ type: 'Rapida', duration: 4 }] })
@@ -293,7 +292,7 @@ describe('Settings Routes', () => {
       })
 
       it('should reject a duration above the 240 minute maximum', async () => {
-        const res = await request(app)
+        const res = await api()
           .put('/api/settings')
           .set('Authorization', `Bearer ${ownerToken}`)
           .send({ appointmentTypeDurations: [{ type: 'Cirugia larga', duration: 241 }] })
@@ -303,7 +302,7 @@ describe('Settings Routes', () => {
       })
 
       it('should reject duplicate type names, case-insensitively', async () => {
-        const res = await request(app)
+        const res = await api()
           .put('/api/settings')
           .set('Authorization', `Bearer ${ownerToken}`)
           .send({
@@ -324,7 +323,7 @@ describe('Settings Routes', () => {
           duration: 30,
         }))
 
-        const res = await request(app)
+        const res = await api()
           .put('/api/settings')
           .set('Authorization', `Bearer ${ownerToken}`)
           .send({ appointmentTypeDurations })
@@ -338,7 +337,7 @@ describe('Settings Routes', () => {
           duration: 30,
         }))
 
-        const res = await request(app)
+        const res = await api()
           .put('/api/settings')
           .set('Authorization', `Bearer ${ownerToken}`)
           .send({ appointmentTypeDurations })
@@ -348,7 +347,7 @@ describe('Settings Routes', () => {
       })
 
       it('should reject an empty type string', async () => {
-        const res = await request(app)
+        const res = await api()
           .put('/api/settings')
           .set('Authorization', `Bearer ${ownerToken}`)
           .send({ appointmentTypeDurations: [{ type: '', duration: 30 }] })
@@ -357,7 +356,7 @@ describe('Settings Routes', () => {
       })
 
       it('should reject a type string longer than 60 characters', async () => {
-        const res = await request(app)
+        const res = await api()
           .put('/api/settings')
           .set('Authorization', `Bearer ${ownerToken}`)
           .send({ appointmentTypeDurations: [{ type: 'a'.repeat(61), duration: 30 }] })
@@ -367,7 +366,7 @@ describe('Settings Routes', () => {
 
       it('should accept a type string at exactly 60 characters', async () => {
         const type = 'a'.repeat(60)
-        const res = await request(app)
+        const res = await api()
           .put('/api/settings')
           .set('Authorization', `Bearer ${ownerToken}`)
           .send({ appointmentTypeDurations: [{ type, duration: 30 }] })
@@ -379,12 +378,12 @@ describe('Settings Routes', () => {
       it('should accept an empty array, clearing previously configured types', async () => {
         // Seed a non-empty value first so this exercises actually clearing it,
         // not merely never having set it.
-        await request(app)
+        await api()
           .put('/api/settings')
           .set('Authorization', `Bearer ${ownerToken}`)
           .send({ appointmentTypeDurations: [{ type: 'Consulta', duration: 20 }] })
 
-        const res = await request(app)
+        const res = await api()
           .put('/api/settings')
           .set('Authorization', `Bearer ${ownerToken}`)
           .send({ appointmentTypeDurations: [] })
@@ -395,7 +394,7 @@ describe('Settings Routes', () => {
     })
 
     it('should reject businessHours where end time is before start time', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/settings')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({
@@ -412,7 +411,7 @@ describe('Settings Routes', () => {
     })
 
     it('should reject businessHours where end time equals start time', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/settings')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({
@@ -425,7 +424,7 @@ describe('Settings Routes', () => {
     })
 
     it('should reject workingDays with duplicate values', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/settings')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({ workingDays: [1, 1, 2, 2] })
@@ -436,7 +435,7 @@ describe('Settings Routes', () => {
     })
 
     it('should accept valid businessHours with end after start', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/settings')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({
@@ -451,7 +450,7 @@ describe('Settings Routes', () => {
     })
 
     it('should accept valid unique workingDays', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/settings')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({ workingDays: [0, 1, 2, 3, 4] })
@@ -463,13 +462,13 @@ describe('Settings Routes', () => {
 
   describe('GET /api/tenant/profile', () => {
     it('should return 401 without auth', async () => {
-      const res = await request(app).get('/api/tenant/profile')
+      const res = await api().get('/api/tenant/profile')
 
       expect(res.status).toBe(401)
     })
 
     it('should return tenant profile', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/tenant/profile')
         .set('Authorization', `Bearer ${ownerToken}`)
 
@@ -483,7 +482,7 @@ describe('Settings Routes', () => {
     })
 
     it('should allow staff to read profile', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/tenant/profile')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -494,7 +493,7 @@ describe('Settings Routes', () => {
 
   describe('PUT /api/tenant/profile', () => {
     it('should return 401 without auth', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/tenant/profile')
         .send({ name: 'New Name' })
 
@@ -502,7 +501,7 @@ describe('Settings Routes', () => {
     })
 
     it('should return 403 for staff trying to update', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/tenant/profile')
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ name: 'New Name' })
@@ -511,7 +510,7 @@ describe('Settings Routes', () => {
     })
 
     it('should update tenant name', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/tenant/profile')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({ name: 'Updated Clinic Name' })
@@ -521,7 +520,7 @@ describe('Settings Routes', () => {
     })
 
     it('should update tenant contact info', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/tenant/profile')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({
@@ -537,7 +536,7 @@ describe('Settings Routes', () => {
     })
 
     it('should update timezone and currency', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/tenant/profile')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({
@@ -551,7 +550,7 @@ describe('Settings Routes', () => {
     })
 
     it('should reject invalid email', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/tenant/profile')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({ email: 'not-an-email' })
@@ -560,7 +559,7 @@ describe('Settings Routes', () => {
     })
 
     it('should reject invalid currency length', async () => {
-      const res = await request(app)
+      const res = await api()
         .put('/api/tenant/profile')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({ currency: 'INVALID' })
