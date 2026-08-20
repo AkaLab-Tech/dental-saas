@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
-import request from 'supertest'
-import { app } from '../app.js'
+import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword, hashToken } from '../services/auth.service.js'
 
@@ -66,7 +65,7 @@ describe('Auth - Tenant User Password Recovery', () => {
 
   describe('POST /api/auth/forgot-password', () => {
     it('should return 200 for valid tenant user email and clinicSlug', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/auth/forgot-password')
         .send({ email: testEmail, clinicSlug: testClinicSlug })
 
@@ -83,7 +82,7 @@ describe('Auth - Tenant User Password Recovery', () => {
     })
 
     it('should return 200 for non-existent email (security)', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/auth/forgot-password')
         .send({ email: 'nonexistent@test.com', clinicSlug: testClinicSlug })
 
@@ -93,7 +92,7 @@ describe('Auth - Tenant User Password Recovery', () => {
     })
 
     it('should return 200 for non-existent clinic (security)', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/auth/forgot-password')
         .send({ email: testEmail, clinicSlug: 'non-existent-clinic' })
 
@@ -103,7 +102,7 @@ describe('Auth - Tenant User Password Recovery', () => {
     })
 
     it('should return 400 for invalid email format', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/auth/forgot-password')
         .send({ email: 'not-an-email', clinicSlug: testClinicSlug })
 
@@ -112,7 +111,7 @@ describe('Auth - Tenant User Password Recovery', () => {
     })
 
     it('should return 400 for missing clinicSlug', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/auth/forgot-password')
         .send({ email: testEmail })
 
@@ -122,7 +121,7 @@ describe('Auth - Tenant User Password Recovery', () => {
 
     it('should invalidate previous tokens when requesting a new one', async () => {
       // Request first token
-      await request(app)
+      await api()
         .post('/api/auth/forgot-password')
         .send({ email: testEmail, clinicSlug: testClinicSlug })
 
@@ -132,7 +131,7 @@ describe('Auth - Tenant User Password Recovery', () => {
       expect(firstToken).not.toBeNull()
 
       // Request second token
-      await request(app)
+      await api()
         .post('/api/auth/forgot-password')
         .send({ email: testEmail, clinicSlug: testClinicSlug })
 
@@ -164,7 +163,7 @@ describe('Auth - Tenant User Password Recovery', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/auth/forgot-password')
         .send({ email: 'inactive@test.com', clinicSlug: testClinicSlug })
 
@@ -193,7 +192,7 @@ describe('Auth - Tenant User Password Recovery', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/auth/forgot-password')
         .send({ email: 'superadmin-wrong@test.com', clinicSlug: testClinicSlug })
 
@@ -224,7 +223,7 @@ describe('Auth - Tenant User Password Recovery', () => {
       })
 
       const newPassword = 'NewPassword123!'
-      const response = await request(app)
+      const response = await api()
         .post('/api/auth/reset-password')
         .send({ token: plainToken, password: newPassword })
 
@@ -239,7 +238,7 @@ describe('Auth - Tenant User Password Recovery', () => {
       expect(usedToken?.usedAt).not.toBeNull()
 
       // Verify we can login with new password
-      const loginResponse = await request(app)
+      const loginResponse = await api()
         .post('/api/auth/login')
         .send({ email: testEmail, password: newPassword, clinicSlug: testClinicSlug })
 
@@ -247,7 +246,7 @@ describe('Auth - Tenant User Password Recovery', () => {
     })
 
     it('should return 400 for invalid token', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/auth/reset-password')
         .send({ token: 'invalid-token', password: 'NewPassword123!' })
 
@@ -267,7 +266,7 @@ describe('Auth - Tenant User Password Recovery', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/auth/reset-password')
         .send({ token: plainToken, password: 'NewPassword123!' })
 
@@ -288,7 +287,7 @@ describe('Auth - Tenant User Password Recovery', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/auth/reset-password')
         .send({ token: plainToken, password: 'NewPassword123!' })
 
@@ -308,7 +307,7 @@ describe('Auth - Tenant User Password Recovery', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/auth/reset-password')
         .send({ token: plainToken, password: 'weak' })
 
@@ -344,7 +343,7 @@ describe('Auth - Tenant User Password Recovery', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/auth/reset-password')
         .send({ token: plainToken, password: 'NewPassword123!' })
 
@@ -381,7 +380,7 @@ describe('Auth - Tenant User Password Recovery', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/auth/reset-password')
         .send({ token: plainToken, password: 'NewPassword123!' })
 
@@ -419,7 +418,7 @@ describe('Auth - Tenant User Password Recovery', () => {
       })
 
       // Attempt to use tenant reset-password endpoint
-      const response = await request(app)
+      const response = await api()
         .post('/api/auth/reset-password')
         .send({ token: plainToken, password: 'NewPassword123!' })
 

@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
-import request from 'supertest'
-import { app } from '../app.js'
+import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
 import { sign } from 'jsonwebtoken'
@@ -106,7 +105,7 @@ describe('Doctors API', () => {
 
   describe('POST /api/doctors', () => {
     it('should create a doctor with valid data (ADMIN)', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/doctors')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -132,7 +131,7 @@ describe('Doctors API', () => {
     })
 
     it('should create a doctor with minimal data', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/doctors')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -147,7 +146,7 @@ describe('Doctors API', () => {
     })
 
     it('should return 400 for missing required fields', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/doctors')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -160,7 +159,7 @@ describe('Doctors API', () => {
     })
 
     it('should return 400 for invalid email format', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/doctors')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -174,7 +173,7 @@ describe('Doctors API', () => {
     })
 
     it('should return 400 for invalid working hours format', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/doctors')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -188,7 +187,7 @@ describe('Doctors API', () => {
     })
 
     it('should return 400 for invalid working days', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/doctors')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -202,7 +201,7 @@ describe('Doctors API', () => {
     })
 
     it('should return 403 for STAFF trying to create doctor', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/doctors')
         .set('Authorization', `Bearer ${staffToken}`)
         .send({
@@ -215,7 +214,7 @@ describe('Doctors API', () => {
     })
 
     it('should return 401 without authentication', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/doctors')
         .send({
           firstName: 'Test',
@@ -227,7 +226,7 @@ describe('Doctors API', () => {
 
     it('should return 409 for duplicate email within tenant', async () => {
       // Create first doctor
-      await request(app)
+      await api()
         .post('/api/doctors')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -237,7 +236,7 @@ describe('Doctors API', () => {
         })
 
       // Try to create second with same email
-      const response = await request(app)
+      const response = await api()
         .post('/api/doctors')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -252,7 +251,7 @@ describe('Doctors API', () => {
 
     it('should return 409 for duplicate license number within tenant', async () => {
       // Create first doctor
-      await request(app)
+      await api()
         .post('/api/doctors')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -262,7 +261,7 @@ describe('Doctors API', () => {
         })
 
       // Try to create second with same license
-      const response = await request(app)
+      const response = await api()
         .post('/api/doctors')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -288,7 +287,7 @@ describe('Doctors API', () => {
       }
 
       // Try to create 4th doctor
-      const response = await request(app)
+      const response = await api()
         .post('/api/doctors')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -304,7 +303,7 @@ describe('Doctors API', () => {
     })
 
     it('should create a doctor with a boundary commissionPercentage of 0', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/doctors')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -318,7 +317,7 @@ describe('Doctors API', () => {
     })
 
     it('should create a doctor with a boundary commissionPercentage of 100', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/doctors')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -332,7 +331,7 @@ describe('Doctors API', () => {
     })
 
     it('should persist a mid-range commissionPercentage', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/doctors')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -346,7 +345,7 @@ describe('Doctors API', () => {
     })
 
     it('should return 400 for a negative commissionPercentage', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/doctors')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -360,7 +359,7 @@ describe('Doctors API', () => {
     })
 
     it('should return 400 for a commissionPercentage above 100', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/doctors')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -374,7 +373,7 @@ describe('Doctors API', () => {
     })
 
     it('should create a doctor with no commissionPercentage (defaults to null)', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/doctors')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -400,7 +399,7 @@ describe('Doctors API', () => {
     })
 
     it('should list active doctors (STAFF)', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/doctors')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -410,7 +409,7 @@ describe('Doctors API', () => {
     })
 
     it('should list all doctors including inactive', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/doctors?includeInactive=true')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -419,7 +418,7 @@ describe('Doctors API', () => {
     })
 
     it('should filter doctors by search term', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/doctors?search=Orthodontics')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -430,7 +429,7 @@ describe('Doctors API', () => {
     })
 
     it('should paginate results', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/doctors?limit=1&offset=1')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -439,7 +438,7 @@ describe('Doctors API', () => {
     })
 
     it('should return 401 without authentication', async () => {
-      const response = await request(app).get('/api/doctors')
+      const response = await api().get('/api/doctors')
 
       expect(response.status).toBe(401)
     })
@@ -461,7 +460,7 @@ describe('Doctors API', () => {
     })
 
     it('should get a doctor by ID (STAFF)', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/doctors/${testDoctorId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -472,7 +471,7 @@ describe('Doctors API', () => {
     })
 
     it('should return 404 for non-existent doctor', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/doctors/non-existent-id')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -497,7 +496,7 @@ describe('Doctors API', () => {
     })
 
     it('should update a doctor (ADMIN)', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/doctors/${testDoctorId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -518,7 +517,7 @@ describe('Doctors API', () => {
         data: { specialty: 'Some Specialty' },
       })
 
-      const response = await request(app)
+      const response = await api()
         .put(`/api/doctors/${testDoctorId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -530,7 +529,7 @@ describe('Doctors API', () => {
     })
 
     it('should update and persist commissionPercentage', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/doctors/${testDoctorId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -547,7 +546,7 @@ describe('Doctors API', () => {
         data: { commissionPercentage: 30 },
       })
 
-      const response = await request(app)
+      const response = await api()
         .put(`/api/doctors/${testDoctorId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -559,7 +558,7 @@ describe('Doctors API', () => {
     })
 
     it('should return 400 when updating with a negative commissionPercentage', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/doctors/${testDoctorId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -571,7 +570,7 @@ describe('Doctors API', () => {
     })
 
     it('should return 400 when updating with a commissionPercentage above 100', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/doctors/${testDoctorId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -583,7 +582,7 @@ describe('Doctors API', () => {
     })
 
     it('should return 403 for STAFF trying to update', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/doctors/${testDoctorId}`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({
@@ -594,7 +593,7 @@ describe('Doctors API', () => {
     })
 
     it('should return 404 for non-existent doctor', async () => {
-      const response = await request(app)
+      const response = await api()
         .put('/api/doctors/non-existent-id')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -620,7 +619,7 @@ describe('Doctors API', () => {
     })
 
     it('should soft delete a doctor (ADMIN)', async () => {
-      const response = await request(app)
+      const response = await api()
         .delete(`/api/doctors/${testDoctorId}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -634,12 +633,12 @@ describe('Doctors API', () => {
 
     it('should return 400 when trying to delete already inactive doctor', async () => {
       // First delete
-      await request(app)
+      await api()
         .delete(`/api/doctors/${testDoctorId}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
       // Try again
-      const response = await request(app)
+      const response = await api()
         .delete(`/api/doctors/${testDoctorId}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -648,7 +647,7 @@ describe('Doctors API', () => {
     })
 
     it('should return 403 for STAFF trying to delete', async () => {
-      const response = await request(app)
+      const response = await api()
         .delete(`/api/doctors/${testDoctorId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -656,7 +655,7 @@ describe('Doctors API', () => {
     })
 
     it('should return 404 for non-existent doctor', async () => {
-      const response = await request(app)
+      const response = await api()
         .delete('/api/doctors/non-existent-id')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -680,7 +679,7 @@ describe('Doctors API', () => {
     })
 
     it('should restore a soft-deleted doctor (ADMIN)', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/doctors/${inactiveDoctorId}/restore`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -695,12 +694,12 @@ describe('Doctors API', () => {
 
     it('should return 400 when trying to restore already active doctor', async () => {
       // First restore
-      await request(app)
+      await api()
         .put(`/api/doctors/${inactiveDoctorId}/restore`)
         .set('Authorization', `Bearer ${adminToken}`)
 
       // Try again
-      const response = await request(app)
+      const response = await api()
         .put(`/api/doctors/${inactiveDoctorId}/restore`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -722,7 +721,7 @@ describe('Doctors API', () => {
       }
 
       // Try to restore the inactive doctor (would be 4th)
-      const response = await request(app)
+      const response = await api()
         .put(`/api/doctors/${inactiveDoctorId}/restore`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -731,7 +730,7 @@ describe('Doctors API', () => {
     })
 
     it('should return 403 for STAFF trying to restore', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/doctors/${inactiveDoctorId}/restore`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -752,7 +751,7 @@ describe('Doctors API', () => {
     })
 
     it('should return doctor stats (ADMIN)', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/doctors/stats')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -766,7 +765,7 @@ describe('Doctors API', () => {
     })
 
     it('should return 403 for STAFF trying to get stats', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/doctors/stats')
         .set('Authorization', `Bearer ${staffToken}`)
 

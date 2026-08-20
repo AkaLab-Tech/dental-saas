@@ -5,7 +5,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.test.ts', 'src/**/*.spec.ts'],
-    setupFiles: ['./src/test/setup.ts'],
+    setupFiles: ['./src/test/diagnostics.ts', './src/test/setup.ts'],
     // Force clean exit after tests complete
     pool: 'forks',
     poolOptions: {

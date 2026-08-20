@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
-import request from 'supertest'
-import { app } from '../app.js'
+import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
 import { sign } from 'jsonwebtoken'
@@ -109,7 +108,7 @@ describe('Patients API', () => {
 
   describe('POST /api/patients', () => {
     it('should create a patient with valid data (ADMIN)', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/patients')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -132,7 +131,7 @@ describe('Patients API', () => {
     })
 
     it('should create a patient with minimal data', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/patients')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -152,7 +151,7 @@ describe('Patients API', () => {
       const childDob = new Date()
       childDob.setFullYear(childDob.getFullYear() - 8)
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/patients')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -169,7 +168,7 @@ describe('Patients API', () => {
       const adultDob = new Date()
       adultDob.setFullYear(adultDob.getFullYear() - 25)
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/patients')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -183,7 +182,7 @@ describe('Patients API', () => {
     })
 
     it('should return 400 for missing required fields', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/patients')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -196,7 +195,7 @@ describe('Patients API', () => {
     })
 
     it('should return 400 for invalid email format', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/patients')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -210,7 +209,7 @@ describe('Patients API', () => {
     })
 
     it('should return 400 for invalid date format', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/patients')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -226,7 +225,7 @@ describe('Patients API', () => {
     it('should return 400 for date of birth in the future', async () => {
       const futureDate = new Date()
       futureDate.setFullYear(futureDate.getFullYear() + 1)
-      const response = await request(app)
+      const response = await api()
         .post('/api/patients')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -240,7 +239,7 @@ describe('Patients API', () => {
     })
 
     it('should return 400 for invalid gender', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/patients')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -254,7 +253,7 @@ describe('Patients API', () => {
     })
 
     it('should return 403 for STAFF trying to create patient', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/patients')
         .set('Authorization', `Bearer ${staffToken}`)
         .send({
@@ -267,7 +266,7 @@ describe('Patients API', () => {
     })
 
     it('should return 401 without authentication', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/patients')
         .send({
           firstName: 'Test',
@@ -279,7 +278,7 @@ describe('Patients API', () => {
 
     it('should return 409 for duplicate email within tenant', async () => {
       // Create first patient
-      await request(app)
+      await api()
         .post('/api/patients')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -289,7 +288,7 @@ describe('Patients API', () => {
         })
 
       // Try to create second with same email
-      const response = await request(app)
+      const response = await api()
         .post('/api/patients')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -315,7 +314,7 @@ describe('Patients API', () => {
       }
 
       // Try to create 51st patient
-      const response = await request(app)
+      const response = await api()
         .post('/api/patients')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -344,7 +343,7 @@ describe('Patients API', () => {
     })
 
     it('should list active patients (STAFF)', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/patients')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -354,7 +353,7 @@ describe('Patients API', () => {
     })
 
     it('should list all patients including inactive', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/patients?includeInactive=true')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -363,7 +362,7 @@ describe('Patients API', () => {
     })
 
     it('should filter patients by search term', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/patients?search=Bob')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -373,7 +372,7 @@ describe('Patients API', () => {
     })
 
     it('should paginate results', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/patients?limit=1&offset=1')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -382,7 +381,7 @@ describe('Patients API', () => {
     })
 
     it('should return 401 without authentication', async () => {
-      const response = await request(app).get('/api/patients')
+      const response = await api().get('/api/patients')
 
       expect(response.status).toBe(401)
     })
@@ -404,7 +403,7 @@ describe('Patients API', () => {
     })
 
     it('should get a patient by ID (STAFF)', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/patients/${testPatientId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -415,7 +414,7 @@ describe('Patients API', () => {
     })
 
     it('should return 404 for non-existent patient', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/patients/non-existent-id')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -478,7 +477,7 @@ describe('Patients API', () => {
     })
 
     it('should get patient appointments (STAFF)', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/patients/${testPatientId}/appointments`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -490,7 +489,7 @@ describe('Patients API', () => {
     })
 
     it('should return 404 for non-existent patient', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/patients/non-existent-id/appointments')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -515,7 +514,7 @@ describe('Patients API', () => {
     })
 
     it('should update a patient (ADMIN)', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/patients/${testPatientId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -536,7 +535,7 @@ describe('Patients API', () => {
         data: { phone: '+123456' },
       })
 
-      const response = await request(app)
+      const response = await api()
         .put(`/api/patients/${testPatientId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -548,7 +547,7 @@ describe('Patients API', () => {
     })
 
     it('should return 403 for STAFF trying to update', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/patients/${testPatientId}`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({
@@ -559,7 +558,7 @@ describe('Patients API', () => {
     })
 
     it('should return 404 for non-existent patient', async () => {
-      const response = await request(app)
+      const response = await api()
         .put('/api/patients/non-existent-id')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -585,7 +584,7 @@ describe('Patients API', () => {
     })
 
     it('should soft delete a patient (ADMIN)', async () => {
-      const response = await request(app)
+      const response = await api()
         .delete(`/api/patients/${testPatientId}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -599,12 +598,12 @@ describe('Patients API', () => {
 
     it('should return 400 when trying to delete already inactive patient', async () => {
       // First delete
-      await request(app)
+      await api()
         .delete(`/api/patients/${testPatientId}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
       // Try again
-      const response = await request(app)
+      const response = await api()
         .delete(`/api/patients/${testPatientId}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -613,7 +612,7 @@ describe('Patients API', () => {
     })
 
     it('should return 403 for STAFF trying to delete', async () => {
-      const response = await request(app)
+      const response = await api()
         .delete(`/api/patients/${testPatientId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -621,7 +620,7 @@ describe('Patients API', () => {
     })
 
     it('should return 404 for non-existent patient', async () => {
-      const response = await request(app)
+      const response = await api()
         .delete('/api/patients/non-existent-id')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -645,7 +644,7 @@ describe('Patients API', () => {
     })
 
     it('should restore a soft-deleted patient (ADMIN)', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/patients/${inactivePatientId}/restore`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -660,12 +659,12 @@ describe('Patients API', () => {
 
     it('should return 400 when trying to restore already active patient', async () => {
       // First restore
-      await request(app)
+      await api()
         .put(`/api/patients/${inactivePatientId}/restore`)
         .set('Authorization', `Bearer ${adminToken}`)
 
       // Try again
-      const response = await request(app)
+      const response = await api()
         .put(`/api/patients/${inactivePatientId}/restore`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -687,7 +686,7 @@ describe('Patients API', () => {
       }
 
       // Try to restore the inactive patient (would be 16th)
-      const response = await request(app)
+      const response = await api()
         .put(`/api/patients/${inactivePatientId}/restore`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -696,7 +695,7 @@ describe('Patients API', () => {
     })
 
     it('should return 403 for STAFF trying to restore', async () => {
-      const response = await request(app)
+      const response = await api()
         .put(`/api/patients/${inactivePatientId}/restore`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -717,7 +716,7 @@ describe('Patients API', () => {
     })
 
     it('should return patient stats (ADMIN)', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/patients/stats')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -731,7 +730,7 @@ describe('Patients API', () => {
     })
 
     it('should return 403 for STAFF trying to get stats', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/patients/stats')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -762,7 +761,7 @@ describe('Patients API', () => {
     })
 
     it('should return teeth data for a patient', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/patients/${patientId}/teeth`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -783,7 +782,7 @@ describe('Patients API', () => {
         },
       })
 
-      const response = await request(app)
+      const response = await api()
         .get(`/api/patients/${patientNoTeeth.id}/teeth`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -793,7 +792,7 @@ describe('Patients API', () => {
     })
 
     it('should return 404 for non-existent patient', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/patients/non-existent-id/teeth')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -802,7 +801,7 @@ describe('Patients API', () => {
     })
 
     it('should return 401 for unauthenticated request', async () => {
-      const response = await request(app)
+      const response = await api()
         .get(`/api/patients/${patientId}/teeth`)
 
       expect(response.status).toBe(401)
@@ -825,7 +824,7 @@ describe('Patients API', () => {
     })
 
     it('should update teeth data for a patient', async () => {
-      const response = await request(app)
+      const response = await api()
         .patch(`/api/patients/${patientId}/teeth`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({
@@ -843,7 +842,7 @@ describe('Patients API', () => {
     })
 
     it('should merge new teeth data with existing', async () => {
-      const response = await request(app)
+      const response = await api()
         .patch(`/api/patients/${patientId}/teeth`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({
@@ -860,13 +859,13 @@ describe('Patients API', () => {
 
     it('should remove tooth data when note is empty and status is healthy', async () => {
       // First add a tooth entry
-      await request(app)
+      await api()
         .patch(`/api/patients/${patientId}/teeth`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ '21': { note: 'To be removed', status: 'caries' } })
 
       // Then remove it (empty note + healthy status)
-      const response = await request(app)
+      const response = await api()
         .patch(`/api/patients/${patientId}/teeth`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ '21': { note: '', status: 'healthy' } })
@@ -877,7 +876,7 @@ describe('Patients API', () => {
     })
 
     it('should return 400 for invalid tooth number', async () => {
-      const response = await request(app)
+      const response = await api()
         .patch(`/api/patients/${patientId}/teeth`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ '99': { note: 'Invalid tooth', status: 'healthy' } })
@@ -888,7 +887,7 @@ describe('Patients API', () => {
 
     it('should return 400 for note exceeding 1000 characters', async () => {
       const longNote = 'a'.repeat(1001)
-      const response = await request(app)
+      const response = await api()
         .patch(`/api/patients/${patientId}/teeth`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ '11': { note: longNote, status: 'healthy' } })
@@ -898,7 +897,7 @@ describe('Patients API', () => {
     })
 
     it('should return 400 for invalid tooth status', async () => {
-      const response = await request(app)
+      const response = await api()
         .patch(`/api/patients/${patientId}/teeth`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ '11': { note: 'Test', status: 'invalid_status' } })
@@ -908,7 +907,7 @@ describe('Patients API', () => {
     })
 
     it('should update tooth status without note', async () => {
-      const response = await request(app)
+      const response = await api()
         .patch(`/api/patients/${patientId}/teeth`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ '12': { note: '', status: 'missing' } })
@@ -918,7 +917,7 @@ describe('Patients API', () => {
     })
 
     it('should return 404 for non-existent patient', async () => {
-      const response = await request(app)
+      const response = await api()
         .patch('/api/patients/non-existent-id/teeth')
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ '11': { note: 'Test', status: 'healthy' } })
@@ -927,7 +926,7 @@ describe('Patients API', () => {
     })
 
     it('should allow ADMIN to update teeth', async () => {
-      const response = await request(app)
+      const response = await api()
         .patch(`/api/patients/${patientId}/teeth`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ '41': { note: 'Admin note', status: 'caries' } })
@@ -937,7 +936,7 @@ describe('Patients API', () => {
     })
 
     it('should support primary teeth notation (51-85)', async () => {
-      const response = await request(app)
+      const response = await api()
         .patch(`/api/patients/${patientId}/teeth`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({
@@ -967,7 +966,7 @@ describe('Patients API', () => {
     })
 
     it('should enable showPrimaryTeeth (STAFF)', async () => {
-      const response = await request(app)
+      const response = await api()
         .patch(`/api/patients/${patientId}/show-primary-teeth`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ showPrimaryTeeth: true })
@@ -986,7 +985,7 @@ describe('Patients API', () => {
         data: { showPrimaryTeeth: true },
       })
 
-      const response = await request(app)
+      const response = await api()
         .patch(`/api/patients/${patientId}/show-primary-teeth`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ showPrimaryTeeth: false })
@@ -996,7 +995,7 @@ describe('Patients API', () => {
     })
 
     it('should return 400 for invalid payload (missing field)', async () => {
-      const response = await request(app)
+      const response = await api()
         .patch(`/api/patients/${patientId}/show-primary-teeth`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({})
@@ -1006,7 +1005,7 @@ describe('Patients API', () => {
     })
 
     it('should return 400 for invalid payload (wrong type)', async () => {
-      const response = await request(app)
+      const response = await api()
         .patch(`/api/patients/${patientId}/show-primary-teeth`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ showPrimaryTeeth: 'yes' })
@@ -1015,7 +1014,7 @@ describe('Patients API', () => {
     })
 
     it('should return 404 for non-existent patient', async () => {
-      const response = await request(app)
+      const response = await api()
         .patch('/api/patients/non-existent-id/show-primary-teeth')
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ showPrimaryTeeth: true })
@@ -1024,7 +1023,7 @@ describe('Patients API', () => {
     })
 
     it('should return 401 without authentication', async () => {
-      const response = await request(app)
+      const response = await api()
         .patch(`/api/patients/${patientId}/show-primary-teeth`)
         .send({ showPrimaryTeeth: true })
 

@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
-import request from 'supertest'
 import { sign } from 'jsonwebtoken'
-import { app } from '../app.js'
+import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
 
@@ -166,7 +165,7 @@ describe('Budgets routes', () => {
     }
 
     it('creates a budget with items and recalculates totalAmount', async () => {
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/${patientId}/budgets`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send(validBody)
@@ -184,7 +183,7 @@ describe('Budgets routes', () => {
     })
 
     it('allows DOCTOR role to create a budget', async () => {
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/${patientId}/budgets`)
         .set('Authorization', `Bearer ${doctorToken}`)
         .send(validBody)
@@ -193,7 +192,7 @@ describe('Budgets routes', () => {
     })
 
     it('rejects STAFF role with 403', async () => {
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/${patientId}/budgets`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send(validBody)
@@ -202,7 +201,7 @@ describe('Budgets routes', () => {
     })
 
     it('returns 400 when items array is empty', async () => {
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/${patientId}/budgets`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ items: [] })
@@ -212,7 +211,7 @@ describe('Budgets routes', () => {
     })
 
     it('returns 400 when quantity is less than 1', async () => {
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/${patientId}/budgets`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -223,7 +222,7 @@ describe('Budgets routes', () => {
     })
 
     it('returns 400 when unitPrice is negative', async () => {
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/${patientId}/budgets`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -234,7 +233,7 @@ describe('Budgets routes', () => {
     })
 
     it('returns 404 when patient does not exist', async () => {
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/non-existent-id/budgets`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send(validBody)
@@ -243,7 +242,7 @@ describe('Budgets routes', () => {
     })
 
     it('cannot create budget for a patient from another tenant', async () => {
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/${otherPatientId}/budgets`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send(validBody)
@@ -252,7 +251,7 @@ describe('Budgets routes', () => {
     })
 
     it('accepts validUntil as an ISO date string', async () => {
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/${patientId}/budgets`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ ...validBody, validUntil: '2027-01-15' })
@@ -267,7 +266,7 @@ describe('Budgets routes', () => {
   // --------------------------------------------------------------------------
   describe('GET /api/patients/:id/budgets', () => {
     it('returns empty list when patient has no budgets', async () => {
-      const res = await request(app)
+      const res = await api()
         .get(`/api/patients/${patientId}/budgets`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -285,7 +284,7 @@ describe('Budgets routes', () => {
         data: { tenantId, patientId, notes: 'new', totalAmount: 200 },
       })
 
-      const res = await request(app)
+      const res = await api()
         .get(`/api/patients/${patientId}/budgets`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -299,12 +298,12 @@ describe('Budgets routes', () => {
       await prisma.budget.create({ data: { tenantId, patientId, notes: 'active' } })
       await prisma.budget.create({ data: { tenantId, patientId, notes: 'deleted', isActive: false } })
 
-      const defaultRes = await request(app)
+      const defaultRes = await api()
         .get(`/api/patients/${patientId}/budgets`)
         .set('Authorization', `Bearer ${staffToken}`)
       expect(defaultRes.body.data).toHaveLength(1)
 
-      const allRes = await request(app)
+      const allRes = await api()
         .get(`/api/patients/${patientId}/budgets?includeInactive=true`)
         .set('Authorization', `Bearer ${staffToken}`)
       expect(allRes.body.data).toHaveLength(2)
@@ -316,7 +315,7 @@ describe('Budgets routes', () => {
         data: { tenantId: otherTenantId, patientId: otherPatientId, notes: 'theirs' },
       })
 
-      const res = await request(app)
+      const res = await api()
         .get(`/api/patients/${patientId}/budgets`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -343,7 +342,7 @@ describe('Budgets routes', () => {
         },
       })
 
-      const res = await request(app)
+      const res = await api()
         .get(`/api/budgets/${created.id}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -358,14 +357,14 @@ describe('Budgets routes', () => {
       const other = await prisma.budget.create({
         data: { tenantId: otherTenantId, patientId: otherPatientId, notes: 'theirs' },
       })
-      const res = await request(app)
+      const res = await api()
         .get(`/api/budgets/${other.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
       expect(res.status).toBe(404)
     })
 
     it('returns 404 for non-existent id', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/budgets/non-existent-id')
         .set('Authorization', `Bearer ${adminToken}`)
       expect(res.status).toBe(404)
@@ -378,7 +377,7 @@ describe('Budgets routes', () => {
   describe('PATCH /api/budgets/:id', () => {
     it('updates notes and validUntil', async () => {
       const budget = await prisma.budget.create({ data: { tenantId, patientId } })
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/budgets/${budget.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ notes: 'updated', validUntil: '2027-06-30' })
@@ -390,7 +389,7 @@ describe('Budgets routes', () => {
 
     it('can transition DRAFT -> APPROVED', async () => {
       const budget = await prisma.budget.create({ data: { tenantId, patientId } })
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/budgets/${budget.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ status: 'APPROVED' })
@@ -403,7 +402,7 @@ describe('Budgets routes', () => {
       const budget = await prisma.budget.create({
         data: { tenantId: otherTenantId, patientId: otherPatientId },
       })
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/budgets/${budget.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ notes: 'x' })
@@ -417,7 +416,7 @@ describe('Budgets routes', () => {
   describe('DELETE /api/budgets/:id', () => {
     it('soft-deletes the budget (isActive=false)', async () => {
       const budget = await prisma.budget.create({ data: { tenantId, patientId } })
-      const res = await request(app)
+      const res = await api()
         .delete(`/api/budgets/${budget.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -430,7 +429,7 @@ describe('Budgets routes', () => {
 
     it('returns 400 if already soft-deleted', async () => {
       const budget = await prisma.budget.create({ data: { tenantId, patientId, isActive: false } })
-      const res = await request(app)
+      const res = await api()
         .delete(`/api/budgets/${budget.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
       expect(res.status).toBe(400)
@@ -438,7 +437,7 @@ describe('Budgets routes', () => {
 
     it('rejects DOCTOR from deleting (only CLINIC_ADMIN+ has BUDGETS_DELETE)', async () => {
       const budget = await prisma.budget.create({ data: { tenantId, patientId } })
-      const res = await request(app)
+      const res = await api()
         .delete(`/api/budgets/${budget.id}`)
         .set('Authorization', `Bearer ${doctorToken}`)
       expect(res.status).toBe(403)
@@ -450,13 +449,13 @@ describe('Budgets routes', () => {
   // --------------------------------------------------------------------------
   describe('POST /api/budgets/:id/items', () => {
     it('adds an item, recalculates total and auto-assigns next order', async () => {
-      const createRes = await request(app)
+      const createRes = await api()
         .post(`/api/patients/${patientId}/budgets`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ items: [{ description: 'A', quantity: 1, unitPrice: 50 }] })
       const budgetId = createRes.body.data.id
 
-      const addRes = await request(app)
+      const addRes = await api()
         .post(`/api/budgets/${budgetId}/items`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ description: 'B', quantity: 3, unitPrice: 20 })
@@ -473,7 +472,7 @@ describe('Budgets routes', () => {
       const other = await prisma.budget.create({
         data: { tenantId: otherTenantId, patientId: otherPatientId },
       })
-      const res = await request(app)
+      const res = await api()
         .post(`/api/budgets/${other.id}/items`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ description: 'X', quantity: 1, unitPrice: 10 })
@@ -486,7 +485,7 @@ describe('Budgets routes', () => {
   // --------------------------------------------------------------------------
   describe('PATCH /api/budgets/:id/items/:itemId', () => {
     async function createBudgetWithTwoItems() {
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/${patientId}/budgets`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -506,7 +505,7 @@ describe('Budgets routes', () => {
       const budget = await createBudgetWithTwoItems()
       const itemA = budget.items.find((i) => i.description === 'A')!
 
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/budgets/${budget.id}/items/${itemA.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ quantity: 4 })
@@ -523,7 +522,7 @@ describe('Budgets routes', () => {
       const budget = await createBudgetWithTwoItems()
       const itemA = budget.items.find((i) => i.description === 'A')!
 
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/budgets/${budget.id}/items/${itemA.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ status: 'EXECUTED' })
@@ -536,13 +535,13 @@ describe('Budgets routes', () => {
       const budget = await createBudgetWithTwoItems()
 
       for (const item of budget.items) {
-        await request(app)
+        await api()
           .patch(`/api/budgets/${budget.id}/items/${item.id}`)
           .set('Authorization', `Bearer ${adminToken}`)
           .send({ status: 'EXECUTED' })
       }
 
-      const res = await request(app)
+      const res = await api()
         .get(`/api/budgets/${budget.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
       expect(res.body.data.status).toBe('COMPLETED')
@@ -552,12 +551,12 @@ describe('Budgets routes', () => {
       const budget = await createBudgetWithTwoItems()
       const itemA = budget.items.find((i) => i.description === 'A')!
 
-      await request(app)
+      await api()
         .patch(`/api/budgets/${budget.id}/items/${itemA.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ status: 'EXECUTED' })
 
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/budgets/${budget.id}/items/${itemA.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ status: 'PENDING' })
@@ -566,7 +565,7 @@ describe('Budgets routes', () => {
     })
 
     it('does not auto-transition DRAFT budgets', async () => {
-      const created = await request(app)
+      const created = await api()
         .post(`/api/patients/${patientId}/budgets`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -575,7 +574,7 @@ describe('Budgets routes', () => {
       expect(created.body.data.status).toBe('DRAFT')
 
       const itemA = created.body.data.items[0]
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/budgets/${created.body.data.id}/items/${itemA.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ status: 'EXECUTED' })
@@ -596,7 +595,7 @@ describe('Budgets routes', () => {
         include: { items: true },
       })
 
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/budgets/${budget.id}/items/${budget.items[0].id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ status: 'EXECUTED' })
@@ -606,7 +605,7 @@ describe('Budgets routes', () => {
 
     it('returns 404 for a non-existent item', async () => {
       const budget = await createBudgetWithTwoItems()
-      const res = await request(app)
+      const res = await api()
         .patch(`/api/budgets/${budget.id}/items/non-existent-item`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ quantity: 2 })
@@ -620,7 +619,7 @@ describe('Budgets routes', () => {
   // --------------------------------------------------------------------------
   describe('DELETE /api/budgets/:id/items/:itemId', () => {
     it('removes the item and recalculates totalAmount', async () => {
-      const created = await request(app)
+      const created = await api()
         .post(`/api/patients/${patientId}/budgets`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -633,7 +632,7 @@ describe('Budgets routes', () => {
         (i: { description: string }) => i.description === 'B'
       )
 
-      const res = await request(app)
+      const res = await api()
         .delete(`/api/budgets/${created.body.data.id}/items/${itemB.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -643,12 +642,12 @@ describe('Budgets routes', () => {
     })
 
     it('returns 404 when item does not belong to the budget', async () => {
-      const created = await request(app)
+      const created = await api()
         .post(`/api/patients/${patientId}/budgets`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ items: [{ description: 'A', quantity: 1, unitPrice: 10 }] })
 
-      const res = await request(app)
+      const res = await api()
         .delete(`/api/budgets/${created.body.data.id}/items/not-there`)
         .set('Authorization', `Bearer ${adminToken}`)
       expect(res.status).toBe(404)
@@ -670,7 +669,7 @@ describe('Budgets routes', () => {
         },
       })
 
-      const res = await request(app)
+      const res = await api()
         .get(`/api/budgets/${budget.id}/pdf`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -686,7 +685,7 @@ describe('Budgets routes', () => {
 
     it('allows STAFF (view-only) to download the PDF', async () => {
       const budget = await prisma.budget.create({ data: { tenantId, patientId } })
-      const res = await request(app)
+      const res = await api()
         .get(`/api/budgets/${budget.id}/pdf`)
         .set('Authorization', `Bearer ${staffToken}`)
       expect(res.status).toBe(200)
@@ -694,7 +693,7 @@ describe('Budgets routes', () => {
 
     it('returns 401 without a token', async () => {
       const budget = await prisma.budget.create({ data: { tenantId, patientId } })
-      const res = await request(app).get(`/api/budgets/${budget.id}/pdf`)
+      const res = await api().get(`/api/budgets/${budget.id}/pdf`)
       expect(res.status).toBe(401)
     })
 
@@ -702,14 +701,14 @@ describe('Budgets routes', () => {
       const other = await prisma.budget.create({
         data: { tenantId: otherTenantId, patientId: otherPatientId },
       })
-      const res = await request(app)
+      const res = await api()
         .get(`/api/budgets/${other.id}/pdf`)
         .set('Authorization', `Bearer ${adminToken}`)
       expect(res.status).toBe(404)
     })
 
     it('returns 404 for a non-existent budget id', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/budgets/non-existent-id/pdf')
         .set('Authorization', `Bearer ${adminToken}`)
       expect(res.status).toBe(404)
@@ -723,7 +722,7 @@ describe('Budgets routes', () => {
     it('generates a share link and returns token/url/expiresAt', async () => {
       const budget = await prisma.budget.create({ data: { tenantId, patientId } })
 
-      const res = await request(app)
+      const res = await api()
         .post(`/api/budgets/${budget.id}/share`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({})
@@ -738,7 +737,7 @@ describe('Budgets routes', () => {
     it('accepts an optional expiresInDays and returns a non-null expiresAt', async () => {
       const budget = await prisma.budget.create({ data: { tenantId, patientId } })
 
-      const res = await request(app)
+      const res = await api()
         .post(`/api/budgets/${budget.id}/share`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ expiresInDays: 14 })
@@ -749,7 +748,7 @@ describe('Budgets routes', () => {
 
     it('rejects STAFF (viewer) role with 403', async () => {
       const budget = await prisma.budget.create({ data: { tenantId, patientId } })
-      const res = await request(app)
+      const res = await api()
         .post(`/api/budgets/${budget.id}/share`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({})
@@ -758,7 +757,7 @@ describe('Budgets routes', () => {
 
     it('rejects DOCTOR role with 403 (no BUDGETS_SHARE permission)', async () => {
       const budget = await prisma.budget.create({ data: { tenantId, patientId } })
-      const res = await request(app)
+      const res = await api()
         .post(`/api/budgets/${budget.id}/share`)
         .set('Authorization', `Bearer ${doctorToken}`)
         .send({})
@@ -767,7 +766,7 @@ describe('Budgets routes', () => {
 
     it('returns 400 when expiresInDays is out of range', async () => {
       const budget = await prisma.budget.create({ data: { tenantId, patientId } })
-      const res = await request(app)
+      const res = await api()
         .post(`/api/budgets/${budget.id}/share`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ expiresInDays: 0 })
@@ -778,7 +777,7 @@ describe('Budgets routes', () => {
       const other = await prisma.budget.create({
         data: { tenantId: otherTenantId, patientId: otherPatientId },
       })
-      const res = await request(app)
+      const res = await api()
         .post(`/api/budgets/${other.id}/share`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({})
@@ -793,12 +792,12 @@ describe('Budgets routes', () => {
           items: { create: [{ description: 'X', quantity: 1, unitPrice: 10, totalPrice: 10 }] },
         },
       })
-      const shareRes = await request(app)
+      const shareRes = await api()
         .post(`/api/budgets/${budget.id}/share`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({})
 
-      const publicRes = await request(app).get(`/api/public/budgets/${shareRes.body.data.token}`)
+      const publicRes = await api().get(`/api/public/budgets/${shareRes.body.data.token}`)
       expect(publicRes.status).toBe(200)
       expect(publicRes.body.data.id).toBe(budget.id)
     })
@@ -809,13 +808,13 @@ describe('Budgets routes', () => {
   // --------------------------------------------------------------------------
   describe('Auth', () => {
     it('returns 401 without a token', async () => {
-      const res = await request(app).get(`/api/patients/${patientId}/budgets`)
+      const res = await api().get(`/api/patients/${patientId}/budgets`)
       expect(res.status).toBe(401)
     })
 
     it('does not allow using another tenant admin to access a budget', async () => {
       const budget = await prisma.budget.create({ data: { tenantId, patientId } })
-      const res = await request(app)
+      const res = await api()
         .get(`/api/budgets/${budget.id}`)
         .set('Authorization', `Bearer ${otherAdminToken}`)
       expect(res.status).toBe(404)

@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import request from 'supertest'
-import { app } from '../app.js'
+import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { generateShareToken } from '../services/budget.service.js'
 
@@ -78,7 +77,7 @@ describe('Public budgets routes', () => {
       expect(share.success).toBe(true)
       if (!share.success) return
 
-      const res = await request(app).get(`/api/public/budgets/${share.data.token}`)
+      const res = await api().get(`/api/public/budgets/${share.data.token}`)
 
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
@@ -96,7 +95,7 @@ describe('Public budgets routes', () => {
     })
 
     it('returns 404 with the same shape for an unknown token', async () => {
-      const res = await request(app).get('/api/public/budgets/totally-unknown-token')
+      const res = await api().get('/api/public/budgets/totally-unknown-token')
 
       expect(res.status).toBe(404)
       expect(res.body).toEqual({ success: false, error: 'Budget not found' })
@@ -110,7 +109,7 @@ describe('Public budgets routes', () => {
         data: { publicToken: token, publicTokenExpiresAt: new Date(Date.now() - 1000) },
       })
 
-      const res = await request(app).get(`/api/public/budgets/${token}`)
+      const res = await api().get(`/api/public/budgets/${token}`)
 
       expect(res.status).toBe(404)
       expect(res.body).toEqual({ success: false, error: 'Budget not found' })
@@ -123,19 +122,19 @@ describe('Public budgets routes', () => {
       if (!share.success) return
       await prisma.budget.update({ where: { id: budget.id }, data: { isActive: false } })
 
-      const res = await request(app).get(`/api/public/budgets/${share.data.token}`)
+      const res = await api().get(`/api/public/budgets/${share.data.token}`)
 
       expect(res.status).toBe(404)
       expect(res.body).toEqual({ success: false, error: 'Budget not found' })
     })
 
     it('works without any Authorization header set at all (no 401)', async () => {
-      const res = await request(app).get('/api/public/budgets/some-token')
+      const res = await api().get('/api/public/budgets/some-token')
       expect(res.status).not.toBe(401)
     })
 
     it('sets standard rate-limit headers, confirming the limiter is wired', async () => {
-      const res = await request(app).get('/api/public/budgets/some-token')
+      const res = await api().get('/api/public/budgets/some-token')
 
       expect(res.headers).toHaveProperty('ratelimit-limit')
       expect(res.headers['ratelimit-limit']).toBe('30')

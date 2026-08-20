@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import request from 'supertest'
-import { app } from '../app.js'
+import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
 import { sign } from 'jsonwebtoken'
@@ -126,7 +125,7 @@ describe('Billing API', () => {
 
   describe('GET /api/plans', () => {
     it('should return all available plans (public)', async () => {
-      const response = await request(app).get('/api/plans')
+      const response = await api().get('/api/plans')
 
       expect(response.status).toBe(200)
       expect(response.body.plans).toBeDefined()
@@ -142,7 +141,7 @@ describe('Billing API', () => {
 
   describe('GET /api/billing/subscription', () => {
     it('should return subscription details for authenticated user', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/billing/subscription')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -156,7 +155,7 @@ describe('Billing API', () => {
     })
 
     it('should return 401 without authentication', async () => {
-      const response = await request(app).get('/api/billing/subscription')
+      const response = await api().get('/api/billing/subscription')
 
       expect(response.status).toBe(401)
     })
@@ -164,7 +163,7 @@ describe('Billing API', () => {
 
   describe('GET /api/billing/usage', () => {
     it('should return usage for authenticated user', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/billing/usage')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -177,7 +176,7 @@ describe('Billing API', () => {
 
   describe('GET /api/billing/payments', () => {
     it('should return payment history for owner', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/billing/payments')
         .set('Authorization', `Bearer ${ownerToken}`)
 
@@ -187,7 +186,7 @@ describe('Billing API', () => {
     })
 
     it('should return payment history for admin', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/billing/payments')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -195,7 +194,7 @@ describe('Billing API', () => {
     })
 
     it('should return 403 for staff', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/billing/payments')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -205,7 +204,7 @@ describe('Billing API', () => {
 
   describe('POST /api/billing/upgrade', () => {
     it('should initiate upgrade for owner', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/billing/upgrade')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({ planName: 'basic' })
@@ -217,7 +216,7 @@ describe('Billing API', () => {
     })
 
     it('should return 400 for invalid plan name', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/billing/upgrade')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({ planName: 'invalid' })
@@ -226,7 +225,7 @@ describe('Billing API', () => {
     })
 
     it('should return 403 for non-owner', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/billing/upgrade')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ planName: 'basic' })
@@ -237,7 +236,7 @@ describe('Billing API', () => {
 
   describe('POST /api/billing/cancel', () => {
     it('should cancel subscription for owner', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/billing/cancel')
         .set('Authorization', `Bearer ${ownerToken}`)
 
@@ -247,7 +246,7 @@ describe('Billing API', () => {
     })
 
     it('should return 403 for non-owner', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/billing/cancel')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -257,7 +256,7 @@ describe('Billing API', () => {
 
   describe('POST /api/billing/reactivate', () => {
     it('should reactivate subscription for owner', async () => {
-      const response = await request(app)
+      const response = await api()
         .post('/api/billing/reactivate')
         .set('Authorization', `Bearer ${ownerToken}`)
 

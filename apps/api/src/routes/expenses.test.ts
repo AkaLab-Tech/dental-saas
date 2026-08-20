@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import request from 'supertest'
-import { app } from '../app.js'
+import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
 import { sign } from 'jsonwebtoken'
@@ -96,7 +95,7 @@ describe('Expenses Routes - Permission Tests', () => {
       date: new Date().toISOString(),
     }
 
-    const response = await request(app)
+    const response = await api()
       .post('/api/expenses')
       .set('Authorization', `Bearer ${adminToken}`)
       .send(expenseData)
@@ -121,7 +120,7 @@ describe('Expenses Routes - Permission Tests', () => {
         date: new Date().toISOString(),
       }
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/expenses')
         .set('Authorization', `Bearer ${adminToken}`)
         .send(expenseData)
@@ -140,7 +139,7 @@ describe('Expenses Routes - Permission Tests', () => {
         date: new Date().toISOString(),
       }
 
-      const response = await request(app)
+      const response = await api()
         .post('/api/expenses')
         .set('Authorization', `Bearer ${staffToken}`)
         .send(expenseData)
@@ -157,7 +156,7 @@ describe('Expenses Routes - Permission Tests', () => {
         note: 'Updated expense note',
       }
 
-      const response = await request(app)
+      const response = await api()
         .put(`/api/expenses/${testExpenseId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send(updateData)
@@ -172,7 +171,7 @@ describe('Expenses Routes - Permission Tests', () => {
         amount: 200.00,
       }
 
-      const response = await request(app)
+      const response = await api()
         .put(`/api/expenses/${testExpenseId}`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send(updateData)
@@ -184,7 +183,7 @@ describe('Expenses Routes - Permission Tests', () => {
 
   describe('DELETE /api/expenses/:id (Delete)', () => {
     it('should deny STAFF from deleting expense', async () => {
-      const response = await request(app)
+      const response = await api()
         .delete(`/api/expenses/${testExpenseId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -201,14 +200,14 @@ describe('Expenses Routes - Permission Tests', () => {
         date: new Date().toISOString(),
       }
 
-      const createResponse = await request(app)
+      const createResponse = await api()
         .post('/api/expenses')
         .set('Authorization', `Bearer ${adminToken}`)
         .send(expenseData)
 
       const expenseId = createResponse.body.data.id
 
-      const deleteResponse = await request(app)
+      const deleteResponse = await api()
         .delete(`/api/expenses/${expenseId}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -218,7 +217,7 @@ describe('Expenses Routes - Permission Tests', () => {
 
   describe('GET /api/expenses (View)', () => {
     it('should allow STAFF to view expenses', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/expenses')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -227,7 +226,7 @@ describe('Expenses Routes - Permission Tests', () => {
     })
 
     it('should allow ADMIN to view expenses', async () => {
-      const response = await request(app)
+      const response = await api()
         .get('/api/expenses')
         .set('Authorization', `Bearer ${adminToken}`)
 

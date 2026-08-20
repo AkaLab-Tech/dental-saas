@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import request from 'supertest'
 import path from 'path'
 import { unlink } from 'fs/promises'
-import { app } from '../app.js'
+import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
 import { sign } from 'jsonwebtoken'
@@ -120,7 +119,7 @@ describe('Attachments Routes', () => {
 
   describe('POST /api/attachments/:module/:entityId', () => {
     it('should upload a file as ADMIN', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/attachments/patients/patient-1')
         .set('Authorization', `Bearer ${adminToken}`)
         .attach('files', Buffer.from('fake-png'), {
@@ -140,7 +139,7 @@ describe('Attachments Routes', () => {
     })
 
     it('should upload a file as DOCTOR', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/attachments/appointments/appt-1')
         .set('Authorization', `Bearer ${doctorToken}`)
         .attach('files', Buffer.from('fake-jpg'), {
@@ -157,7 +156,7 @@ describe('Attachments Routes', () => {
     })
 
     it('should deny upload for STAFF', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/attachments/patients/patient-1')
         .set('Authorization', `Bearer ${staffToken}`)
         .attach('files', Buffer.from('fake'), {
@@ -169,7 +168,7 @@ describe('Attachments Routes', () => {
     })
 
     it('should reject invalid file types', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/attachments/patients/patient-1')
         .set('Authorization', `Bearer ${adminToken}`)
         .attach('files', Buffer.from('fake-pdf'), {
@@ -182,7 +181,7 @@ describe('Attachments Routes', () => {
     })
 
     it('should reject invalid module', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/attachments/invalid-module/entity-1')
         .set('Authorization', `Bearer ${adminToken}`)
         .attach('files', Buffer.from('data'), {
@@ -195,7 +194,7 @@ describe('Attachments Routes', () => {
     })
 
     it('should reject request without files', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/attachments/patients/patient-1')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -204,7 +203,7 @@ describe('Attachments Routes', () => {
     })
 
     it('should require authentication', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/attachments/patients/patient-1')
         .attach('files', Buffer.from('data'), {
           filename: 'test.png',
@@ -218,7 +217,7 @@ describe('Attachments Routes', () => {
   describe('GET /api/attachments/:module/:entityId', () => {
     it('should list attachments as STAFF', async () => {
       // First upload as admin
-      const uploadRes = await request(app)
+      const uploadRes = await api()
         .post('/api/attachments/labworks/labwork-list-1')
         .set('Authorization', `Bearer ${adminToken}`)
         .attach('files', Buffer.from('data-1'), {
@@ -231,7 +230,7 @@ describe('Attachments Routes', () => {
       )
 
       // Then list as staff
-      const res = await request(app)
+      const res = await api()
         .get('/api/attachments/labworks/labwork-list-1')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -241,7 +240,7 @@ describe('Attachments Routes', () => {
     })
 
     it('should return empty array for entity with no attachments', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/attachments/expenses/no-attachments')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -253,7 +252,7 @@ describe('Attachments Routes', () => {
   describe('GET /api/attachments/file/:id', () => {
     it('should stream file with correct Content-Type', async () => {
       const imageData = Buffer.from('fake-image-data')
-      const uploadRes = await request(app)
+      const uploadRes = await api()
         .post('/api/attachments/patients/patient-file-test')
         .set('Authorization', `Bearer ${adminToken}`)
         .attach('files', imageData, {
@@ -266,7 +265,7 @@ describe('Attachments Routes', () => {
         path.join(env.UPLOAD_DIR, tenantId, 'patients', uploadRes.body.data[0].storedName)
       )
 
-      const res = await request(app)
+      const res = await api()
         .get(`/api/attachments/file/${attachmentId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -275,7 +274,7 @@ describe('Attachments Routes', () => {
     })
 
     it('should return 404 for non-existent attachment', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/attachments/file/non-existent-id')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -284,7 +283,7 @@ describe('Attachments Routes', () => {
 
     it('should stream file via ?token= query param (no Authorization header)', async () => {
       const imageData = Buffer.from('token-param-image-data')
-      const uploadRes = await request(app)
+      const uploadRes = await api()
         .post('/api/attachments/patients/patient-token-test')
         .set('Authorization', `Bearer ${adminToken}`)
         .attach('files', imageData, {
@@ -298,7 +297,7 @@ describe('Attachments Routes', () => {
       )
 
       // Access via query param instead of Authorization header
-      const res = await request(app)
+      const res = await api()
         .get(`/api/attachments/file/${attachmentId}?token=${staffToken}`)
 
       expect(res.status).toBe(200)
@@ -306,7 +305,7 @@ describe('Attachments Routes', () => {
     })
 
     it('should reject file access with no auth at all', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/attachments/file/some-id')
 
       expect(res.status).toBe(401)
@@ -315,7 +314,7 @@ describe('Attachments Routes', () => {
 
   describe('DELETE /api/attachments/:id', () => {
     it('should delete attachment as ADMIN', async () => {
-      const uploadRes = await request(app)
+      const uploadRes = await api()
         .post('/api/attachments/expenses/expense-del-1')
         .set('Authorization', `Bearer ${adminToken}`)
         .attach('files', Buffer.from('del-data'), {
@@ -325,7 +324,7 @@ describe('Attachments Routes', () => {
 
       const attachmentId = uploadRes.body.data[0].id
 
-      const res = await request(app)
+      const res = await api()
         .delete(`/api/attachments/${attachmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -333,7 +332,7 @@ describe('Attachments Routes', () => {
       expect(res.body.success).toBe(true)
 
       // Verify it's gone
-      const getRes = await request(app)
+      const getRes = await api()
         .get(`/api/attachments/file/${attachmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -341,7 +340,7 @@ describe('Attachments Routes', () => {
     })
 
     it('should deny delete for STAFF', async () => {
-      const uploadRes = await request(app)
+      const uploadRes = await api()
         .post('/api/attachments/patients/patient-staff-del')
         .set('Authorization', `Bearer ${adminToken}`)
         .attach('files', Buffer.from('keep'), {
@@ -354,7 +353,7 @@ describe('Attachments Routes', () => {
         path.join(env.UPLOAD_DIR, tenantId, 'patients', uploadRes.body.data[0].storedName)
       )
 
-      const res = await request(app)
+      const res = await api()
         .delete(`/api/attachments/${attachmentId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -362,7 +361,7 @@ describe('Attachments Routes', () => {
     })
 
     it('should deny delete for DOCTOR', async () => {
-      const uploadRes = await request(app)
+      const uploadRes = await api()
         .post('/api/attachments/appointments/appt-doc-del')
         .set('Authorization', `Bearer ${adminToken}`)
         .attach('files', Buffer.from('keep'), {
@@ -375,7 +374,7 @@ describe('Attachments Routes', () => {
         path.join(env.UPLOAD_DIR, tenantId, 'appointments', uploadRes.body.data[0].storedName)
       )
 
-      const res = await request(app)
+      const res = await api()
         .delete(`/api/attachments/${attachmentId}`)
         .set('Authorization', `Bearer ${doctorToken}`)
 
@@ -383,7 +382,7 @@ describe('Attachments Routes', () => {
     })
 
     it('should return 404 for non-existent attachment', async () => {
-      const res = await request(app)
+      const res = await api()
         .delete('/api/attachments/non-existent-id')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -393,7 +392,7 @@ describe('Attachments Routes', () => {
 
   describe('GET /api/attachments/storage', () => {
     it('should return storage usage for STAFF', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/attachments/storage')
         .set('Authorization', `Bearer ${staffToken}`)
 

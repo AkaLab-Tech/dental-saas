@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import request from 'supertest'
-import { app } from '../app.js'
+import { api } from '../test/http.js'
 import { prisma, Prisma } from '@dental/database'
 import { Permission, UserRole, hasPermission } from '@dental/shared'
 import { hashPassword } from '../services/auth.service.js'
@@ -105,7 +104,7 @@ describe('Patient Payments Routes', () => {
 
   describe('GET /api/patients/:id/balance', () => {
     it('should return zero balance for patient with no billable items', async () => {
-      const res = await request(app)
+      const res = await api()
         .get(`/api/patients/${patientId}/balance`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -114,7 +113,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('should return 404 for non-existent patient', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/patients/non-existent-id/balance')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -137,7 +136,7 @@ describe('Patient Payments Routes', () => {
         },
       })
 
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/${patientId}/payments`)
         .set('Authorization', `Bearer ${staffToken}`)
         .send({ amount: 50, date: new Date().toISOString() })
@@ -146,7 +145,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('should allow ADMIN to create payment', async () => {
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/${patientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 50, date: new Date().toISOString(), note: 'First payment' })
@@ -164,7 +163,7 @@ describe('Patient Payments Routes', () => {
     it('should accept a payment exceeding the outstanding balance and record it as an advance', async () => {
       // At this point: totalDebt=100 (appointment), totalPaid=50 (prior payment),
       // outstanding=50. Paying 99999 is a deliberate overpayment/advance.
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/${patientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 99999, date: new Date().toISOString(), note: 'Advance payment' })
@@ -174,7 +173,7 @@ describe('Patient Payments Routes', () => {
       expect(Number(res.body.data.amount)).toBe(99999)
 
       // Persisted: fetch the payment back via the list endpoint.
-      const listRes = await request(app)
+      const listRes = await api()
         .get(`/api/patients/${patientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
       const persisted = listRes.body.data.find((p: { id: string }) => p.id === res.body.data.id)
@@ -182,7 +181,7 @@ describe('Patient Payments Routes', () => {
       expect(Number(persisted.amount)).toBe(99999)
 
       // Balance now reports a credit: totalPaid (50 + 99999) - totalDebt (100) = 99949.
-      const balanceRes = await request(app)
+      const balanceRes = await api()
         .get(`/api/patients/${patientId}/balance`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -194,7 +193,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('should reject payment with invalid amount', async () => {
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/${patientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 0, date: new Date().toISOString() })
@@ -203,7 +202,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('should reject a negative amount (the 0.01 floor is the only rejection reason left)', async () => {
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/${patientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: -10, date: new Date().toISOString() })
@@ -212,7 +211,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('should accept the smallest valid amount (0.01)', async () => {
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/${patientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 0.01, date: new Date().toISOString() })
@@ -222,7 +221,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('should return 404 for non-existent patient', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/patients/non-existent-id/payments')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 10, date: new Date().toISOString() })
@@ -233,7 +232,7 @@ describe('Patient Payments Routes', () => {
 
   describe('GET /api/patients/:id/payments', () => {
     it('should allow STAFF to list payments', async () => {
-      const res = await request(app)
+      const res = await api()
         .get(`/api/patients/${patientId}/payments`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -247,13 +246,13 @@ describe('Patient Payments Routes', () => {
   describe('DELETE /api/patients/:patientId/payments/:paymentId', () => {
     it('should deny STAFF from deleting payment', async () => {
       // Get first payment
-      const listRes = await request(app)
+      const listRes = await api()
         .get(`/api/patients/${patientId}/payments`)
         .set('Authorization', `Bearer ${staffToken}`)
 
       const paymentId = listRes.body.data[0].id
 
-      const res = await request(app)
+      const res = await api()
         .delete(`/api/patients/${patientId}/payments/${paymentId}`)
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -262,14 +261,14 @@ describe('Patient Payments Routes', () => {
 
     it('should allow ADMIN to delete payment', async () => {
       // Create a payment to delete
-      const createRes = await request(app)
+      const createRes = await api()
         .post(`/api/patients/${patientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 10, date: new Date().toISOString() })
 
       const paymentId = createRes.body.data.id
 
-      const res = await request(app)
+      const res = await api()
         .delete(`/api/patients/${patientId}/payments/${paymentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -277,7 +276,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('should return 404 for non-existent payment', async () => {
-      const res = await request(app)
+      const res = await api()
         .delete(`/api/patients/${patientId}/payments/non-existent-id`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -299,7 +298,7 @@ describe('Patient Payments Routes', () => {
         })
         consultPatientId = patient.id
 
-        const createRes = await request(app)
+        const createRes = await api()
           .post('/api/appointments')
           .set('Authorization', `Bearer ${adminToken}`)
           .send({
@@ -323,7 +322,7 @@ describe('Patient Payments Routes', () => {
         })
 
         // Appointment starts out fully paid via the linked payment.
-        const before = await request(app)
+        const before = await api()
           .get(`/api/appointments/${consultAppointmentId}`)
           .set('Authorization', `Bearer ${adminToken}`)
         expect(before.body.data.isPaid).toBe(true)
@@ -333,7 +332,7 @@ describe('Patient Payments Routes', () => {
       it('denies a STAFF token (no PAYMENTS_DELETE) with 403 and leaves the payment untouched', async () => {
         expect(hasPermission(UserRole.STAFF, Permission.PAYMENTS_DELETE)).toBe(false)
 
-        const res = await request(app)
+        const res = await api()
           .delete(`/api/patients/${consultPatientId}/payments/${consultPaymentId}`)
           .set('Authorization', `Bearer ${staffToken}`)
 
@@ -344,7 +343,7 @@ describe('Patient Payments Routes', () => {
       })
 
       it('ADMIN reversal returns 200, soft-deletes the payment, and takes the appointment back to unpaid', async () => {
-        const res = await request(app)
+        const res = await api()
           .delete(`/api/patients/${consultPatientId}/payments/${consultPaymentId}`)
           .set('Authorization', `Bearer ${adminToken}`)
 
@@ -357,7 +356,7 @@ describe('Patient Payments Routes', () => {
 
         // recalculatePaidStatus ran: the appointment falls back to unpaid,
         // with paidAmount recomputed to 0 now that the pool is empty.
-        const after = await request(app)
+        const after = await api()
           .get(`/api/appointments/${consultAppointmentId}`)
           .set('Authorization', `Bearer ${adminToken}`)
         expect(after.body.data.isPaid).toBe(false)
@@ -413,7 +412,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('should show $300 outstanding balance', async () => {
-      const res = await request(app)
+      const res = await api()
         .get(`/api/patients/${fifoPatientId}/balance`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -424,13 +423,13 @@ describe('Patient Payments Routes', () => {
     })
 
     it('should not mark any appointment as paid after $50 payment', async () => {
-      await request(app)
+      await api()
         .post(`/api/patients/${fifoPatientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 50, date: '2025-01-15' })
 
       // Check balance
-      const balanceRes = await request(app)
+      const balanceRes = await api()
         .get(`/api/patients/${fifoPatientId}/balance`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -448,7 +447,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('should mark first appointment as paid after additional $60 payment (cumulative $110 >= $100)', async () => {
-      await request(app)
+      await api()
         .post(`/api/patients/${fifoPatientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 60, date: '2025-02-15' })
@@ -464,7 +463,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('should mark second appointment as paid after $100 payment (cumulative $210 >= $200)', async () => {
-      await request(app)
+      await api()
         .post(`/api/patients/${fifoPatientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 100, date: '2025-03-15' })
@@ -480,7 +479,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('should mark all appointments as paid after final $90 payment (cumulative $300 >= $300)', async () => {
-      await request(app)
+      await api()
         .post(`/api/patients/${fifoPatientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 90, date: '2025-04-15' })
@@ -495,7 +494,7 @@ describe('Patient Payments Routes', () => {
       expect(appointments[2].isPaid).toBe(true)
 
       // Balance should be 0
-      const balanceRes = await request(app)
+      const balanceRes = await api()
         .get(`/api/patients/${fifoPatientId}/balance`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -504,14 +503,14 @@ describe('Patient Payments Routes', () => {
 
     it('should recalculate FIFO when a payment is deleted', async () => {
       // Delete the last payment ($90)
-      const paymentsRes = await request(app)
+      const paymentsRes = await api()
         .get(`/api/patients/${fifoPatientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
 
       // Payments ordered by date desc, so first is the $90 one
       const lastPayment = paymentsRes.body.data[0]
 
-      await request(app)
+      await api()
         .delete(`/api/patients/${fifoPatientId}/payments/${lastPayment.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -526,7 +525,7 @@ describe('Patient Payments Routes', () => {
       expect(appointments[2].isPaid).toBe(false)   // $210 < $300
 
       // Balance should be $90
-      const balanceRes = await request(app)
+      const balanceRes = await api()
         .get(`/api/patients/${fifoPatientId}/balance`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -561,7 +560,7 @@ describe('Patient Payments Routes', () => {
 
     it('should NOT count labwork price in debt when priceIncludedInAppointment is true', async () => {
       // Create labwork linked to appointment with price included
-      const res = await request(app)
+      const res = await api()
         .post('/api/labworks')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -579,7 +578,7 @@ describe('Patient Payments Routes', () => {
       expect(res.body.data.isPaid).toBe(true)
 
       // Balance should only include appointment cost, not labwork
-      const balanceRes = await request(app)
+      const balanceRes = await api()
         .get(`/api/patients/${linkedPatientId}/balance`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -589,7 +588,7 @@ describe('Patient Payments Routes', () => {
 
     it('should count labwork price in debt when linked but priceIncludedInAppointment is false', async () => {
       // Create another labwork linked but NOT included in price
-      await request(app)
+      await api()
         .post('/api/labworks')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -601,7 +600,7 @@ describe('Patient Payments Routes', () => {
           price: 50,
         })
 
-      const balanceRes = await request(app)
+      const balanceRes = await api()
         .get(`/api/patients/${linkedPatientId}/balance`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -614,7 +613,7 @@ describe('Patient Payments Routes', () => {
         data: { tenantId, firstName: 'Other', lastName: 'Patient' },
       })
 
-      const res = await request(app)
+      const res = await api()
         .post('/api/labworks')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -631,7 +630,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('should ignore priceIncludedInAppointment when no appointmentId is provided', async () => {
-      const res = await request(app)
+      const res = await api()
         .post('/api/labworks')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -666,7 +665,7 @@ describe('Patient Payments Routes', () => {
       })
 
       // Labwork $50 included in appointment (should not consume payments)
-      await request(app)
+      await api()
         .post('/api/labworks')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -679,7 +678,7 @@ describe('Patient Payments Routes', () => {
         })
 
       // Labwork $60 standalone
-      await request(app)
+      await api()
         .post('/api/labworks')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
@@ -690,14 +689,14 @@ describe('Patient Payments Routes', () => {
         })
 
       // Total debt should be $100 (apt) + $60 (standalone labwork) = $160
-      const balanceRes = await request(app)
+      const balanceRes = await api()
         .get(`/api/patients/${p.id}/balance`)
         .set('Authorization', `Bearer ${adminToken}`)
 
       expect(balanceRes.body.data.totalDebt).toBe(160)
 
       // Pay $100 — appointment should be paid, standalone labwork not
-      await request(app)
+      await api()
         .post(`/api/patients/${p.id}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 100, date: '2025-07-15' })
@@ -745,14 +744,14 @@ describe('Patient Payments Routes', () => {
         },
       })
 
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/${creditPatientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 40, date: '2025-08-02' })
 
       expect(res.status).toBe(201)
 
-      const balanceRes = await request(app)
+      const balanceRes = await api()
         .get(`/api/patients/${creditPatientId}/balance`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -763,14 +762,14 @@ describe('Patient Payments Routes', () => {
     })
 
     it('reports credit=0 when totalPaid exactly equals totalDebt (boundary)', async () => {
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/${creditPatientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 60, date: '2025-08-03' })
 
       expect(res.status).toBe(201)
 
-      const balanceRes = await request(app)
+      const balanceRes = await api()
         .get(`/api/patients/${creditPatientId}/balance`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -781,14 +780,14 @@ describe('Patient Payments Routes', () => {
     })
 
     it('reports a positive credit once payments exceed debt, and outstanding stays clamped at 0', async () => {
-      const res = await request(app)
+      const res = await api()
         .post(`/api/patients/${creditPatientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 25, date: '2025-08-04', note: 'Advance for next visit' })
 
       expect(res.status).toBe(201)
 
-      const balanceRes = await request(app)
+      const balanceRes = await api()
         .get(`/api/patients/${creditPatientId}/balance`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -819,7 +818,7 @@ describe('Patient Payments Routes', () => {
       // The balance endpoint aggregates live (not from the stored isPaid
       // column), so it reflects the new debt against existing credit
       // immediately.
-      const balanceRes = await request(app)
+      const balanceRes = await api()
         .get(`/api/patients/${creditPatientId}/balance`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -831,7 +830,7 @@ describe('Patient Payments Routes', () => {
       // The per-appointment FIFO allocation (exposed via the appointments
       // list) shows the new appointment as fully paid by the existing
       // credit without a dedicated payment for it.
-      const listRes = await request(app)
+      const listRes = await api()
         .get(`/api/appointments/by-patient/${creditPatientId}`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -866,7 +865,7 @@ describe('Patient Payments Routes', () => {
           status: 'COMPLETED',
         },
       })
-      await request(app)
+      await api()
         .post(`/api/patients/${debtorAId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 50, date: '2025-09-02' })
@@ -887,7 +886,7 @@ describe('Patient Payments Routes', () => {
           status: 'COMPLETED',
         },
       })
-      await request(app)
+      await api()
         .post(`/api/patients/${debtorBId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 100, date: '2025-09-04' })
@@ -908,7 +907,7 @@ describe('Patient Payments Routes', () => {
           status: 'COMPLETED',
         },
       })
-      await request(app)
+      await api()
         .post(`/api/patients/${paidPatientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 100, date: '2025-09-06' })
@@ -921,13 +920,13 @@ describe('Patient Payments Routes', () => {
     })
 
     it('should return 401 without authentication', async () => {
-      const res = await request(app).get('/api/patients/debts')
+      const res = await api().get('/api/patients/debts')
 
       expect(res.status).toBe(401)
     })
 
     it('should allow STAFF (PAYMENTS_VIEW) to view the debtors list, consistent with /balance', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/patients/debts')
         .set('Authorization', `Bearer ${staffToken}`)
 
@@ -936,7 +935,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('should include a patient with outstanding debt with the correct totals', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/patients/debts')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -952,7 +951,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('should exclude a fully-paid patient (outstanding === 0)', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/patients/debts')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -963,7 +962,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('should exclude a patient with no billable items (no appointments/labworks)', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/patients/debts')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -974,7 +973,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('should sort the full result set by outstanding descending', async () => {
-      const res = await request(app)
+      const res = await api()
         .get('/api/patients/debts')
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1020,21 +1019,21 @@ describe('Patient Payments Routes', () => {
       })
       linkedAppointmentId = appointment.id
 
-      const putRes = await request(app)
+      const putRes = await api()
         .put(`/api/appointments/${appointment.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ isPaid: true })
       expect(putRes.status).toBe(200)
 
       // Freestanding advance for the same patient.
-      const advanceRes = await request(app)
+      const advanceRes = await api()
         .post(`/api/patients/${kindPatientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 30, date: '2025-10-02', note: 'Advance' })
       expect(advanceRes.status).toBe(201)
       advancePaymentId = advanceRes.body.data.id
 
-      const listRes = await request(app)
+      const listRes = await api()
         .get(`/api/patients/${kindPatientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
       appointmentPaymentId = listRes.body.data.find(
@@ -1043,7 +1042,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('with no kind param, returns both kinds — regression on the pre-existing response shape/pagination', async () => {
-      const res = await request(app)
+      const res = await api()
         .get(`/api/patients/${kindPatientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1075,7 +1074,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('?kind=ADVANCE returns only the freestanding advance', async () => {
-      const res = await request(app)
+      const res = await api()
         .get(`/api/patients/${kindPatientId}/payments?kind=ADVANCE`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1087,7 +1086,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('?kind=APPOINTMENT returns only the appointment-driven payment', async () => {
-      const res = await request(app)
+      const res = await api()
         .get(`/api/patients/${kindPatientId}/payments?kind=APPOINTMENT`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1099,7 +1098,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('?kind=BOGUS is rejected with 400', async () => {
-      const res = await request(app)
+      const res = await api()
         .get(`/api/patients/${kindPatientId}/payments?kind=BOGUS`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1155,13 +1154,13 @@ describe('Patient Payments Routes', () => {
       })
       otherAppointmentId = appointment.id
 
-      const putRes = await request(app)
+      const putRes = await api()
         .put(`/api/appointments/${appointment.id}`)
         .set('Authorization', `Bearer ${otherAdminToken}`)
         .send({ isPaid: true })
       expect(putRes.status).toBe(200)
 
-      const listRes = await request(app)
+      const listRes = await api()
         .get(`/api/patients/${otherPatientId}/payments`)
         .set('Authorization', `Bearer ${otherAdminToken}`)
       otherAppointmentPaymentId = listRes.body.data[0].id
@@ -1190,7 +1189,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it('?kind= filtering under the main tenant never returns another tenant payment', async () => {
-      const res = await request(app)
+      const res = await api()
         .get(`/api/patients/${patientId}/payments?kind=APPOINTMENT`)
         .set('Authorization', `Bearer ${adminToken}`)
 
@@ -1201,7 +1200,7 @@ describe('Patient Payments Routes', () => {
     })
 
     it("another tenant's token querying the main tenant's patient gets an empty result, never the main tenant's payments", async () => {
-      const res = await request(app)
+      const res = await api()
         .get(`/api/patients/${patientId}/payments?kind=ADVANCE`)
         .set('Authorization', `Bearer ${otherAdminToken}`)
 
@@ -1249,7 +1248,7 @@ describe('Patient Payments Routes', () => {
 
     it('sums ADVANCE and APPOINTMENT-kind payments identically for balance and FIFO isPaid', async () => {
       // Step 1: freestanding advance of $50.
-      const advanceRes = await request(app)
+      const advanceRes = await api()
         .post(`/api/patients/${mixedPatientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 50, date: '2025-12-02' })
@@ -1258,13 +1257,13 @@ describe('Patient Payments Routes', () => {
 
       // Step 2: mark apt1 (cost 100) as paid. Outstanding at that moment is
       // 300 - 50 = 250, so the auto-payment is the full cost ($100, kind=APPOINTMENT).
-      const putRes = await request(app)
+      const putRes = await api()
         .put(`/api/appointments/${apt1Id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ isPaid: true })
       expect(putRes.status).toBe(200)
 
-      const balanceAfterStep2 = await request(app)
+      const balanceAfterStep2 = await api()
         .get(`/api/patients/${mixedPatientId}/balance`)
         .set('Authorization', `Bearer ${adminToken}`)
       expect(balanceAfterStep2.body.data).toEqual({
@@ -1287,13 +1286,13 @@ describe('Patient Payments Routes', () => {
       // completing apt2 via FIFO — proving ADVANCE and APPOINTMENT rows are
       // summed together exactly as a same-kind set would have been before
       // this task (kind is purely a label, never a filter on these sums).
-      const advance2Res = await request(app)
+      const advance2Res = await api()
         .post(`/api/patients/${mixedPatientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ amount: 150, date: '2025-12-06' })
       expect(advance2Res.status).toBe(201)
 
-      const balanceAfterStep3 = await request(app)
+      const balanceAfterStep3 = await api()
         .get(`/api/patients/${mixedPatientId}/balance`)
         .set('Authorization', `Bearer ${adminToken}`)
       expect(balanceAfterStep3.body.data).toEqual({
@@ -1311,7 +1310,7 @@ describe('Patient Payments Routes', () => {
       expect(aptsAfterStep3[1].isPaid).toBe(true)
 
       // Fully paid: the debtors dashboard must exclude this patient too.
-      const debtsRes = await request(app)
+      const debtsRes = await api()
         .get('/api/patients/debts')
         .set('Authorization', `Bearer ${adminToken}`)
       expect(
@@ -1346,7 +1345,7 @@ describe('Patient Payments Routes', () => {
         },
       })
 
-      const putRes = await request(app)
+      const putRes = await api()
         .put(`/api/appointments/${appointment.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ isPaid: true })
@@ -1635,7 +1634,7 @@ describe('Patient Payments Routes', () => {
     }
 
     async function getStatement(patientId: string, token = adminToken) {
-      const res = await request(app)
+      const res = await api()
         .get(`/api/patients/${patientId}/statement`)
         .set('Authorization', `Bearer ${token}`)
       expect(res.status).toBe(200)
@@ -1643,7 +1642,7 @@ describe('Patient Payments Routes', () => {
     }
 
     async function getBalance(patientId: string, token = adminToken) {
-      const res = await request(app)
+      const res = await api()
         .get(`/api/patients/${patientId}/balance`)
         .set('Authorization', `Bearer ${token}`)
       expect(res.status).toBe(200)
@@ -1886,7 +1885,7 @@ describe('Patient Payments Routes', () => {
       })
 
       it('returns 404 PATIENT_NOT_FOUND for a non-existent patient id', async () => {
-        const res = await request(app)
+        const res = await api()
           .get('/api/patients/non-existent-id/statement')
           .set('Authorization', `Bearer ${adminToken}`)
 
@@ -2112,7 +2111,7 @@ describe('Patient Payments Routes', () => {
       it('allows the lowest tenant role that holds PAYMENTS_VIEW (STAFF)', async () => {
         expect(hasPermission(UserRole.STAFF, Permission.PAYMENTS_VIEW)).toBe(true)
 
-        const res = await request(app)
+        const res = await api()
           .get(`/api/patients/${performedWorkPatientId}/statement`)
           .set('Authorization', `Bearer ${staffToken}`)
 
@@ -2127,7 +2126,7 @@ describe('Patient Payments Routes', () => {
         expect(hasPermission(UserRole.SUPER_ADMIN, Permission.PAYMENTS_VIEW)).toBe(false)
         const noPermissionToken = generateToken('super-admin-id', tenantId, 'SUPER_ADMIN')
 
-        const res = await request(app)
+        const res = await api()
           .get(`/api/patients/${performedWorkPatientId}/statement`)
           .set('Authorization', `Bearer ${noPermissionToken}`)
 
@@ -2135,14 +2134,14 @@ describe('Patient Payments Routes', () => {
         expect(res.body.required).toBe(Permission.PAYMENTS_VIEW)
 
         // Same gate, same answer as the sibling /balance route.
-        const balanceRes = await request(app)
+        const balanceRes = await api()
           .get(`/api/patients/${performedWorkPatientId}/balance`)
           .set('Authorization', `Bearer ${noPermissionToken}`)
         expect(balanceRes.status).toBe(403)
       })
 
       it('rejects an unauthenticated request with 401', async () => {
-        const res = await request(app).get(`/api/patients/${performedWorkPatientId}/statement`)
+        const res = await api().get(`/api/patients/${performedWorkPatientId}/statement`)
 
         expect(res.status).toBe(401)
       })
@@ -2192,7 +2191,7 @@ describe('Patient Payments Routes', () => {
       })
 
       it("returns 404 when asking for another tenant's patient", async () => {
-        const res = await request(app)
+        const res = await api()
           .get(`/api/patients/${isolationPatientId}/statement`)
           .set('Authorization', `Bearer ${adminToken}`)
 
@@ -2201,7 +2200,7 @@ describe('Patient Payments Routes', () => {
       })
 
       it("returns 404 when another tenant's token asks for this tenant's patient", async () => {
-        const res = await request(app)
+        const res = await api()
           .get(`/api/patients/${performedWorkPatientId}/statement`)
           .set('Authorization', `Bearer ${isolationAdminToken}`)
 
