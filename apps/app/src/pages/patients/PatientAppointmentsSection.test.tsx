@@ -173,10 +173,17 @@ const noShowAppointment: Appointment = {
 
 // #384: an appointment with a recorded (kind=APPOINTMENT) consultation
 // payment linked to it.
+// #390: the "Cobrado en consulta (reversible)" line is shown only in the
+// mixed case (recordedPaidAmount < paidAmount) — see the table in the
+// "consultation payment reversal" describe block below. This base fixture
+// is deliberately the mixed case: fully-earmarked $75 recorded payment plus
+// $25 more from the FIFO pool/advances, covering the full $100 cost.
 const paidConsultationAppointment: Appointment = {
   ...upcomingAppointment,
   id: 'a6',
   type: 'Consulta pagada',
+  isPaid: true,
+  paidAmount: 100,
   hasRecordedPayment: true,
   recordedPaidAmount: 75,
   recordedPaymentId: 'pay-1',
@@ -708,13 +715,20 @@ describe('PatientAppointmentsSection', () => {
       mockGetAppointmentsByPatient.mockResolvedValue([paidConsultationAppointment])
     })
 
-    it('renders the "Pago en consulta" line when hasRecordedPayment is true', async () => {
+    // #390: computeFifoAllocation now earmarks a kind=APPOINTMENT payment to
+    // its own appointment first, so `paidAmount` and `recordedPaidAmount`
+    // usually agree — the line would just repeat the figure already shown by
+    // the cost/paid breakdown above it. It is shown only in the mixed case,
+    // where pool/advance money on top of the recorded payment pushes
+    // `paidAmount` past `recordedPaidAmount`.
+    it('renders the "Cobrado en consulta (reversible)" line when the item is also covered by pool/advance money (mixed case)', async () => {
       renderSection()
 
       await waitFor(() => {
         expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
       })
 
+      // paidConsultationAppointment: recordedPaidAmount 75 < paidAmount 100.
       expect(
         screen.getByText(
           (_content, element) => element?.textContent === 'payments.consultationPayment: $75'
@@ -722,7 +736,43 @@ describe('PatientAppointmentsSection', () => {
       ).toBeInTheDocument()
     })
 
-    it('does not render the payment line when hasRecordedPayment is false', async () => {
+    it('hides the line when fully covered by its own consultation payment (recordedPaidAmount === paidAmount === cost)', async () => {
+      mockGetAppointmentsByPatient.mockResolvedValue([
+        {
+          ...paidConsultationAppointment,
+          isPaid: true,
+          paidAmount: 100,
+          recordedPaidAmount: 100,
+        },
+      ])
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
+      })
+
+      expect(screen.queryByText(/payments\.consultationPayment/)).not.toBeInTheDocument()
+    })
+
+    it('hides the line when partially paid but funded only by its own consultation payment (recordedPaidAmount === paidAmount < cost)', async () => {
+      mockGetAppointmentsByPatient.mockResolvedValue([
+        {
+          ...paidConsultationAppointment,
+          isPaid: false,
+          paidAmount: 40,
+          recordedPaidAmount: 40,
+        },
+      ])
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
+      })
+
+      expect(screen.queryByText(/payments\.consultationPayment/)).not.toBeInTheDocument()
+    })
+
+    it('does not render the payment line when hasRecordedPayment is false (no linked payment, advances only)', async () => {
       mockGetAppointmentsByPatient.mockResolvedValue([upcomingAppointment])
       renderSection()
 

@@ -13,7 +13,9 @@
     "test:watch": "vitest",
     "test:unit": "vitest run --exclude '**/*.integration.test.ts'",
     "test:integration": "vitest run --include '**/*.integration.test.ts'",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "recalc:paid": "tsx --env-file=../../.env src/scripts/recalc-paid-status.ts",
+    "recalc:paid:dry": "tsx --env-file=../../.env src/scripts/recalc-paid-status.ts --dry-run"
   },
   "dependencies": {
     "@dental/database": "workspace:*",

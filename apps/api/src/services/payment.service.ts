@@ -86,16 +86,35 @@ export interface FifoAllocation {
  * fully covered. This keeps the model coherent with how patients reason
  * about their debt: pagos cubren deudas en orden de antigüedad sin
  * "saltearlas".
+ *
+ * `earmarks` (billable-item id -> amount) lets a payment recorded directly
+ * against an item (a kind=APPOINTMENT consultation payment) claim its own
+ * item first, up to that item's cost, before the remainder joins the FIFO
+ * pool. The pool is derived by subtraction (totalPaid - sum(earmarked)),
+ * never by re-summing leftovers — that is what makes "no earmarked money is
+ * stranded" true by construction, and it handles over-cost earmarks and
+ * earmarks pointing at items absent from `items` (cost null/0/inactive) for
+ * free, with no special-casing. Called without `earmarks`, the output is
+ * byte-identical to the pre-earmark behaviour.
  */
 export function computeFifoAllocation(
   items: BillableItem[],
-  totalPaid: number
+  totalPaid: number,
+  earmarks?: ReadonlyMap<string, number>
 ): FifoAllocation[] {
-  let remaining = totalPaid
+  const earmarked = items.map((item) =>
+    item.cost > 0 ? Math.min(earmarks?.get(item.id) ?? 0, item.cost) : 0
+  )
+  const totalEarmarked = earmarked.reduce((sum, amount) => sum + amount, 0)
+
+  let remaining = totalPaid - totalEarmarked
   const result: FifoAllocation[] = []
-  for (const item of items) {
-    const paidAmount = Math.min(remaining, item.cost)
-    remaining = Math.max(0, remaining - item.cost)
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    const capacity = item.cost - earmarked[i]
+    const fromPool = Math.min(remaining, capacity)
+    remaining = Math.max(0, remaining - capacity)
+    const paidAmount = earmarked[i] + fromPool
     result.push({
       id: item.id,
       type: item.type,
@@ -129,6 +148,33 @@ export async function getTotalPaid(tenantId: string, patientId: string): Promise
     _sum: { amount: true },
   })
   return aggregate._sum.amount?.toNumber() || 0
+}
+
+/**
+ * Get earmarked amounts per appointment: the sum of active kind=APPOINTMENT
+ * payments linked to each appointment, keyed by appointment id. Uses
+ * groupBy (not findFirst) because an appointment can carry more than one
+ * active linked payment after a re-edit or a reversal-then-re-record, and
+ * all of them are earmarked to it. Appointment cuids never collide with
+ * labwork ids in the shared billable-item space.
+ */
+export async function getAppointmentEarmarks(
+  tenantId: string,
+  patientId: string
+): Promise<Map<string, number>> {
+  const grouped = await prisma.patientPayment.groupBy({
+    by: ['appointmentId'],
+    where: { tenantId, patientId, isActive: true, kind: 'APPOINTMENT', appointmentId: { not: null } },
+    _sum: { amount: true },
+  })
+
+  const earmarks = new Map<string, number>()
+  for (const row of grouped) {
+    if (row.appointmentId) {
+      earmarks.set(row.appointmentId, row._sum.amount?.toNumber() || 0)
+    }
+  }
+  return earmarks
 }
 
 /**
@@ -173,21 +219,37 @@ async function getBillableItems(tenantId: string, patientId: string): Promise<Bi
   return items
 }
 
+export interface RecalculatePaidStatusResult {
+  appointmentChanges: number
+  labworkChanges: number
+}
+
 /**
  * Recalculate isPaid status for all billable items of a patient using FIFO allocation.
- * Total active payments are distributed to items oldest-first.
+ * Total active payments are distributed to items oldest-first, with
+ * kind=APPOINTMENT payments earmarked to their own appointment first.
+ *
+ * `options.dryRun` computes the same changes without writing them — used by
+ * the recalc-paid-status backfill script to preview counts before applying.
  */
-export async function recalculatePaidStatus(tenantId: string, patientId: string): Promise<void> {
-  const [items, paymentsAggregate] = await Promise.all([
+export async function recalculatePaidStatus(
+  tenantId: string,
+  patientId: string,
+  options?: { dryRun?: boolean }
+): Promise<RecalculatePaidStatusResult> {
+  const dryRun = options?.dryRun ?? false
+
+  const [items, paymentsAggregate, earmarks] = await Promise.all([
     getBillableItems(tenantId, patientId),
     prisma.patientPayment.aggregate({
       where: { tenantId, patientId, isActive: true },
       _sum: { amount: true },
     }),
+    getAppointmentEarmarks(tenantId, patientId),
   ])
 
   const totalPaid = paymentsAggregate._sum.amount?.toNumber() || 0
-  const allocations = computeFifoAllocation(items, totalPaid)
+  const allocations = computeFifoAllocation(items, totalPaid, earmarks)
 
   const appointmentUpdates: { id: string; isPaid: boolean }[] = []
   const labworkUpdates: { id: string; isPaid: boolean }[] = []
@@ -206,6 +268,21 @@ export async function recalculatePaidStatus(tenantId: string, patientId: string)
     }
   }
 
+  // Auto-mark labworks with price included in appointment as paid
+  const includedLabworks = await prisma.labwork.findMany({
+    where: { tenantId, patientId, isActive: true, priceIncludedInAppointment: true, isPaid: false },
+    select: { id: true },
+  })
+
+  const result: RecalculatePaidStatusResult = {
+    appointmentChanges: appointmentUpdates.length,
+    labworkChanges: labworkUpdates.length + includedLabworks.length,
+  }
+
+  if (dryRun) {
+    return result
+  }
+
   // Batch updates
   const updates: Prisma.PrismaPromise<unknown>[] = []
   for (const u of appointmentUpdates) {
@@ -214,12 +291,6 @@ export async function recalculatePaidStatus(tenantId: string, patientId: string)
   for (const u of labworkUpdates) {
     updates.push(prisma.labwork.update({ where: { id: u.id }, data: { isPaid: u.isPaid } }))
   }
-
-  // Auto-mark labworks with price included in appointment as paid
-  const includedLabworks = await prisma.labwork.findMany({
-    where: { tenantId, patientId, isActive: true, priceIncludedInAppointment: true, isPaid: false },
-    select: { id: true },
-  })
   for (const l of includedLabworks) {
     updates.push(prisma.labwork.update({ where: { id: l.id }, data: { isPaid: true } }))
   }
@@ -231,10 +302,20 @@ export async function recalculatePaidStatus(tenantId: string, patientId: string)
       'Recalculated paid status for billable items'
     )
   }
+
+  return result
 }
 
 /**
  * Get patient balance: total debt, total paid, outstanding
+ *
+ * Deliberately not earmark-aware: with A = sum(earmarked_i) and
+ * P = totalPaid - A, total remaining capacity across items is
+ * sum(capacity_i) = totalDebt - A, so total applied
+ * = A + min(P, totalDebt - A) = min(A + P, totalDebt) = min(totalPaid, totalDebt)
+ * — identical to the plain sum used here. Earmarking redistributes payments
+ * *among* items, never changes the aggregate paid/outstanding/credit, so
+ * this aggregate query stays correct without earmark data.
  */
 export async function getPatientBalance(
   tenantId: string,
@@ -324,9 +405,10 @@ export async function getPatientAccountStatement(
     return { success: false, code: 'PATIENT_NOT_FOUND' }
   }
 
-  const [items, totalPaid, advancesAgg, budgetItemsAgg] = await Promise.all([
+  const [items, totalPaid, earmarks, advancesAgg, budgetItemsAgg] = await Promise.all([
     getBillableItems(tenantId, patientId),
     getTotalPaid(tenantId, patientId),
+    getAppointmentEarmarks(tenantId, patientId),
     prisma.patientPayment.aggregate({
       where: { tenantId, patientId, isActive: true, kind: 'ADVANCE' },
       _sum: { amount: true },
@@ -347,7 +429,7 @@ export async function getPatientAccountStatement(
     }),
   ])
 
-  const allocations = computeFifoAllocation(items, totalPaid)
+  const allocations = computeFifoAllocation(items, totalPaid, earmarks)
   const appointmentsDebt = allocations.reduce((sum, a) => sum + a.outstanding, 0)
   const totalBilled = items.reduce((sum, item) => sum + item.cost, 0)
 
@@ -384,6 +466,12 @@ function addToMap(map: Map<string, number>, patientId: string | null, amount: nu
  * outstanding desc. Uses set-based grouped aggregations (no per-patient
  * N+1) with the same filters as getPatientBalance/getBillableItems, so the
  * debt figures stay consistent with the per-patient balance view.
+ *
+ * Deliberately not earmark-aware, for the same reason as getPatientBalance:
+ * earmarking only redistributes a patient's payments among their own
+ * billable items, it never changes their totalDebt/totalPaid/outstanding
+ * sums. Per-patient FIFO here would turn this into an N+1 loop for no
+ * change in the numbers.
  */
 export async function listDebtors(tenantId: string): Promise<Debtor[]> {
   const [appointments, labworks, payments] = await Promise.all([

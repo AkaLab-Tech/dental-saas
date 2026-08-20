@@ -1087,7 +1087,7 @@
     "paymentCreated": "Entrega registrada exitosamente",
     "paymentDeleted": "Entrega eliminada exitosamente",
     "noOutstandingBalance": "No hay saldo pendiente",
-    "consultationPayment": "Pago en consulta",
+    "consultationPayment": "Cobrado en consulta (reversible)",
     "reverseConsultationPayment": "Revertir pago de consulta",
     "reverseConsultationConfirm": "¿Revertir el pago registrado en esta consulta? El saldo del paciente se recalculará.",
     "statement": {

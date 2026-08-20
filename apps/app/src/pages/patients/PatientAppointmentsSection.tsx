@@ -283,12 +283,18 @@ function PatientAppointmentCard({
         )
       })()}
 
-      {/* Consultation payment (kind=APPOINTMENT payment recorded on this appointment) */}
-      {appointment.hasRecordedPayment && (
-        <div className="mt-1 text-[11px] text-gray-500">
-          {t('payments.consultationPayment')}: {formatCurrency(appointment.recordedPaidAmount ?? 0, currency)}
-        </div>
-      )}
+      {/* Reversible share of the paid figure (kind=APPOINTMENT payment recorded on
+          this appointment). Shown only in the mixed case — a consultation payment
+          plus older pool/advance money both covering this appointment — where the
+          cost/paid breakdown above and the amount the reversal button would undo
+          genuinely differ. When they're equal, this line would just repeat the
+          figure already shown above. */}
+      {appointment.hasRecordedPayment &&
+        (appointment.recordedPaidAmount ?? 0) < (appointment.paidAmount ?? 0) && (
+          <div className="mt-1 text-[11px] text-gray-500">
+            {t('payments.consultationPayment')}: {formatCurrency(appointment.recordedPaidAmount ?? 0, currency)}
+          </div>
+        )}
     </div>
   )
 }

@@ -1078,7 +1078,7 @@
     "paymentCreated": "Payment registered successfully",
     "paymentDeleted": "Payment deleted successfully",
     "noOutstandingBalance": "No outstanding balance",
-    "consultationPayment": "Consultation payment",
+    "consultationPayment": "Collected at consultation (reversible)",
     "reverseConsultationPayment": "Reverse consultation payment",
     "reverseConsultationConfirm": "Reverse the payment recorded on this appointment? The patient balance will be recalculated.",
     "statement": {

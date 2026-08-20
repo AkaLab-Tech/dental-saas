@@ -868,19 +868,21 @@ describe('Appointments API', () => {
     })
 
     // Reviewer finding on PR #379 (Finding 2 — the highest-value case here):
-    // FIFO allocates a patient's total payments oldest-item-first, so a
-    // payment linked directly to THIS appointment can still be entirely
+    // pre-#390, FIFO allocated a patient's total payments oldest-item-first,
+    // so a payment linked directly to THIS appointment could be entirely
     // absorbed by an older, unpaid item, leaving the FIFO-derived
     // `paidAmount` at 0 — the exact value the old `!!appointment.paidAmount`
-    // proxy read as "nothing recorded". hasRecordedPayment/recordedPaidAmount
-    // must reflect the real linked payment regardless of where FIFO applied it.
-    it('reports hasRecordedPayment/recordedPaidAmount correctly even when FIFO allocates the linked payment to an older appointment (#373 Finding 2)', async () => {
+    // proxy read as "nothing recorded". Task #390 earmarks a kind=APPOINTMENT
+    // payment to its own appointment before FIFO runs, so that steal can no
+    // longer happen: paidAmount and recordedPaidAmount now agree.
+    it('earmarks a linked APPOINTMENT payment to its own appointment ahead of an older unpaid one (#390), so paidAmount and recordedPaidAmount agree', async () => {
       await prisma.appointment.deleteMany({ where: { tenantId, patientId } })
       await prisma.patientPayment.deleteMany({ where: { tenantId, patientId } })
 
-      // Older, unpaid appointment: no payment linked directly to it, but
-      // first in FIFO order — it absorbs the whole pool before the newer
-      // item (which actually has a recorded payment) is reached.
+      // Older, unpaid appointment: no payment linked directly to it, and
+      // first in FIFO order — pre-#390 it would have absorbed the whole
+      // pool before the newer item (which actually has a recorded payment)
+      // was reached.
       const older = getFutureTime(1, 8)
       await prisma.appointment.create({
         data: {
@@ -895,8 +897,8 @@ describe('Appointments API', () => {
       })
 
       // Newer appointment: has its own $50 payment recorded directly
-      // against it, but FIFO applies the $50 pool to the older item first,
-      // leaving this one's FIFO share at 0.
+      // against it. The earmark claims it for this appointment first, so
+      // FIFO no longer diverts it to the older item.
       const newer = getFutureTime(2, 8)
       const newerApt = await prisma.appointment.create({
         data: {
@@ -925,15 +927,81 @@ describe('Appointments API', () => {
         .set('Authorization', `Bearer ${staffToken}`)
 
       expect(response.status).toBe(200)
-      // The old proxy's failure mode: FIFO share reads 0 despite a real
-      // payment recorded against this exact appointment.
-      expect(response.body.data.paidAmount).toBe(0)
-      // The correct signal — unaffected by FIFO allocation order.
+      // The earmark keeps the $50 on its own appointment: FIFO's paidAmount
+      // now agrees with the real recorded payment instead of reading 0.
+      expect(response.body.data.paidAmount).toBe(50)
       expect(response.body.data.hasRecordedPayment).toBe(true)
       expect(response.body.data.recordedPaidAmount).toBe(50)
-      // task #384: recordedPaymentId also tracks the real linked payment,
-      // not whatever FIFO happened to allocate to this appointment.
       expect(response.body.data.recordedPaymentId).toBe(linkedPayment.id)
+
+      // The older item, having received none of the earmarked money, stays
+      // unpaid.
+      const olderApt = await prisma.appointment.findFirst({
+        where: { tenantId, patientId, id: { not: newerApt.id } },
+      })
+      expect(olderApt?.isPaid).toBe(false)
+    })
+
+    // ADVANCE-funded variant preserving the original point of the test
+    // above (pre-#390): hasRecordedPayment/recordedPaidAmount reflect only
+    // the *specific* payment recorded directly against an appointment,
+    // never whatever FIFO happens to allocate to it from the shared pool.
+    // An ADVANCE payment is never earmarked, so it still follows plain FIFO
+    // (oldest-first) — proving the linked-payment fields stay independent
+    // of FIFO allocation order.
+    it('hasRecordedPayment/recordedPaidAmount stay independent of FIFO-pool money an appointment receives from an unlinked ADVANCE payment', async () => {
+      await prisma.appointment.deleteMany({ where: { tenantId, patientId } })
+      await prisma.patientPayment.deleteMany({ where: { tenantId, patientId } })
+
+      // Older appointment: no linked payment of its own.
+      const older = getFutureTime(1, 8)
+      const olderApt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(older.startTime),
+          endTime: new Date(older.endTime),
+          duration: 30,
+          cost: 100,
+        },
+      })
+
+      // Newer appointment: also no linked payment.
+      const newer = getFutureTime(2, 8)
+      await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(newer.startTime),
+          endTime: new Date(newer.endTime),
+          duration: 30,
+          cost: 50,
+        },
+      })
+
+      // A $30 ADVANCE (unlinked, not earmarked) funds the pool. FIFO still
+      // applies it oldest-first, to the older appointment.
+      const advanceRes = await api()
+        .post(`/api/patients/${patientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 30, date: older.startTime })
+      expect(advanceRes.status).toBe(201)
+      expect(advanceRes.body.data.kind).toBe('ADVANCE')
+
+      const response = await api()
+        .get(`/api/appointments/${olderApt.id}`)
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(200)
+      // FIFO applied the $30 pool to the older item...
+      expect(response.body.data.paidAmount).toBe(30)
+      // ...but that money was never a recorded consultation payment against
+      // it, so the linked-payment fields correctly stay at their defaults.
+      expect(response.body.data.hasRecordedPayment).toBe(false)
+      expect(response.body.data.recordedPaidAmount).toBe(0)
+      expect(response.body.data.recordedPaymentId).toBe(null)
     })
   })
 
@@ -1167,7 +1235,7 @@ describe('Appointments API', () => {
       expect(payments[0].amount.toNumber()).toBe(250)
     })
 
-    it('should apply FIFO: pay older unpaid appointment first when marking newer as paid', async () => {
+    it('marking the newer appointment paid earmarks its own auto-payment, so it (not the older item) becomes paid (#390 earmark)', async () => {
       // Create an older unpaid appointment for the same patient
       const olderTimes = getFutureTime(2, 9)
       await prisma.appointment.create({
@@ -1183,17 +1251,62 @@ describe('Appointments API', () => {
         },
       })
 
-      // Mark the newer appointment as paid (cost 100)
+      // Mark the newer appointment as paid (cost 100). This auto-creates a
+      // kind=APPOINTMENT payment linked to it, which #390 earmarks to this
+      // exact appointment ahead of FIFO — so it becomes paid immediately
+      // instead of the money being diverted to the older unpaid item.
       const response = await api()
         .put(`/api/appointments/${appointmentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ isPaid: true })
 
       expect(response.status).toBe(200)
-      // FIFO sends the payment to the older appointment, so the edited (newer) one stays unpaid
-      expect(response.body.data.isPaid).toBe(false)
+      expect(response.body.data.isPaid).toBe(true)
 
-      // Older appointment should now be marked as paid
+      // The older item, having received none of the earmarked money, stays
+      // unpaid.
+      const allActive = await prisma.appointment.findMany({
+        where: { tenantId, patientId, isActive: true },
+        orderBy: { startTime: 'asc' },
+      })
+      expect(allActive[0].isPaid).toBe(false)
+      expect(allActive[1].isPaid).toBe(true)
+    })
+
+    // ADVANCE-funded variant keeping the original FIFO-ordering assertion
+    // alive: an earmarked kind=APPOINTMENT auto-payment (above) always
+    // claims its own appointment first, but a plain kind=ADVANCE payment is
+    // never earmarked, so it still follows oldest-first FIFO exactly as
+    // before #390.
+    it('should apply FIFO: pay older unpaid appointment first when funded by an unlinked ADVANCE payment', async () => {
+      // Create an older unpaid appointment for the same patient
+      const olderTimes = getFutureTime(2, 9)
+      await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId: doctor2Id,
+          startTime: new Date(olderTimes.startTime),
+          endTime: new Date(olderTimes.endTime),
+          duration: 30,
+          cost: 100,
+          isPaid: false,
+        },
+      })
+
+      // A $100 ADVANCE (not linked to any appointment) is recorded instead
+      // of marking the newer appointment paid directly. createPayment
+      // recalculates FIFO as part of the request.
+      const advanceRes = await api()
+        .post(`/api/patients/${patientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 100, date: olderTimes.startTime })
+      expect(advanceRes.status).toBe(201)
+      expect(advanceRes.body.data.kind).toBe('ADVANCE')
+
+      // The unearmarked $100 went to the older item first, exactly as
+      // before #390; the newer appointment (created in beforeEach) stays
+      // unpaid.
       const allActive = await prisma.appointment.findMany({
         where: { tenantId, patientId, isActive: true },
         orderBy: { startTime: 'asc' },
