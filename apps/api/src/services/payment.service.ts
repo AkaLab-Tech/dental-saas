@@ -102,26 +102,41 @@ export function computeFifoAllocation(
   totalPaid: number,
   earmarks?: ReadonlyMap<string, number>
 ): FifoAllocation[] {
-  const earmarked = items.map((item) =>
-    item.cost > 0 ? Math.min(earmarks?.get(item.id) ?? 0, item.cost) : 0
-  )
-  const totalEarmarked = earmarked.reduce((sum, amount) => sum + amount, 0)
+  // Run the whole allocation in integer cents. `cost`/`amount` are
+  // Decimal(10,2) at the source, so cents are always whole numbers and the
+  // conversion at the boundary is lossless — no IEEE-754 double can
+  // introduce fractional-cent drift into a chain of integer +/- ops (unlike
+  // the equivalent chain in dollars, where subtract-then-re-add round-trips
+  // are not exact; see the isPaid regression this replaced). Comparisons,
+  // capping, and the no-skip FIFO walk all happen here in cents; only the
+  // final FifoAllocation is converted back to dollars, once per item.
+  const toCents = (dollars: number) => Math.round(dollars * 100)
 
-  let remaining = totalPaid - totalEarmarked
+  const costCents = items.map((item) => toCents(item.cost))
+  const earmarkedCents = items.map((item, i) =>
+    costCents[i] > 0 ? Math.min(toCents(earmarks?.get(item.id) ?? 0), costCents[i]) : 0
+  )
+  const totalEarmarkedCents = earmarkedCents.reduce((sum, cents) => sum + cents, 0)
+
+  // Clamp to 0: totalPaid and earmarks come from separate, non-transactional
+  // reads (see buildPatientAllocationMap's Promise.all), so a payment
+  // inserted between them can make totalEarmarked outgrow the totalPaid
+  // snapshot. Without the clamp that would go negative here.
+  let remainingCents = Math.max(0, toCents(totalPaid) - totalEarmarkedCents)
   const result: FifoAllocation[] = []
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
-    const capacity = item.cost - earmarked[i]
-    const fromPool = Math.min(remaining, capacity)
-    remaining = Math.max(0, remaining - capacity)
-    const paidAmount = earmarked[i] + fromPool
+    const capacityCents = costCents[i] - earmarkedCents[i]
+    const fromPoolCents = Math.min(remainingCents, capacityCents)
+    remainingCents = Math.max(0, remainingCents - capacityCents)
+    const paidAmountCents = earmarkedCents[i] + fromPoolCents
     result.push({
       id: item.id,
       type: item.type,
       cost: item.cost,
-      paidAmount,
-      outstanding: Math.max(0, item.cost - paidAmount),
-      isPaid: item.cost > 0 && paidAmount >= item.cost,
+      paidAmount: paidAmountCents / 100,
+      outstanding: Math.max(0, costCents[i] - paidAmountCents) / 100,
+      isPaid: costCents[i] > 0 && paidAmountCents >= costCents[i],
     })
   }
   return result

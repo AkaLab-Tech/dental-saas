@@ -91,6 +91,10 @@ async function recalcPaidStatus(dryRun: boolean) {
   } else if (!dryRun && changedCount > 0) {
     console.log('Recalculation completed successfully!\n')
   }
+
+  if (errorCount > 0) {
+    process.exitCode = 1
+  }
 }
 
 const args = process.argv.slice(2)

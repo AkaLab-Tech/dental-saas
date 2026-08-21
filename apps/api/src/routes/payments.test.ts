@@ -1583,6 +1583,7 @@ describe('Patient Payments Routes', () => {
     let convenioPatientId: string
     let advancePatientId: string
     let mixedKindPatientId: string
+    let precisionPatientId: string
     let budgetFilterPatientId: string
     // Budget rows of budgetFilterPatient that the per-exclusion tests toggle.
     let executedItemId: string
@@ -1789,7 +1790,45 @@ describe('Patient Payments Routes', () => {
         },
       })
 
-      // 7. Budget filter matrix. Expected projection (baseline):
+      // 7. Non-round (2-decimal) amounts, MIXED case: an appointment
+      //    covered partly by its own earmarked APPOINTMENT-kind payment and
+      //    partly by the ADVANCE pool. This is the #390 regression fixture:
+      //    round-number fixtures (300/370 elsewhere in this file) never
+      //    exposed the `earmarked[i] + fromPool` IEEE round-trip loss —
+      //    120.30 = 40.10 (earmarked) + 80.20 (pool) does.
+      precisionPatientId = await createStatementPatient('Precision')
+      const precisionAppointment = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId: precisionPatientId,
+          doctorId,
+          startTime: new Date('2026-06-01T10:00:00Z'),
+          endTime: new Date('2026-06-01T10:30:00Z'),
+          cost: 120.3,
+          status: 'COMPLETED',
+        },
+      })
+      await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId: precisionPatientId,
+          amount: 40.1,
+          date: new Date('2026-06-01T10:00:00Z'),
+          kind: 'APPOINTMENT',
+          appointmentId: precisionAppointment.id,
+        },
+      })
+      await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId: precisionPatientId,
+          amount: 80.2,
+          date: new Date('2026-06-02T10:00:00Z'),
+          kind: 'ADVANCE',
+        },
+      })
+
+      // 8. Budget filter matrix. Expected projection (baseline):
       //    APPROVED active  -> PENDING 100 + SCHEDULED 50 + IN_PROGRESS 25 = 175
       //                        (EXECUTED 1000 and CANCELLED 500 excluded)
       //    PARTIAL active   -> PENDING 200                                 = 200
@@ -1965,6 +2004,30 @@ describe('Patient Payments Routes', () => {
       })
     })
 
+    describe('floating-point precision — MIXED case with non-round amounts (#390 regression)', () => {
+      it('reports the appointment as fully paid (appointmentsDebt exactly 0) when earmark + pool together equal cost', async () => {
+        const data = await getStatement(precisionPatientId)
+
+        // 120.30 cost, covered by 40.10 earmarked + 80.20 pool. Asserting
+        // exact 0 (not toBeCloseTo) is the point: pre-fix this was
+        // 1.4210854715202004e-14, not 0.
+        expect(data.appointmentsDebt).toBe(0)
+        expect(data.totalBilled).toBe(120.3)
+        expect(data.totalPaid).toBe(120.3)
+        expect(data.advancesCredit).toBe(0)
+        expect(data.advancesTotal).toBe(80.2)
+      })
+
+      it('agrees exactly with GET /balance (outstanding 0, no residual debt)', async () => {
+        const balance = await getBalance(precisionPatientId)
+
+        expect(balance.outstanding).toBe(0)
+        expect(balance.totalDebt).toBe(120.3)
+        expect(balance.totalPaid).toBe(120.3)
+        expect(balance.credit).toBe(0)
+      })
+    })
+
     describe('reconciliation with GET /balance', () => {
       it('matches the balance endpoint for every fixture (debt === outstanding, credit === credit)', async () => {
         const fixtures: [string, string][] = [
@@ -1974,6 +2037,7 @@ describe('Patient Payments Routes', () => {
           ['convenio', convenioPatientId],
           ['advance', advancePatientId],
           ['mixedKind', mixedKindPatientId],
+          ['precision', precisionPatientId],
           ['budgetFilter', budgetFilterPatientId],
         ]
 
@@ -2613,6 +2677,11 @@ describe('Patient Payments Routes', () => {
       const pid = await createEarmarkPatient('ThreeWayAgree')
 
       // Older appointment: no linked payment, funded entirely by pool money.
+      // Non-round (2-decimal) cost: round figures (the previous 100/200/50/320
+      // fixture here) can't expose the `earmarked[i] + fromPool` IEEE
+      // round-trip loss between getPatientAccountStatement.appointmentsDebt
+      // and getPatientBalance that this test exists to catch, because
+      // integer arithmetic on doubles has no rounding error to surface.
       const older = await prisma.appointment.create({
         data: {
           tenantId,
@@ -2620,11 +2689,15 @@ describe('Patient Payments Routes', () => {
           doctorId,
           startTime: new Date('2026-06-20T10:00:00Z'),
           endTime: new Date('2026-06-20T10:30:00Z'),
-          cost: 100,
+          cost: 45.65,
           status: 'COMPLETED',
         },
       })
       // Newer appointment: partially earmarked by its own linked payment.
+      // Reuses the exact 120.30 cost / 40.10 earmark split from the
+      // canonical #390 regression repro (payment.service.test.ts), which
+      // pre-fix landed paidAmount at 120.29999999999998 (isPaid false,
+      // outstanding 1.42e-14) instead of exactly 120.30.
       const newer = await prisma.appointment.create({
         data: {
           tenantId,
@@ -2632,7 +2705,7 @@ describe('Patient Payments Routes', () => {
           doctorId,
           startTime: new Date('2026-06-21T10:00:00Z'),
           endTime: new Date('2026-06-21T10:30:00Z'),
-          cost: 200,
+          cost: 120.3,
           status: 'COMPLETED',
         },
       })
@@ -2640,29 +2713,42 @@ describe('Patient Payments Routes', () => {
         data: {
           tenantId,
           patientId: pid,
-          amount: 50,
+          amount: 40.1,
           date: new Date('2026-06-21T10:00:00Z'),
           kind: 'APPOINTMENT',
           appointmentId: newer.id,
         },
       })
       // Extra ADVANCE that overflows past both items' capacity, becoming
-      // credit.
+      // credit. 138.60 (not 138.20) is deliberate: totalPaid (178.70) minus
+      // totalDebt (165.95) lands on an exact double (12.75) here, whereas
+      // 178.30 - 165.95 does not (12.350000000000023) — that is a separate,
+      // pre-existing dollars-subtraction rounding artifact in
+      // getPatientBalance's plain `totalPaid - totalDebt` credit calc, not
+      // the earmark/pool cents bug this describe block targets, and fixing
+      // it is out of scope here (getPatientBalance is deliberately not
+      // earmark-aware; see the comment above it).
       await api()
         .post(`/api/patients/${pid}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({ amount: 320, date: '2026-06-22' })
+        .send({ amount: 138.6, date: '2026-06-22' })
 
-      // earmarked=50, pool = (50 + 320) - 50 = 320. older gets 100 (full),
-      // remaining 220 to newer: newer paidAmount = 50 + 150 = 200 (full).
-      // Total paid 370, total debt 300 -> credit 70.
+      // earmarked=40.10, pool = (40.10 + 138.60) - 40.10 = 138.60.
+      // older gets 45.65 (full), remaining 92.95 to newer: newer paidAmount
+      // = 40.10 + 80.20 = 120.30 (full, the exact regression repro amount).
+      // Total paid 178.70, total debt 165.95 -> credit 12.75.
       const [balanceRes, statementRes, debtorsRes] = await Promise.all([
         api().get(`/api/patients/${pid}/balance`).set('Authorization', `Bearer ${adminToken}`),
         api().get(`/api/patients/${pid}/statement`).set('Authorization', `Bearer ${adminToken}`),
         api().get('/api/patients/debts').set('Authorization', `Bearer ${adminToken}`),
       ])
 
-      expect(balanceRes.body.data).toEqual({ totalDebt: 300, totalPaid: 370, outstanding: 0, credit: 70 })
+      expect(balanceRes.body.data).toEqual({
+        totalDebt: 165.95,
+        totalPaid: 178.7,
+        outstanding: 0,
+        credit: 12.75,
+      })
       expect(statementRes.body.data.appointmentsDebt).toBe(balanceRes.body.data.outstanding)
       expect(statementRes.body.data.advancesCredit).toBe(balanceRes.body.data.credit)
       expect(statementRes.body.data.totalBilled).toBe(balanceRes.body.data.totalDebt)
