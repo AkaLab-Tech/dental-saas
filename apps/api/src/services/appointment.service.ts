@@ -3,6 +3,7 @@ import { logger } from '../utils/logger.js'
 import {
   computeFifoAllocation,
   createPayment,
+  getAppointmentEarmarks,
   getTotalPaid,
   listBillableItems,
   recalculatePaidStatus,
@@ -68,7 +69,11 @@ export type SafeAppointment = {
   // (getAppointmentsByPatient, getAppointmentById). undefined elsewhere.
   paidAmount?: number
   outstanding?: number
-  // Actual linked-payment state (unlike paidAmount, never 0 due to FIFO pooling).
+  // Actual linked-payment state. paidAmount now agrees with this for the
+  // earmarked case (a consultation payment claims its own appointment
+  // first); recordedPaidAmount stays a separate field because it is what
+  // the "reverse consultation payment" action would undo, which is not
+  // necessarily all of paidAmount when older pool money also contributed.
   hasRecordedPayment?: boolean
   recordedPaidAmount?: number
   recordedPaymentId?: string | null
@@ -335,11 +340,12 @@ async function buildPatientAllocationMap(
   tenantId: string,
   patientId: string
 ): Promise<Map<string, { paidAmount: number; outstanding: number; isPaid: boolean }>> {
-  const [items, totalPaid] = await Promise.all([
+  const [items, totalPaid, earmarks] = await Promise.all([
     listBillableItems(tenantId, patientId),
     getTotalPaid(tenantId, patientId),
+    getAppointmentEarmarks(tenantId, patientId),
   ])
-  const allocations = computeFifoAllocation(items, totalPaid)
+  const allocations = computeFifoAllocation(items, totalPaid, earmarks)
   const map = new Map<string, { paidAmount: number; outstanding: number; isPaid: boolean }>()
   for (const a of allocations) {
     if (a.type === 'appointment') {
