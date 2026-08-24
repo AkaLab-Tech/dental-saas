@@ -291,7 +291,7 @@ jobs:
           name: playwright-report
           path: |
             apps/app/playwright-report
-            apps/web/playwright-report
+            apps/web/e2e/playwright-report
           retention-days: 7
 
   build:
