@@ -15,7 +15,9 @@
     "test:integration": "vitest run --include '**/*.integration.test.ts'",
     "test:coverage": "vitest run --coverage",
     "recalc:paid": "tsx --env-file=../../.env src/scripts/recalc-paid-status.ts",
-    "recalc:paid:dry": "tsx --env-file=../../.env src/scripts/recalc-paid-status.ts --dry-run"
+    "recalc:paid:dry": "tsx --env-file=../../.env src/scripts/recalc-paid-status.ts --dry-run",
+    "backfill:cancelled-payments": "tsx --env-file=../../.env src/scripts/backfill-cancelled-appointment-payments.ts",
+    "backfill:cancelled-payments:apply": "tsx --env-file=../../.env src/scripts/backfill-cancelled-appointment-payments.ts --apply"
   },
   "dependencies": {
     "@dental/database": "workspace:*",
