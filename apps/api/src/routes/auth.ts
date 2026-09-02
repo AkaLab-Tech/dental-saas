@@ -1,4 +1,5 @@
-import { Router, type IRouter } from 'express'
+import { Router, type IRouter, type Request, type Response } from 'express'
+import { rateLimit, MemoryStore, type RateLimitInfo } from 'express-rate-limit'
 import { z } from 'zod'
 import { prisma } from '@dental/database'
 import { type Language } from '@dental/shared'
@@ -25,6 +26,66 @@ import {
 } from '../utils/password-reset.js'
 
 const authRouter: IRouter = Router()
+
+// Task #254: rate limiting for password recovery. This is NOT a defense
+// against reset-token brute force — the token is 256 bits of
+// crypto.randomBytes (../utils/password-reset.ts), stored only as a hash on
+// a unique column, single-use, and time-limited, so guessing it is
+// infeasible at any request rate a per-endpoint limiter could meaningfully
+// slow down. What this DOES defend: anti-automation (scripted mass password
+// resets), anti-enumeration (repeated probing of which emails/slugs exist),
+// and general resource protection (email-sending and DB load from either
+// endpoint being hammered).
+//
+// forgot-password and reset-password get SEPARATE buckets, deliberately not
+// shared: forgot-password is cheap and unauthenticated, so sharing a budget
+// with it would let it starve reset-password for every legitimate user
+// behind the same IP (e.g. an office NAT address). limit: 10 rather than a
+// tight number because the legitimate flow already spends 2 requests
+// (request the email, submit the new password) and a shared office IP can
+// have several people using it; a low ceiling here would lock out a
+// low-single-digit-typo user with no way to self-recover.
+//
+// Explicit MemoryStore instances (rather than the ones the rateLimit()
+// factory would create internally) are exported so tests can reset them
+// between cases without disabling the limiter under NODE_ENV === 'test'.
+export const forgotPasswordRateLimitStore = new MemoryStore()
+export const resetPasswordRateLimitStore = new MemoryStore()
+
+function buildPasswordRecoveryHandler() {
+  return (req: Request & { rateLimit?: RateLimitInfo }, res: Response) => {
+    const resetTime = req.rateLimit?.resetTime
+    const retryAfter = resetTime
+      ? Math.max(1, Math.ceil((resetTime.getTime() - Date.now()) / 1000))
+      : 15 * 60
+    res.status(429).json({
+      success: false,
+      error: {
+        message: 'Too many password recovery attempts. Please try again later.',
+        code: 'RATE_LIMITED',
+        retryAfter,
+      },
+    })
+  }
+}
+
+const forgotPasswordRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: forgotPasswordRateLimitStore,
+  handler: buildPasswordRecoveryHandler(),
+})
+
+const resetPasswordRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: resetPasswordRateLimitStore,
+  handler: buildPasswordRecoveryHandler(),
+})
 
 // Password schema with strong requirements
 const passwordSchema = z
@@ -520,7 +581,7 @@ authRouter.get('/me', async (req, res, next) => {
 })
 
 // POST /api/auth/forgot-password - Request password reset for tenant user
-authRouter.post('/forgot-password', async (req, res, next) => {
+authRouter.post('/forgot-password', forgotPasswordRateLimit, async (req, res, next) => {
   try {
     const parse = forgotPasswordSchema.safeParse(req.body)
     if (!parse.success) {
@@ -626,7 +687,7 @@ authRouter.post('/forgot-password', async (req, res, next) => {
 })
 
 // POST /api/auth/reset-password - Reset password with token
-authRouter.post('/reset-password', async (req, res, next) => {
+authRouter.post('/reset-password', resetPasswordRateLimit, async (req, res, next) => {
   try {
     const parse = resetPasswordSchema.safeParse(req.body)
     if (!parse.success) {

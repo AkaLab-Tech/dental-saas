@@ -15,6 +15,7 @@ vi.mock('../services/email.service.js', () => ({
 import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword, hashToken } from '../services/auth.service.js'
+import { forgotPasswordRateLimitStore, resetPasswordRateLimitStore } from './auth.js'
 
 describe('POST /api/auth/register', () => {
   let n = 0
@@ -233,6 +234,12 @@ describe('Auth - Tenant User Password Recovery', () => {
     await prisma.passwordResetToken.deleteMany({
       where: { userId },
     })
+    // Task #254: forgot-password and reset-password each carry their own
+    // rate-limit bucket, keyed by IP. All requests in this suite come from
+    // the same loopback address, so without this reset later tests in each
+    // describe block would start getting 429s from earlier tests' hits.
+    await forgotPasswordRateLimitStore.resetAll()
+    await resetPasswordRateLimitStore.resetAll()
   })
 
   describe('POST /api/auth/forgot-password', () => {
@@ -602,6 +609,134 @@ describe('Auth - Tenant User Password Recovery', () => {
       // Cleanup
       await prisma.passwordResetToken.deleteMany({ where: { userId: superAdmin.id } })
       await prisma.user.delete({ where: { id: superAdmin.id } })
+    })
+  })
+
+  describe('Task #254: password recovery rate limiting', () => {
+    it('does not 429 forgot-password before the 11th request, and 429s on the 11th', async () => {
+      for (let i = 0; i < 10; i++) {
+        const response = await api()
+          .post('/api/auth/forgot-password')
+          .send({ email: testEmail, clinicSlug: testClinicSlug })
+        expect(response.status).toBe(200)
+      }
+
+      const eleventh = await api()
+        .post('/api/auth/forgot-password')
+        .send({ email: testEmail, clinicSlug: testClinicSlug })
+
+      expect(eleventh.status).toBe(429)
+      expect(eleventh.body).toEqual({
+        success: false,
+        error: {
+          message: expect.any(String),
+          code: 'RATE_LIMITED',
+          retryAfter: expect.any(Number),
+        },
+      })
+      // `expect.any(Number)` above only proves it's numeric, not that it's in
+      // the right unit. The window is 15 minutes (900s); if the handler ever
+      // regressed to emitting milliseconds (900000) instead of seconds, this
+      // bound is what would catch it.
+      expect(eleventh.body.error.retryAfter).toBeGreaterThan(0)
+      expect(eleventh.body.error.retryAfter).toBeLessThanOrEqual(15 * 60)
+    })
+
+    it('does not 429 reset-password before the 11th request, and 429s on the 11th', async () => {
+      for (let i = 0; i < 10; i++) {
+        const response = await api()
+          .post('/api/auth/reset-password')
+          .send({ token: 'nonexistent-token', password: 'NewPassword123!' })
+        expect(response.status).toBe(400)
+      }
+
+      const eleventh = await api()
+        .post('/api/auth/reset-password')
+        .send({ token: 'nonexistent-token', password: 'NewPassword123!' })
+
+      expect(eleventh.status).toBe(429)
+      expect(eleventh.body.error.code).toBe('RATE_LIMITED')
+    })
+
+    it('exhausting forgot-password does NOT rate-limit reset-password from the same IP (separate buckets, anti-starvation)', async () => {
+      for (let i = 0; i < 11; i++) {
+        await api()
+          .post('/api/auth/forgot-password')
+          .send({ email: testEmail, clinicSlug: testClinicSlug })
+      }
+
+      const resetResponse = await api()
+        .post('/api/auth/reset-password')
+        .send({ token: 'nonexistent-token', password: 'NewPassword123!' })
+
+      expect(resetResponse.status).not.toBe(429)
+      expect(resetResponse.status).toBe(400)
+    })
+
+    it('exhausting reset-password does NOT rate-limit forgot-password from the same IP (independence holds in both directions)', async () => {
+      for (let i = 0; i < 11; i++) {
+        await api()
+          .post('/api/auth/reset-password')
+          .send({ token: 'nonexistent-token', password: 'NewPassword123!' })
+      }
+
+      const forgotResponse = await api()
+        .post('/api/auth/forgot-password')
+        .send({ email: testEmail, clinicSlug: testClinicSlug })
+
+      expect(forgotResponse.status).not.toBe(429)
+      expect(forgotResponse.status).toBe(200)
+    })
+
+    it('returns an identical 429 shape for a known and an unknown email (no enumeration signal)', async () => {
+      for (let i = 0; i < 10; i++) {
+        await api()
+          .post('/api/auth/forgot-password')
+          .send({ email: testEmail, clinicSlug: testClinicSlug })
+      }
+      const knownEmailResponse = await api()
+        .post('/api/auth/forgot-password')
+        .send({ email: testEmail, clinicSlug: testClinicSlug })
+
+      await forgotPasswordRateLimitStore.resetAll()
+
+      for (let i = 0; i < 10; i++) {
+        await api()
+          .post('/api/auth/forgot-password')
+          .send({ email: 'does-not-exist@test.com', clinicSlug: testClinicSlug })
+      }
+      const unknownEmailResponse = await api()
+        .post('/api/auth/forgot-password')
+        .send({ email: 'does-not-exist@test.com', clinicSlug: testClinicSlug })
+
+      expect(knownEmailResponse.status).toBe(429)
+      expect(unknownEmailResponse.status).toBe(429)
+      expect(knownEmailResponse.body.success).toBe(false)
+      expect(unknownEmailResponse.body.success).toBe(false)
+      expect(knownEmailResponse.body.error.message).toBe(unknownEmailResponse.body.error.message)
+      expect(knownEmailResponse.body.error.code).toBe(unknownEmailResponse.body.error.code)
+      expect(knownEmailResponse.body.error.code).toBe('RATE_LIMITED')
+    })
+
+    it('gives two different X-Forwarded-For clients independent buckets (proves trust proxy took effect)', async () => {
+      for (let i = 0; i < 10; i++) {
+        const response = await api()
+          .post('/api/auth/forgot-password')
+          .set('X-Forwarded-For', '203.0.113.10')
+          .send({ email: testEmail, clinicSlug: testClinicSlug })
+        expect(response.status).toBe(200)
+      }
+      const tenthClientOneNextRequest = await api()
+        .post('/api/auth/forgot-password')
+        .set('X-Forwarded-For', '203.0.113.10')
+        .send({ email: testEmail, clinicSlug: testClinicSlug })
+      expect(tenthClientOneNextRequest.status).toBe(429)
+
+      const firstRequestFromSecondClient = await api()
+        .post('/api/auth/forgot-password')
+        .set('X-Forwarded-For', '203.0.113.20')
+        .send({ email: testEmail, clinicSlug: testClinicSlug })
+      expect(firstRequestFromSecondClient.status).toBe(200)
     })
   })
 })
