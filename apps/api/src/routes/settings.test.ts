@@ -164,6 +164,30 @@ describe('Settings Routes', () => {
       expect(res.body.settings.language).toBe('en')
     })
 
+    // Task #221: the enum used to be ['es', 'en', 'pt'] — 'pt' was never a
+    // real supported language, and 'ar' (which is) was rejected. These two
+    // cases are the exact inverse of that bug and would have failed against
+    // the old enum.
+    it('should accept "ar" as a valid language', async () => {
+      const res = await api()
+        .put('/api/settings')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ language: 'ar' })
+
+      expect(res.status).toBe(200)
+      expect(res.body.settings.language).toBe('ar')
+    })
+
+    it('should reject "pt" as an unsupported language', async () => {
+      const res = await api()
+        .put('/api/settings')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ language: 'pt' })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('Validation Error')
+    })
+
     it('should update multiple settings', async () => {
       const res = await api()
         .put('/api/settings')

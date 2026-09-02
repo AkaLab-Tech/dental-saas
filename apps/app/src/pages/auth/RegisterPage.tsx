@@ -41,7 +41,7 @@ function createRegisterSchema(t: TFunction) {
 type RegisterFormData = z.infer<ReturnType<typeof createRegisterSchema>>
 
 export function RegisterPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { register: registerUser, isLoading, error, clearError } = useAuth()
   const { isAuthenticated } = useAuthStore()
   const [showPassword, setShowPassword] = useState(false)
@@ -79,7 +79,7 @@ export function RegisterPage() {
     clearError()
     try {
       const { confirmPassword: _, ...registerData } = data
-      await registerUser(registerData)
+      await registerUser({ ...registerData, language: i18n.resolvedLanguage })
     } catch (err) {
       // Error is handled by the useAuth hook
       console.error('Register error:', err)
