@@ -19,6 +19,29 @@ type RedisLike = { call: (...args: string[]) => Promise<unknown> }
  */
 export type ResettableStore = Store & { resetAll: () => Promise<void> | void }
 
+/**
+ * Every prefix handed to createRateLimiter in this process.
+ *
+ * Requiring keyPrefix only forces presence, not uniqueness: a new call-site
+ * that copy-pastes `keyPrefix: 'forgot-password'` would pass every test in
+ * this file and then silently share one Redis bucket with the real
+ * forgot-password limiter. This registry is what makes uniqueness
+ * load-bearing — a duplicate throws at module-evaluation time, so the mistake
+ * fails the boot (and CI, which imports the routers) instead of quietly
+ * halving somebody's limit in production.
+ *
+ * Safe under vitest because it is per-module-instance: vitest isolates the
+ * module graph per test file, so a limiter registered by routes/auth.ts in one
+ * file never collides with another file's. Tests that build many limiters in
+ * one file call resetRateLimiterRegistry() between cases.
+ */
+const registeredKeyPrefixes = new Set<string>()
+
+/** Test-only: clears the prefix registry so a file can build limiters freely. */
+export function resetRateLimiterRegistry(): void {
+  registeredKeyPrefixes.clear()
+}
+
 export interface CreateRateLimiterOptions {
   windowMs: number
   limit: number
@@ -46,6 +69,14 @@ export function createRateLimiter({
   keyGenerator,
   client = getRedisClient(),
 }: CreateRateLimiterOptions): { limiter: RequestHandler; store: Store } {
+  if (registeredKeyPrefixes.has(keyPrefix)) {
+    throw new Error(
+      `Rate limiter keyPrefix "${keyPrefix}" is already registered. Two limiters ` +
+        'sharing a prefix share one Redis bucket per client; give this one its own prefix.'
+    )
+  }
+  registeredKeyPrefixes.add(keyPrefix)
+
   const store: Store = client
     ? new RedisStore({
         prefix: `rl:${keyPrefix}:`,

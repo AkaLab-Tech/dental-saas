@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import express, { type Express, type RequestHandler } from 'express'
 import request from 'supertest'
 import { MemoryStore, type Store } from 'express-rate-limit'
 import RedisStore from 'rate-limit-redis'
-import { createRateLimiter } from './rate-limit.js'
+import { createRateLimiter, resetRateLimiterRegistry } from './rate-limit.js'
 import { getRedisClient } from '../config/redis.js'
 import { env } from '../config/env.js'
 import { logger } from '../utils/logger.js'
@@ -65,6 +65,12 @@ function redisKeyOf(argv: string[]): string | undefined {
 function keysSeen(fake: FakeRedis): string[] {
   return [...new Set(fake.calls.map(redisKeyOf).filter((k): k is string => k !== undefined))]
 }
+
+beforeEach(() => {
+  // The prefix registry is process-wide and rejects duplicates; this file
+  // builds many limiters, so each case starts from an empty registry.
+  resetRateLimiterRegistry()
+})
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -142,9 +148,10 @@ describe('createRateLimiter', () => {
   // anti-starvation test in routes/auth.test.ts (:661) cannot catch that
   // regression: it runs on MemoryStore, where separation is structural — two
   // distinct store instances with two distinct maps — and holds even if every
-  // limiter in the app were given an identical prefix. This test is the only
-  // guard on the property that actually matters in production. Do not weaken
-  // it into a "the Redis path works" smoke test.
+  // limiter in the app were given an identical prefix. This test proves the
+  // prefix reaches the key; the registry in rate-limit.ts (exercised below)
+  // proves no two call-sites can pick the same one. Do not weaken this into a
+  // "the Redis path works" smoke test.
   it('keeps two limiters in disjoint keyspaces for the same client IP (prefix disjointness)', async () => {
     const sameIp = '203.0.113.7'
     const fakeA = createFakeRedis()
@@ -215,6 +222,25 @@ describe('createRateLimiter', () => {
     expect(keysSeen(fake).sort()).toEqual(['rl:alpha:198.51.100.4', 'rl:beta:198.51.100.4'])
   })
 
+
+  it('rejects a second limiter registered with an already-used keyPrefix', () => {
+    // The guard that makes keyPrefix uniqueness real. Both tests above
+    // hard-code distinct prefixes, so they only prove the factory PROPAGATES a
+    // prefix; a call-site copy-pasting an existing one would sail past them and
+    // silently share a bucket.
+    const build = () =>
+      createRateLimiter({
+        windowMs: WINDOW_MS,
+        limit: 1,
+        keyPrefix: 'duplicated-prefix',
+        message: MESSAGE,
+        client: null,
+      })
+
+    expect(() => build()).not.toThrow()
+    expect(() => build()).toThrow(/already registered/)
+  })
+
   it('fails OPEN and logs when the Redis client rejects (passOnStoreError)', async () => {
     const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined)
     const brokenClient = {
@@ -249,10 +275,10 @@ describe('createRateLimiter', () => {
 
 describe('getRedisClient', () => {
   it('returns null under NODE_ENV=test even though REDIS_URL is set', () => {
-    // The whole test strategy rests on this: test.env DOES define REDIS_URL,
-    // but CI runs no Redis service (ci.yml lists postgres only). If this ever
-    // returns a client, the entire backend suite starts dialling a server that
-    // does not exist in CI.
+    // The whole test strategy rests on this: test.env DOES define REDIS_URL
+    // and a Redis IS reachable in CI (ci.yml runs a redis:7-alpine service),
+    // so "is REDIS_URL set?" cannot be the signal. Tests deliberately stay on
+    // MemoryStore for determinism and isolation - see config/redis.ts.
     expect(env.NODE_ENV).toBe('test')
     expect(env.REDIS_URL).toBeTruthy()
     expect(getRedisClient()).toBeNull()
