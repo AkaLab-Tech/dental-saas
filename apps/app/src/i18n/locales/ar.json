@@ -1002,7 +1002,7 @@
       "appointmentsThisMonth": "مواعيد هذا الشهر",
       "completedCount": "{{count}} مكتملة",
       "monthlyRevenue": "إيرادات الشهر",
-      "pendingAmount": "{{amount}} معلّق",
+      "pendingAmount": "{{amount}} مستحقة على المرضى",
       "pendingLabworks": "أعمال مخبرية معلّقة",
       "unpaidCount": "{{count}} غير مدفوعة",
       "totalAppointments": "إجمالي المواعيد",

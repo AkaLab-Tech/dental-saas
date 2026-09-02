@@ -2,7 +2,10 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { prisma } from '@dental/database'
 import {
   computeFifoAllocation,
+  computeOutstandingByPatient,
   convertAppointmentPaymentsToAdvance,
+  getTenantOutstandingTotal,
+  listDebtors,
   restoreAppointmentPaymentsFromAdvance,
   type BillableItem,
   type FifoAllocation,
@@ -602,5 +605,315 @@ describe('convertAppointmentPaymentsToAdvance / restoreAppointmentPaymentsFromAd
       expect(unchanged.isActive).toBe(false)
       expect(unchanged.note).toBe('Pago en consulta (cita cancelada)')
     })
+  })
+})
+
+// ============================================================================
+// computeOutstandingByPatient / getTenantOutstandingTotal (task #396 — the
+// dashboard's "pending payments" figure became the net outstanding shared
+// with the debtors screen). These run grouped aggregates against Postgres,
+// so they are exercised here against the test DB.
+//
+// Money fixtures below are deliberately 2-decimal clinic amounts (178.30 /
+// 165.95, not round hundreds): the whole point of the cents-based arithmetic
+// is that a chain of subtract/re-add on doubles drifts, and round numbers
+// cannot expose that.
+// ============================================================================
+
+describe('computeOutstandingByPatient / getTenantOutstandingTotal (#396)', () => {
+  let tenantId: string
+  let otherTenantId: string
+  let doctorId: string
+  let otherDoctorId: string
+  // Distinct patients per behavior, all inside the same tenant, so the
+  // per-patient floor can be observed against a co-tenant's real debt.
+  let debtorId: string
+  let settledId: string
+  let creditId: string
+  let otherPatientId: string
+  const suffix = Date.now()
+
+  async function seedAppointment(
+    forTenantId: string,
+    forPatientId: string,
+    forDoctorId: string,
+    cost: number | null,
+    overrides: Record<string, unknown> = {}
+  ) {
+    return prisma.appointment.create({
+      data: {
+        tenantId: forTenantId,
+        patientId: forPatientId,
+        doctorId: forDoctorId,
+        startTime: new Date(Date.now() + 3600_000),
+        endTime: new Date(Date.now() + 5400_000),
+        duration: 30,
+        cost,
+        ...overrides,
+      },
+    })
+  }
+
+  async function seedPayment(
+    forTenantId: string,
+    forPatientId: string,
+    amount: number,
+    overrides: Record<string, unknown> = {}
+  ) {
+    return prisma.patientPayment.create({
+      data: {
+        tenantId: forTenantId,
+        patientId: forPatientId,
+        amount,
+        date: new Date(),
+        kind: 'ADVANCE',
+        ...overrides,
+      },
+    })
+  }
+
+  async function seedLabwork(
+    forTenantId: string,
+    forPatientId: string,
+    price: number,
+    overrides: Record<string, unknown> = {}
+  ) {
+    return prisma.labwork.create({
+      data: {
+        tenantId: forTenantId,
+        patientId: forPatientId,
+        lab: 'Lab Central',
+        date: new Date(),
+        price,
+        ...overrides,
+      },
+    })
+  }
+
+  beforeAll(async () => {
+    let freePlan = await prisma.plan.findUnique({ where: { name: 'free' } })
+    if (!freePlan) {
+      freePlan = await prisma.plan.create({
+        data: { name: 'free', displayName: 'Free', price: 0, maxAdmins: 1, maxDoctors: 3, maxPatients: 50 },
+      })
+    }
+    const tenant = await prisma.tenant.create({
+      data: { name: 'Outstanding Svc', slug: `outstanding-svc-${suffix}` },
+    })
+    tenantId = tenant.id
+    const otherTenant = await prisma.tenant.create({
+      data: { name: 'Outstanding Svc Other', slug: `outstanding-svc-other-${suffix}` },
+    })
+    otherTenantId = otherTenant.id
+    for (const id of [tenantId, otherTenantId]) {
+      await prisma.subscription.create({
+        data: {
+          tenantId: id,
+          planId: freePlan.id,
+          status: 'ACTIVE',
+          currentPeriodStart: new Date(),
+          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        },
+      })
+    }
+    debtorId = (await prisma.patient.create({ data: { tenantId, firstName: 'Debtor', lastName: 'Uno' } })).id
+    settledId = (await prisma.patient.create({ data: { tenantId, firstName: 'Settled', lastName: 'Dos' } })).id
+    creditId = (await prisma.patient.create({ data: { tenantId, firstName: 'Credit', lastName: 'Tres' } })).id
+    otherPatientId = (
+      await prisma.patient.create({
+        data: { tenantId: otherTenantId, firstName: 'Other', lastName: 'Tenant' },
+      })
+    ).id
+    doctorId = (
+      await prisma.doctor.create({
+        data: { tenantId, firstName: 'Out', lastName: 'Doctor', email: `out-doc-${suffix}@test.com` },
+      })
+    ).id
+    otherDoctorId = (
+      await prisma.doctor.create({
+        data: {
+          tenantId: otherTenantId,
+          firstName: 'Out',
+          lastName: 'Doctor Other',
+          email: `out-doc-other-${suffix}@test.com`,
+        },
+      })
+    ).id
+  })
+
+  afterAll(async () => {
+    for (const id of [tenantId, otherTenantId]) {
+      await prisma.patientPayment.deleteMany({ where: { tenantId: id } })
+      await prisma.labwork.deleteMany({ where: { tenantId: id } })
+      await prisma.appointment.deleteMany({ where: { tenantId: id } })
+      await prisma.patient.deleteMany({ where: { tenantId: id } })
+      await prisma.doctor.deleteMany({ where: { tenantId: id } })
+      await prisma.subscription.deleteMany({ where: { tenantId: id } })
+      await prisma.tenant.delete({ where: { id } })
+    }
+  })
+
+  beforeEach(async () => {
+    for (const id of [tenantId, otherTenantId]) {
+      await prisma.patientPayment.deleteMany({ where: { tenantId: id } })
+      await prisma.labwork.deleteMany({ where: { tenantId: id } })
+      await prisma.appointment.deleteMany({ where: { tenantId: id } })
+    }
+  })
+
+  it('a partially paid appointment contributes only the remainder (178.30 billed, 165.95 paid -> 12.35)', async () => {
+    await seedAppointment(tenantId, debtorId, doctorId, 178.3)
+    await seedPayment(tenantId, debtorId, 165.95)
+
+    const byPatient = await computeOutstandingByPatient(tenantId)
+
+    expect(byPatient.get(debtorId)).toEqual({ totalDebt: 178.3, totalPaid: 165.95, outstanding: 12.35 })
+    expect(await getTenantOutstandingTotal(tenantId)).toBe(12.35)
+  })
+
+  it('a fully paid appointment contributes exactly 0', async () => {
+    await seedAppointment(tenantId, settledId, doctorId, 178.3)
+    await seedPayment(tenantId, settledId, 178.3)
+
+    const byPatient = await computeOutstandingByPatient(tenantId)
+
+    expect(byPatient.get(settledId)).toEqual({ totalDebt: 178.3, totalPaid: 178.3, outstanding: 0 })
+    expect(await getTenantOutstandingTotal(tenantId)).toBe(0)
+  })
+
+  it('an unpaid appointment contributes its full cost', async () => {
+    await seedAppointment(tenantId, debtorId, doctorId, 99.99)
+
+    const byPatient = await computeOutstandingByPatient(tenantId)
+
+    expect(byPatient.get(debtorId)).toEqual({ totalDebt: 99.99, totalPaid: 0, outstanding: 99.99 })
+    expect(await getTenantOutstandingTotal(tenantId)).toBe(99.99)
+  })
+
+  it('a patient in credit reports exactly 0 (never negative) and never offsets another patient debt', async () => {
+    // The load-bearing assertion of the per-patient floor: two patients in
+    // ONE tenant. Credit patient is 74.40 in credit; if the floor were
+    // applied only to the tenant total, the reported figure would be
+    // 99.99 - 74.40 = 25.59 instead of the debtor's real 99.99.
+    await seedAppointment(tenantId, creditId, doctorId, 45.6)
+    await seedPayment(tenantId, creditId, 120.0)
+    await seedAppointment(tenantId, debtorId, doctorId, 99.99)
+
+    const byPatient = await computeOutstandingByPatient(tenantId)
+
+    expect(byPatient.get(creditId)).toEqual({ totalDebt: 45.6, totalPaid: 120, outstanding: 0 })
+    expect(byPatient.get(creditId)!.outstanding).toBeGreaterThanOrEqual(0)
+    expect(byPatient.get(debtorId)!.outstanding).toBe(99.99)
+    expect(await getTenantOutstandingTotal(tenantId)).toBe(99.99)
+
+    // listDebtors, built on the same map, omits the credit patient entirely.
+    const debtors = await listDebtors(tenantId)
+    expect(debtors.map((d) => d.patientId)).toEqual([debtorId])
+  })
+
+  it('excludes a labwork whose price is already included in the appointment, and includes a billable one', async () => {
+    await seedAppointment(tenantId, debtorId, doctorId, 178.3)
+    await seedLabwork(tenantId, debtorId, 62.4, { priceIncludedInAppointment: true })
+    await seedLabwork(tenantId, debtorId, 43.75, { priceIncludedInAppointment: false })
+
+    const byPatient = await computeOutstandingByPatient(tenantId)
+
+    // 178.30 + 43.75 = 222.05; the 62.40 included labwork is not billed twice.
+    expect(byPatient.get(debtorId)).toEqual({ totalDebt: 222.05, totalPaid: 0, outstanding: 222.05 })
+  })
+
+  it('excludes a zero-price labwork even when priceIncludedInAppointment is false', async () => {
+    await seedAppointment(tenantId, debtorId, doctorId, 178.3)
+    await seedLabwork(tenantId, debtorId, 0, { priceIncludedInAppointment: false })
+
+    const byPatient = await computeOutstandingByPatient(tenantId)
+
+    expect(byPatient.get(debtorId)!.totalDebt).toBe(178.3)
+  })
+
+  it('excludes appointments with a null cost and with a zero cost', async () => {
+    await seedAppointment(tenantId, debtorId, doctorId, null)
+    await seedAppointment(tenantId, debtorId, doctorId, 0)
+
+    const byPatient = await computeOutstandingByPatient(tenantId)
+
+    // No billable row at all -> the patient is absent from the map entirely.
+    expect(byPatient.has(debtorId)).toBe(false)
+    expect(await getTenantOutstandingTotal(tenantId)).toBe(0)
+  })
+
+  it('excludes a soft-deleted (isActive false) appointment', async () => {
+    await seedAppointment(tenantId, debtorId, doctorId, 178.3)
+    await seedAppointment(tenantId, debtorId, doctorId, 500.55, { isActive: false })
+
+    const byPatient = await computeOutstandingByPatient(tenantId)
+
+    expect(byPatient.get(debtorId)!.totalDebt).toBe(178.3)
+  })
+
+  it('excludes a cancelled appointment (status CANCELLED + isActive false)', async () => {
+    await seedAppointment(tenantId, debtorId, doctorId, 178.3)
+    await seedAppointment(tenantId, debtorId, doctorId, 240.15, {
+      isActive: false,
+      status: 'CANCELLED',
+    })
+
+    const byPatient = await computeOutstandingByPatient(tenantId)
+
+    expect(byPatient.get(debtorId)).toEqual({ totalDebt: 178.3, totalPaid: 0, outstanding: 178.3 })
+  })
+
+  it('excludes an inactive (reversed/deleted) payment from totalPaid', async () => {
+    await seedAppointment(tenantId, debtorId, doctorId, 178.3)
+    await seedPayment(tenantId, debtorId, 165.95)
+    await seedPayment(tenantId, debtorId, 50.0, { isActive: false })
+
+    const byPatient = await computeOutstandingByPatient(tenantId)
+
+    expect(byPatient.get(debtorId)).toEqual({ totalDebt: 178.3, totalPaid: 165.95, outstanding: 12.35 })
+  })
+
+  it('counts APPOINTMENT-kind payments as well as ADVANCE ones (no kind filter)', async () => {
+    const appointment = await seedAppointment(tenantId, debtorId, doctorId, 178.3)
+    await seedPayment(tenantId, debtorId, 100.45, {
+      kind: 'APPOINTMENT',
+      appointmentId: appointment.id,
+    })
+    await seedPayment(tenantId, debtorId, 65.5, { kind: 'ADVANCE' })
+
+    const byPatient = await computeOutstandingByPatient(tenantId)
+
+    expect(byPatient.get(debtorId)).toEqual({ totalDebt: 178.3, totalPaid: 165.95, outstanding: 12.35 })
+  })
+
+  it('is tenant-isolated: another tenant debt, labworks and payments never leak in', async () => {
+    await seedAppointment(tenantId, debtorId, doctorId, 178.3)
+    await seedAppointment(otherTenantId, otherPatientId, otherDoctorId, 999.95)
+    await seedLabwork(otherTenantId, otherPatientId, 55.25)
+    await seedPayment(otherTenantId, otherPatientId, 10.1)
+
+    const byPatient = await computeOutstandingByPatient(tenantId)
+
+    expect([...byPatient.keys()]).toEqual([debtorId])
+    expect(byPatient.has(otherPatientId)).toBe(false)
+    expect(await getTenantOutstandingTotal(tenantId)).toBe(178.3)
+    // ...and the other tenant sees only its own: 999.95 + 55.25 - 10.10.
+    expect(await getTenantOutstandingTotal(otherTenantId)).toBe(1045.1)
+  })
+
+  it('sums a multi-patient tenant in cents, exactly equal to the sum of listDebtors outstanding', async () => {
+    await seedAppointment(tenantId, debtorId, doctorId, 178.3)
+    await seedPayment(tenantId, debtorId, 165.95) // -> 12.35
+    await seedAppointment(tenantId, settledId, doctorId, 210.45)
+    await seedPayment(tenantId, settledId, 210.45) // -> 0
+    await seedAppointment(tenantId, creditId, doctorId, 45.6)
+    await seedPayment(tenantId, creditId, 120.0) // -> 0 (74.40 credit, floored)
+    await seedLabwork(tenantId, debtorId, 43.75) // -> debtor now 56.10
+
+    const debtors = await listDebtors(tenantId)
+    const sumOfColumn = debtors.reduce((sum, d) => sum + d.outstanding, 0)
+
+    expect(await getTenantOutstandingTotal(tenantId)).toBe(56.1)
+    expect(sumOfColumn).toBe(56.1)
   })
 })

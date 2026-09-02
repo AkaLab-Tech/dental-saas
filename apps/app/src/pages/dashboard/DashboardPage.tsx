@@ -37,7 +37,7 @@ import DoctorDashboard from './DoctorDashboard'
 interface StatCardProps {
   title: string
   value: string | number
-  subtitle?: string
+  subtitle?: React.ReactNode
   icon: React.ReactNode
   trend?: {
     value: number
@@ -184,10 +184,23 @@ export default function DashboardPage() {
           color="purple"
           linkTo="/appointments"
         />
+        {/* No `linkTo` here on purpose: the subtitle carries its own link to
+            the debtors screen, and StatCard's `linkTo` wraps the entire card
+            in an anchor — adding it would nest anchors (invalid HTML) and
+            send the revenue card to /patients/debts. */}
         <StatCard
           title={t('dashboard.statCards.monthlyRevenue')}
           value={formatCurrency(overview?.monthlyRevenue || 0, currency)}
-          subtitle={overview?.pendingPayments ? t('dashboard.statCards.pendingAmount', { amount: formatCurrency(overview.pendingPayments, currency) }) : undefined}
+          subtitle={
+            overview?.pendingPayments ? (
+              <Link
+                to="/patients/debts"
+                className="underline underline-offset-2 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded"
+              >
+                {t('dashboard.statCards.pendingAmount', { amount: formatCurrency(overview.pendingPayments, currency) })}
+              </Link>
+            ) : undefined
+          }
           icon={<DollarSign className="h-6 w-6" />}
           color="orange"
         />

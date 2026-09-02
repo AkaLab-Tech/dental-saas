@@ -1,5 +1,6 @@
 import { prisma } from '@dental/database'
 import { logger } from '../utils/logger.js'
+import { getTenantOutstandingTotal } from './payment.service.js'
 
 // ============================================================================
 // Types
@@ -14,7 +15,17 @@ export interface OverviewStats {
   pendingLabworks: number
   unpaidLabworks: number
   monthlyRevenue: number
-  pendingPayments: number
+  /**
+   * Net amount still owed by patients: the outstanding on all active
+   * patient-billable work (appointments carrying a cost + labworks whose
+   * price is not included in an appointment) minus the payments they have
+   * made, floored per patient so a patient in credit contributes 0 and never
+   * offsets another patient's debt. Tenant-wide and NOT restricted to
+   * COMPLETED appointments. `null` when the overview is doctor-scoped:
+   * payments carry no doctor attribution, so no doctor-level share of this
+   * figure exists.
+   */
+  pendingPayments: number | null
 }
 
 export interface AppointmentStats {
@@ -110,7 +121,7 @@ export async function getOverviewStats(tenantId: string, doctorId?: string): Pro
     pendingLabworks,
     unpaidLabworks,
     revenueData,
-    pendingPaymentsData,
+    pendingPayments,
   ] = await Promise.all([
     // Total active patients (for doctor: distinct patients from their appointments)
     doctorId
@@ -168,17 +179,10 @@ export async function getOverviewStats(tenantId: string, doctorId?: string): Pro
       },
       _sum: { cost: true },
     }),
-    // Pending payments (unpaid appointments)
-    prisma.appointment.aggregate({
-      where: {
-        tenantId,
-        isActive: true,
-        isPaid: false,
-        status: 'COMPLETED',
-        ...appointmentDoctorFilter,
-      },
-      _sum: { cost: true },
-    }),
+    // Pending payments: net outstanding across all patient-billable work,
+    // shared with listDebtors so the dashboard and the debtors screen can
+    // never disagree. Not available doctor-scoped (payments have no doctor).
+    doctorId ? Promise.resolve(null) : getTenantOutstandingTotal(tenantId),
   ])
 
   return {
@@ -190,7 +194,7 @@ export async function getOverviewStats(tenantId: string, doctorId?: string): Pro
     pendingLabworks,
     unpaidLabworks,
     monthlyRevenue: revenueData._sum.cost?.toNumber() ?? 0,
-    pendingPayments: pendingPaymentsData._sum.cost?.toNumber() ?? 0,
+    pendingPayments,
   }
 }
 
