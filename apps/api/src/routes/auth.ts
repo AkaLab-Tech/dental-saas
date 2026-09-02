@@ -1,5 +1,4 @@
-import { Router, type IRouter, type Request, type Response } from 'express'
-import { rateLimit, MemoryStore, type RateLimitInfo } from 'express-rate-limit'
+import { Router, type IRouter } from 'express'
 import { z } from 'zod'
 import { prisma } from '@dental/database'
 import { type Language } from '@dental/shared'
@@ -15,6 +14,7 @@ import {
   cleanupOldRefreshTokens,
 } from '../services/auth.service.js'
 import { requireAuth } from '../middleware/auth.js'
+import { createRateLimiter, type ResettableStore } from '../middleware/rate-limit.js'
 import { sendWelcomeEmail, sendPasswordResetEmail } from '../services/email.service.js'
 import { logger } from '../utils/logger.js'
 import { env } from '../config/env.js'
@@ -46,46 +46,30 @@ const authRouter: IRouter = Router()
 // have several people using it; a low ceiling here would lock out a
 // low-single-digit-typo user with no way to self-recover.
 //
-// Explicit MemoryStore instances (rather than the ones the rateLimit()
-// factory would create internally) are exported so tests can reset them
-// between cases without disabling the limiter under NODE_ENV === 'test'.
-export const forgotPasswordRateLimitStore = new MemoryStore()
-export const resetPasswordRateLimitStore = new MemoryStore()
-
-function buildPasswordRecoveryHandler() {
-  return (req: Request & { rateLimit?: RateLimitInfo }, res: Response) => {
-    const resetTime = req.rateLimit?.resetTime
-    const retryAfter = resetTime
-      ? Math.max(1, Math.ceil((resetTime.getTime() - Date.now()) / 1000))
-      : 15 * 60
-    res.status(429).json({
-      success: false,
-      error: {
-        message: 'Too many password recovery attempts. Please try again later.',
-        code: 'RATE_LIMITED',
-        retryAfter,
-      },
-    })
-  }
-}
-
-const forgotPasswordRateLimit = rateLimit({
+// Task #253: the buckets live in Redis when a client is available, so the
+// separation above survives across API instances. The stores are still
+// exported so tests can reset them between cases without disabling the
+// limiter under NODE_ENV === 'test'. Under test the factory always yields a
+// MemoryStore (config/redis.ts returns no client there), which is the only
+// context that calls resetAll() — RedisStore has none, hence the narrowing.
+const forgotPassword = createRateLimiter({
   windowMs: 15 * 60 * 1000,
   limit: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: forgotPasswordRateLimitStore,
-  handler: buildPasswordRecoveryHandler(),
+  keyPrefix: 'forgot-password',
+  message: 'Too many password recovery attempts. Please try again later.',
 })
-
-const resetPasswordRateLimit = rateLimit({
+const resetPasswordLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
   limit: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: resetPasswordRateLimitStore,
-  handler: buildPasswordRecoveryHandler(),
+  keyPrefix: 'reset-password',
+  message: 'Too many password recovery attempts. Please try again later.',
 })
+
+export const forgotPasswordRateLimitStore = forgotPassword.store as ResettableStore
+export const resetPasswordRateLimitStore = resetPasswordLimiter.store as ResettableStore
+
+const forgotPasswordRateLimit = forgotPassword.limiter
+const resetPasswordRateLimit = resetPasswordLimiter.limiter
 
 // Password schema with strong requirements
 const passwordSchema = z
