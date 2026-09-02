@@ -843,6 +843,70 @@ describe('Patient Payments Routes', () => {
     })
   })
 
+  describe('Balance cents arithmetic (#403)', () => {
+    it('reports outstanding and credit as exact 0 when an appointment + a non-included labwork are paid off in one payment', async () => {
+      // Reproduces the IEEE-754 residue that used to leak out of
+      // getPatientBalance's dollar-space `totalDebt - totalPaid` /
+      // `totalPaid - totalDebt` when the debt is built from TWO separate
+      // aggregates (an appointment sum and a labwork sum) that only line up
+      // to a whole cent once combined. Pre-fix this patient reported
+      // outstanding: 0 but credit: 1.4210854715202004e-14 instead of 0.
+      const patient = await prisma.patient.create({
+        data: { tenantId, firstName: 'CentsArithmetic', lastName: 'Test' },
+      })
+
+      const appointment = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId: patient.id,
+          doctorId,
+          startTime: new Date('2026-07-01T10:00:00Z'),
+          endTime: new Date('2026-07-01T10:30:00Z'),
+          cost: 50.0,
+          status: 'COMPLETED',
+        },
+      })
+
+      const labworkRes = await api()
+        .post('/api/labworks')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          patientId: patient.id,
+          appointmentId: appointment.id,
+          priceIncludedInAppointment: false,
+          lab: 'Cents Lab',
+          date: '2026-07-01',
+          price: 50.01,
+        })
+      expect(labworkRes.status).toBe(201)
+
+      const paymentRes = await api()
+        .post(`/api/patients/${patient.id}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 100.01, date: '2026-07-02' })
+      expect(paymentRes.status).toBe(201)
+
+      const balanceRes = await api()
+        .get(`/api/patients/${patient.id}/balance`)
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(balanceRes.body.data.totalDebt).toBe(100.01)
+      expect(balanceRes.body.data.totalPaid).toBe(100.01)
+      expect(balanceRes.body.data.outstanding).toBe(0)
+      expect(balanceRes.body.data.credit).toBe(0)
+
+      // Regression guard (already correct pre-#403 via #396): a fully
+      // settled patient never shows up in the debtors list.
+      const debtorsRes = await api()
+        .get('/api/patients/debts')
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(
+        debtorsRes.body.data.find((d: { patientId: string }) => d.patientId === patient.id)
+      ).toBeUndefined()
+    })
+  })
+
   describe('GET /api/patients/debts', () => {
     let debtorAId: string
     let debtorBId: string
@@ -2720,23 +2784,16 @@ describe('Patient Payments Routes', () => {
         },
       })
       // Extra ADVANCE that overflows past both items' capacity, becoming
-      // credit. 138.60 (not 138.20) is deliberate: totalPaid (178.70) minus
-      // totalDebt (165.95) lands on an exact double (12.75) here, whereas
-      // 178.30 - 165.95 does not (12.350000000000023) — that is a separate,
-      // pre-existing dollars-subtraction rounding artifact in
-      // getPatientBalance's plain `totalPaid - totalDebt` credit calc, not
-      // the earmark/pool cents bug this describe block targets, and fixing
-      // it is out of scope here (getPatientBalance is deliberately not
-      // earmark-aware; see the comment above it).
+      // credit.
       await api()
         .post(`/api/patients/${pid}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({ amount: 138.6, date: '2026-06-22' })
+        .send({ amount: 138.2, date: '2026-06-22' })
 
-      // earmarked=40.10, pool = (40.10 + 138.60) - 40.10 = 138.60.
-      // older gets 45.65 (full), remaining 92.95 to newer: newer paidAmount
+      // earmarked=40.10, pool = (40.10 + 138.20) - 40.10 = 138.20.
+      // older gets 45.65 (full), remaining 92.55 to newer: newer paidAmount
       // = 40.10 + 80.20 = 120.30 (full, the exact regression repro amount).
-      // Total paid 178.70, total debt 165.95 -> credit 12.75.
+      // Total paid 178.30, total debt 165.95 -> credit 12.35.
       const [balanceRes, statementRes, debtorsRes] = await Promise.all([
         api().get(`/api/patients/${pid}/balance`).set('Authorization', `Bearer ${adminToken}`),
         api().get(`/api/patients/${pid}/statement`).set('Authorization', `Bearer ${adminToken}`),
@@ -2745,9 +2802,9 @@ describe('Patient Payments Routes', () => {
 
       expect(balanceRes.body.data).toEqual({
         totalDebt: 165.95,
-        totalPaid: 178.7,
+        totalPaid: 178.3,
         outstanding: 0,
-        credit: 12.75,
+        credit: 12.35,
       })
       expect(statementRes.body.data.appointmentsDebt).toBe(balanceRes.body.data.outstanding)
       expect(statementRes.body.data.advancesCredit).toBe(balanceRes.body.data.credit)
