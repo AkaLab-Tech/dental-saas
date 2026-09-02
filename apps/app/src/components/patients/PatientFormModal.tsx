@@ -157,7 +157,7 @@ export function PatientFormModal({
       ...(data.gender && { gender: data.gender as CreatePatientData['gender'] }),
       coverageType: (data.coverageType || 'PARTICULAR') as CreatePatientData['coverageType'],
       ...(data.coverageType === 'CONVENIO'
-        ? { convenioName: data.convenioName || undefined }
+        ? { convenioName: data.convenioName?.trim() || null }
         : { convenioName: null }),
       ...(data.address && { address: data.address }),
     }

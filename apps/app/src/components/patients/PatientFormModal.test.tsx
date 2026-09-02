@@ -219,6 +219,74 @@ describe('PatientFormModal', () => {
       fireEvent.change(coverageSelect, { target: { value: 'PARTICULAR' } })
       expect(document.querySelector('input[name="convenioName"]')).not.toBeInTheDocument()
     })
+
+    it('submits convenioName: null (not undefined) when the name is cleared but coverage stays CONVENIO', async () => {
+      mockOnSubmit.mockResolvedValue(undefined)
+
+      const convenioPatient: Patient = {
+        ...mockPatient,
+        coverageType: 'CONVENIO',
+        convenioName: 'OSDE',
+      }
+
+      render(
+        <PatientFormModal
+          isOpen={true}
+          onClose={mockOnClose}
+          onSubmit={mockOnSubmit}
+          patient={convenioPatient}
+        />
+      )
+
+      const convenioInput = document.querySelector('input[name="convenioName"]') as HTMLInputElement
+      expect(convenioInput.value).toBe('OSDE')
+
+      fireEvent.change(convenioInput, { target: { value: '' } })
+
+      const submitButton = screen.getByRole('button', { name: /guardar cambios/i })
+      fireEvent.click(submitButton)
+
+      await waitFor(() => {
+        expect(mockOnSubmit).toHaveBeenCalled()
+      })
+
+      const payload = mockOnSubmit.mock.calls[0][0]
+      expect(payload).toHaveProperty('convenioName', null)
+      expect('convenioName' in payload).toBe(true)
+      expect(payload.convenioName).not.toBeUndefined()
+    })
+
+    it('submits convenioName: null when the name is whitespace-only', async () => {
+      mockOnSubmit.mockResolvedValue(undefined)
+
+      const convenioPatient: Patient = {
+        ...mockPatient,
+        coverageType: 'CONVENIO',
+        convenioName: 'OSDE',
+      }
+
+      render(
+        <PatientFormModal
+          isOpen={true}
+          onClose={mockOnClose}
+          onSubmit={mockOnSubmit}
+          patient={convenioPatient}
+        />
+      )
+
+      const convenioInput = document.querySelector('input[name="convenioName"]') as HTMLInputElement
+      fireEvent.change(convenioInput, { target: { value: '   ' } })
+
+      const submitButton = screen.getByRole('button', { name: /guardar cambios/i })
+      fireEvent.click(submitButton)
+
+      await waitFor(() => {
+        expect(mockOnSubmit).toHaveBeenCalled()
+      })
+
+      const payload = mockOnSubmit.mock.calls[0][0]
+      expect(payload).toHaveProperty('convenioName', null)
+    })
   })
 
   describe('form validation', () => {
