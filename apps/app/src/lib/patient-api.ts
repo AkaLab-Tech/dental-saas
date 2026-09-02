@@ -14,6 +14,8 @@ export interface Patient {
   phone: string | null
   dob: string | null
   gender: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null
+  coverageType: 'PARTICULAR' | 'CONVENIO'
+  convenioName: string | null
   address: string | null
   notes: Record<string, unknown> | null
   teeth: TeethData | null
@@ -38,6 +40,8 @@ export interface CreatePatientData {
   phone?: string
   dob?: string
   gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say'
+  coverageType?: 'PARTICULAR' | 'CONVENIO'
+  convenioName?: string | null
   address?: string
   notes?: Record<string, unknown>
 }
@@ -164,6 +168,14 @@ export async function restorePatient(id: string): Promise<Patient> {
  */
 export async function getPatientStats(): Promise<PatientStats> {
   const response = await apiClient.get<ApiResponse<PatientStats>>('/patients/stats')
+  return response.data.data
+}
+
+/**
+ * Get the tenant's previously used convenio (insurance agreement) names, for autocomplete
+ */
+export async function getConvenioNames(): Promise<string[]> {
+  const response = await apiClient.get<ApiResponse<string[]>>('/patients/convenios')
   return response.data.data
 }
 

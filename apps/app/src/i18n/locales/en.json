@@ -571,7 +571,11 @@
       "male": "Male",
       "female": "Female",
       "other": "Other",
-      "preferNotToSay": "Prefer not to say"
+      "preferNotToSay": "Prefer not to say",
+      "coverageType": "Coverage type",
+      "particular": "Private",
+      "convenio": "Insurance agreement",
+      "convenioName": "Agreement name"
     },
     "years": "years",
     "list": {

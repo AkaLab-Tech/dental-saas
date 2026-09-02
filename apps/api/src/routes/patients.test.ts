@@ -252,6 +252,83 @@ describe('Patients API', () => {
       expect(response.body.success).toBe(false)
     })
 
+    it('should create a patient with CONVENIO coverage and a convenio name', async () => {
+      const response = await api()
+        .post('/api/patients')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          firstName: 'Convenio',
+          lastName: 'Patient',
+          coverageType: 'CONVENIO',
+          convenioName: 'OSDE',
+        })
+
+      expect(response.status).toBe(201)
+      expect(response.body.data.coverageType).toBe('CONVENIO')
+      expect(response.body.data.convenioName).toBe('OSDE')
+    })
+
+    it('should default coverageType to PARTICULAR with a null convenioName when omitted', async () => {
+      const response = await api()
+        .post('/api/patients')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          firstName: 'Default',
+          lastName: 'Coverage',
+        })
+
+      expect(response.status).toBe(201)
+      expect(response.body.data.coverageType).toBe('PARTICULAR')
+      expect(response.body.data.convenioName).toBeNull()
+    })
+
+    it('should return 400 for an invalid coverageType enum value', async () => {
+      const response = await api()
+        .post('/api/patients')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          firstName: 'Test',
+          lastName: 'Patient',
+          coverageType: 'GOLD_PLAN',
+        })
+
+      expect(response.status).toBe(400)
+      expect(response.body.success).toBe(false)
+      expect(response.body.error.code).toBe('VALIDATION_ERROR')
+    })
+
+    it('should return 400 for a convenioName exceeding 120 characters', async () => {
+      const response = await api()
+        .post('/api/patients')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          firstName: 'Test',
+          lastName: 'Patient',
+          coverageType: 'CONVENIO',
+          convenioName: 'A'.repeat(121),
+        })
+
+      expect(response.status).toBe(400)
+      expect(response.body.success).toBe(false)
+      expect(response.body.error.code).toBe('VALIDATION_ERROR')
+    })
+
+    it('should force convenioName to null on create when coverageType is PARTICULAR', async () => {
+      const response = await api()
+        .post('/api/patients')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          firstName: 'Stale',
+          lastName: 'Name',
+          coverageType: 'PARTICULAR',
+          convenioName: 'Should be dropped',
+        })
+
+      expect(response.status).toBe(201)
+      expect(response.body.data.coverageType).toBe('PARTICULAR')
+      expect(response.body.data.convenioName).toBeNull()
+    })
+
     it('should return 403 for STAFF trying to create patient', async () => {
       const response = await api()
         .post('/api/patients')
@@ -387,6 +464,112 @@ describe('Patients API', () => {
     })
   })
 
+  describe('GET /api/patients/convenios', () => {
+    let otherTenantId: string
+    let otherAdminToken: string
+
+    beforeAll(async () => {
+      const otherTenant = await prisma.tenant.create({
+        data: {
+          name: 'Other Clinic for Convenios',
+          slug: `other-clinic-convenios-${Date.now()}`,
+        },
+      })
+      otherTenantId = otherTenant.id
+
+      const passwordHash = await hashPassword('OtherPass123!')
+      const otherAdmin = await prisma.user.create({
+        data: {
+          email: 'other-admin-convenios@test.com',
+          passwordHash,
+          firstName: 'Other',
+          lastName: 'Admin',
+          role: 'ADMIN',
+          tenantId: otherTenant.id,
+        },
+      })
+      otherAdminToken = generateToken(otherAdmin.id, otherTenant.id, 'ADMIN')
+    })
+
+    afterAll(async () => {
+      await prisma.patient.deleteMany({ where: { tenantId: otherTenantId } })
+      await prisma.user.deleteMany({ where: { tenantId: otherTenantId } })
+      await prisma.tenant.delete({ where: { id: otherTenantId } }).catch(() => {})
+    })
+
+    beforeEach(async () => {
+      await prisma.patient.createMany({
+        data: [
+          { tenantId, firstName: 'A', lastName: 'One', coverageType: 'CONVENIO', convenioName: 'OSDE' },
+          { tenantId, firstName: 'B', lastName: 'Two', coverageType: 'CONVENIO', convenioName: 'Swiss Medical' },
+          // Duplicate name should collapse via `distinct`
+          { tenantId, firstName: 'C', lastName: 'Three', coverageType: 'CONVENIO', convenioName: 'OSDE' },
+          // Inactive CONVENIO patient must not leak its name
+          {
+            tenantId,
+            firstName: 'D',
+            lastName: 'Four',
+            coverageType: 'CONVENIO',
+            convenioName: 'Inactive Plan',
+            isActive: false,
+          },
+          // Empty convenioName must be excluded
+          { tenantId, firstName: 'E', lastName: 'Five', coverageType: 'CONVENIO', convenioName: '' },
+          // PARTICULAR patient must not contribute a name
+          { tenantId, firstName: 'F', lastName: 'Six', coverageType: 'PARTICULAR' },
+        ],
+      })
+    })
+
+    it('returns the tenant distinct convenio names, sorted, excluding inactive and empty names', async () => {
+      const response = await api()
+        .get('/api/patients/convenios')
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(200)
+      expect(response.body.success).toBe(true)
+      expect(response.body.data).toEqual(['OSDE', 'Swiss Medical'])
+    })
+
+    it('does not leak another tenant convenio names', async () => {
+      await prisma.patient.create({
+        data: {
+          tenantId: otherTenantId,
+          firstName: 'Leaky',
+          lastName: 'Name',
+          coverageType: 'CONVENIO',
+          convenioName: 'OtherTenantOnlyPlan',
+        },
+      })
+
+      const response = await api()
+        .get('/api/patients/convenios')
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(response.status).toBe(200)
+      expect(response.body.data).not.toContain('OtherTenantOnlyPlan')
+
+      const otherResponse = await api()
+        .get('/api/patients/convenios')
+        .set('Authorization', `Bearer ${otherAdminToken}`)
+
+      expect(otherResponse.status).toBe(200)
+      expect(otherResponse.body.data).toEqual(['OtherTenantOnlyPlan'])
+    })
+
+    it('is not shadowed by GET /:id and returns a plain string array at the literal /convenios path', async () => {
+      const response = await api()
+        .get('/api/patients/convenios')
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      // If GET /:id had captured "convenios" as the :id param instead, this
+      // would be a 404 { error: { code: 'NOT_FOUND' } } rather than 200 with
+      // a plain string array.
+      expect(response.status).toBe(200)
+      expect(response.body).toEqual({ success: true, data: ['OSDE', 'Swiss Medical'] })
+    })
+  })
+
   describe('GET /api/patients/:id', () => {
     let testPatientId: string
 
@@ -411,6 +594,28 @@ describe('Patients API', () => {
       expect(response.body.success).toBe(true)
       expect(response.body.data.id).toBe(testPatientId)
       expect(response.body.data.firstName).toBe('Single')
+    })
+
+    it('should include coverageType and convenioName in the response', async () => {
+      // Written directly via Prisma (bypassing the create route) so this test
+      // pins down PATIENT_SELECT + SafePatient, not the route's normalization.
+      const convenioPatient = await prisma.patient.create({
+        data: {
+          tenantId,
+          firstName: 'Coverage',
+          lastName: 'Fields',
+          coverageType: 'CONVENIO',
+          convenioName: 'Swiss Medical',
+        },
+      })
+
+      const response = await api()
+        .get(`/api/patients/${convenioPatient.id}`)
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(200)
+      expect(response.body.data.coverageType).toBe('CONVENIO')
+      expect(response.body.data.convenioName).toBe('Swiss Medical')
     })
 
     it('should return 404 for non-existent patient', async () => {
@@ -566,6 +771,72 @@ describe('Patients API', () => {
         })
 
       expect(response.status).toBe(404)
+    })
+
+    it('should return 400 for an invalid coverageType enum value', async () => {
+      const response = await api()
+        .put(`/api/patients/${testPatientId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ coverageType: 'GOLD_PLAN' })
+
+      expect(response.status).toBe(400)
+      expect(response.body.success).toBe(false)
+      expect(response.body.error.code).toBe('VALIDATION_ERROR')
+    })
+
+    it('should return 400 for a convenioName exceeding 120 characters', async () => {
+      const response = await api()
+        .put(`/api/patients/${testPatientId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ coverageType: 'CONVENIO', convenioName: 'A'.repeat(121) })
+
+      expect(response.status).toBe(400)
+      expect(response.body.success).toBe(false)
+      expect(response.body.error.code).toBe('VALIDATION_ERROR')
+    })
+
+    it('should update coverageType to CONVENIO with a convenioName', async () => {
+      const response = await api()
+        .put(`/api/patients/${testPatientId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ coverageType: 'CONVENIO', convenioName: 'OSDE' })
+
+      expect(response.status).toBe(200)
+      expect(response.body.data.coverageType).toBe('CONVENIO')
+      expect(response.body.data.convenioName).toBe('OSDE')
+    })
+
+    it('should null out a stale convenioName when switched back to PARTICULAR, verified by re-reading the row', async () => {
+      // Seed as CONVENIO with a name
+      const seedResponse = await api()
+        .put(`/api/patients/${testPatientId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ coverageType: 'CONVENIO', convenioName: 'OSDE' })
+      expect(seedResponse.status).toBe(200)
+      expect(seedResponse.body.data.convenioName).toBe('OSDE')
+
+      // Switch back to PARTICULAR without explicitly sending convenioName
+      const switchResponse = await api()
+        .put(`/api/patients/${testPatientId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ coverageType: 'PARTICULAR' })
+
+      expect(switchResponse.status).toBe(200)
+      expect(switchResponse.body.data.coverageType).toBe('PARTICULAR')
+      expect(switchResponse.body.data.convenioName).toBeNull()
+
+      // Re-read the row through a fresh GET to prove the null was persisted,
+      // not just present on the mutation's own response
+      const rereadResponse = await api()
+        .get(`/api/patients/${testPatientId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(rereadResponse.status).toBe(200)
+      expect(rereadResponse.body.data.coverageType).toBe('PARTICULAR')
+      expect(rereadResponse.body.data.convenioName).toBeNull()
+
+      const dbRow = await prisma.patient.findUnique({ where: { id: testPatientId } })
+      expect(dbRow?.convenioName).toBeNull()
     })
   })
 

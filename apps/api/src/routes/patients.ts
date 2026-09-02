@@ -17,6 +17,7 @@ import {
   updatePatientTeeth,
   getPatientTeeth,
   updatePatientShowPrimaryTeeth,
+  listConvenioNames,
 } from '../services/patient.service.js'
 import { PdfService } from '../services/pdf.service.js'
 import { PatientHistoryPdf, sanitizeFilename } from '../pdfs/index.js'
@@ -124,6 +125,10 @@ const genderSchema = z
   .optional()
   .nullable()
 
+// Coverage type validation
+const coverageTypeSchema = z.enum(['PARTICULAR', 'CONVENIO']).optional()
+const convenioNameSchema = z.string().trim().max(120, 'Convenio name cannot exceed 120 characters').optional().nullable()
+
 // Query params validation for list endpoint
 const listPatientsQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(100).optional(),
@@ -140,6 +145,8 @@ const createPatientSchema = z.object({
   phone: phoneSchema,
   dob: dobSchema,
   gender: genderSchema,
+  coverageType: coverageTypeSchema,
+  convenioName: convenioNameSchema,
   address: z.string().max(500, 'Address cannot exceed 500 characters').optional(),
 })
 
@@ -151,6 +158,8 @@ const updatePatientSchema = z.object({
   phone: phoneSchema,
   dob: dobSchema,
   gender: genderSchema,
+  coverageType: coverageTypeSchema,
+  convenioName: convenioNameSchema,
   address: z.string().max(500, 'Address cannot exceed 500 characters').optional().nullable(),
 })
 
@@ -222,6 +231,24 @@ patientsRouter.get('/debts', requirePermission(Permission.PAYMENTS_VIEW), async 
     const debtors = await listDebtors(tenantId)
 
     res.json({ success: true, data: debtors })
+  } catch (e) {
+    next(e)
+  }
+})
+
+/**
+ * GET /api/patients/convenios
+ * List the tenant's distinct convenio (insurance agreement) names for autocomplete (STAFF+ required)
+ *
+ * Registered above GET /:id so Express 5 does not capture "convenios" as an id.
+ */
+patientsRouter.get('/convenios', requireMinRole('STAFF'), async (req, res, next) => {
+  try {
+    const tenantId = req.user!.tenantId
+
+    const names = await listConvenioNames(tenantId)
+
+    res.json({ success: true, data: names })
   } catch (e) {
     next(e)
   }
@@ -325,6 +352,9 @@ patientsRouter.post('/', requireMinRole('CLINIC_ADMIN'), async (req, res, next) 
       phone: parsed.data.phone ?? undefined,
       dob: parsed.data.dob ?? undefined,
       gender: parsed.data.gender ?? undefined,
+      coverageType: parsed.data.coverageType ?? undefined,
+      // A patient not marked CONVENIO cannot end up with a stale convenio name
+      convenioName: parsed.data.coverageType === 'CONVENIO' ? (parsed.data.convenioName ?? undefined) : undefined,
     }
 
     const patient = await createPatient(tenantId, {
@@ -362,7 +392,11 @@ patientsRouter.put('/:id', requireMinRole('DOCTOR'), requireOwnership('patient')
       })
     }
 
-    const patient = await updatePatient(tenantId, id, parsed.data)
+    // A patient switched back to PARTICULAR cannot keep a stale convenio name
+    const updateData =
+      parsed.data.coverageType === 'PARTICULAR' ? { ...parsed.data, convenioName: null } : parsed.data
+
+    const patient = await updatePatient(tenantId, id, updateData)
 
     if (!patient) {
       return res.status(404).json({

@@ -31,6 +31,14 @@ export const SubscriptionStatus = {
 export type SubscriptionStatus = (typeof SubscriptionStatus)[keyof typeof SubscriptionStatus]
 
 
+export const PatientCoverageType = {
+  PARTICULAR: 'PARTICULAR',
+  CONVENIO: 'CONVENIO'
+} as const
+
+export type PatientCoverageType = (typeof PatientCoverageType)[keyof typeof PatientCoverageType]
+
+
 export const AppointmentStatus = {
   SCHEDULED: 'SCHEDULED',
   CONFIRMED: 'CONFIRMED',

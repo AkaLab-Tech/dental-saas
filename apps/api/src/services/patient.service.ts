@@ -19,6 +19,8 @@ const PATIENT_SELECT = {
   phone: true,
   dob: true,
   gender: true,
+  coverageType: true,
+  convenioName: true,
   address: true,
   notes: true,
   teeth: true,
@@ -38,6 +40,8 @@ export type SafePatient = {
   phone: string | null
   dob: Date | null
   gender: string | null
+  coverageType: 'PARTICULAR' | 'CONVENIO'
+  convenioName: string | null
   address: string | null
   notes: Prisma.JsonValue
   teeth: Prisma.JsonValue
@@ -162,12 +166,15 @@ export async function createPatient(
     phone?: string
     dob?: Date | string
     gender?: string
+    coverageType?: 'PARTICULAR' | 'CONVENIO'
+    convenioName?: string | null
     address?: string
     notes?: JsonInputValue
     createdBy?: string
   }
 ): Promise<SafePatient> {
-  const { firstName, lastName, email, phone, dob, gender, address, notes, createdBy } = data
+  const { firstName, lastName, email, phone, dob, gender, coverageType, convenioName, address, notes, createdBy } =
+    data
 
   // Handle date of birth - convert string to Date if needed
   let dobValue: Date | undefined
@@ -186,6 +193,8 @@ export async function createPatient(
       phone,
       dob: dobValue,
       gender,
+      coverageType,
+      convenioName,
       address,
       notes: notes ?? JsonNull,
       showPrimaryTeeth,
@@ -212,6 +221,8 @@ export async function updatePatient(
     phone?: string | null
     dob?: Date | string | null
     gender?: string | null
+    coverageType?: 'PARTICULAR' | 'CONVENIO'
+    convenioName?: string | null
     address?: string | null
     notes?: JsonInputValue | null
     isActive?: boolean
@@ -254,6 +265,20 @@ export async function updatePatient(
   logger.info({ patientId, tenantId }, 'Patient updated')
 
   return patient
+}
+
+/**
+ * List distinct convenio (insurance agreement) names previously used by a tenant, for autocomplete
+ */
+export async function listConvenioNames(tenantId: string): Promise<string[]> {
+  const rows = await prisma.patient.findMany({
+    where: { tenantId, isActive: true, coverageType: 'CONVENIO', convenioName: { not: null } },
+    distinct: ['convenioName'],
+    select: { convenioName: true },
+    orderBy: { convenioName: 'asc' },
+  })
+
+  return rows.map((r) => r.convenioName!).filter((n) => n.length > 0)
 }
 
 /**

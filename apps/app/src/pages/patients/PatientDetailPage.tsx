@@ -18,6 +18,7 @@ import {
   ChevronRight,
   X,
   FileText,
+  ShieldCheck,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Odontogram } from 'react-odontogram'
@@ -704,6 +705,16 @@ export default function PatientDetailPage() {
                     </span>
                   </div>
                 )}
+                <div className="flex items-center gap-3 text-gray-600 bg-gray-50 rounded-lg px-3 py-2.5">
+                  <ShieldCheck className="h-5 w-5 text-gray-400 shrink-0" />
+                  <span className="text-sm truncate">
+                    {patient.coverageType === 'CONVENIO'
+                      ? patient.convenioName
+                        ? `${t('patients.form.convenio')}: ${patient.convenioName}`
+                        : t('patients.form.convenio')
+                      : t('patients.form.particular')}
+                  </span>
+                </div>
               </div>
             </div>
 
