@@ -680,7 +680,7 @@ export async function listPayments(
 
 // Appended to a converted payment's note so it reads as self-explanatory in
 // Entregas; stripped back off on restore via a suffix match.
-const CANCELLED_APPOINTMENT_NOTE_SUFFIX = ' (cita cancelada)'
+export const CANCELLED_APPOINTMENT_NOTE_SUFFIX = ' (cita cancelada)'
 
 /**
  * Convert every active kind=APPOINTMENT payment linked to a cancelled
