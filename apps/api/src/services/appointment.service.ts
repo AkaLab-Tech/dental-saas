@@ -2,11 +2,13 @@ import { prisma, Prisma, AppointmentStatus } from '@dental/database'
 import { logger } from '../utils/logger.js'
 import {
   computeFifoAllocation,
+  convertAppointmentPaymentsToAdvance,
   createPayment,
   getAppointmentEarmarks,
   getTotalPaid,
   listBillableItems,
   recalculatePaidStatus,
+  restoreAppointmentPaymentsFromAdvance,
   type PaymentErrorCode,
 } from './payment.service.js'
 
@@ -751,7 +753,7 @@ export async function deleteAppointment(
 ): Promise<{ appointment?: SafeAppointment; error?: { code: AppointmentErrorCode; message: string } }> {
   const existing = await prisma.appointment.findUnique({
     where: { id },
-    select: { tenantId: true, isActive: true },
+    select: { tenantId: true, isActive: true, patientId: true },
   })
 
   if (!existing || existing.tenantId !== tenantId) {
@@ -762,18 +764,25 @@ export async function deleteAppointment(
     return { error: { code: 'ALREADY_INACTIVE', message: 'Appointment is already deleted' } }
   }
 
-  const appointment = await prisma.appointment.update({
-    where: { id },
-    data: { isActive: false, status: 'CANCELLED' },
-    select: {
-      ...APPOINTMENT_SELECT,
-      patient: { select: PATIENT_INCLUDE },
-      doctor: { select: DOCTOR_INCLUDE },
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.appointment.update({
+      where: { id },
+      data: { isActive: false, status: 'CANCELLED' },
+    })
+    // Freed from the billable set, the appointment's linked consultation
+    // payment (if any) must stop being earmarked to it — otherwise FIFO
+    // silently re-allocates that money to other items with no visible trace.
+    await convertAppointmentPaymentsToAdvance(tx, tenantId, id)
   })
 
+  // Cancelling changes the billable set for every other item too (FIFO
+  // shifts), so the cached isPaid columns need a full recompute — not just
+  // for the converted payment's own appointment.
+  await recalculatePaidStatus(tenantId, existing.patientId)
+
+  const appointment = await getAppointmentById(tenantId, id)
   logger.info(`Appointment soft-deleted: ${id}`)
-  return { appointment: appointment as SafeAppointment }
+  return { appointment: appointment ?? undefined }
 }
 
 /**
@@ -785,7 +794,14 @@ export async function restoreAppointment(
 ): Promise<{ appointment?: SafeAppointment; error?: { code: AppointmentErrorCode; message: string } }> {
   const existing = await prisma.appointment.findUnique({
     where: { id },
-    select: { tenantId: true, isActive: true, doctorId: true, startTime: true, endTime: true },
+    select: {
+      tenantId: true,
+      isActive: true,
+      doctorId: true,
+      startTime: true,
+      endTime: true,
+      patientId: true,
+    },
   })
 
   if (!existing || existing.tenantId !== tenantId) {
@@ -807,18 +823,23 @@ export async function restoreAppointment(
     }
   }
 
-  const appointment = await prisma.appointment.update({
-    where: { id },
-    data: { isActive: true, status: 'SCHEDULED' },
-    select: {
-      ...APPOINTMENT_SELECT,
-      patient: { select: PATIENT_INCLUDE },
-      doctor: { select: DOCTOR_INCLUDE },
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.appointment.update({
+      where: { id },
+      data: { isActive: true, status: 'SCHEDULED' },
+    })
+    // Mirrors deleteAppointment's conversion. If the operator already deleted
+    // the converted advance (isActive=false), this matches nothing on
+    // purpose — the money was given back, so the restored appointment must
+    // read as unpaid, not double-charged on the next edit.
+    await restoreAppointmentPaymentsFromAdvance(tx, tenantId, id)
   })
 
+  await recalculatePaidStatus(tenantId, existing.patientId)
+
+  const appointment = await getAppointmentById(tenantId, id)
   logger.info(`Appointment restored: ${id}`)
-  return { appointment: appointment as SafeAppointment }
+  return { appointment: appointment ?? undefined }
 }
 
 /**

@@ -78,9 +78,13 @@ vi.mock('@/stores/auth.store', () => ({
     selector({ user: { tenant: { currency: 'USD' } } }),
 }))
 
+// #391: t() now receives an interpolation options object for
+// payments.cancelWithRecordedPayment (and payment.appliedOf already did).
+// Serialize options into the returned string so cancel-warning tests can
+// assert on the exact amount that was passed, instead of the raw key.
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, options?: Record<string, unknown>) => (options ? `${key}:${JSON.stringify(options)}` : key),
     i18n: { language: 'es' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
@@ -187,6 +191,20 @@ const paidConsultationAppointment: Appointment = {
   hasRecordedPayment: true,
   recordedPaidAmount: 75,
   recordedPaymentId: 'pay-1',
+}
+
+// #391: fully paid ONLY through FIFO allocation of older advances — no
+// payment recorded directly against this appointment. The cancel warning
+// must never show for this shape.
+const fifoPaidOnlyAppointment: Appointment = {
+  ...upcomingAppointment,
+  id: 'a7',
+  type: 'Pagada por pool',
+  isPaid: true,
+  paidAmount: 100,
+  hasRecordedPayment: false,
+  recordedPaidAmount: 0,
+  recordedPaymentId: null,
 }
 
 // ============================================================================
@@ -702,6 +720,91 @@ describe('PatientAppointmentsSection', () => {
         expect(mockDeleteAppointment).toHaveBeenCalledWith('a1')
       })
       expect(mockGetAppointmentsByPatient).toHaveBeenCalledTimes(2)
+    })
+
+    it('calls onPaymentsChange after a successful cancel (#391)', async () => {
+      mockDeleteAppointment.mockResolvedValue(undefined)
+      mockGetAppointmentsByPatient.mockResolvedValue([upcomingAppointment])
+      const onPaymentsChange = vi.fn()
+
+      renderSection({ onPaymentsChange })
+
+      await waitFor(() => {
+        expect(screen.getByText('Limpieza')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByLabelText('common.options'))
+      fireEvent.click(screen.getByText('appointments.cancelAppointment'))
+
+      const cancelButtons = screen.getAllByText('appointments.cancelAppointment')
+      const confirmButton = cancelButtons[cancelButtons.length - 1]
+      await act(async () => {
+        fireEvent.click(confirmButton)
+      })
+
+      await waitFor(() => {
+        expect(onPaymentsChange).toHaveBeenCalledTimes(1)
+      })
+    })
+  })
+
+  // --------------------------------------------------------------------------
+  // Cancel warning for a recorded consultation payment (#391)
+  // --------------------------------------------------------------------------
+
+  describe('cancel warning for a recorded consultation payment (#391)', () => {
+    beforeEach(() => {
+      localStorage.setItem('patient-appointments-collapsed', 'false')
+    })
+
+    it('renders the warning with the correctly formatted recorded amount when hasRecordedPayment is true', async () => {
+      mockGetAppointmentsByPatient.mockResolvedValue([paidConsultationAppointment])
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByLabelText('common.options'))
+      fireEvent.click(screen.getByText('appointments.cancelAppointment'))
+
+      // paidConsultationAppointment.recordedPaidAmount === 75; formatCurrency
+      // is mocked to `$${amount}`.
+      expect(
+        screen.getByText('payments.cancelWithRecordedPayment:{"amount":"$75"}')
+      ).toBeInTheDocument()
+    })
+
+    // Explicit acceptance criterion: an appointment that reads as paid ONLY
+    // through FIFO allocation of older advances (isPaid true, hasRecordedPayment
+    // false) must show NO warning.
+    it('shows no warning when isPaid is true only via FIFO pool allocation (hasRecordedPayment false)', async () => {
+      mockGetAppointmentsByPatient.mockResolvedValue([fifoPaidOnlyAppointment])
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Pagada por pool')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByLabelText('common.options'))
+      fireEvent.click(screen.getByText('appointments.cancelAppointment'))
+
+      expect(screen.getByText('appointments.confirmCancel')).toBeInTheDocument()
+      expect(screen.queryByText(/payments\.cancelWithRecordedPayment/)).not.toBeInTheDocument()
+    })
+
+    it('shows no warning for an appointment with no recorded payment at all', async () => {
+      mockGetAppointmentsByPatient.mockResolvedValue([upcomingAppointment])
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Limpieza')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByLabelText('common.options'))
+      fireEvent.click(screen.getByText('appointments.cancelAppointment'))
+
+      expect(screen.queryByText(/payments\.cancelWithRecordedPayment/)).not.toBeInTheDocument()
     })
   })
 

@@ -233,6 +233,7 @@ export function DoctorAppointmentsSection({
   refreshKey = 0,
 }: DoctorAppointmentsSectionProps) {
   const { t } = useTranslation()
+  const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
 
   // Collapse state with localStorage persistence
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -492,6 +493,13 @@ export function DoctorAppointmentsSection({
             <p className="text-sm text-gray-600 mb-4">
               {t('appointments.confirmCancel')}
             </p>
+            {confirmAction.appointment.hasRecordedPayment && (
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+                {t('payments.cancelWithRecordedPayment', {
+                  amount: formatCurrency(confirmAction.appointment.recordedPaidAmount ?? 0, currency),
+                })}
+              </p>
+            )}
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setConfirmAction(null)}

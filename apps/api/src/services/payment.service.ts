@@ -615,6 +615,81 @@ export async function listPayments(
   return { data: payments, total }
 }
 
+// Appended to a converted payment's note so it reads as self-explanatory in
+// Entregas; stripped back off on restore via a suffix match.
+const CANCELLED_APPOINTMENT_NOTE_SUFFIX = ' (cita cancelada)'
+
+/**
+ * Convert every active kind=APPOINTMENT payment linked to a cancelled
+ * appointment into a kind=ADVANCE payment, inside the caller's transaction.
+ * appointmentId is deliberately kept (not nulled) — it is the only
+ * discriminator restoreAppointmentPaymentsFromAdvance uses to find its way
+ * back, and every read of PatientPayment.appointmentId elsewhere in this
+ * service filters on kind too, so leaving it set cannot leak into any
+ * existing FIFO/earmark computation (getAppointmentEarmarks,
+ * hasRecordedAppointmentPayment both require kind='APPOINTMENT').
+ *
+ * updateMany (not findFirst+update) because it is idempotent and needs no
+ * prior read; the single-active-row-per-appointment invariant enforced by
+ * hasRecordedAppointmentPayment plus deletePayment's soft-delete means at
+ * most one row ever matches, but updateMany degrades safely even if that
+ * invariant were ever violated by a race.
+ */
+export async function convertAppointmentPaymentsToAdvance(
+  tx: Prisma.TransactionClient,
+  tenantId: string,
+  appointmentId: string
+): Promise<void> {
+  const payments = await tx.patientPayment.findMany({
+    where: { tenantId, appointmentId, kind: 'APPOINTMENT', isActive: true },
+    select: { id: true, note: true },
+  })
+
+  for (const payment of payments) {
+    await tx.patientPayment.update({
+      where: { id: payment.id },
+      data: {
+        kind: 'ADVANCE',
+        note: `${payment.note ?? ''}${CANCELLED_APPOINTMENT_NOTE_SUFFIX}`,
+      },
+    })
+  }
+}
+
+/**
+ * Reverse convertAppointmentPaymentsToAdvance on restore: only rows this
+ * feature itself converted can match (kind=ADVANCE with a non-null
+ * appointmentId), because the only client-facing payment-creation endpoint
+ * (POST /api/patients/:id/payments, createPaymentSchema in
+ * apps/api/src/routes/patients.ts) accepts just {amount, date, note} — kind
+ * always falls to createPayment's 'ADVANCE' default and appointmentId to
+ * null. A payment the operator deleted (isActive=false) in the meantime is
+ * deliberately excluded: the money was given back, so the restored
+ * appointment should read as unpaid again.
+ */
+export async function restoreAppointmentPaymentsFromAdvance(
+  tx: Prisma.TransactionClient,
+  tenantId: string,
+  appointmentId: string
+): Promise<void> {
+  const payments = await tx.patientPayment.findMany({
+    where: { tenantId, appointmentId, kind: 'ADVANCE', isActive: true },
+    select: { id: true, note: true },
+  })
+
+  for (const payment of payments) {
+    await tx.patientPayment.update({
+      where: { id: payment.id },
+      data: {
+        kind: 'APPOINTMENT',
+        note: payment.note?.endsWith(CANCELLED_APPOINTMENT_NOTE_SUFFIX)
+          ? payment.note.slice(0, -CANCELLED_APPOINTMENT_NOTE_SUFFIX.length)
+          : payment.note,
+      },
+    })
+  }
+}
+
 /**
  * Soft delete a payment and recalculate FIFO allocation
  */
