@@ -66,3 +66,6 @@ temp/
 
 # Flake diagnostics (task #394, opt-in via API_TEST_DIAG=1)
 apps/api/.flake-diag/
+
+# Flake diagnostics (task #398)
+apps/app/.flake-diag/
