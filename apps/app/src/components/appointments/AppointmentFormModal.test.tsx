@@ -273,9 +273,28 @@ function renderModal(props: Partial<ComponentProps<typeof AppointmentFormModal>>
   return { onClose, onSubmit, ...utils }
 }
 
-// The doctor <select> is the modal's only combobox in create mode (the
-// patient combobox is stubbed above and the status select only exists when
-// editing), so it can be targeted without an accessible name.
+// The doctor <select> is the modal's only <select> in create mode (the
+// patient combobox is stubbed above and the status <select> only exists when
+// editing, always rendered after this one — see AppointmentFormModal.tsx),
+// so `document.querySelector('select')` reaches the same element
+// `getAllByRole('combobox')[0]` used to, without the accessible-role scan.
+//
+// This query used to be `screen.getAllByRole('combobox')[0]`, sitting inside
+// this helper's `waitFor` retry loop, which polls every ~50ms — a query cost
+// approaching or exceeding that interval turns the loop CPU-bound instead of
+// interval-bound, and this helper runs at the top of nearly every test in
+// this file (task #398). Measured on this component: ~7.4ms/call for the
+// role query (role computation scans the whole mounted tree to find
+// candidates, not just the matches — same mechanism as `selectTime()` and
+// `selectCalendarDay()` below) vs ~0.05ms/call for the plain DOM query,
+// ~150x faster. `getDoctorSelect()` still waits for **enabled**, not just
+// present — the <select> is always mounted (only its `disabled` attribute
+// toggles), so presence alone would race the modal's form-reset effect
+// documented below.
+function getDoctorSelect() {
+  return document.querySelector('select') as HTMLSelectElement
+}
+
 async function waitForOptionsLoaded() {
   // The modal's form-reset effect re-runs whenever `loadingOptions` flips
   // (pre-existing behavior, unrelated to budget items), which re-applies the
@@ -283,13 +302,13 @@ async function waitForOptionsLoaded() {
   // still loading. Waiting for the doctor <select> to become enabled ensures
   // that settling has already happened before a test interacts with the form.
   await waitFor(() => {
-    expect(screen.getAllByRole('combobox')[0]).not.toBeDisabled()
+    expect(getDoctorSelect()).not.toBeDisabled()
   })
 }
 
 async function selectDoctor() {
   await waitForOptionsLoaded()
-  fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'doc-1' } })
+  fireEvent.change(getDoctorSelect(), { target: { value: 'doc-1' } })
 }
 
 // The form lists one checkbox per budget item row, so budget item checkboxes
@@ -300,6 +319,30 @@ function getItemCheckbox(description: string) {
   const row = screen.getByText(description).closest('label')
   if (!row) throw new Error(`No row found for "${description}"`)
   return within(row).getByRole('checkbox')
+}
+
+// Opens a TimePicker's popover and clicks the option matching the given
+// 'HH:mm' value. Only one TimePicker popover is ever open at a time (each
+// selection closes its own popover), so this is safe to call sequentially
+// for the start and end fields.
+//
+// A role query here (`getAllByRole('option')`, scoped or not) is the real
+// cost, independent of tree size: dom-testing-library's byRole matcher runs
+// an `isInaccessible` visibility check per candidate that walks the DOM
+// ancestor chain with `getComputedStyle` at every level, all the way up to
+// the true document root — `within(popover)` only narrows which nodes are
+// considered candidates, it can't shorten that walk. Measured on this
+// component (task #398): ~66ms/call for a full-document role query, ~55ms/
+// call scoped to the popover (~96 <li role="option"> slots) — barely
+// different, because each of those ~96 candidates pays the same ancestor
+// walk either way. A scoped text match instead (`within(popover).getByText`)
+// skips the accessibility-tree computation entirely: ~0.6ms/call, ~100x
+// faster than either role query. Each option <li> has no other rendered
+// descendants, so its exact text is unambiguous within the popover.
+function selectTime(trigger: HTMLElement, hhmm: string) {
+  fireEvent.click(trigger)
+  const popover = trigger.parentElement as HTMLElement
+  fireEvent.click(within(popover).getByText(hhmm))
 }
 
 // Regression coverage for task #323 (i18n migration): the header close
@@ -948,9 +991,20 @@ describe('AppointmentFormModal — date/time picker migration (task #233)', () =
 
   // The DatePicker's trigger button carries a fixed aria-label
   // (t('appointments.form.date') = "Fecha"), independent of the currently
-  // displayed date text, so it's reliably queryable by name.
+  // displayed date text, so it's reliably queryable by that attribute
+  // directly — no other element in the modal shares it.
+  //
+  // This used to be `screen.getByRole('button', { name: 'Fecha' })`. Same
+  // mechanism as `selectDoctor()`'s doctor <select> query above, one step
+  // worse: with the calendar grid open (as most tests using this helper have
+  // it), a document-wide role+name match pays the per-candidate
+  // `isInaccessible` walk over every button on screen (nav, close, submit,
+  // ~30-40 day cells) PLUS an accessible-name computation per candidate.
+  // Measured on this component: ~22.3ms/call for the role+name query vs
+  // ~0.06ms/call for `document.querySelector('button[aria-label="Fecha"]')`,
+  // ~380x faster.
   function getDateTrigger() {
-    return screen.getByRole('button', { name: 'Fecha' })
+    return document.querySelector('button[aria-label="Fecha"]') as HTMLButtonElement
   }
 
   // The TimePicker trigger <button> exposes role="combobox" (task #347: the
@@ -964,17 +1018,6 @@ describe('AppointmentFormModal — date/time picker migration (task #233)', () =
       screen.getByRole('combobox', { name: 'Hora de inicio' }),
       screen.getByRole('combobox', { name: 'Hora de fin' }),
     ]
-  }
-
-  // Opens a TimePicker's popover and clicks the option matching the given
-  // 'HH:mm' value. Only one TimePicker popover is ever open at a time (each
-  // selection closes its own popover), so this is safe to call sequentially
-  // for the start and end fields.
-  function selectTime(trigger: HTMLElement, hhmm: string) {
-    fireEvent.click(trigger)
-    const option = screen.getAllByRole('option').find((el) => el.textContent === hhmm)
-    if (!option) throw new Error(`No TimePicker option found for "${hhmm}"`)
-    fireEvent.click(option)
   }
 
   // Picks a day within the month the DatePicker opens on by default. With no
@@ -1000,7 +1043,36 @@ describe('AppointmentFormModal — date/time picker migration (task #233)', () =
       month: 'long',
       day: 'numeric',
     }).format(date)
-    return { date, isoDate: formatDateForInputHelper(date), label }
+    return { date, day, isoDate: formatDateForInputHelper(date), label }
+  }
+
+  // Clicks the calendar-day button for `day` (a day-of-month number) inside
+  // the currently open DatePicker grid.
+  //
+  // Same mechanism as `selectTime()` above (task #398), one step worse: a
+  // document-wide `getByRole('button', { name: label })` against an open
+  // calendar grid pays the same per-candidate ancestor `isInaccessible` walk,
+  // but over MORE candidates (~30-40 day buttons plus every other button in
+  // the mounted modal — nav, close, submit — vs. ~96 <li role="option">
+  // slots for the TimePicker), AND an accessible-NAME computation per
+  // candidate on top of that, which is strictly pricier than a bare role
+  // match. Measured on this component: this exact query is what pushed
+  // "submits the exact date selected via the DatePicker popover" past the
+  // 5000ms test timeout.
+  //
+  // Each day button's only visible content is its bare day-of-month number
+  // (react-day-picker's `formatDay()`, e.g. "1"); the full accessible-name
+  // string ("viernes, 10 de julio de 2026") only exists as its aria-label
+  // attribute, never as rendered text. Outside-month days are hidden
+  // entirely (not just greyed out — react-day-picker renders nothing for
+  // them when `showOutsideDays` is unset, see DayPicker.js), so that bare
+  // number is unambiguous within the grid currently on screen. Scoping to
+  // the grid and matching on that number instead skips both the extra
+  // candidate volume and the accessible-name computation, the same win
+  // `selectTime()` gets from `within(popover).getByText(hhmm)`.
+  function selectCalendarDay(day: number) {
+    const grid = screen.getByRole('grid')
+    fireEvent.click(within(grid).getByText(String(day)))
   }
 
   it('renders the date field as a button-triggered popover, not a native date input', async () => {
@@ -1017,9 +1089,9 @@ describe('AppointmentFormModal — date/time picker migration (task #233)', () =
     fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
     await selectDoctor()
 
-    const { isoDate, label } = pickCalendarDay()
+    const { isoDate, day } = pickCalendarDay()
     fireEvent.click(getDateTrigger())
-    fireEvent.click(screen.getByRole('button', { name: label }))
+    selectCalendarDay(day)
 
     fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
 
@@ -1036,8 +1108,8 @@ describe('AppointmentFormModal — date/time picker migration (task #233)', () =
     fireEvent.click(getDateTrigger())
     expect(screen.getByRole('grid')).toBeInTheDocument()
 
-    const { label } = pickCalendarDay()
-    fireEvent.click(screen.getByRole('button', { name: label }))
+    const { day } = pickCalendarDay()
+    selectCalendarDay(day)
     expect(screen.queryByRole('grid')).not.toBeInTheDocument()
   })
 
@@ -1221,10 +1293,7 @@ describe('AppointmentFormModal — appointment type duration auto-fill (task #23
 
     // Manually override the auto-filled endTime via the TimePicker.
     const endTrigger = screen.getByRole('combobox', { name: 'Hora de fin' })
-    fireEvent.click(endTrigger)
-    const option = screen.getAllByRole('option').find((el) => el.textContent === '11:15')
-    if (!option) throw new Error('No TimePicker option found for "11:15"')
-    fireEvent.click(option)
+    selectTime(endTrigger, '11:15')
 
     fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
 
