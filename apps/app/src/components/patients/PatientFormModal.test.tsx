@@ -79,7 +79,7 @@ describe('PatientFormModal', () => {
       expect(screen.getByPlaceholderText('Pérez')).toBeInTheDocument()
       expect(screen.getByPlaceholderText('paciente@email.com')).toBeInTheDocument()
       expect(screen.getByPlaceholderText('+1 234 567 890')).toBeInTheDocument()
-      expect(screen.getByRole('combobox')).toBeInTheDocument()
+      expect(document.querySelector('select[name="gender"]')).toBeInTheDocument()
       expect(screen.getByPlaceholderText(/calle, número/i)).toBeInTheDocument()
     })
 
@@ -92,7 +92,7 @@ describe('PatientFormModal', () => {
         />
       )
 
-      const genderSelect = screen.getByRole('combobox')
+      const genderSelect = document.querySelector('select[name="gender"]') as HTMLSelectElement
       expect(genderSelect).toBeInTheDocument()
 
       const options = Array.from(genderSelect.querySelectorAll('option'))
@@ -161,7 +161,7 @@ describe('PatientFormModal', () => {
       const lastNameInput = screen.getByPlaceholderText('Pérez') as HTMLInputElement
       const emailInput = screen.getByPlaceholderText('paciente@email.com') as HTMLInputElement
       const phoneInput = screen.getByPlaceholderText('+1 234 567 890') as HTMLInputElement
-      const genderSelect = screen.getByRole('combobox') as HTMLSelectElement
+      const genderSelect = document.querySelector('select[name="gender"]') as HTMLSelectElement
       const addressTextarea = screen.getByPlaceholderText(/calle, número/i) as HTMLTextAreaElement
 
       expect(firstNameInput.value).toBe('Juan')
@@ -170,6 +170,122 @@ describe('PatientFormModal', () => {
       expect(phoneInput.value).toBe('+1234567890')
       expect(genderSelect.value).toBe('male')
       expect(addressTextarea.value).toBe('123 Main St, City')
+    })
+  })
+
+  describe('coverage type', () => {
+    it('hides the convenio name input when coverageType is PARTICULAR (the default)', () => {
+      render(
+        <PatientFormModal
+          isOpen={true}
+          onClose={mockOnClose}
+          onSubmit={mockOnSubmit}
+        />
+      )
+
+      const coverageSelect = document.querySelector('select[name="coverageType"]') as HTMLSelectElement
+      expect(coverageSelect.value).toBe('PARTICULAR')
+      expect(document.querySelector('input[name="convenioName"]')).not.toBeInTheDocument()
+    })
+
+    it('reveals the convenio name input after selecting CONVENIO', () => {
+      render(
+        <PatientFormModal
+          isOpen={true}
+          onClose={mockOnClose}
+          onSubmit={mockOnSubmit}
+        />
+      )
+
+      const coverageSelect = document.querySelector('select[name="coverageType"]') as HTMLSelectElement
+      fireEvent.change(coverageSelect, { target: { value: 'CONVENIO' } })
+
+      expect(document.querySelector('input[name="convenioName"]')).toBeInTheDocument()
+    })
+
+    it('hides the convenio name input again after switching back to PARTICULAR', () => {
+      render(
+        <PatientFormModal
+          isOpen={true}
+          onClose={mockOnClose}
+          onSubmit={mockOnSubmit}
+        />
+      )
+
+      const coverageSelect = document.querySelector('select[name="coverageType"]') as HTMLSelectElement
+      fireEvent.change(coverageSelect, { target: { value: 'CONVENIO' } })
+      expect(document.querySelector('input[name="convenioName"]')).toBeInTheDocument()
+
+      fireEvent.change(coverageSelect, { target: { value: 'PARTICULAR' } })
+      expect(document.querySelector('input[name="convenioName"]')).not.toBeInTheDocument()
+    })
+
+    it('submits convenioName: null (not undefined) when the name is cleared but coverage stays CONVENIO', async () => {
+      mockOnSubmit.mockResolvedValue(undefined)
+
+      const convenioPatient: Patient = {
+        ...mockPatient,
+        coverageType: 'CONVENIO',
+        convenioName: 'OSDE',
+      }
+
+      render(
+        <PatientFormModal
+          isOpen={true}
+          onClose={mockOnClose}
+          onSubmit={mockOnSubmit}
+          patient={convenioPatient}
+        />
+      )
+
+      const convenioInput = document.querySelector('input[name="convenioName"]') as HTMLInputElement
+      expect(convenioInput.value).toBe('OSDE')
+
+      fireEvent.change(convenioInput, { target: { value: '' } })
+
+      const submitButton = screen.getByRole('button', { name: /guardar cambios/i })
+      fireEvent.click(submitButton)
+
+      await waitFor(() => {
+        expect(mockOnSubmit).toHaveBeenCalled()
+      })
+
+      const payload = mockOnSubmit.mock.calls[0][0]
+      expect(payload).toHaveProperty('convenioName', null)
+      expect('convenioName' in payload).toBe(true)
+      expect(payload.convenioName).not.toBeUndefined()
+    })
+
+    it('submits convenioName: null when the name is whitespace-only', async () => {
+      mockOnSubmit.mockResolvedValue(undefined)
+
+      const convenioPatient: Patient = {
+        ...mockPatient,
+        coverageType: 'CONVENIO',
+        convenioName: 'OSDE',
+      }
+
+      render(
+        <PatientFormModal
+          isOpen={true}
+          onClose={mockOnClose}
+          onSubmit={mockOnSubmit}
+          patient={convenioPatient}
+        />
+      )
+
+      const convenioInput = document.querySelector('input[name="convenioName"]') as HTMLInputElement
+      fireEvent.change(convenioInput, { target: { value: '   ' } })
+
+      const submitButton = screen.getByRole('button', { name: /guardar cambios/i })
+      fireEvent.click(submitButton)
+
+      await waitFor(() => {
+        expect(mockOnSubmit).toHaveBeenCalled()
+      })
+
+      const payload = mockOnSubmit.mock.calls[0][0]
+      expect(payload).toHaveProperty('convenioName', null)
     })
   })
 
@@ -242,6 +358,8 @@ describe('PatientFormModal', () => {
         expect(mockOnSubmit).toHaveBeenCalledWith({
           firstName: 'John',
           lastName: 'Doe',
+          coverageType: 'PARTICULAR',
+          convenioName: null,
         })
       })
     })
@@ -305,6 +423,8 @@ describe('PatientFormModal', () => {
           lastName: 'Doe',
           email: 'john@example.com',
           phone: '+1234567890',
+          coverageType: 'PARTICULAR',
+          convenioName: null,
         })
       })
     })
@@ -361,6 +481,8 @@ describe('PatientFormModal', () => {
         expect(mockOnSubmit).toHaveBeenCalledWith({
           firstName: 'John',
           lastName: 'Doe',
+          coverageType: 'PARTICULAR',
+          convenioName: null,
         })
       })
     })
@@ -380,7 +502,7 @@ describe('PatientFormModal', () => {
       const lastNameInput = screen.getByPlaceholderText('Pérez')
       const emailInput = screen.getByPlaceholderText('paciente@email.com')
       const phoneInput = screen.getByPlaceholderText('+1 234 567 890')
-      const genderSelect = screen.getByRole('combobox')
+      const genderSelect = document.querySelector('select[name="gender"]') as HTMLSelectElement
       const addressTextarea = screen.getByPlaceholderText(/calle, número/i)
 
       // Find date input by type
@@ -406,6 +528,8 @@ describe('PatientFormModal', () => {
           phone: '+1234567890',
           dob: '1990-01-15',
           gender: 'male',
+          coverageType: 'PARTICULAR',
+          convenioName: null,
           address: '123 Main St',
         })
       })

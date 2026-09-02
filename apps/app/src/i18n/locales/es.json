@@ -571,7 +571,11 @@
       "male": "Masculino",
       "female": "Femenino",
       "other": "Otro",
-      "preferNotToSay": "Prefiere no decir"
+      "preferNotToSay": "Prefiere no decir",
+      "coverageType": "Tipo de cobertura",
+      "particular": "Particular",
+      "convenio": "Convenio",
+      "convenioName": "Nombre del convenio"
     },
     "years": "años",
     "list": {

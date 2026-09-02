@@ -331,6 +331,13 @@ export type EnumUserRoleWithAggregatesFilter<$PrismaModel = never> = {
   _max?: Prisma.NestedEnumUserRoleFilter<$PrismaModel>
 }
 
+export type EnumPatientCoverageTypeFilter<$PrismaModel = never> = {
+  equals?: $Enums.PatientCoverageType | Prisma.EnumPatientCoverageTypeFieldRefInput<$PrismaModel>
+  in?: $Enums.PatientCoverageType[] | Prisma.ListEnumPatientCoverageTypeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PatientCoverageType[] | Prisma.ListEnumPatientCoverageTypeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPatientCoverageTypeFilter<$PrismaModel> | $Enums.PatientCoverageType
+}
+
 export type JsonNullableFilter<$PrismaModel = never> =
 | Prisma.PatchUndefined<
     Prisma.Either<Required<JsonNullableFilterBase<$PrismaModel>>, Exclude<keyof Required<JsonNullableFilterBase<$PrismaModel>>, 'path'>>,
@@ -353,6 +360,16 @@ export type JsonNullableFilterBase<$PrismaModel = never> = {
   gt?: runtime.InputJsonValue | Prisma.JsonFieldRefInput<$PrismaModel>
   gte?: runtime.InputJsonValue | Prisma.JsonFieldRefInput<$PrismaModel>
   not?: runtime.InputJsonValue | Prisma.JsonFieldRefInput<$PrismaModel> | Prisma.JsonNullValueFilter
+}
+
+export type EnumPatientCoverageTypeWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.PatientCoverageType | Prisma.EnumPatientCoverageTypeFieldRefInput<$PrismaModel>
+  in?: $Enums.PatientCoverageType[] | Prisma.ListEnumPatientCoverageTypeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PatientCoverageType[] | Prisma.ListEnumPatientCoverageTypeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPatientCoverageTypeWithAggregatesFilter<$PrismaModel> | $Enums.PatientCoverageType
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumPatientCoverageTypeFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumPatientCoverageTypeFilter<$PrismaModel>
 }
 
 export type JsonNullableWithAggregatesFilter<$PrismaModel = never> =
@@ -812,6 +829,23 @@ export type NestedEnumUserRoleWithAggregatesFilter<$PrismaModel = never> = {
   _count?: Prisma.NestedIntFilter<$PrismaModel>
   _min?: Prisma.NestedEnumUserRoleFilter<$PrismaModel>
   _max?: Prisma.NestedEnumUserRoleFilter<$PrismaModel>
+}
+
+export type NestedEnumPatientCoverageTypeFilter<$PrismaModel = never> = {
+  equals?: $Enums.PatientCoverageType | Prisma.EnumPatientCoverageTypeFieldRefInput<$PrismaModel>
+  in?: $Enums.PatientCoverageType[] | Prisma.ListEnumPatientCoverageTypeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PatientCoverageType[] | Prisma.ListEnumPatientCoverageTypeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPatientCoverageTypeFilter<$PrismaModel> | $Enums.PatientCoverageType
+}
+
+export type NestedEnumPatientCoverageTypeWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.PatientCoverageType | Prisma.EnumPatientCoverageTypeFieldRefInput<$PrismaModel>
+  in?: $Enums.PatientCoverageType[] | Prisma.ListEnumPatientCoverageTypeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PatientCoverageType[] | Prisma.ListEnumPatientCoverageTypeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPatientCoverageTypeWithAggregatesFilter<$PrismaModel> | $Enums.PatientCoverageType
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumPatientCoverageTypeFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumPatientCoverageTypeFilter<$PrismaModel>
 }
 
 export type NestedJsonNullableFilter<$PrismaModel = never> =

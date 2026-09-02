@@ -213,6 +213,8 @@ export const PatientScalarFieldEnum = {
   phone: 'phone',
   dob: 'dob',
   gender: 'gender',
+  coverageType: 'coverageType',
+  convenioName: 'convenioName',
   address: 'address',
   notes: 'notes',
   teeth: 'teeth',

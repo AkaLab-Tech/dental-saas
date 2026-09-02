@@ -1,9 +1,10 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { X, Loader2 } from 'lucide-react'
 import type { Patient, CreatePatientData } from '@/lib/patient-api'
+import { getConvenioNames } from '@/lib/patient-api'
 
 // ============================================================================
 // Validation Schema
@@ -30,6 +31,8 @@ const patientFormSchema = z.object({
       { message: 'La fecha de nacimiento no puede ser en el futuro' }
     ),
   gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional().or(z.literal('')),
+  coverageType: z.enum(['PARTICULAR', 'CONVENIO']).optional().or(z.literal('')),
+  convenioName: z.string().max(120, 'El nombre del convenio no puede exceder 120 caracteres').optional(),
   address: z.string().max(500, 'La dirección no puede exceder 500 caracteres').optional(),
 })
 
@@ -45,6 +48,11 @@ const GENDER_OPTIONS = [
   { value: 'female', label: 'Femenino' },
   { value: 'other', label: 'Otro' },
   { value: 'prefer_not_to_say', label: 'Prefiere no decir' },
+] as const
+
+const COVERAGE_TYPE_OPTIONS = [
+  { value: 'PARTICULAR', label: 'Particular' },
+  { value: 'CONVENIO', label: 'Convenio' },
 ] as const
 
 // ============================================================================
@@ -67,11 +75,13 @@ export function PatientFormModal({
   isLoading = false,
 }: PatientFormModalProps) {
   const isEditing = !!patient
+  const [convenioNames, setConvenioNames] = useState<string[]>([])
 
   const {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<PatientFormData>({
     resolver: zodResolver(patientFormSchema),
@@ -82,9 +92,13 @@ export function PatientFormModal({
       phone: '',
       dob: '',
       gender: '',
+      coverageType: 'PARTICULAR',
+      convenioName: '',
       address: '',
     },
   })
+
+  const coverageType = watch('coverageType')
 
   // Reset form when patient changes or modal opens
   useEffect(() => {
@@ -97,6 +111,8 @@ export function PatientFormModal({
           phone: patient.phone || '',
           dob: patient.dob ? patient.dob.split('T')[0] : '',
           gender: patient.gender || '',
+          coverageType: patient.coverageType || 'PARTICULAR',
+          convenioName: patient.convenioName || '',
           address: patient.address || '',
         })
       } else {
@@ -107,11 +123,29 @@ export function PatientFormModal({
           phone: '',
           dob: '',
           gender: '',
+          coverageType: 'PARTICULAR',
+          convenioName: '',
           address: '',
         })
       }
     }
   }, [isOpen, patient, reset])
+
+  // Fetch previously used convenio names for autocomplete when the modal opens
+  useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+    getConvenioNames()
+      .then((names) => {
+        if (!cancelled) setConvenioNames(names)
+      })
+      .catch(() => {
+        if (!cancelled) setConvenioNames([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen])
 
   const handleFormSubmit = async (data: PatientFormData) => {
     const submitData: CreatePatientData = {
@@ -121,6 +155,10 @@ export function PatientFormModal({
       ...(data.phone && { phone: data.phone }),
       ...(data.dob && { dob: data.dob }),
       ...(data.gender && { gender: data.gender as CreatePatientData['gender'] }),
+      coverageType: (data.coverageType || 'PARTICULAR') as CreatePatientData['coverageType'],
+      ...(data.coverageType === 'CONVENIO'
+        ? { convenioName: data.convenioName?.trim() || null }
+        : { convenioName: null }),
       ...(data.address && { address: data.address }),
     }
 
@@ -274,6 +312,49 @@ export function PatientFormModal({
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Coverage type */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tipo de Cobertura
+                  </label>
+                  <select
+                    {...register('coverageType')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    {COVERAGE_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {coverageType === 'CONVENIO' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nombre del Convenio
+                    </label>
+                    <input
+                      type="text"
+                      list="convenio-suggestions"
+                      autoComplete="off"
+                      {...register('convenioName')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Nombre del convenio"
+                    />
+                    <datalist id="convenio-suggestions">
+                      {convenioNames.map((name) => (
+                        <option key={name} value={name} />
+                      ))}
+                    </datalist>
+                    {errors.convenioName && (
+                      <p className="mt-1 text-sm text-red-600">{errors.convenioName.message}</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Address */}

@@ -571,7 +571,11 @@
       "male": "ذكر",
       "female": "أنثى",
       "other": "آخر",
-      "preferNotToSay": "أفضل عدم الإفصاح"
+      "preferNotToSay": "أفضل عدم الإفصاح",
+      "coverageType": "نوع التغطية",
+      "particular": "خاص",
+      "convenio": "اتفاقية تأمين",
+      "convenioName": "اسم الاتفاقية"
     },
     "years": "سنة",
     "list": {

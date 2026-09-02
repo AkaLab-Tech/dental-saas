@@ -259,6 +259,10 @@ model Patient {
   phone     String?
   dob       DateTime?
   gender    String?   @db.VarChar(20)
+
+  coverageType PatientCoverageType @default(PARTICULAR)
+  convenioName String?             @db.VarChar(120)
+
   address   String?   @db.Text
   notes     Json?
 
@@ -287,6 +291,11 @@ model Patient {
   @@index([tenantId])
   @@index([lastName])
   @@map("patients")
+}
+
+enum PatientCoverageType {
+  PARTICULAR
+  CONVENIO
 }
 
 // ============================================================================

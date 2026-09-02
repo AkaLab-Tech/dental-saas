@@ -1918,6 +1918,8 @@ export const PatientScalarFieldEnum = {
   phone: 'phone',
   dob: 'dob',
   gender: 'gender',
+  coverageType: 'coverageType',
+  convenioName: 'convenioName',
   address: 'address',
   notes: 'notes',
   teeth: 'teeth',
@@ -2316,6 +2318,20 @@ export type EnumUserRoleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaM
  * Reference to a field of type 'UserRole[]'
  */
 export type ListEnumUserRoleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'UserRole[]'>
+    
+
+
+/**
+ * Reference to a field of type 'PatientCoverageType'
+ */
+export type EnumPatientCoverageTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PatientCoverageType'>
+    
+
+
+/**
+ * Reference to a field of type 'PatientCoverageType[]'
+ */
+export type ListEnumPatientCoverageTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PatientCoverageType[]'>
     
 
 
