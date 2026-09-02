@@ -24,6 +24,12 @@ import { env } from './config/env.js'
 
 export const app: Express = express()
 
+// Coolify/Traefik terminates TLS and proxies to this app as a single hop, so
+// req.ip must trust exactly one layer of X-Forwarded-For. `true` would let any
+// client spoof the header and defeat IP-based rate limiting; revisit this
+// value if the proxy topology ever grows another hop.
+app.set('trust proxy', 1)
+
 // Middleware
 // The public budgets route below applies its own scoped CORS policy (the
 // apps/web origin, not the app-panel CORS_ORIGIN). It must be excluded here,
