@@ -138,6 +138,7 @@ export interface RegisterPayload {
   lastName: string
   clinicSlug: string
   clinicName?: string
+  language?: string
 }
 
 export interface AuthResponse {

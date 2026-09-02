@@ -1,7 +1,179 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest'
+
+// Task #221: assert the welcome email is sent in the persisted (resolved)
+// language, without making a real network call. `vi.hoisted` is required
+// because the `vi.mock` factory below is hoisted above this file's imports,
+// so it cannot close over an ordinary top-level `const`.
+const { sendWelcomeEmailMock } = vi.hoisted(() => ({
+  sendWelcomeEmailMock: vi.fn().mockResolvedValue(true),
+}))
+vi.mock('../services/email.service.js', () => ({
+  sendWelcomeEmail: sendWelcomeEmailMock,
+  sendPasswordResetEmail: vi.fn().mockResolvedValue(true),
+}))
+
 import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword, hashToken } from '../services/auth.service.js'
+
+describe('POST /api/auth/register', () => {
+  let n = 0
+  const uniqueSlug = () => `register-lang-${Date.now()}-${n++}`
+  const createdTenantIds: string[] = []
+
+  beforeAll(async () => {
+    // Task #221: registration 500s with PLAN_NOT_FOUND if this is absent.
+    await prisma.plan.upsert({
+      where: { name: 'enterprise' },
+      update: {},
+      create: {
+        name: 'enterprise',
+        displayName: 'Enterprise',
+        price: 0,
+        maxAdmins: 5,
+        maxDoctors: 10,
+        maxPatients: 60,
+        features: [],
+      },
+    })
+  })
+
+  beforeEach(() => {
+    sendWelcomeEmailMock.mockClear()
+  })
+
+  afterAll(async () => {
+    for (const tenantId of createdTenantIds) {
+      await prisma.tenantSettings.deleteMany({ where: { tenantId } })
+      await prisma.refreshToken.deleteMany({ where: { user: { tenantId } } })
+      await prisma.user.deleteMany({ where: { tenantId } })
+      await prisma.subscription.deleteMany({ where: { tenantId } })
+      await prisma.tenant.delete({ where: { id: tenantId } }).catch(() => {
+        // Tenant may have already been removed by another cleanup path.
+      })
+    }
+  })
+
+  async function registerNewClinic(extra: Record<string, unknown>) {
+    const clinicSlug = uniqueSlug()
+    const res = await api()
+      .post('/api/auth/register')
+      .send({
+        email: `owner-${clinicSlug}@test.com`,
+        password: 'Password1!',
+        firstName: 'Ana',
+        lastName: 'Owner',
+        clinicName: 'Lang Test Clinic',
+        clinicSlug,
+        ...extra,
+      })
+    if (res.status === 201) {
+      createdTenantIds.push(res.body.user.tenantId)
+    }
+    return res
+  }
+
+  it('persists language "en" for a newly registered clinic', async () => {
+    const res = await registerNewClinic({ language: 'en' })
+
+    expect(res.status).toBe(201)
+    const settings = await prisma.tenantSettings.findUnique({
+      where: { tenantId: res.body.user.tenantId },
+    })
+    expect(settings?.language).toBe('en')
+  })
+
+  it('persists language "ar" for a newly registered clinic', async () => {
+    const res = await registerNewClinic({ language: 'ar' })
+
+    expect(res.status).toBe(201)
+    const settings = await prisma.tenantSettings.findUnique({
+      where: { tenantId: res.body.user.tenantId },
+    })
+    expect(settings?.language).toBe('ar')
+  })
+
+  it('defaults to "es" when no language field is sent (back-compat with older clients)', async () => {
+    const res = await registerNewClinic({})
+
+    expect(res.status).toBe(201)
+    const settings = await prisma.tenantSettings.findUnique({
+      where: { tenantId: res.body.user.tenantId },
+    })
+    expect(settings?.language).toBe('es')
+  })
+
+  it('does NOT change an existing tenant\'s language when a second user registers into it', async () => {
+    const clinicSlug = uniqueSlug()
+
+    const firstRes = await api().post('/api/auth/register').send({
+      email: `first-${clinicSlug}@test.com`,
+      password: 'Password1!',
+      firstName: 'First',
+      lastName: 'Owner',
+      clinicName: 'Existing Clinic',
+      clinicSlug,
+      language: 'es',
+    })
+    expect(firstRes.status).toBe(201)
+    const tenantId = firstRes.body.user.tenantId
+    createdTenantIds.push(tenantId)
+
+    const before = await prisma.tenantSettings.findUnique({ where: { tenantId } })
+    expect(before?.language).toBe('es')
+
+    const secondRes = await api().post('/api/auth/register').send({
+      email: `second-${clinicSlug}@test.com`,
+      password: 'Password1!',
+      firstName: 'Second',
+      lastName: 'Staff',
+      clinicSlug,
+      language: 'en',
+    })
+    expect(secondRes.status).toBe(201)
+
+    const after = await prisma.tenantSettings.findUnique({ where: { tenantId } })
+    expect(after?.language).toBe('es')
+  })
+
+  describe('malformed/unsupported language values always fall back to "es" and never 400', () => {
+    const cases: Array<[string, unknown]> = [
+      ['unsupported language code "pt"', 'pt'],
+      ['region-tagged locale "en-GB"', 'en-GB'],
+      ['garbage string "zzz"', 'zzz'],
+      ['empty string', ''],
+      ['a number', 123],
+    ]
+
+    it.each(cases)('%s', async (_label, value) => {
+      const res = await registerNewClinic({ language: value })
+
+      expect(res.status).toBe(201)
+      const settings = await prisma.tenantSettings.findUnique({
+        where: { tenantId: res.body.user.tenantId },
+      })
+      expect(settings?.language).toBe('es')
+    })
+  })
+
+  it('sends the welcome email in the persisted language, verified via the handler\'s own read-back', async () => {
+    const res = await registerNewClinic({ language: 'ar' })
+    expect(res.status).toBe(201)
+    const tenantId = res.body.user.tenantId
+
+    await vi.waitFor(() => {
+      expect(sendWelcomeEmailMock).toHaveBeenCalled()
+    })
+
+    // The persisted value (what the handler re-reads via findUnique) is what
+    // must match, not a local variable computed before the write.
+    const settings = await prisma.tenantSettings.findUnique({ where: { tenantId } })
+    expect(settings?.language).toBe('ar')
+    expect(sendWelcomeEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({ language: 'ar' })
+    )
+  })
+})
 
 describe('Auth - Tenant User Password Recovery', () => {
   let tenantId: string

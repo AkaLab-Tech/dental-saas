@@ -164,7 +164,7 @@ model TenantSettings {
   tenantId String @unique
 
   // Localization
-  language   String @default("es") // ISO 639-1: es, en, pt
+  language   String @default("es") // ISO 639-1: es, en, ar
   dateFormat String @default("DD/MM/YYYY") // DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD
   timeFormat String @default("24h") // 12h, 24h
 

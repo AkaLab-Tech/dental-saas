@@ -8,7 +8,7 @@ const router: Router = Router()
 
 // Validation schema for settings update
 const updateSettingsSchema = z.object({
-  language: z.enum(['es', 'en', 'pt']).optional(),
+  language: z.enum(['es', 'en', 'ar']).optional(),
   dateFormat: z.enum(['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD']).optional(),
   timeFormat: z.enum(['12h', '24h']).optional(),
   defaultAppointmentDuration: z.number().min(5).max(240).optional(),

@@ -3,10 +3,14 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router'
 
 // Mock react-i18next — return the key so assertions are stable regardless of locale
+// `language` and `resolvedLanguage` are deliberately different values here
+// (e.g. a browser reporting `en-GB` resolves to the loaded `en` bundle) so
+// that a regression sending `i18n.language` instead of `i18n.resolvedLanguage`
+// is caught by the submission assertion below rather than passing by luck.
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
-    i18n: { language: 'es', changeLanguage: vi.fn() },
+    i18n: { language: 'en-GB', resolvedLanguage: 'en', changeLanguage: vi.fn() },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
@@ -175,6 +179,8 @@ describe('RegisterPage', () => {
           lastName: 'Doe',
           email: 'test@example.com',
           password: 'Password1!',
+          // Must be i18n.resolvedLanguage ('en'), not i18n.language ('en-GB').
+          language: 'en',
         })
       })
     })

@@ -1,6 +1,7 @@
 import { Router, type IRouter } from 'express'
 import { z } from 'zod'
 import { prisma } from '@dental/database'
+import { type Language } from '@dental/shared'
 import {
   hashPassword,
   verifyPassword,
@@ -34,6 +35,8 @@ const passwordSchema = z
       'Password must include at least one uppercase letter, one lowercase letter, one number, and one special character',
   })
 
+const SUPPORTED_LANGUAGES: Language[] = ['es', 'en', 'ar']
+
 // Validation schemas
 const registerSchema = z.object({
   email: z.string().email(),
@@ -45,6 +48,9 @@ const registerSchema = z.object({
   clinicSlug: z.string().min(3).max(50).regex(/^[a-z0-9-]+$/, {
     message: 'Slug must contain only lowercase letters, numbers, and hyphens',
   }),
+  // Cosmetic client-side detected language; validated/normalized in the handler
+  // so malformed input never fails registration.
+  language: z.unknown().optional(),
 })
 
 const loginSchema = z.object({
@@ -79,7 +85,11 @@ authRouter.post('/register', async (req, res, next) => {
       })
     }
 
-    const { email, password, firstName, lastName, clinicName, clinicSlug } = parse.data
+    const { email, password, firstName, lastName, clinicName, clinicSlug, language: requestedLanguage } =
+      parse.data
+    const resolvedLanguage: Language = SUPPORTED_LANGUAGES.includes(requestedLanguage as Language)
+      ? (requestedLanguage as Language)
+      : 'es'
 
     // Check if tenant with this slug exists
     let tenant = await prisma.tenant.findUnique({ where: { slug: clinicSlug } })
@@ -114,6 +124,7 @@ authRouter.post('/register', async (req, res, next) => {
           },
           settings: {
             create: {
+              language: resolvedLanguage,
               // Use defaults from schema
               businessHours: {
                 1: { start: '09:00', end: '18:00' },
@@ -202,7 +213,7 @@ authRouter.post('/register', async (req, res, next) => {
         where: { tenantId: tenant.id },
         select: { language: true },
       })
-      const language = (tenantSettings?.language || 'es') as 'es' | 'en' | 'ar'
+      const language = (tenantSettings?.language || 'es') as Language
 
       // Don't await - send email in background without blocking response
       sendWelcomeEmail({
