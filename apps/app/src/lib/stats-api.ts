@@ -13,7 +13,11 @@ export interface OverviewStats {
   pendingLabworks: number
   unpaidLabworks: number
   monthlyRevenue: number
-  pendingPayments: number
+  /**
+   * Net outstanding across all patient-billable work (see the API's
+   * OverviewStats). `null` when the overview is doctor-scoped.
+   */
+  pendingPayments: number | null
 }
 
 export interface AppointmentStats {

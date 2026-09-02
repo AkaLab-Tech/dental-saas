@@ -87,7 +87,10 @@ const EXPECTED_ES_VALUES: Record<(typeof DASHBOARD_NEW_KEYS)[number], string> = 
   'statCards.appointmentsThisMonth': 'Citas del Mes',
   'statCards.completedCount': '{{count}} completadas',
   'statCards.monthlyRevenue': 'Ingresos del Mes',
-  'statCards.pendingAmount': '{{amount}} pendientes',
+  // Retexted by #396: the figure is now the net outstanding across all
+  // patient-billable work, so the copy names that basis instead of the bare
+  // "pendientes" the #332 migration moved over.
+  'statCards.pendingAmount': '{{amount}} por cobrar a pacientes',
   'statCards.pendingLabworks': 'Labworks Pendientes',
   'statCards.unpaidCount': '{{count}} sin pagar',
   'statCards.totalAppointments': 'Total de Citas',

@@ -211,7 +211,13 @@ describe('DashboardPage', () => {
     expect(screen.getByText('45')).toBeInTheDocument()
     expect(screen.getByText('dashboard.statCards.completedCount 38')).toBeInTheDocument()
     expect(screen.getByText('dashboard.statCards.monthlyRevenue')).toBeInTheDocument()
-    expect(screen.getByText('dashboard.statCards.pendingAmount USD 5,000.00')).toBeInTheDocument()
+    // Regex, not a plain string: accessible-name matching is not
+    // whitespace-normalized and formatCurrency separates the code from the
+    // amount with a non-breaking space.
+    const pendingLink = screen.getByRole('link', {
+      name: /^dashboard\.statCards\.pendingAmount USD\s5,000\.00$/,
+    })
+    expect(pendingLink).toHaveAttribute('href', '/patients/debts')
 
     // Check secondary stat cards (new interpolated subtitles from #332)
     expect(screen.getByText('dashboard.statCards.pendingLabworks')).toBeInTheDocument()

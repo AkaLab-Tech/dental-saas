@@ -993,7 +993,7 @@
       "appointmentsThisMonth": "Appointments This Month",
       "completedCount": "{{count}} completed",
       "monthlyRevenue": "Monthly Revenue",
-      "pendingAmount": "{{amount}} pending",
+      "pendingAmount": "{{amount}} outstanding from patients",
       "pendingLabworks": "Pending Labworks",
       "unpaidCount": "{{count}} unpaid",
       "totalAppointments": "Total Appointments",

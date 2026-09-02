@@ -53,6 +53,15 @@ export interface ListPaymentsOptions {
   kind?: PatientPaymentKind
 }
 
+// Money arithmetic in this service runs in integer cents. `cost`/`price`/
+// `amount` are Decimal(10,2) at the source, so cents are always whole numbers
+// and the conversion at the boundary is lossless — no IEEE-754 double can
+// introduce fractional-cent drift into a chain of integer +/- ops (unlike the
+// equivalent chain in dollars, where subtract-then-re-add round-trips are not
+// exact).
+const toCents = (dollars: number) => Math.round(dollars * 100)
+const fromCents = (cents: number) => cents / 100
+
 /**
  * Billable item (appointment or labwork) used for FIFO allocation
  */
@@ -102,16 +111,10 @@ export function computeFifoAllocation(
   totalPaid: number,
   earmarks?: ReadonlyMap<string, number>
 ): FifoAllocation[] {
-  // Run the whole allocation in integer cents. `cost`/`amount` are
-  // Decimal(10,2) at the source, so cents are always whole numbers and the
-  // conversion at the boundary is lossless — no IEEE-754 double can
-  // introduce fractional-cent drift into a chain of integer +/- ops (unlike
-  // the equivalent chain in dollars, where subtract-then-re-add round-trips
-  // are not exact; see the isPaid regression this replaced). Comparisons,
-  // capping, and the no-skip FIFO walk all happen here in cents; only the
-  // final FifoAllocation is converted back to dollars, once per item.
-  const toCents = (dollars: number) => Math.round(dollars * 100)
-
+  // Run the whole allocation in integer cents (see toCents at module scope;
+  // this is the isPaid regression that motivated it). Comparisons, capping,
+  // and the no-skip FIFO walk all happen here in cents; only the final
+  // FifoAllocation is converted back to dollars, once per item.
   const costCents = items.map((item) => toCents(item.cost))
   const earmarkedCents = items.map((item, i) =>
     costCents[i] > 0 ? Math.min(toCents(earmarks?.get(item.id) ?? 0), costCents[i]) : 0
@@ -471,24 +474,44 @@ export interface Debtor {
   outstanding: number
 }
 
-function addToMap(map: Map<string, number>, patientId: string | null, amount: number): void {
+function addToMap(map: Map<string, number>, patientId: string | null, cents: number): void {
   if (!patientId) return
-  map.set(patientId, (map.get(patientId) || 0) + amount)
+  map.set(patientId, (map.get(patientId) || 0) + cents)
+}
+
+export interface PatientOutstanding {
+  totalDebt: number
+  totalPaid: number
+  outstanding: number
 }
 
 /**
- * List all patients with an outstanding balance for the tenant, sorted by
- * outstanding desc. Uses set-based grouped aggregations (no per-patient
- * N+1) with the same filters as getPatientBalance/getBillableItems, so the
- * debt figures stay consistent with the per-patient balance view.
+ * Outstanding balance per patient for the whole tenant, keyed by patientId.
+ *
+ * No per-patient N+1: the whole tenant is covered by exactly three grouped
+ * aggregates (appointments, labworks, payments) — there is no query inside
+ * any loop here, and callers must not add one.
+ *
+ * Uses the same filters as getPatientBalance/getBillableItems, so the debt
+ * figures stay consistent with the per-patient balance view. The payments
+ * aggregate deliberately carries no `kind` filter: an ADVANCE is the
+ * patient's money just as much as an APPOINTMENT payment is, and that is
+ * what keeps the metric stable across the cancel/restore ADVANCE conversion
+ * in convertAppointmentPaymentsToAdvance.
  *
  * Deliberately not earmark-aware, for the same reason as getPatientBalance:
  * earmarking only redistributes a patient's payments among their own
  * billable items, it never changes their totalDebt/totalPaid/outstanding
  * sums. Per-patient FIFO here would turn this into an N+1 loop for no
  * change in the numbers.
+ *
+ * Arithmetic runs in integer cents and `outstanding` is floored at 0 per
+ * patient, so a patient in credit contributes exactly 0 and can never
+ * offset another patient's debt.
  */
-export async function listDebtors(tenantId: string): Promise<Debtor[]> {
+export async function computeOutstandingByPatient(
+  tenantId: string
+): Promise<Map<string, PatientOutstanding>> {
   const [appointments, labworks, payments] = await Promise.all([
     prisma.appointment.groupBy({
       by: ['patientId'],
@@ -507,16 +530,57 @@ export async function listDebtors(tenantId: string): Promise<Debtor[]> {
     }),
   ])
 
-  const debtByPatient = new Map<string, number>()
-  appointments.forEach((r) => addToMap(debtByPatient, r.patientId, r._sum.cost?.toNumber() || 0))
-  labworks.forEach((r) => addToMap(debtByPatient, r.patientId, r._sum.price?.toNumber() || 0))
-
-  const paidByPatient = new Map<string, number>()
-  payments.forEach((r) => addToMap(paidByPatient, r.patientId, r._sum.amount?.toNumber() || 0))
-
-  const patientIds = [...debtByPatient.keys()].filter(
-    (id) => (debtByPatient.get(id) || 0) - (paidByPatient.get(id) || 0) > 0
+  const debtCentsByPatient = new Map<string, number>()
+  appointments.forEach((r) =>
+    addToMap(debtCentsByPatient, r.patientId, toCents(r._sum.cost?.toNumber() || 0))
   )
+  labworks.forEach((r) =>
+    addToMap(debtCentsByPatient, r.patientId, toCents(r._sum.price?.toNumber() || 0))
+  )
+
+  const paidCentsByPatient = new Map<string, number>()
+  payments.forEach((r) =>
+    addToMap(paidCentsByPatient, r.patientId, toCents(r._sum.amount?.toNumber() || 0))
+  )
+
+  const result = new Map<string, PatientOutstanding>()
+  for (const [patientId, debtCents] of debtCentsByPatient) {
+    const paidCents = paidCentsByPatient.get(patientId) || 0
+    result.set(patientId, {
+      totalDebt: fromCents(debtCents),
+      totalPaid: fromCents(paidCents),
+      outstanding: fromCents(Math.max(0, debtCents - paidCents)),
+    })
+  }
+  return result
+}
+
+/**
+ * Tenant-wide outstanding total: the sum of every patient's own outstanding
+ * balance, each floored at 0 (see computeOutstandingByPatient). Summed in
+ * cents and converted to dollars once, so it is exactly equal to the sum of
+ * listDebtors' outstanding column.
+ */
+export async function getTenantOutstandingTotal(tenantId: string): Promise<number> {
+  const byPatient = await computeOutstandingByPatient(tenantId)
+  let totalCents = 0
+  for (const { outstanding } of byPatient.values()) {
+    totalCents += toCents(outstanding)
+  }
+  return fromCents(totalCents)
+}
+
+/**
+ * List all patients with an outstanding balance for the tenant, sorted by
+ * outstanding desc. Shares computeOutstandingByPatient with the dashboard's
+ * pending-payments metric, so the two can never disagree.
+ */
+export async function listDebtors(tenantId: string): Promise<Debtor[]> {
+  const byPatient = await computeOutstandingByPatient(tenantId)
+
+  const patientIds = [...byPatient.entries()]
+    .filter(([, balance]) => balance.outstanding > 0)
+    .map(([id]) => id)
 
   const patients = await prisma.patient.findMany({
     where: { tenantId, id: { in: patientIds } },
@@ -525,14 +589,13 @@ export async function listDebtors(tenantId: string): Promise<Debtor[]> {
 
   return patients
     .map((patient) => {
-      const totalDebt = debtByPatient.get(patient.id) || 0
-      const totalPaid = paidByPatient.get(patient.id) || 0
+      const balance = byPatient.get(patient.id) as PatientOutstanding
       return {
         patientId: patient.id,
         name: `${patient.firstName} ${patient.lastName}`,
-        totalDebt,
-        totalPaid,
-        outstanding: Math.max(0, totalDebt - totalPaid),
+        totalDebt: balance.totalDebt,
+        totalPaid: balance.totalPaid,
+        outstanding: balance.outstanding,
       }
     })
     .sort((a, b) => b.outstanding - a.outstanding)
@@ -629,11 +692,15 @@ const CANCELLED_APPOINTMENT_NOTE_SUFFIX = ' (cita cancelada)'
  * existing FIFO/earmark computation (getAppointmentEarmarks,
  * hasRecordedAppointmentPayment both require kind='APPOINTMENT').
  *
- * updateMany (not findFirst+update) because it is idempotent and needs no
- * prior read; the single-active-row-per-appointment invariant enforced by
- * hasRecordedAppointmentPayment plus deletePayment's soft-delete means at
- * most one row ever matches, but updateMany degrades safely even if that
- * invariant were ever violated by a race.
+ * findMany + a per-row update (not a set-based updateMany) because the note
+ * suffix must be appended to each row's *existing* note, which SQL-side
+ * updateMany cannot express. "Simplifying" this into an updateMany would
+ * drop the suffix and silently break the suffix strip that
+ * restoreAppointmentPaymentsFromAdvance relies on to restore the original
+ * note. findMany (not findFirst) because the loop must cover every matching
+ * row even if the single-active-row-per-appointment invariant enforced by
+ * hasRecordedAppointmentPayment plus deletePayment's soft-delete were ever
+ * violated by a race.
  */
 export async function convertAppointmentPaymentsToAdvance(
   tx: Prisma.TransactionClient,

@@ -1002,7 +1002,7 @@
       "appointmentsThisMonth": "Citas del Mes",
       "completedCount": "{{count}} completadas",
       "monthlyRevenue": "Ingresos del Mes",
-      "pendingAmount": "{{amount}} pendientes",
+      "pendingAmount": "{{amount}} por cobrar a pacientes",
       "pendingLabworks": "Labworks Pendientes",
       "unpaidCount": "{{count}} sin pagar",
       "totalAppointments": "Total de Citas",
