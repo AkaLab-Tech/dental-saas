@@ -369,13 +369,23 @@ export async function getPatientBalance(
     }),
   ])
 
-  const totalDebt =
-    (appointmentsAgg._sum.cost?.toNumber() || 0) + (labworksAgg._sum.price?.toNumber() || 0)
-  const totalPaid = paymentsAgg._sum.amount?.toNumber() || 0
-  const outstanding = Math.max(0, totalDebt - totalPaid)
-  const credit = Math.max(0, totalPaid - totalDebt)
+  // Sum and diff in integer cents (see toCents at module scope, #403): the
+  // dollar-space `+`/`-` below used to leave sub-cent IEEE-754 residue in
+  // totalDebt/outstanding/credit (e.g. 12.350000000000023).
+  const debtCents =
+    toCents(appointmentsAgg._sum.cost?.toNumber() || 0) +
+    toCents(labworksAgg._sum.price?.toNumber() || 0)
+  const paidCents = toCents(paymentsAgg._sum.amount?.toNumber() || 0)
 
-  return { success: true, data: { totalDebt, totalPaid, outstanding, credit } }
+  return {
+    success: true,
+    data: {
+      totalDebt: fromCents(debtCents),
+      totalPaid: fromCents(paidCents),
+      outstanding: fromCents(Math.max(0, debtCents - paidCents)),
+      credit: fromCents(Math.max(0, paidCents - debtCents)),
+    },
+  }
 }
 
 /**
@@ -448,18 +458,22 @@ export async function getPatientAccountStatement(
   ])
 
   const allocations = computeFifoAllocation(items, totalPaid, earmarks)
-  const appointmentsDebt = allocations.reduce((sum, a) => sum + a.outstanding, 0)
-  const totalBilled = items.reduce((sum, item) => sum + item.cost, 0)
+  // Reduce and diff in integer cents (see toCents at module scope, #403):
+  // the dollar-space reduces/subtraction below used to leave sub-cent
+  // IEEE-754 residue in appointmentsDebt/totalBilled/advancesCredit.
+  const appointmentsDebtCents = allocations.reduce((sum, a) => sum + toCents(a.outstanding), 0)
+  const billedCents = items.reduce((sum, item) => sum + toCents(item.cost), 0)
+  const paidCents = toCents(totalPaid)
 
   return {
     success: true,
     data: {
-      appointmentsDebt,
+      appointmentsDebt: fromCents(appointmentsDebtCents),
       // Whatever FIFO could not apply to performed work. Advances already
       // consumed by an item are part of paidAmount, never counted here.
-      advancesCredit: Math.max(0, totalPaid - totalBilled),
+      advancesCredit: fromCents(Math.max(0, paidCents - billedCents)),
       remainingBudgetProjection: budgetItemsAgg._sum.totalPrice?.toNumber() || 0,
-      totalBilled,
+      totalBilled: fromCents(billedCents),
       totalPaid,
       advancesTotal: advancesAgg._sum.amount?.toNumber() || 0,
     },
