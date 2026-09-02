@@ -1847,6 +1847,97 @@ describe('Appointments API', () => {
 
       expect(response.status).toBe(404)
     })
+
+    // ==========================================================================
+    // Payment conversion on cancel (#391): cancelling an appointment must stop
+    // earmarking its linked kind=APPOINTMENT payment, converting it to a plain
+    // ADVANCE inside the same transaction as the soft delete.
+    // ==========================================================================
+    describe('payment conversion on cancel (#391)', () => {
+      it('converts every active kind=APPOINTMENT payment on the appointment to kind=ADVANCE in the same transaction as the soft delete, and the converted payment is reachable in Entregas and deletable by an ADMIN', async () => {
+        const patient = await prisma.patient.create({
+          data: { tenantId, firstName: 'Cancel', lastName: 'Conversion' },
+        })
+        // Distinct day/hour from every other fixture in this file so the
+        // shared doctorId's schedule never collides with an unrelated test.
+        const times = getFutureTime(40, 9)
+        const created = await api()
+          .post('/api/appointments')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ patientId: patient.id, doctorId, ...times, cost: 80, paidAmount: 80 })
+
+        expect(created.status).toBe(201)
+        const apptId = created.body.data.id
+        const paymentId = created.body.data.recordedPaymentId
+        expect(paymentId).toBeTypeOf('string')
+
+        const paymentBefore = await prisma.patientPayment.findUniqueOrThrow({ where: { id: paymentId } })
+        expect(paymentBefore).toMatchObject({ kind: 'APPOINTMENT', appointmentId: apptId, isActive: true })
+
+        const del = await api()
+          .delete(`/api/appointments/${apptId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+        expect(del.status).toBe(200)
+
+        const paymentAfter = await prisma.patientPayment.findUniqueOrThrow({ where: { id: paymentId } })
+        expect(paymentAfter.kind).toBe('ADVANCE')
+        expect(paymentAfter.appointmentId).toBe(apptId)
+        expect(paymentAfter.amount.toNumber()).toBe(80)
+        expect(paymentAfter.isActive).toBe(true)
+        expect(paymentAfter.note).toContain('cita cancelada')
+
+        // Reachable in Entregas (kind=ADVANCE listing).
+        const entregas = await api()
+          .get(`/api/patients/${patient.id}/payments`)
+          .query({ kind: 'ADVANCE' })
+          .set('Authorization', `Bearer ${adminToken}`)
+        expect(entregas.status).toBe(200)
+        expect((entregas.body.data as Array<{ id: string }>).map((p) => p.id)).toContain(paymentId)
+
+        // Deletable by a holder of PAYMENTS_DELETE (ADMIN).
+        const deletePayment = await api()
+          .delete(`/api/patients/${patient.id}/payments/${paymentId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+        expect(deletePayment.status).toBe(200)
+        const finalPayment = await prisma.patientPayment.findUniqueOrThrow({ where: { id: paymentId } })
+        expect(finalPayment.isActive).toBe(false)
+      })
+
+      // The plan's other required assertion: deleteAppointment calls
+      // recalculatePaidStatus for the WHOLE patient, not just the cancelled
+      // appointment's own converted payment. Cancelling apt1 frees its $100
+      // earmark into the shared pool, which is then large enough to cover
+      // apt2 in full — an observable isPaid flip on a completely different row.
+      it('recalculates isPaid for the patient\'s other billable items: cancelling a fully-earmarked appointment lets its converted advance cover another outstanding one', async () => {
+        const patient = await prisma.patient.create({
+          data: { tenantId, firstName: 'Recalc', lastName: 'OtherItems' },
+        })
+        const t1 = getFutureTime(41, 9)
+        const t2 = getFutureTime(42, 9)
+
+        const apt1 = await api()
+          .post('/api/appointments')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ patientId: patient.id, doctorId, ...t1, cost: 100, paidAmount: 100 })
+        expect(apt1.status).toBe(201)
+        expect(apt1.body.data.isPaid).toBe(true)
+
+        const apt2 = await api()
+          .post('/api/appointments')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ patientId: patient.id, doctorId, ...t2, cost: 50 })
+        expect(apt2.status).toBe(201)
+        expect(apt2.body.data.isPaid).toBe(false)
+
+        const del = await api()
+          .delete(`/api/appointments/${apt1.body.data.id}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+        expect(del.status).toBe(200)
+
+        const apt2After = await prisma.appointment.findUniqueOrThrow({ where: { id: apt2.body.data.id } })
+        expect(apt2After.isPaid).toBe(true)
+      })
+    })
   })
 
   // ============================================================================
@@ -1930,6 +2021,134 @@ describe('Appointments API', () => {
         .set('Authorization', `Bearer ${staffToken}`)
 
       expect(response.status).toBe(403)
+    })
+
+    // ==========================================================================
+    // Payment restore on un-cancel (#391): mirrors the conversion on cancel.
+    // ==========================================================================
+    describe('payment restore on un-cancel (#391)', () => {
+      it('restores the converted advance back to an APPOINTMENT-kind payment and recalculates the appointment as paid again', async () => {
+        const patient = await prisma.patient.create({
+          data: { tenantId, firstName: 'Restore', lastName: 'Conversion' },
+        })
+        const times = getFutureTime(43, 9)
+        const created = await api()
+          .post('/api/appointments')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ patientId: patient.id, doctorId, ...times, cost: 90, paidAmount: 90 })
+        expect(created.status).toBe(201)
+        const apptId = created.body.data.id
+        const paymentId = created.body.data.recordedPaymentId
+
+        await api().delete(`/api/appointments/${apptId}`).set('Authorization', `Bearer ${adminToken}`)
+        const afterCancel = await prisma.patientPayment.findUniqueOrThrow({ where: { id: paymentId } })
+        expect(afterCancel.kind).toBe('ADVANCE')
+
+        const restore = await api()
+          .put(`/api/appointments/${apptId}/restore`)
+          .set('Authorization', `Bearer ${adminToken}`)
+        expect(restore.status).toBe(200)
+
+        const paymentAfterRestore = await prisma.patientPayment.findUniqueOrThrow({ where: { id: paymentId } })
+        expect(paymentAfterRestore.kind).toBe('APPOINTMENT')
+        expect(paymentAfterRestore.note).not.toContain('cita cancelada')
+
+        const apptAfterRestore = await api()
+          .get(`/api/appointments/${apptId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+        expect(apptAfterRestore.body.data.hasRecordedPayment).toBe(true)
+        expect(apptAfterRestore.body.data.recordedPaidAmount).toBe(90)
+        expect(apptAfterRestore.body.data.isPaid).toBe(true)
+      })
+
+      // Double-charge guard: cancel -> restore -> edit-with-paidAmount must
+      // NOT create a second payment, because hasRecordedAppointmentPayment
+      // (or existing.isPaid) already sees the restored payment as recorded.
+      it('cancel -> restore -> edit with paidAmount creates no second payment', async () => {
+        const patient = await prisma.patient.create({
+          data: { tenantId, firstName: 'DoubleCharge', lastName: 'Guard' },
+        })
+        const times = getFutureTime(44, 9)
+        const created = await api()
+          .post('/api/appointments')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ patientId: patient.id, doctorId, ...times, cost: 100, paidAmount: 100 })
+        expect(created.status).toBe(201)
+        const apptId = created.body.data.id
+        const originalPaymentId = created.body.data.recordedPaymentId
+
+        await api().delete(`/api/appointments/${apptId}`).set('Authorization', `Bearer ${adminToken}`)
+        await api().put(`/api/appointments/${apptId}/restore`).set('Authorization', `Bearer ${adminToken}`)
+
+        const update = await api()
+          .put(`/api/appointments/${apptId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ paidAmount: 100 })
+        expect(update.status).toBe(200)
+
+        const activePayments = await prisma.patientPayment.findMany({
+          where: { tenantId, appointmentId: apptId, isActive: true },
+        })
+        expect(activePayments).toHaveLength(1)
+        expect(activePayments[0].id).toBe(originalPaymentId)
+        expect(activePayments[0].kind).toBe('APPOINTMENT')
+      })
+
+      // Deliberate negative case (#391): cancel -> delete the converted
+      // advance -> restore. The restore matches nothing (the row is
+      // isActive:false), so the appointment comes back with NO recorded
+      // payment — the money was genuinely refunded — and a later edit may
+      // record a fresh payment without double-charging.
+      it('cancel -> delete the converted advance -> restore leaves the appointment unpaid, and a later edit records a fresh payment', async () => {
+        const patient = await prisma.patient.create({
+          data: { tenantId, firstName: 'Refund', lastName: 'ThenRestore' },
+        })
+        const times = getFutureTime(45, 9)
+        const created = await api()
+          .post('/api/appointments')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ patientId: patient.id, doctorId, ...times, cost: 80, paidAmount: 80 })
+        expect(created.status).toBe(201)
+        const apptId = created.body.data.id
+        const originalPaymentId = created.body.data.recordedPaymentId
+
+        await api().delete(`/api/appointments/${apptId}`).set('Authorization', `Bearer ${adminToken}`)
+
+        // Operator reverses the (now ADVANCE) converted payment — the money
+        // is genuinely given back to the patient.
+        const deletePayment = await api()
+          .delete(`/api/patients/${patient.id}/payments/${originalPaymentId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+        expect(deletePayment.status).toBe(200)
+
+        const restore = await api()
+          .put(`/api/appointments/${apptId}/restore`)
+          .set('Authorization', `Bearer ${adminToken}`)
+        expect(restore.status).toBe(200)
+        expect(restore.body.data.hasRecordedPayment).toBe(false)
+        expect(restore.body.data.isPaid).toBe(false)
+
+        // A later edit is free to record a brand new payment — no
+        // double-charge guard blocks it, because nothing is currently recorded.
+        const update = await api()
+          .put(`/api/appointments/${apptId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ paidAmount: 30 })
+        expect(update.status).toBe(200)
+        expect(update.body.data.hasRecordedPayment).toBe(true)
+        expect(update.body.data.recordedPaidAmount).toBe(30)
+
+        const allPayments = await prisma.patientPayment.findMany({
+          where: { tenantId, appointmentId: apptId },
+          orderBy: { createdAt: 'asc' },
+        })
+        expect(allPayments).toHaveLength(2)
+        expect(allPayments[0]).toMatchObject({ id: originalPaymentId, isActive: false })
+        const freshPayment = allPayments[1]
+        expect(freshPayment.isActive).toBe(true)
+        expect(freshPayment.amount.toNumber()).toBe(30)
+        expect(freshPayment.kind).toBe('APPOINTMENT')
+      })
     })
   })
 

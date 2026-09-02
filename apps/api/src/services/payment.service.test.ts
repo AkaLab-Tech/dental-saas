@@ -1,5 +1,12 @@
-import { describe, it, expect } from 'vitest'
-import { computeFifoAllocation, type BillableItem, type FifoAllocation } from './payment.service.js'
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { prisma } from '@dental/database'
+import {
+  computeFifoAllocation,
+  convertAppointmentPaymentsToAdvance,
+  restoreAppointmentPaymentsFromAdvance,
+  type BillableItem,
+  type FifoAllocation,
+} from './payment.service.js'
 
 // Pure-function unit tests for the two-stage (earmark, then FIFO pool)
 // allocator introduced by #390. No Prisma/DB involved — `computeFifoAllocation`
@@ -399,6 +406,201 @@ describe('computeFifoAllocation', () => {
         expect(a.paidAmount).toBeGreaterThanOrEqual(0)
         expect(a.outstanding).toBeGreaterThanOrEqual(0)
       }
+    })
+  })
+})
+
+// ============================================================================
+// convertAppointmentPaymentsToAdvance / restoreAppointmentPaymentsFromAdvance
+// (task #391 — cancelling an appointment must stop earmarking its linked
+// consultation payment, and restoring must earmark it again). These take a
+// real Prisma.TransactionClient, so they are exercised here against the test
+// DB rather than as pure-function tests.
+// ============================================================================
+
+describe('convertAppointmentPaymentsToAdvance / restoreAppointmentPaymentsFromAdvance (#391)', () => {
+  let tenantId: string
+  let patientId: string
+  let doctorId: string
+  let appointmentId: string
+  const suffix = Date.now()
+
+  beforeAll(async () => {
+    let freePlan = await prisma.plan.findUnique({ where: { name: 'free' } })
+    if (!freePlan) {
+      freePlan = await prisma.plan.create({
+        data: { name: 'free', displayName: 'Free', price: 0, maxAdmins: 1, maxDoctors: 3, maxPatients: 50 },
+      })
+    }
+    const tenant = await prisma.tenant.create({
+      data: { name: 'Payment Conversion Svc', slug: `payment-conversion-svc-${suffix}` },
+    })
+    tenantId = tenant.id
+    await prisma.subscription.create({
+      data: {
+        tenantId,
+        planId: freePlan.id,
+        status: 'ACTIVE',
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    })
+    const patient = await prisma.patient.create({ data: { tenantId, firstName: 'Conv', lastName: 'Patient' } })
+    patientId = patient.id
+    const doctor = await prisma.doctor.create({
+      data: { tenantId, firstName: 'Conv', lastName: 'Doctor', email: `conv-doc-${suffix}@test.com` },
+    })
+    doctorId = doctor.id
+  })
+
+  afterAll(async () => {
+    await prisma.patientPayment.deleteMany({ where: { tenantId } })
+    await prisma.appointment.deleteMany({ where: { tenantId } })
+    await prisma.patient.deleteMany({ where: { tenantId } })
+    await prisma.doctor.deleteMany({ where: { tenantId } })
+    await prisma.subscription.deleteMany({ where: { tenantId } })
+    await prisma.tenant.delete({ where: { id: tenantId } })
+  })
+
+  beforeEach(async () => {
+    await prisma.patientPayment.deleteMany({ where: { tenantId } })
+    await prisma.appointment.deleteMany({ where: { tenantId } })
+    const appointment = await prisma.appointment.create({
+      data: {
+        tenantId,
+        patientId,
+        doctorId,
+        startTime: new Date(Date.now() + 3600_000),
+        endTime: new Date(Date.now() + 5400_000),
+        duration: 30,
+        cost: 100,
+      },
+    })
+    appointmentId = appointment.id
+  })
+
+  describe('convertAppointmentPaymentsToAdvance', () => {
+    it('flips kind to ADVANCE, appends the " (cita cancelada)" note marker, and preserves appointmentId/amount', async () => {
+      const payment = await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId,
+          appointmentId,
+          amount: 75,
+          date: new Date(),
+          kind: 'APPOINTMENT',
+          note: 'Pago en consulta',
+        },
+      })
+
+      await prisma.$transaction((tx) => convertAppointmentPaymentsToAdvance(tx, tenantId, appointmentId))
+
+      const updated = await prisma.patientPayment.findUniqueOrThrow({ where: { id: payment.id } })
+      expect(updated.kind).toBe('ADVANCE')
+      expect(updated.note).toBe('Pago en consulta (cita cancelada)')
+      expect(updated.appointmentId).toBe(appointmentId)
+      expect(updated.amount.toNumber()).toBe(75)
+      expect(updated.isActive).toBe(true)
+    })
+
+    it('appends the marker to a null note (yields just the marker text)', async () => {
+      const payment = await prisma.patientPayment.create({
+        data: { tenantId, patientId, appointmentId, amount: 40, date: new Date(), kind: 'APPOINTMENT', note: null },
+      })
+
+      await prisma.$transaction((tx) => convertAppointmentPaymentsToAdvance(tx, tenantId, appointmentId))
+
+      const updated = await prisma.patientPayment.findUniqueOrThrow({ where: { id: payment.id } })
+      expect(updated.note).toBe(' (cita cancelada)')
+    })
+
+    it('leaves an already-inactive linked payment untouched (nothing to convert)', async () => {
+      const payment = await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId,
+          appointmentId,
+          amount: 50,
+          date: new Date(),
+          kind: 'APPOINTMENT',
+          note: 'x',
+          isActive: false,
+        },
+      })
+
+      await prisma.$transaction((tx) => convertAppointmentPaymentsToAdvance(tx, tenantId, appointmentId))
+
+      const unchanged = await prisma.patientPayment.findUniqueOrThrow({ where: { id: payment.id } })
+      expect(unchanged.kind).toBe('APPOINTMENT')
+      expect(unchanged.note).toBe('x')
+    })
+
+    it('is a no-op (resolves, writes nothing) when no APPOINTMENT payment is linked to the appointment', async () => {
+      await expect(
+        prisma.$transaction((tx) => convertAppointmentPaymentsToAdvance(tx, tenantId, appointmentId))
+      ).resolves.toBeUndefined()
+    })
+  })
+
+  describe('restoreAppointmentPaymentsFromAdvance', () => {
+    it('flips kind back to APPOINTMENT and strips the note marker, preserving appointmentId/amount', async () => {
+      const payment = await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId,
+          appointmentId,
+          amount: 75,
+          date: new Date(),
+          kind: 'ADVANCE',
+          note: 'Pago en consulta (cita cancelada)',
+        },
+      })
+
+      await prisma.$transaction((tx) => restoreAppointmentPaymentsFromAdvance(tx, tenantId, appointmentId))
+
+      const updated = await prisma.patientPayment.findUniqueOrThrow({ where: { id: payment.id } })
+      expect(updated.kind).toBe('APPOINTMENT')
+      expect(updated.note).toBe('Pago en consulta')
+      expect(updated.appointmentId).toBe(appointmentId)
+      expect(updated.amount.toNumber()).toBe(75)
+    })
+
+    it('leaves the note unchanged when it does not end with the marker', async () => {
+      const payment = await prisma.patientPayment.create({
+        data: { tenantId, patientId, appointmentId, amount: 30, date: new Date(), kind: 'ADVANCE', note: 'Entrega manual' },
+      })
+
+      await prisma.$transaction((tx) => restoreAppointmentPaymentsFromAdvance(tx, tenantId, appointmentId))
+
+      const updated = await prisma.patientPayment.findUniqueOrThrow({ where: { id: payment.id } })
+      expect(updated.kind).toBe('APPOINTMENT')
+      expect(updated.note).toBe('Entrega manual')
+    })
+
+    // Deliberate negative case (#391): the operator deleted the converted
+    // advance while the appointment was cancelled. Restore must NOT resurrect
+    // it — the money was already refunded, so the restored appointment should
+    // read as unpaid again, not double-earmarked.
+    it('never matches an inactive (deleted) advance — a refunded advance stays refunded on restore', async () => {
+      const payment = await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId,
+          appointmentId,
+          amount: 75,
+          date: new Date(),
+          kind: 'ADVANCE',
+          note: 'Pago en consulta (cita cancelada)',
+          isActive: false,
+        },
+      })
+
+      await prisma.$transaction((tx) => restoreAppointmentPaymentsFromAdvance(tx, tenantId, appointmentId))
+
+      const unchanged = await prisma.patientPayment.findUniqueOrThrow({ where: { id: payment.id } })
+      expect(unchanged.kind).toBe('ADVANCE')
+      expect(unchanged.isActive).toBe(false)
+      expect(unchanged.note).toBe('Pago en consulta (cita cancelada)')
     })
   })
 })
