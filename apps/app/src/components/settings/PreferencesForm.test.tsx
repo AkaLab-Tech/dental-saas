@@ -1,4 +1,14 @@
-import { describe, it, expect, vi, beforeEach, beforeAll, type Mock } from 'vitest'
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  beforeAll,
+  type Mock,
+  type MockInstance,
+} from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import i18n from 'i18next'
 import '@/i18n'
@@ -66,6 +76,115 @@ function getRows() {
     }
   })
 }
+
+// Task #222: changing the language from Settings -> Preferences and having it
+// persist had no test — the two pre-existing language assertions (in the
+// #239 block below) only ever saw the untouched 'es' default. These tests
+// drive the real <select> instead.
+//
+// The hazard that kept this coverage out of the file is i18n's singleton:
+// handleChange calls `i18n.changeLanguage`, which would flip the shared
+// instance the rest of this file relies on being Spanish. Two guards, both
+// structural rather than best-effort:
+//   1. `i18n.changeLanguage` is spied (no-op) for every test here, so the
+//      contract is asserted without the instance actually switching.
+//   2. A scoped afterEach restores both the spy and the language, so a
+//      FAILING test in this block cannot poison the ones that follow.
+// This block is declared first on purpose: the Spanish-string assertions of
+// the #239 block run after it, so a leak would surface as their failure.
+describe('PreferencesForm — language preference (task #222)', () => {
+  const LANGUAGE_LABEL = 'Idioma'
+
+  let changeLanguageSpy: MockInstance<typeof i18n.changeLanguage>
+  let languageBeforeTest: string
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    ;(useSettingsStore as unknown as Mock).mockReturnValue({
+      updateSettings: mockUpdateSettings,
+      isSaving: false,
+    })
+    languageBeforeTest = i18n.language
+    changeLanguageSpy = vi.spyOn(i18n, 'changeLanguage').mockResolvedValue(undefined as never)
+  })
+
+  afterEach(async () => {
+    changeLanguageSpy.mockRestore()
+    if (i18n.language !== languageBeforeTest) {
+      await i18n.changeLanguage(languageBeforeTest)
+    }
+    expect(i18n.language).toBe(languageBeforeTest)
+  })
+
+  function getLanguageSelect() {
+    return screen.getByLabelText(LANGUAGE_LABEL) as HTMLSelectElement
+  }
+
+  it('offers exactly the three shipped languages, including Arabic', () => {
+    render(<PreferencesForm settings={mockSettings} canEdit={true} />)
+
+    const options = Array.from(getLanguageSelect().options)
+    expect(options.map((o) => o.value)).toEqual(['es', 'en', 'ar'])
+    expect(options.map((o) => o.textContent)).toEqual(['Español', 'English', 'العربية'])
+  })
+
+  it('preselects the saved language and submits the newly chosen one to updateSettings', () => {
+    render(<PreferencesForm settings={mockSettings} canEdit={true} />)
+
+    expect(getLanguageSelect().value).toBe('es')
+
+    fireEvent.change(getLanguageSelect(), { target: { value: 'en' } })
+    expect(getLanguageSelect().value).toBe('en')
+
+    fireEvent.click(screen.getByRole('button', { name: SAVE_LABEL }))
+
+    expect(mockUpdateSettings).toHaveBeenCalledTimes(1)
+    const payload = mockUpdateSettings.mock.calls[0][0]
+    expect(payload.language).toBe('en')
+    // The rest of the preferences ship unchanged alongside it.
+    expect(payload.dateFormat).toBe('DD/MM/YYYY')
+    expect(payload.defaultAppointmentDuration).toBe(30)
+  })
+
+  it("persists 'ar' — the value the old pt/ar enum mismatch made unsaveable (#221)", () => {
+    render(<PreferencesForm settings={mockSettings} canEdit={true} />)
+
+    fireEvent.change(getLanguageSelect(), { target: { value: 'ar' } })
+    fireEvent.click(screen.getByRole('button', { name: SAVE_LABEL }))
+
+    expect(mockUpdateSettings).toHaveBeenCalledTimes(1)
+    expect(mockUpdateSettings.mock.calls[0][0].language).toBe('ar')
+  })
+
+  it('applies the choice to i18n immediately, on change rather than on submit', () => {
+    render(<PreferencesForm settings={mockSettings} canEdit={true} />)
+
+    fireEvent.change(getLanguageSelect(), { target: { value: 'ar' } })
+
+    expect(changeLanguageSpy).toHaveBeenCalledTimes(1)
+    expect(changeLanguageSpy).toHaveBeenCalledWith('ar')
+    // Not deferred to the save: the UI switches as soon as the select changes.
+    expect(mockUpdateSettings).not.toHaveBeenCalled()
+  })
+
+  it('changing another field never touches i18n', () => {
+    render(<PreferencesForm settings={mockSettings} canEdit={true} />)
+
+    fireEvent.change(screen.getByLabelText('Formato de Fecha'), {
+      target: { value: 'YYYY-MM-DD' },
+    })
+
+    expect(changeLanguageSpy).not.toHaveBeenCalled()
+  })
+
+  it('disables the language select in read-only mode (canEdit=false)', () => {
+    render(<PreferencesForm settings={mockSettings} canEdit={false} />)
+
+    expect(getLanguageSelect()).toBeDisabled()
+    expect(getLanguageSelect().value).toBe('es')
+    expect(changeLanguageSpy).not.toHaveBeenCalled()
+  })
+})
 
 describe('PreferencesForm — appointment type durations (task #239)', () => {
   beforeEach(() => {
@@ -311,7 +430,10 @@ describe('PreferencesForm — appointment type durations (task #239)', () => {
       // pref. (Deliberately not the language select — changing it mutates
       // the shared i18n singleton across the whole test file via
       // handleChange's `i18n.changeLanguage`, which would leak into other
-      // tests/assertions here.)
+      // tests/assertions here. The language path is covered instead by the
+      // task #222 block at the top of this file, which spies on
+      // `i18n.changeLanguage` and restores the language in an afterEach so
+      // no switch escapes those tests.)
       fireEvent.change(screen.getByLabelText('Formato de Fecha'), { target: { value: 'YYYY-MM-DD' } })
       fireEvent.change(screen.getByLabelText('Tiempo entre citas (minutos)'), {
         target: { value: '15' },
