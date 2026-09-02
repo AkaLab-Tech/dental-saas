@@ -176,6 +176,47 @@ describe('POST /api/auth/register', () => {
   })
 })
 
+// Task #378: the fixtures below use deterministic emails and token strings, and
+// PasswordResetToken.tokenHash is globally @unique. An aborted run therefore
+// strands rows that make the NEXT run fail at create() — a failure that
+// re-strands them, so it never self-clears. Delete-then-insert makes the suite
+// recover from any prior state.
+const FIXTURE_EMAILS = [
+  'inactive@test.com',
+  'superadmin-wrong@test.com',
+  'inactive-reset@test.com',
+  'superadmin-reset-test@test.com',
+]
+
+const FIXTURE_RESET_TOKENS = [
+  'valid-test-token-for-reset',
+  'expired-test-token',
+  'used-test-token',
+  'weak-password-token',
+  'token-for-invalidation-test',
+  'inactive-user-token',
+  'superadmin-tenant-reset-token',
+]
+
+async function clearAuthFixtures() {
+  // A token stranded after its owning user was already removed is invisible to
+  // any user-scoped delete, and on its own is enough to keep the loop alive —
+  // so clearing by hash is the essential half, not an extra.
+  await prisma.passwordResetToken.deleteMany({
+    where: { tokenHash: { in: FIXTURE_RESET_TOKENS.map(hashToken) } },
+  })
+
+  const users = await prisma.user.findMany({
+    where: { email: { in: FIXTURE_EMAILS } },
+    select: { id: true },
+  })
+  const userIds = users.map((u) => u.id)
+  if (userIds.length > 0) {
+    await prisma.passwordResetToken.deleteMany({ where: { userId: { in: userIds } } })
+    await prisma.user.deleteMany({ where: { id: { in: userIds } } })
+  }
+}
+
 describe('Auth - Tenant User Password Recovery', () => {
   let tenantId: string
   let userId: string
@@ -234,6 +275,9 @@ describe('Auth - Tenant User Password Recovery', () => {
     await prisma.passwordResetToken.deleteMany({
       where: { userId },
     })
+    // Task #378: wired here rather than per-test so a future fixture cannot
+    // forget it — every test in this file starts from a known state.
+    await clearAuthFixtures()
     // Task #254: forgot-password and reset-password each carry their own
     // rate-limit bucket, keyed by IP. All requests in this suite come from
     // the same loopback address, so without this reset later tests in each
