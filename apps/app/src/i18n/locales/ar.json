@@ -1143,7 +1143,8 @@
     "confirmPin": "تأكيد رمز PIN",
     "mismatch": "رموز PIN غير متطابقة. حاول مرة أخرى.",
     "saveError": "خطأ في حفظ رمز PIN. حاول مرة أخرى.",
-    "startOver": "البدء من جديد"
+    "startOver": "البدء من جديد",
+    "provisionedEnterToContinue": "تم إعداد رمز PIN. أدخله للمتابعة."
   },
   "users": {
     "title": "المستخدمون",

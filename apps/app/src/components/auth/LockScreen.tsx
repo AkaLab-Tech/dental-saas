@@ -39,6 +39,7 @@ export function LockScreen() {
   const [pin, setPin] = useState(['', '', '', ''])
   const [setupPinValue, setSetupPinValue] = useState('')
   const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
   const [shake, setShake] = useState(false)
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
@@ -67,6 +68,7 @@ export function LockScreen() {
     newPin[index] = value.slice(-1)
     setPin(newPin)
     setError('')
+    setInfo('')
 
     if (value && index < 3) {
       inputRefs.current[index + 1]?.focus()
@@ -117,10 +119,19 @@ export function LockScreen() {
         resetPinInput()
         return
       }
-      // Save PIN via setup-pin endpoint (sets PIN + returns profileToken)
+      // Save PIN via setup-pin endpoint. Self-service setup returns a
+      // profileToken and unlocks immediately; an admin provisioning someone
+      // else's PIN gets no token, so the device stays locked and the user
+      // must log in with the PIN they just chose through the normal flow.
       setLoading(true)
       try {
-        await setupPinAction(selectedProfile.id, fullPin)
+        const unlockedSelf = await setupPinAction(selectedProfile.id, fullPin)
+        if (!unlockedSelf) {
+          setSetupPinValue('')
+          setStep('enter')
+          setInfo(t('pin.provisionedEnterToContinue'))
+          resetPinInput()
+        }
       } catch {
         setError(t('pin.saveError'))
         setStep('setup-enter')
@@ -138,6 +149,7 @@ export function LockScreen() {
     setSetupPinValue('')
     setStep('enter')
     setError('')
+    setInfo('')
   }
 
   const handleLogout = async () => {
@@ -156,6 +168,7 @@ export function LockScreen() {
   const handleSelectProfile = (profile: ProfileUser) => {
     setSelectedProfile(profile)
     setError('')
+    setInfo('')
     setPin(['', '', '', ''])
     setSetupPinValue('')
     setStep(profile.hasPinSet ? 'enter' : 'setup-enter')
@@ -255,6 +268,10 @@ export function LockScreen() {
 
             {error && (
               <p className="text-sm text-red-600 mb-2">{error}</p>
+            )}
+
+            {!error && info && (
+              <p className="text-sm text-blue-600 mb-2">{info}</p>
             )}
 
             {loading && (

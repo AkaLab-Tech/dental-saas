@@ -10,6 +10,7 @@ describe('PIN Authentication Routes', () => {
   let tenantId: string
   let adminUserId: string
   let staffUserId: string
+  let ownerUserId: string
   let adminToken: string
   let staffToken: string
   const testSlug = `test-pin-${Date.now()}`
@@ -56,6 +57,21 @@ describe('PIN Authentication Routes', () => {
     })
     staffUserId = staffUser.id
     staffToken = generateToken(staffUser.id, tenantId, 'STAFF')
+
+    // Task #427: OWNER user with no PIN set yet, used to prove the
+    // setup-pin escalation gate — a STAFF session must not be able to set
+    // (or read anything about) an OWNER's PIN.
+    const ownerUser = await prisma.user.create({
+      data: {
+        tenantId,
+        email: 'owner@pin-test.com',
+        firstName: 'Owner',
+        lastName: 'User',
+        passwordHash: hashedPassword,
+        role: 'OWNER',
+      },
+    })
+    ownerUserId = ownerUser.id
   })
 
   afterAll(async () => {
@@ -77,7 +93,9 @@ describe('PIN Authentication Routes', () => {
 
       expect(res.status).toBe(200)
       expect(res.body).toBeInstanceOf(Array)
-      expect(res.body.length).toBe(2)
+      // 3 active tenant users in the fixture: admin, staff, and the OWNER
+      // added for task #427's setup-pin escalation coverage.
+      expect(res.body.length).toBe(3)
       expect(res.body[0]).toHaveProperty('id')
       expect(res.body[0]).toHaveProperty('firstName')
       expect(res.body[0]).toHaveProperty('lastName')
@@ -302,6 +320,59 @@ describe('PIN Authentication Routes', () => {
         .send({ userId: staffUserId, pin: 'ab' })
 
       expect(res.status).toBe(400)
+    })
+
+    // Task #427: setup-pin was a one-request privilege escalation — any
+    // authenticated tenant user could set *any* colleague's first PIN and
+    // walk away with a profileToken carrying that colleague's role. The fix
+    // gates the write on isSelf || hasMinRole(ADMIN), checked before the
+    // user lookup and before any write.
+    it('should reject a STAFF session setting an OWNER PIN, without writing the PIN or returning a profileToken', async () => {
+      const res = await api()
+        .post('/api/auth/setup-pin')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .send({ userId: ownerUserId, pin: '7777' })
+
+      expect(res.status).toBe(403)
+      expect(res.body).toEqual({
+        success: false,
+        error: { message: 'Insufficient permissions', code: 'FORBIDDEN' },
+      })
+      expect(res.body.profileToken).toBeUndefined()
+
+      // The gate must run before the write: prove the PIN was never
+      // persisted, not merely that the response was a 403.
+      const ownerAfter = await prisma.user.findUnique({ where: { id: ownerUserId } })
+      expect(ownerAfter?.pinHash).toBeNull()
+    })
+
+    it('should let an ADMIN provision another user first PIN, but withhold the profileToken', async () => {
+      const targetUser = await prisma.user.create({
+        data: {
+          tenantId,
+          email: 'provisioned-target@pin-test.com',
+          firstName: 'Provisioned',
+          lastName: 'Target',
+          passwordHash: await hashPassword('Password123!'),
+          role: 'STAFF',
+        },
+      })
+      expect(targetUser.pinHash).toBeNull()
+
+      const res = await api()
+        .post('/api/auth/setup-pin')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ userId: targetUser.id, pin: '8642' })
+
+      expect(res.status).toBe(200)
+      expect(res.body.profileToken).toBeUndefined()
+      expect(res.body.user).toHaveProperty('id', targetUser.id)
+      expect(res.body.user).toHaveProperty('hasPinSet', true)
+
+      // The PIN really was set — this is the half of the behavior that must
+      // keep working.
+      const targetAfter = await prisma.user.findUnique({ where: { id: targetUser.id } })
+      expect(targetAfter?.pinHash).not.toBeNull()
     })
   })
 
