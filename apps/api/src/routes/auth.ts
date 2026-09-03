@@ -135,6 +135,67 @@ export const loginAccountRateLimitStore = loginAccountLimiter.store as Resettabl
 const loginIpRateLimit = loginIpLimiter.limiter
 const loginAccountRateLimit = loginAccountLimiter.limiter
 
+// #425: pin-login had no attempt limit at all against a 4-digit secret, and a
+// success mints a profile token carrying the TARGET's role — so an ordinary
+// shared front-desk session could brute-force its way up to OWNER. The target
+// list is not even secret: GET /profiles hands every authenticated member the
+// tenant's users with their role and hasPinSet.
+//
+// Two chained limiters, same shape as #418 and for the same reason: a single
+// composite (caller, target) key would hand an attacker a fresh bucket per
+// target, which is no limit at all.
+function pinLoginTargetUserId(req: Request): string | undefined {
+  const body = req.body as unknown
+  if (!body || typeof body !== 'object') return undefined
+  const { userId } = body as Record<string, unknown>
+  if (typeof userId !== 'string' || userId.length === 0) return undefined
+  return userId
+}
+
+// Target dimension — the control that actually bounds guessing. 10 failures /
+// 15 min against one profile makes exhausting the 10,000-PIN space take ~250
+// hours. Its lockout vector is insider-only (the key must be a real user id in
+// the caller's own tenant) and narrow: because the key is the TARGET, a locked
+// profile does not throttle the kiosk for anyone else. A throttle, not a hard
+// lock — at the lock screen the PIN *is* the credential, there is no fallback,
+// and recovery via setup-pin needs an ADMIN (#429), so it must expire on its own.
+const pinLoginTargetLimiter = createRateLimiter({
+  windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
+  limit: 10,
+  keyPrefix: 'pin-login-target',
+  message: 'Too many PIN attempts. Please try again later.',
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (_req, res) => res.statusCode !== 401,
+  // A payload with no usable userId is not a PIN guess and must not create a
+  // bucket at all — skip, don't key on a fallback constant (it would mix
+  // unrelated callers into one bucket). Such a request fails the schema anyway.
+  skip: (req) => pinLoginTargetUserId(req) === undefined,
+  keyGenerator: (req) => `${req.user!.tenantId}:${pinLoginTargetUserId(req) ?? ''}`,
+})
+// Caller dimension — catches target rotation, which the target bucket
+// structurally cannot see. Keyed on the BASE session user id, not the IP:
+// every profile at a kiosk shares one address, and middleware/auth.ts
+// overwrites only role and profileUserId from a profile token, so userId stays
+// the base session's and a caller cannot rotate this key by presenting a
+// different X-Profile-Token. Deliberately loose (three targets' worth) because
+// on a shared device this budget belongs to the whole front desk: it exists to
+// make sweeping the staff list expensive, not to be the primary control.
+const pinLoginSessionLimiter = createRateLimiter({
+  windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
+  limit: 30,
+  keyPrefix: 'pin-login-session',
+  message: 'Too many PIN attempts. Please try again later.',
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (_req, res) => res.statusCode !== 401,
+  keyGenerator: (req) => `${req.user!.tenantId}:${req.user!.userId}`,
+})
+
+export const pinLoginTargetRateLimitStore = pinLoginTargetLimiter.store as ResettableStore
+export const pinLoginSessionRateLimitStore = pinLoginSessionLimiter.store as ResettableStore
+
+const pinLoginTargetRateLimit = pinLoginTargetLimiter.limiter
+const pinLoginSessionRateLimit = pinLoginSessionLimiter.limiter
+
 // Password schema with strong requirements
 const passwordSchema = z
   .string()
@@ -873,68 +934,80 @@ const pinLoginSchema = z.object({
   pin: z.string().regex(/^\d{4}$/, 'PIN must be exactly 4 digits'),
 })
 
-authRouter.post('/pin-login', requireAuth, async (req, res, next) => {
-  try {
-    const parse = pinLoginSchema.safeParse(req.body)
-    if (!parse.success) {
-      return res.status(400).json({
-        success: false,
-        error: { message: 'Invalid payload', code: 'INVALID_PAYLOAD', details: parse.error.errors },
+// The limiters run AFTER requireAuth — unlike #418's login limiters — because
+// both keys read req.user.
+authRouter.post(
+  '/pin-login',
+  requireAuth,
+  pinLoginTargetRateLimit,
+  pinLoginSessionRateLimit,
+  async (req, res, next) => {
+    try {
+      const parse = pinLoginSchema.safeParse(req.body)
+      if (!parse.success) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            message: 'Invalid payload',
+            code: 'INVALID_PAYLOAD',
+            details: parse.error.errors,
+          },
+        })
+      }
+
+      const { userId, pin } = parse.data
+
+      const user = await prisma.user.findFirst({
+        where: { id: userId, tenantId: req.user!.tenantId, isActive: true },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          avatar: true,
+          pinHash: true,
+        },
       })
-    }
 
-    const { userId, pin } = parse.data
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          error: { message: 'Invalid credentials', code: 'INVALID_CREDENTIALS' },
+        })
+      }
 
-    const user = await prisma.user.findFirst({
-      where: { id: userId, tenantId: req.user!.tenantId, isActive: true },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        avatar: true,
-        pinHash: true,
-      },
-    })
+      if (!user.pinHash) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'PIN not set', code: 'PIN_NOT_SET' },
+        })
+      }
 
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        error: { message: 'Invalid credentials', code: 'INVALID_CREDENTIALS' },
+      const isValid = await verifyPassword(pin, user.pinHash)
+      if (!isValid) {
+        return res.status(401).json({
+          success: false,
+          error: { message: 'Invalid credentials', code: 'INVALID_CREDENTIALS' },
+        })
+      }
+
+      const profileToken = generateProfileToken({
+        profileUserId: user.id,
+        role: user.role,
+        tenantId: req.user!.tenantId,
       })
-    }
 
-    if (!user.pinHash) {
-      return res.status(400).json({
-        success: false,
-        error: { message: 'PIN not set', code: 'PIN_NOT_SET' },
+      const { pinHash, ...userData } = user
+
+      res.json({
+        profileToken,
+        user: { ...userData, hasPinSet: !!pinHash },
       })
+    } catch (e) {
+      next(e)
     }
-
-    const isValid = await verifyPassword(pin, user.pinHash)
-    if (!isValid) {
-      return res.status(401).json({
-        success: false,
-        error: { message: 'Invalid credentials', code: 'INVALID_CREDENTIALS' },
-      })
-    }
-
-    const profileToken = generateProfileToken({
-      profileUserId: user.id,
-      role: user.role,
-      tenantId: req.user!.tenantId,
-    })
-
-    const { pinHash, ...userData } = user
-
-    res.json({
-      profileToken,
-      user: { ...userData, hasPinSet: !!pinHash },
-    })
-  } catch (e) {
-    next(e)
   }
-})
+)
 
 // POST /api/auth/setup-pin - Set PIN for first time (requires JWT)
 const setupPinSchema = z.object({

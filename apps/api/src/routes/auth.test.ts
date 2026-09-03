@@ -14,12 +14,20 @@ vi.mock('../services/email.service.js', () => ({
 
 import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
-import { hashPassword, hashToken } from '../services/auth.service.js'
+import bcrypt from 'bcrypt'
+import { sign } from 'jsonwebtoken'
+import {
+  hashPassword,
+  hashToken,
+  generateProfileToken,
+} from '../services/auth.service.js'
 import {
   forgotPasswordRateLimitStore,
   resetPasswordRateLimitStore,
   loginIpRateLimitStore,
   loginAccountRateLimitStore,
+  pinLoginTargetRateLimitStore,
+  pinLoginSessionRateLimitStore,
 } from './auth.js'
 
 describe('POST /api/auth/register', () => {
@@ -1042,5 +1050,307 @@ describe('Task #418: tenant login rate limiting', () => {
       .post('/api/auth/login')
       .send({ email: testEmail, password: testPassword, clinicSlug: testClinicSlug })
     expect(loginAfterForgotExhausted.status).toBe(200)
+  })
+})
+
+// Task #425: pin-login rate limiting. POST /api/auth/pin-login guards a
+// 4-digit secret whose success mints a profile token carrying the TARGET's
+// role, so an unlimited endpoint let any authenticated kiosk session escalate
+// by guessing. Two chained limiters run after requireAuth (both keys read
+// req.user): a TARGET bucket keyed `${tenantId}:${body.userId}` (limit 10) and
+// a CALLER bucket keyed `${tenantId}:${req.user.userId}` (limit 30). Only a 401
+// spends budget. MemoryStore backs both under test, so resetAll() works.
+describe('Task #425: pin-login rate limiting', () => {
+  let tenantId: string
+  let callerUserId: string
+  let callerToken: string
+  let secondCallerUserId: string
+  let secondCallerToken: string
+  let targetAId: string
+  let targetBId: string
+  const correctPin = '9999'
+  const wrongPin = '0000'
+  const testClinicSlug = `pin-login-rl-${Date.now()}`
+  const createdUserIds: string[] = []
+
+  // These cases spend 10-30 failures each; at the production cost factor (12)
+  // every wrong-PIN attempt costs a full bcrypt compare (~1s on a loaded dev
+  // host), which would push a single case past vitest's 30s timeout. The cost
+  // factor is a property of the stored hash, not of the code under test:
+  // verifyPassword still runs a real bcrypt.compare against a real hash here,
+  // only cheaply. Nothing about the limiter's behaviour depends on it.
+  const hashPinCheaply = (pin: string) => bcrypt.hash(pin, 4)
+
+  type TenantRole = 'OWNER' | 'ADMIN' | 'CLINIC_ADMIN' | 'DOCTOR' | 'STAFF'
+
+  function accessToken(userId: string, email: string, role: TenantRole) {
+    // This codebase reads req.user.userId (not `sub`), and the caller-dimension
+    // rate limit key is built from it.
+    return sign({ userId, tenantId, email, role }, process.env.JWT_SECRET as string, {
+      expiresIn: '1h',
+    })
+  }
+
+  async function createUser(email: string, role: TenantRole, pin?: string) {
+    const user = await prisma.user.create({
+      data: {
+        tenantId,
+        email,
+        firstName: 'Pin',
+        lastName: 'RateLimit',
+        passwordHash: await hashPassword('Password1!'),
+        role,
+        ...(pin ? { pinHash: await hashPinCheaply(pin) } : {}),
+      },
+    })
+    createdUserIds.push(user.id)
+    return user.id
+  }
+
+  function pinAttempt(
+    userId: unknown,
+    pin: string,
+    opts: { token?: string; profileToken?: string } = {}
+  ) {
+    const req = api()
+      .post('/api/auth/pin-login')
+      .set('Authorization', `Bearer ${opts.token ?? callerToken}`)
+    if (opts.profileToken) req.set('X-Profile-Token', opts.profileToken)
+    return req.send({ userId, pin })
+  }
+
+  beforeAll(async () => {
+    const tenant = await prisma.tenant.create({
+      data: { name: 'Pin Login Rate Limit Clinic', slug: testClinicSlug },
+    })
+    tenantId = tenant.id
+
+    callerUserId = await createUser('pin-rl-caller@test.com', 'STAFF')
+    callerToken = accessToken(callerUserId, 'pin-rl-caller@test.com', 'STAFF')
+
+    secondCallerUserId = await createUser('pin-rl-caller-2@test.com', 'STAFF')
+    secondCallerToken = accessToken(secondCallerUserId, 'pin-rl-caller-2@test.com', 'STAFF')
+
+    targetAId = await createUser('pin-rl-target-a@test.com', 'OWNER', correctPin)
+    targetBId = await createUser('pin-rl-target-b@test.com', 'ADMIN', correctPin)
+  })
+
+  afterAll(async () => {
+    await prisma.refreshToken.deleteMany({ where: { userId: { in: createdUserIds } } })
+    await prisma.user.deleteMany({ where: { tenantId } })
+    await prisma.tenantSettings.deleteMany({ where: { tenantId } })
+    await prisma.tenant.delete({ where: { id: tenantId } }).catch(() => {
+      // Tenant may already be gone.
+    })
+  })
+
+  beforeEach(async () => {
+    // Both buckets live in one MemoryStore-backed module instance for the whole
+    // file, so hits from an earlier case would otherwise carry over and 429 at
+    // an unexpected request count. Resetting here — rather than disabling the
+    // limiter under NODE_ENV === 'test', which #254 ruled out — is what keeps
+    // every other test in this file (and pin.test.ts) unaffected.
+    await pinLoginTargetRateLimitStore.resetAll()
+    await pinLoginSessionRateLimitStore.resetAll()
+  })
+
+  it(
+    'returns 401 for the first 10 failed PIN attempts against one profile and 429 on the 11th',
+    async () => {
+      for (let i = 0; i < 10; i++) {
+        const response = await pinAttempt(targetAId, wrongPin)
+        expect(response.status).toBe(401)
+        expect(response.body.error.code).toBe('INVALID_CREDENTIALS')
+      }
+
+      const eleventh = await pinAttempt(targetAId, wrongPin)
+      expect(eleventh.status).toBe(429)
+      expect(eleventh.body.error.code).toBe('RATE_LIMITED')
+    },
+    60_000
+  )
+
+  it(
+    'does not spend budget on a successful PIN entry (10 successes then a failure is still 401)',
+    async () => {
+      for (let i = 0; i < 10; i++) {
+        const response = await pinAttempt(targetAId, correctPin)
+        expect(response.status).toBe(200)
+        expect(response.body).toHaveProperty('profileToken')
+      }
+
+      // If successes had been counted, the target bucket (limit 10) would be
+      // empty and this would 429. Only failures spend budget.
+      const failureAfterSuccesses = await pinAttempt(targetAId, wrongPin)
+      expect(failureAfterSuccesses.status).toBe(401)
+      expect(failureAfterSuccesses.body.error.code).toBe('INVALID_CREDENTIALS')
+    },
+    60_000
+  )
+
+  it(
+    'gives each target its own budget: exhausting one profile does not throttle another from the same session',
+    async () => {
+      for (let i = 0; i < 10; i++) {
+        expect((await pinAttempt(targetAId, wrongPin)).status).toBe(401)
+      }
+      expect((await pinAttempt(targetAId, wrongPin)).status).toBe(429)
+
+      // Target B, same caller session, same tenant: a full, untouched budget of
+      // 10 failures. This is what proves the target key is the TARGET and not a
+      // composite (caller, target) — under a composite key B would inherit
+      // nothing either, but under a CALLER-only target key B's first attempt
+      // would already be 429.
+      for (let i = 0; i < 10; i++) {
+        const response = await pinAttempt(targetBId, wrongPin)
+        expect(response.status).toBe(401)
+        expect(response.body.error.code).toBe('INVALID_CREDENTIALS')
+      }
+      // ...and B is then exhausted on its own account, independently of A.
+      expect((await pinAttempt(targetBId, wrongPin)).status).toBe(429)
+    },
+    120_000
+  )
+
+  it('429s the 31st failure from one session even when every attempt targets a different profile', async () => {
+    // 30 distinct targets, one failure each: no single target bucket gets past
+    // 1 of its 10, so only the caller-dimension limiter can catch this.
+    for (let i = 0; i < 30; i++) {
+      const response = await pinAttempt(`no-such-profile-${i}`, wrongPin)
+      expect(response.status).toBe(401)
+      expect(response.body.error.code).toBe('INVALID_CREDENTIALS')
+    }
+
+    const thirtyFirst = await pinAttempt('no-such-profile-30', wrongPin)
+    expect(thirtyFirst.status).toBe(429)
+    expect(thirtyFirst.body.error.code).toBe('RATE_LIMITED')
+
+    // A different session in the SAME tenant is untouched: the key is the base
+    // session user, not the tenant (one exhausted kiosk must not lock the clinic).
+    const otherSession = await pinAttempt('no-such-profile-31', wrongPin, {
+      token: secondCallerToken,
+    })
+    expect(otherSession.status).toBe(401)
+  })
+
+  it('does not let a caller reset the caller-dimension budget by presenting a different X-Profile-Token', async () => {
+    const profileToken = generateProfileToken({
+      profileUserId: targetAId,
+      role: 'OWNER',
+      tenantId,
+    })
+
+    for (let i = 0; i < 30; i++) {
+      expect((await pinAttempt(`rotate-${i}`, wrongPin)).status).toBe(401)
+    }
+
+    // middleware/auth.ts overwrites only role and profileUserId from a profile
+    // token, so req.user.userId — and therefore the caller key — is still the
+    // base session's. The same request that would be a fresh bucket under a
+    // profileUserId-based key must stay blocked.
+    const withProfileToken = await pinAttempt('rotate-30', wrongPin, { profileToken })
+    expect(withProfileToken.status).toBe(429)
+    expect(withProfileToken.body.error.code).toBe('RATE_LIMITED')
+
+    // Control: the very same request is a plain 401 once the buckets are
+    // cleared, which proves the 429 above came from the limiter and not from
+    // the profile token being rejected (that path is a 403 PROFILE_TOKEN_EXPIRED).
+    await pinLoginTargetRateLimitStore.resetAll()
+    await pinLoginSessionRateLimitStore.resetAll()
+    const afterReset = await pinAttempt('rotate-30', wrongPin, { profileToken })
+    expect(afterReset.status).toBe(401)
+    expect(afterReset.body.error.code).toBe('INVALID_CREDENTIALS')
+  })
+
+  it('answers with the project-standard RATE_LIMITED body from both the target and the caller limiter', async () => {
+    for (let i = 0; i < 10; i++) {
+      expect((await pinAttempt('body-shape-target', wrongPin)).status).toBe(401)
+    }
+    const targetLimited = await pinAttempt('body-shape-target', wrongPin)
+
+    // Free the target bucket, then rotate targets until the caller ceiling
+    // (30) trips instead. 10 failures are already on the caller bucket above —
+    // a request blocked by the target limiter never reaches the caller one.
+    await pinLoginTargetRateLimitStore.resetAll()
+    for (let i = 0; i < 20; i++) {
+      expect((await pinAttempt(`body-shape-rotate-${i}`, wrongPin)).status).toBe(401)
+    }
+    const callerLimited = await pinAttempt('body-shape-rotate-20', wrongPin)
+
+    for (const response of [targetLimited, callerLimited]) {
+      expect(response.status).toBe(429)
+      expect(response.body).toEqual({
+        success: false,
+        error: {
+          message: expect.any(String),
+          code: 'RATE_LIMITED',
+          retryAfter: expect.any(Number),
+        },
+      })
+      // retryAfter is seconds, not milliseconds: the window is 15 minutes.
+      expect(response.body.error.retryAfter).toBeGreaterThan(0)
+      expect(response.body.error.retryAfter).toBeLessThanOrEqual(15 * 60)
+    }
+    expect(targetLimited.body.error.message).toBe(callerLimited.body.error.message)
+  })
+
+  it(
+    'keeps a wrong PIN and an unknown userId indistinguishable, and charges budget for both',
+    async () => {
+      const wrongPinFirst = await pinAttempt(targetAId, wrongPin)
+      const unknownUserFirst = await pinAttempt('no-such-profile-enumeration', wrongPin)
+
+      expect(wrongPinFirst.status).toBe(401)
+      expect(unknownUserFirst.status).toBe(401)
+      expect(wrongPinFirst.body).toEqual(unknownUserFirst.body)
+      expect(wrongPinFirst.body.error.code).toBe('INVALID_CREDENTIALS')
+
+      // Both spent one hit of their own target bucket: 9 more each exhausts it.
+      for (let i = 0; i < 9; i++) {
+        expect((await pinAttempt(targetAId, wrongPin)).status).toBe(401)
+        expect((await pinAttempt('no-such-profile-enumeration', wrongPin)).status).toBe(401)
+      }
+
+      const wrongPinBlocked = await pinAttempt(targetAId, wrongPin)
+      const unknownUserBlocked = await pinAttempt('no-such-profile-enumeration', wrongPin)
+      expect(wrongPinBlocked.status).toBe(429)
+      expect(unknownUserBlocked.status).toBe(429)
+      expect(wrongPinBlocked.body).toEqual(unknownUserBlocked.body)
+    },
+    60_000
+  )
+
+  it('never spends target budget on a payload with no usable userId', async () => {
+    // 12 requests: two past the target limit, none of them a PIN guess. The
+    // limiter skips them entirely rather than keying on a fallback constant.
+    for (let i = 0; i < 12; i++) {
+      const response = await pinAttempt(undefined, wrongPin)
+      expect(response.status).toBe(400)
+      expect(response.body.error.code).toBe('INVALID_PAYLOAD')
+    }
+
+    // A real target still gets its full 10 failures afterwards.
+    for (let i = 0; i < 10; i++) {
+      expect((await pinAttempt('after-malformed-target', wrongPin)).status).toBe(401)
+    }
+    expect((await pinAttempt('after-malformed-target', wrongPin)).status).toBe(429)
+  })
+
+  it('does not spend pin-login budget on the #418 login buckets, or vice versa', async () => {
+    for (let i = 0; i < 10; i++) {
+      expect((await pinAttempt('independence-target', wrongPin)).status).toBe(401)
+    }
+    expect((await pinAttempt('independence-target', wrongPin)).status).toBe(429)
+
+    await loginIpRateLimitStore.resetAll()
+    await loginAccountRateLimitStore.resetAll()
+    const login = await api()
+      .post('/api/auth/login')
+      .send({
+        email: 'pin-rl-caller@test.com',
+        password: 'Password1!',
+        clinicSlug: testClinicSlug,
+      })
+    expect(login.status).toBe(200)
   })
 })
