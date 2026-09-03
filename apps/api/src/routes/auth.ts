@@ -13,7 +13,7 @@ import {
   getExpiryDate,
   cleanupOldRefreshTokens,
 } from '../services/auth.service.js'
-import { requireAuth } from '../middleware/auth.js'
+import { requireAuth, hasMinRole } from '../middleware/auth.js'
 import {
   createRateLimiter,
   hashLoginAccountKey,
@@ -954,6 +954,20 @@ authRouter.post('/setup-pin', requireAuth, async (req, res, next) => {
 
     const { userId, pin } = parse.data
 
+    // Deliberately compared against the base session's userId, not
+    // profileUserId: a profile session is already an elevated context
+    // (middleware/auth.ts overwrites req.user.role from the profile token),
+    // so treating "self" as the switched-in profile would let it provision
+    // its own credentials. Accepted cost: no self-service first-PIN setup
+    // while operating inside a profile session.
+    const isSelf = userId === req.user!.userId
+    if (!isSelf && !hasMinRole(req.user!.role, 'ADMIN')) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Insufficient permissions', code: 'FORBIDDEN' },
+      })
+    }
+
     const user = await prisma.user.findFirst({
       where: { id: userId, tenantId: req.user!.tenantId, isActive: true },
       select: {
@@ -986,14 +1000,20 @@ authRouter.post('/setup-pin', requireAuth, async (req, res, next) => {
       data: { pinHash },
     })
 
-    const profileToken = generateProfileToken({
-      profileUserId: user.id,
-      role: user.role,
-      tenantId: req.user!.tenantId,
-    })
+    // Only issue a role-bearing profile token when the caller is provisioning
+    // their own PIN. An ADMIN provisioning someone else's PIN must not walk
+    // away with a token for that other user's role — that would turn
+    // provisioning into an impersonation primitive.
+    const profileToken = isSelf
+      ? generateProfileToken({
+          profileUserId: user.id,
+          role: user.role,
+          tenantId: req.user!.tenantId,
+        })
+      : undefined
 
     res.json({
-      profileToken,
+      ...(profileToken ? { profileToken } : {}),
       user: { id: user.id, firstName: user.firstName, lastName: user.lastName, role: user.role, avatar: user.avatar, hasPinSet: true },
     })
   } catch (e) {

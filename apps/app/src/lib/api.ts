@@ -181,6 +181,13 @@ export interface ProfileLoginResponse {
   user: ProfileUser
 }
 
+export interface SetupPinResponse {
+  // Absent when an ADMIN provisions someone else's PIN — provisioning must
+  // not hand back a token for the target user's role.
+  profileToken?: string
+  user: ProfileUser
+}
+
 export const authApi = {
   login: async (payload: LoginPayload): Promise<AuthResponse> => {
     const response = await apiClient.post<AuthResponse>('/auth/login', payload)
@@ -219,8 +226,8 @@ export const authApi = {
     return response.data
   },
 
-  setupPin: async (payload: PinLoginPayload): Promise<ProfileLoginResponse> => {
-    const response = await apiClient.post<ProfileLoginResponse>('/auth/setup-pin', payload)
+  setupPin: async (payload: PinLoginPayload): Promise<SetupPinResponse> => {
+    const response = await apiClient.post<SetupPinResponse>('/auth/setup-pin', payload)
     return response.data
   },
 }

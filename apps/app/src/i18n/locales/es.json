@@ -1143,7 +1143,8 @@
     "confirmPin": "Confirma tu PIN",
     "mismatch": "Los PINs no coinciden. Intenta de nuevo.",
     "saveError": "Error al guardar el PIN. Intenta de nuevo.",
-    "startOver": "Empezar de nuevo"
+    "startOver": "Empezar de nuevo",
+    "provisionedEnterToContinue": "PIN configurado. Ingrésalo para continuar."
   },
   "users": {
     "title": "Usuarios",
