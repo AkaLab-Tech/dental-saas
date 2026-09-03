@@ -107,6 +107,15 @@ const loginIpLimiter = createRateLimiter({
   skipSuccessfulRequests: true,
   requestWasSuccessful: (_req, res) => res.statusCode !== 401,
 })
+// Account-keyed limiting is a lockout vector by construction: anyone who knows
+// an address can spend that account's failure budget from any origin. Accepted
+// deliberately. The ceiling is generous (10 failures / 15 min), it throttles
+// rather than hard-locks, and it expires on its own without a support contact.
+// The alternative — dropping the account dimension — leaves credential stuffing
+// across a botnet (one guess per IP, thousands of accounts) entirely
+// uncontrolled, which is precisely the attack the IP bucket structurally cannot
+// see. A hard lockout was rejected for the mirror-image reason: it turns a known
+// email address into a denial-of-service primitive against its owner.
 const loginAccountLimiter = createRateLimiter({
   windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
   limit: LOGIN_ACCOUNT_RATE_LIMIT,

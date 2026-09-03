@@ -51,6 +51,8 @@ const loginIpLimiter = createRateLimiter({
   skipSuccessfulRequests: true,
   requestWasSuccessful: (_req, res) => res.statusCode !== 401,
 })
+// See routes/auth.ts's loginAccountLimiter for why account-keyed limiting is
+// an accepted lockout trade-off rather than an oversight.
 const loginAccountLimiter = createRateLimiter({
   windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
   limit: LOGIN_ACCOUNT_RATE_LIMIT,
