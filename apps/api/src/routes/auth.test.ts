@@ -15,7 +15,12 @@ vi.mock('../services/email.service.js', () => ({
 import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword, hashToken } from '../services/auth.service.js'
-import { forgotPasswordRateLimitStore, resetPasswordRateLimitStore } from './auth.js'
+import {
+  forgotPasswordRateLimitStore,
+  resetPasswordRateLimitStore,
+  loginIpRateLimitStore,
+  loginAccountRateLimitStore,
+} from './auth.js'
 
 describe('POST /api/auth/register', () => {
   let n = 0
@@ -782,5 +787,260 @@ describe('Auth - Tenant User Password Recovery', () => {
         .send({ email: testEmail, clinicSlug: testClinicSlug })
       expect(firstRequestFromSecondClient.status).toBe(200)
     })
+  })
+})
+
+// Task #418: login rate limiting (tenant). Two independent limiters guard
+// POST /api/auth/login — IP (limit 20) then account (limit 10), keyed on
+// (email, clinicSlug) so the same address in two clinics gets two buckets.
+// Only a 401 spends budget; a fresh MemoryStore is used under test (no Redis
+// client is configured), so every store here supports resetAll().
+describe('Task #418: tenant login rate limiting', () => {
+  let tenantId: string
+  let userId: string
+  const testEmail = 'login-ratelimit-tenant@test.com'
+  const testPassword = 'CorrectPassword1!'
+  const wrongPassword = 'WrongPassword1!'
+  const testClinicSlug = `login-rl-tenant-${Date.now()}`
+
+  beforeAll(async () => {
+    const tenant = await prisma.tenant.create({
+      data: { name: 'Login Rate Limit Tenant', slug: testClinicSlug },
+    })
+    tenantId = tenant.id
+
+    const user = await prisma.user.create({
+      data: {
+        email: testEmail,
+        passwordHash: await hashPassword(testPassword),
+        firstName: 'Login',
+        lastName: 'RateLimit',
+        role: 'OWNER',
+        tenantId: tenant.id,
+      },
+    })
+    userId = user.id
+  })
+
+  afterAll(async () => {
+    if (userId) {
+      await prisma.refreshToken.deleteMany({ where: { userId } })
+      await prisma.user.delete({ where: { id: userId } }).catch(() => {
+        // User may already be gone.
+      })
+    }
+    if (tenantId) {
+      await prisma.tenant.delete({ where: { id: tenantId } }).catch(() => {
+        // Tenant may already be gone.
+      })
+    }
+  })
+
+  beforeEach(async () => {
+    // These four buckets share one MemoryStore-backed module instance for the
+    // whole file: without a reset here, hits from earlier describe blocks (and
+    // from earlier tests in THIS block) would carry over and produce a 429 at
+    // an unexpected request count. Resetting the #416 recovery stores too
+    // keeps the independence tests below honest about their starting state.
+    await loginIpRateLimitStore.resetAll()
+    await loginAccountRateLimitStore.resetAll()
+    await forgotPasswordRateLimitStore.resetAll()
+    await resetPasswordRateLimitStore.resetAll()
+  })
+
+  it('throttles repeated failed logins from one IP once 20 distinct-account attempts are exceeded', async () => {
+    const ip = '198.51.100.1'
+    for (let i = 0; i < 20; i++) {
+      const response = await api()
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', ip)
+        .send({ email: `no-such-user-${i}@test.com`, password: wrongPassword, clinicSlug: testClinicSlug })
+      expect(response.status).toBe(401)
+    }
+
+    const twentyFirst = await api()
+      .post('/api/auth/login')
+      .set('X-Forwarded-For', ip)
+      .send({ email: 'no-such-user-20@test.com', password: wrongPassword, clinicSlug: testClinicSlug })
+    expect(twentyFirst.status).toBe(429)
+    expect(twentyFirst.body.error.code).toBe('RATE_LIMITED')
+
+    // A fresh account from a DIFFERENT IP is not blocked: the bucket above is
+    // scoped to the IP, not global (IP/account independence).
+    const freshIpFreshAccount = await api()
+      .post('/api/auth/login')
+      .set('X-Forwarded-For', '198.51.100.2')
+      .send({ email: 'no-such-user-fresh@test.com', password: wrongPassword, clinicSlug: testClinicSlug })
+    expect(freshIpFreshAccount.status).toBe(401)
+  })
+
+  it('throttles repeated failed logins against one account from many different IPs — X-Forwarded-For varies every request', async () => {
+    for (let i = 0; i < 10; i++) {
+      const response = await api()
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', `198.51.100.${10 + i}`)
+        .send({ email: testEmail, password: wrongPassword, clinicSlug: testClinicSlug })
+      expect(response.status).toBe(401)
+    }
+
+    // A brand-new IP, never used above: still blocked, because it is the
+    // ACCOUNT bucket that is exhausted, not any one IP's bucket.
+    const eleventh = await api()
+      .post('/api/auth/login')
+      .set('X-Forwarded-For', '198.51.100.99')
+      .send({ email: testEmail, password: wrongPassword, clinicSlug: testClinicSlug })
+    expect(eleventh.status).toBe(429)
+    expect(eleventh.body.error.code).toBe('RATE_LIMITED')
+  })
+
+  it('a successful login does not consume the account failure budget', async () => {
+    const ip = '198.51.100.50'
+    for (let i = 0; i < 9; i++) {
+      const response = await api()
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', ip)
+        .send({ email: testEmail, password: wrongPassword, clinicSlug: testClinicSlug })
+      expect(response.status).toBe(401)
+    }
+
+    // One failure of budget remains. Spend it on a SUCCESS instead.
+    const success = await api()
+      .post('/api/auth/login')
+      .set('X-Forwarded-For', ip)
+      .send({ email: testEmail, password: testPassword, clinicSlug: testClinicSlug })
+    expect(success.status).toBe(200)
+
+    // If the success had been counted as a failure, the budget would already
+    // be at zero and this next failure would 429. It must still be allowed.
+    const stillAllowed = await api()
+      .post('/api/auth/login')
+      .set('X-Forwarded-For', ip)
+      .send({ email: testEmail, password: wrongPassword, clinicSlug: testClinicSlug })
+    expect(stillAllowed.status).toBe(401)
+
+    // Only NOW is the 10-failure budget spent.
+    const nowBlocked = await api()
+      .post('/api/auth/login')
+      .set('X-Forwarded-For', ip)
+      .send({ email: testEmail, password: wrongPassword, clinicSlug: testClinicSlug })
+    expect(nowBlocked.status).toBe(429)
+  })
+
+  it('returns an identical 429 body whether the account exists (wrong password), does not exist, or the clinic does not exist', async () => {
+    async function exhaustAccountBudget(ip: string, body: Record<string, string>) {
+      for (let i = 0; i < 10; i++) {
+        const response = await api().post('/api/auth/login').set('X-Forwarded-For', ip).send(body)
+        expect(response.status).toBe(401)
+      }
+      const eleventh = await api().post('/api/auth/login').set('X-Forwarded-For', ip).send(body)
+      expect(eleventh.status).toBe(429)
+      return eleventh.body
+    }
+
+    const wrongPasswordResponse = await exhaustAccountBudget('198.51.100.60', {
+      email: testEmail,
+      password: wrongPassword,
+      clinicSlug: testClinicSlug,
+    })
+    const unknownEmailResponse = await exhaustAccountBudget('198.51.100.61', {
+      email: 'no-such-account-418@test.com',
+      password: wrongPassword,
+      clinicSlug: testClinicSlug,
+    })
+    const unknownClinicResponse = await exhaustAccountBudget('198.51.100.62', {
+      email: testEmail,
+      password: wrongPassword,
+      clinicSlug: 'no-such-clinic-418',
+    })
+
+    for (const body of [wrongPasswordResponse, unknownEmailResponse, unknownClinicResponse]) {
+      expect(body.success).toBe(false)
+      expect(body.error.code).toBe('RATE_LIMITED')
+    }
+    expect(wrongPasswordResponse.error.message).toBe(unknownEmailResponse.error.message)
+    expect(wrongPasswordResponse.error.message).toBe(unknownClinicResponse.error.message)
+  })
+
+  it('a malformed payload with no usable email never trips (or spends) the account bucket', async () => {
+    const ip = '198.51.100.70'
+    // 12 requests: two more than the account limit of 10, all missing `email`.
+    for (let i = 0; i < 12; i++) {
+      const response = await api()
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', ip)
+        .send({ password: wrongPassword, clinicSlug: testClinicSlug })
+      expect(response.status).toBe(400)
+      expect(response.body.error.code).toBe('INVALID_PAYLOAD')
+    }
+
+    // A real (wrong-password) attempt from the SAME IP right after still gets
+    // its full budget: the malformed traffic above spent nothing.
+    const firstRealFailure = await api()
+      .post('/api/auth/login')
+      .set('X-Forwarded-For', ip)
+      .send({ email: testEmail, password: wrongPassword, clinicSlug: testClinicSlug })
+    expect(firstRealFailure.status).toBe(401)
+  })
+
+  it('treats different-case emails as the same account bucket', async () => {
+    const ip = '198.51.100.80'
+    const upperCaseEmail = 'CaseUser418@Test.com'
+    const lowerCaseEmail = 'caseuser418@test.com'
+
+    for (let i = 0; i < 5; i++) {
+      const response = await api()
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', ip)
+        .send({ email: upperCaseEmail, password: wrongPassword, clinicSlug: testClinicSlug })
+      expect(response.status).toBe(401)
+    }
+    for (let i = 0; i < 5; i++) {
+      const response = await api()
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', ip)
+        .send({ email: lowerCaseEmail, password: wrongPassword, clinicSlug: testClinicSlug })
+      expect(response.status).toBe(401)
+    }
+
+    // 10 combined failures (5 + 5) have already spent the whole budget: an
+    // 11th attempt, in either case, must be blocked — proving the two case
+    // variants share one bucket rather than getting 10 each.
+    const eleventh = await api()
+      .post('/api/auth/login')
+      .set('X-Forwarded-For', ip)
+      .send({ email: upperCaseEmail, password: wrongPassword, clinicSlug: testClinicSlug })
+    expect(eleventh.status).toBe(429)
+  })
+
+  it('is independent of the #416 forgot-password / reset-password buckets, in both directions', async () => {
+    const loginBody = { email: testEmail, password: wrongPassword, clinicSlug: testClinicSlug }
+    for (let i = 0; i < 10; i++) {
+      await api().post('/api/auth/login').send(loginBody)
+    }
+    const eleventhLogin = await api().post('/api/auth/login').send(loginBody)
+    expect(eleventhLogin.status).toBe(429)
+
+    // forgot-password for the very same email + clinicSlug is unaffected.
+    const forgotAfterLoginExhausted = await api()
+      .post('/api/auth/forgot-password')
+      .send({ email: testEmail, clinicSlug: testClinicSlug })
+    expect(forgotAfterLoginExhausted.status).toBe(200)
+
+    // And the reverse: exhausting forgot-password must not touch login.
+    await forgotPasswordRateLimitStore.resetAll()
+    for (let i = 0; i < 10; i++) {
+      await api().post('/api/auth/forgot-password').send({ email: testEmail, clinicSlug: testClinicSlug })
+    }
+    const eleventhForgot = await api()
+      .post('/api/auth/forgot-password')
+      .send({ email: testEmail, clinicSlug: testClinicSlug })
+    expect(eleventhForgot.status).toBe(429)
+
+    await loginAccountRateLimitStore.resetAll()
+    await loginIpRateLimitStore.resetAll()
+    const loginAfterForgotExhausted = await api()
+      .post('/api/auth/login')
+      .send({ email: testEmail, password: testPassword, clinicSlug: testClinicSlug })
+    expect(loginAfterForgotExhausted.status).toBe(200)
   })
 })

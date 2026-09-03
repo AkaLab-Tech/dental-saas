@@ -1,4 +1,4 @@
-import { Router, type IRouter } from 'express'
+import { Router, type IRouter, type Request } from 'express'
 import { z } from 'zod'
 import { prisma } from '@dental/database'
 import { type Language } from '@dental/shared'
@@ -14,7 +14,14 @@ import {
   cleanupOldRefreshTokens,
 } from '../services/auth.service.js'
 import { requireAuth } from '../middleware/auth.js'
-import { createRateLimiter, type ResettableStore } from '../middleware/rate-limit.js'
+import {
+  createRateLimiter,
+  hashLoginAccountKey,
+  LOGIN_RATE_LIMIT_WINDOW_MS,
+  LOGIN_IP_RATE_LIMIT,
+  LOGIN_ACCOUNT_RATE_LIMIT,
+  type ResettableStore,
+} from '../middleware/rate-limit.js'
 import { sendWelcomeEmail, sendPasswordResetEmail } from '../services/email.service.js'
 import { logger } from '../utils/logger.js'
 import { env } from '../config/env.js'
@@ -70,6 +77,54 @@ export const resetPasswordRateLimitStore = resetPasswordLimiter.store as Resetta
 
 const forgotPasswordRateLimit = forgotPassword.limiter
 const resetPasswordRateLimit = resetPasswordLimiter.limiter
+
+// #418: two independent limiters on tenant login, applied IP-first then
+// account. One limiter cannot key on both dimensions at once — a single
+// keyGenerator yields a single key, so composing (IP, account) into one key
+// gives the worst of both (a botnet gets a fresh bucket per source against
+// one victim; a single IP gets a fresh bucket per account it targets).
+//
+// Both count only rejected credentials, not every non-2xx: skipSuccessfulRequests
+// alone would also refund on a 400 INVALID_PAYLOAD or a 500, so
+// requestWasSuccessful narrows "successful" to "not a 401". Note that
+// CLINIC_NOT_ACTIVE (below) is also a 401, so a legitimate user of a
+// deactivated clinic spends account budget too — accepted as a small,
+// self-limiting population; widening the predicate to inspect the error code
+// would couple the limiter to response bodies.
+function tenantLoginAccountKey(req: Request): string | undefined {
+  const body = req.body as unknown
+  if (!body || typeof body !== 'object') return undefined
+  const { email, clinicSlug } = body as Record<string, unknown>
+  if (typeof email !== 'string' || typeof clinicSlug !== 'string') return undefined
+  return hashLoginAccountKey(email, clinicSlug)
+}
+
+const loginIpLimiter = createRateLimiter({
+  windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
+  limit: LOGIN_IP_RATE_LIMIT,
+  keyPrefix: 'login-ip-tenant',
+  message: 'Too many login attempts. Please try again later.',
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (_req, res) => res.statusCode !== 401,
+})
+const loginAccountLimiter = createRateLimiter({
+  windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
+  limit: LOGIN_ACCOUNT_RATE_LIMIT,
+  keyPrefix: 'login-account-tenant',
+  message: 'Too many login attempts. Please try again later.',
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (_req, res) => res.statusCode !== 401,
+  // A malformed payload (no email/clinicSlug) is not a credential guess and
+  // must not create a bucket at all — skip, don't key on a fallback constant.
+  skip: (req) => tenantLoginAccountKey(req) === undefined,
+  keyGenerator: (req) => tenantLoginAccountKey(req) ?? '',
+})
+
+export const loginIpRateLimitStore = loginIpLimiter.store as ResettableStore
+export const loginAccountRateLimitStore = loginAccountLimiter.store as ResettableStore
+
+const loginIpRateLimit = loginIpLimiter.limiter
+const loginAccountRateLimit = loginAccountLimiter.limiter
 
 // Password schema with strong requirements
 const passwordSchema = z
@@ -292,7 +347,7 @@ authRouter.post('/register', async (req, res, next) => {
 })
 
 // POST /api/auth/login
-authRouter.post('/login', async (req, res, next) => {
+authRouter.post('/login', loginIpRateLimit, loginAccountRateLimit, async (req, res, next) => {
   try {
     const parse = loginSchema.safeParse(req.body)
     if (!parse.success) {
@@ -314,6 +369,8 @@ authRouter.post('/login', async (req, res, next) => {
     }
 
     if (!tenant.isActive) {
+      // #418: this 401 also consumes login-account budget (see the comment
+      // above loginAccountLimiter) — accepted trade-off, not an oversight.
       return res.status(401).json({
         success: false,
         error: { message: 'This clinic is not active', code: 'CLINIC_NOT_ACTIVE' },
