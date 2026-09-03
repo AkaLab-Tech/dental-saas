@@ -1,15 +1,15 @@
 import { Router, type IRouter } from 'express'
-import { rateLimit } from 'express-rate-limit'
 import { getBudgetByPublicToken } from '../services/budget.service.js'
+import { createRateLimiter } from '../middleware/rate-limit.js'
 
 const publicBudgetsRouter: IRouter = Router()
 
 // Unauthenticated endpoint reachable by anyone with a share link: keep it tight.
-const publicBudgetsRateLimit = rateLimit({
+const { limiter: publicBudgetsRateLimit } = createRateLimiter({
   windowMs: 60 * 1000,
   limit: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
+  keyPrefix: 'public-budgets',
+  message: 'Too many requests. Please try again later.',
 })
 
 publicBudgetsRouter.use(publicBudgetsRateLimit)
