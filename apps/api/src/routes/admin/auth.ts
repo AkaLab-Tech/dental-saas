@@ -1,4 +1,4 @@
-import { Router, type IRouter } from 'express'
+import { Router, type IRouter, type Request } from 'express'
 import { z } from 'zod'
 import { prisma } from '@dental/database'
 import {
@@ -18,8 +18,57 @@ import {
   getTokenExpiryDate,
   buildAdminResetUrl,
 } from '../../utils/password-reset.js'
+import {
+  createRateLimiter,
+  hashLoginAccountKey,
+  LOGIN_RATE_LIMIT_WINDOW_MS,
+  LOGIN_IP_RATE_LIMIT,
+  LOGIN_ACCOUNT_RATE_LIMIT,
+  type ResettableStore,
+} from '../../middleware/rate-limit.js'
 
 const authRouter: IRouter = Router()
+
+// #418: same shape as the tenant login limiters in routes/auth.ts — two
+// independent limiters (IP then account), each counting only rejected
+// credentials (a 401), not every non-2xx. See routes/auth.ts for the full
+// rationale (single-key composition, requestWasSuccessful narrowing,
+// fail-open trade-off tracked by #420). No tenant dimension here: super
+// admins have no tenantId.
+function adminLoginAccountKey(req: Request): string | undefined {
+  const body = req.body as unknown
+  if (!body || typeof body !== 'object') return undefined
+  const { email } = body as Record<string, unknown>
+  if (typeof email !== 'string') return undefined
+  return hashLoginAccountKey(email)
+}
+
+const loginIpLimiter = createRateLimiter({
+  windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
+  limit: LOGIN_IP_RATE_LIMIT,
+  keyPrefix: 'login-ip-admin',
+  message: 'Too many login attempts. Please try again later.',
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (_req, res) => res.statusCode !== 401,
+})
+// See routes/auth.ts's loginAccountLimiter for why account-keyed limiting is
+// an accepted lockout trade-off rather than an oversight.
+const loginAccountLimiter = createRateLimiter({
+  windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
+  limit: LOGIN_ACCOUNT_RATE_LIMIT,
+  keyPrefix: 'login-account-admin',
+  message: 'Too many login attempts. Please try again later.',
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (_req, res) => res.statusCode !== 401,
+  skip: (req) => adminLoginAccountKey(req) === undefined,
+  keyGenerator: (req) => adminLoginAccountKey(req) ?? '',
+})
+
+export const loginIpRateLimitStore = loginIpLimiter.store as ResettableStore
+export const loginAccountRateLimitStore = loginAccountLimiter.store as ResettableStore
+
+const loginIpRateLimit = loginIpLimiter.limiter
+const loginAccountRateLimit = loginAccountLimiter.limiter
 
 // Password validation schema (same as registration)
 const passwordSchema = z
@@ -45,7 +94,7 @@ const resetPasswordSchema = z.object({
 })
 
 // POST /api/admin/auth/login
-authRouter.post('/login', async (req, res, next) => {
+authRouter.post('/login', loginIpRateLimit, loginAccountRateLimit, async (req, res, next) => {
   try {
     const parse = loginSchema.safeParse(req.body)
     if (!parse.success) {

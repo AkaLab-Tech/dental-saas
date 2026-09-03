@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { Request, RequestHandler, Response } from 'express'
 import {
   rateLimit,
@@ -57,9 +58,57 @@ export interface CreateRateLimiterOptions {
   message: string
   /** Defaults to express-rate-limit's IP keying. */
   keyGenerator?: ValueDeterminingMiddleware<string>
+  /**
+   * Excludes a request from ever consuming (or refunding) budget, evaluated
+   * BEFORE keyGenerator runs. Use this — not a fallback value inside
+   * keyGenerator — when a request cannot yield a meaningful key (#418): a
+   * constant key mixes unrelated callers into one bucket, and a keyGenerator
+   * that throws takes the whole route down.
+   */
+  skip?: ValueDeterminingMiddleware<boolean>
+  /**
+   * When true, a request `requestWasSuccessful` deems successful refunds the
+   * hit it just consumed (express-rate-limit@8.5.2 calls store.decrement on
+   * the response 'finish' event). Both stores here implement decrement:
+   * MemoryStore decrements its in-memory counter, RedisStore issues DECR.
+   */
+  skipSuccessfulRequests?: boolean
+  /**
+   * Overrides the "successful" predicate used by skipSuccessfulRequests.
+   * express-rate-limit's default is `res.statusCode < 400`, which would also
+   * refund a 400 INVALID_PAYLOAD or a 500 — neither is a credential guess, so
+   * a login limiter must supply its own predicate (#418).
+   */
+  requestWasSuccessful?: ValueDeterminingMiddleware<boolean>
   /** Injection point for tests; defaults to the shared client. */
   client?: RedisLike | null
 }
+
+/**
+ * Builds the per-account rate-limit key for a login attempt (#418): the email
+ * is lowercased and trimmed, optionally scoped (e.g. by clinicSlug, since the
+ * same address can exist in two tenants), then SHA-256 hashed and truncated —
+ * raw addresses are PII that would otherwise sit in Redis MONITOR output and
+ * snapshots, when only equality is needed here.
+ *
+ * Deliberately case-insensitive even though the lookup beside it (User.email
+ * is a case-sensitive column, see routes/auth.ts and routes/admin/auth.ts) is
+ * not — tracked as #424, NOT fixed by this key. That mismatch cannot mint
+ * extra rate-limit budget: a case variant that would fail the lookup anyway
+ * still collapses into this same bucket.
+ */
+export function hashLoginAccountKey(email: string, scope?: string): string {
+  const normalized = email.toLowerCase().trim()
+  const subject = scope ? `${scope}:${normalized}` : normalized
+  return createHash('sha256').update(subject).digest('hex').slice(0, 32)
+}
+
+// #418: shared ceilings for every login rate limiter (tenant + super admin).
+// Failure counts, not request counts (skipSuccessfulRequests below), so a
+// whole clinic behind one NAT address spends nothing on successful logins.
+export const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
+export const LOGIN_IP_RATE_LIMIT = 20
+export const LOGIN_ACCOUNT_RATE_LIMIT = 10
 
 export function createRateLimiter({
   windowMs,
@@ -67,6 +116,9 @@ export function createRateLimiter({
   keyPrefix,
   message,
   keyGenerator,
+  skip,
+  skipSuccessfulRequests,
+  requestWasSuccessful,
   client = getRedisClient(),
 }: CreateRateLimiterOptions): { limiter: RequestHandler; store: Store } {
   if (registeredKeyPrefixes.has(keyPrefix)) {
@@ -91,13 +143,25 @@ export function createRateLimiter({
     legacyHeaders: false,
     store,
     keyGenerator,
-    // Fail OPEN. These limiters are anti-automation and resource protection,
-    // not authentication controls (see the threat model in routes/auth.ts).
-    // Failing closed would turn a Redis outage into a password-recovery and
-    // public-budget outage — express-rate-limit rethrows store errors by
-    // default, which the error handler turns into 500s. Degrading to the
-    // pre-#416 behaviour is the lesser harm; routing express-rate-limit's own
-    // logger into pino makes that silent loss an incident, not a mystery.
+    skip,
+    skipSuccessfulRequests,
+    requestWasSuccessful,
+    // Fail OPEN. For the original callers of this factory (forgot/reset
+    // password) these are anti-automation and resource protection, not
+    // authentication controls (see the threat model in routes/auth.ts), so
+    // failing closed would turn a Redis outage into a password-recovery and
+    // public-budget outage for no security gain.
+    //
+    // #418 login limiters reuse this factory and DO NOT get that reasoning
+    // for free: they are the standard control against credential brute force,
+    // so fail-open here means a Redis outage silently removes the only
+    // guessing limit on tenant and super-admin credentials alike. Fail-closed
+    // is worse — it would turn a Redis outage into a total login outage,
+    // locking out every clinic during business hours and the super admin out
+    // of the incident they are fixing. The real fix is #420 (a FallbackStore
+    // that degrades to a per-process MemoryStore instead of passing through
+    // unlimited); until that lands, login ships fail-open too, as a
+    // deliberate and temporary trade-off, not an inherited default.
     passOnStoreError: true,
     logger: {
       error: (err, msg) => logger.error({ err }, msg),

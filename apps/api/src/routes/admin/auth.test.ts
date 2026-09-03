@@ -3,6 +3,11 @@ import crypto from 'crypto'
 import { api } from '../../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword, hashToken } from '../../services/auth.service.js'
+import { loginIpRateLimitStore, loginAccountRateLimitStore } from './auth.js'
+import {
+  loginIpRateLimitStore as tenantLoginIpRateLimitStore,
+  loginAccountRateLimitStore as tenantLoginAccountRateLimitStore,
+} from '../auth.js'
 
 describe('Admin Auth - Password Recovery', () => {
   let superAdminId: string
@@ -328,5 +333,249 @@ describe('Admin Auth - Password Recovery', () => {
         data: { passwordHash: await hashPassword(testPassword) },
       })
     })
+  })
+})
+
+// Task #418: login rate limiting (super admin). Same shape as the tenant
+// limiters in routes/auth.ts — IP (limit 20) then account (limit 10) — but
+// keyed on email alone: super admins have no tenantId/clinicSlug dimension.
+describe('Task #418: admin login rate limiting', () => {
+  let superAdminId: string
+  const testEmail = 'login-ratelimit-admin@test.com'
+  const testPassword = 'CorrectPassword1!'
+  const wrongPassword = 'WrongPassword1!'
+
+  beforeAll(async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: testEmail,
+        passwordHash: await hashPassword(testPassword),
+        firstName: 'Login',
+        lastName: 'RateLimitAdmin',
+        role: 'SUPER_ADMIN',
+        tenantId: null,
+      },
+    })
+    superAdminId = user.id
+  })
+
+  afterAll(async () => {
+    if (superAdminId) {
+      await prisma.refreshToken.deleteMany({ where: { userId: superAdminId } })
+      await prisma.user.delete({ where: { id: superAdminId } }).catch(() => {
+        // User may already be gone.
+      })
+    }
+  })
+
+  beforeEach(async () => {
+    // Four buckets share one MemoryStore-backed module instance across this
+    // file's tests: without a reset here, earlier hits (including from this
+    // block's own previous tests) would carry over. The tenant stores are
+    // reset too so the cross-route independence test starts from a known
+    // state regardless of run order.
+    await loginIpRateLimitStore.resetAll()
+    await loginAccountRateLimitStore.resetAll()
+    await tenantLoginIpRateLimitStore.resetAll()
+    await tenantLoginAccountRateLimitStore.resetAll()
+  })
+
+  it('throttles repeated failed logins from one IP once 20 distinct-account attempts are exceeded', async () => {
+    const ip = '198.51.100.101'
+    for (let i = 0; i < 20; i++) {
+      const response = await api()
+        .post('/api/admin/auth/login')
+        .set('X-Forwarded-For', ip)
+        .send({ email: `no-such-admin-${i}@test.com`, password: wrongPassword })
+      expect(response.status).toBe(401)
+    }
+
+    const twentyFirst = await api()
+      .post('/api/admin/auth/login')
+      .set('X-Forwarded-For', ip)
+      .send({ email: 'no-such-admin-20@test.com', password: wrongPassword })
+    expect(twentyFirst.status).toBe(429)
+    expect(twentyFirst.body.error.code).toBe('RATE_LIMITED')
+
+    // A fresh account from a DIFFERENT IP is not blocked (IP/account
+    // independence).
+    const freshIpFreshAccount = await api()
+      .post('/api/admin/auth/login')
+      .set('X-Forwarded-For', '198.51.100.102')
+      .send({ email: 'no-such-admin-fresh@test.com', password: wrongPassword })
+    expect(freshIpFreshAccount.status).toBe(401)
+  })
+
+  it('throttles repeated failed logins against one account from many different IPs — X-Forwarded-For varies every request', async () => {
+    for (let i = 0; i < 10; i++) {
+      const response = await api()
+        .post('/api/admin/auth/login')
+        .set('X-Forwarded-For', `198.51.100.${110 + i}`)
+        .send({ email: testEmail, password: wrongPassword })
+      expect(response.status).toBe(401)
+    }
+
+    // A brand-new IP, never used above: still blocked, because it is the
+    // ACCOUNT bucket that is exhausted.
+    const eleventh = await api()
+      .post('/api/admin/auth/login')
+      .set('X-Forwarded-For', '198.51.100.199')
+      .send({ email: testEmail, password: wrongPassword })
+    expect(eleventh.status).toBe(429)
+    expect(eleventh.body.error.code).toBe('RATE_LIMITED')
+  })
+
+  it('a successful login does not consume the account failure budget', async () => {
+    const ip = '198.51.100.150'
+    for (let i = 0; i < 9; i++) {
+      const response = await api()
+        .post('/api/admin/auth/login')
+        .set('X-Forwarded-For', ip)
+        .send({ email: testEmail, password: wrongPassword })
+      expect(response.status).toBe(401)
+    }
+
+    const success = await api()
+      .post('/api/admin/auth/login')
+      .set('X-Forwarded-For', ip)
+      .send({ email: testEmail, password: testPassword })
+    expect(success.status).toBe(200)
+
+    // If the success had been counted as a failure, the budget would already
+    // be at zero and this next failure would 429. It must still be allowed.
+    const stillAllowed = await api()
+      .post('/api/admin/auth/login')
+      .set('X-Forwarded-For', ip)
+      .send({ email: testEmail, password: wrongPassword })
+    expect(stillAllowed.status).toBe(401)
+
+    // Only NOW is the 10-failure budget spent.
+    const nowBlocked = await api()
+      .post('/api/admin/auth/login')
+      .set('X-Forwarded-For', ip)
+      .send({ email: testEmail, password: wrongPassword })
+    expect(nowBlocked.status).toBe(429)
+  })
+
+  it('returns an identical 429 body whether the account exists (wrong password) or does not exist', async () => {
+    async function exhaustAccountBudget(ip: string, body: Record<string, string>) {
+      for (let i = 0; i < 10; i++) {
+        const response = await api().post('/api/admin/auth/login').set('X-Forwarded-For', ip).send(body)
+        expect(response.status).toBe(401)
+      }
+      const eleventh = await api().post('/api/admin/auth/login').set('X-Forwarded-For', ip).send(body)
+      expect(eleventh.status).toBe(429)
+      return eleventh.body
+    }
+
+    const wrongPasswordResponse = await exhaustAccountBudget('198.51.100.160', {
+      email: testEmail,
+      password: wrongPassword,
+    })
+    const unknownEmailResponse = await exhaustAccountBudget('198.51.100.161', {
+      email: 'no-such-admin-account-418@test.com',
+      password: wrongPassword,
+    })
+
+    for (const body of [wrongPasswordResponse, unknownEmailResponse]) {
+      expect(body.success).toBe(false)
+      expect(body.error.code).toBe('RATE_LIMITED')
+    }
+    expect(wrongPasswordResponse.error.message).toBe(unknownEmailResponse.error.message)
+  })
+
+  it('a malformed payload with no usable email never trips (or spends) the account bucket', async () => {
+    const ip = '198.51.100.170'
+    // 12 requests: two more than the account limit of 10, all missing `email`.
+    for (let i = 0; i < 12; i++) {
+      const response = await api()
+        .post('/api/admin/auth/login')
+        .set('X-Forwarded-For', ip)
+        .send({ password: wrongPassword })
+      expect(response.status).toBe(400)
+    }
+
+    // A real (wrong-password) attempt from the SAME IP right after still gets
+    // its full budget: the malformed traffic above spent nothing.
+    const firstRealFailure = await api()
+      .post('/api/admin/auth/login')
+      .set('X-Forwarded-For', ip)
+      .send({ email: testEmail, password: wrongPassword })
+    expect(firstRealFailure.status).toBe(401)
+  })
+
+  it('treats different-case emails as the same account bucket', async () => {
+    const ip = '198.51.100.180'
+    const upperCaseEmail = 'CaseAdmin418@Test.com'
+    const lowerCaseEmail = 'caseadmin418@test.com'
+
+    for (let i = 0; i < 5; i++) {
+      const response = await api()
+        .post('/api/admin/auth/login')
+        .set('X-Forwarded-For', ip)
+        .send({ email: upperCaseEmail, password: wrongPassword })
+      expect(response.status).toBe(401)
+    }
+    for (let i = 0; i < 5; i++) {
+      const response = await api()
+        .post('/api/admin/auth/login')
+        .set('X-Forwarded-For', ip)
+        .send({ email: lowerCaseEmail, password: wrongPassword })
+      expect(response.status).toBe(401)
+    }
+
+    // 10 combined failures (5 + 5) have already spent the whole budget: an
+    // 11th attempt, in either case, must be blocked.
+    const eleventh = await api()
+      .post('/api/admin/auth/login')
+      .set('X-Forwarded-For', ip)
+      .send({ email: upperCaseEmail, password: wrongPassword })
+    expect(eleventh.status).toBe(429)
+  })
+
+  it('admin login buckets are independent of tenant login buckets, in both directions', async () => {
+    const ip = '198.51.100.190'
+
+    // Exhaust BOTH admin buckets: IP (20) via distinct accounts, then account
+    // (10) for one fixed identity.
+    for (let i = 0; i < 20; i++) {
+      await api()
+        .post('/api/admin/auth/login')
+        .set('X-Forwarded-For', ip)
+        .send({ email: `admin-indep-${i}@test.com`, password: wrongPassword })
+    }
+    const adminBlocked = await api()
+      .post('/api/admin/auth/login')
+      .set('X-Forwarded-For', ip)
+      .send({ email: 'admin-indep-20@test.com', password: wrongPassword })
+    expect(adminBlocked.status).toBe(429)
+
+    // Tenant login, same IP, is completely unaffected.
+    const tenantLoginUnaffected = await api()
+      .post('/api/auth/login')
+      .set('X-Forwarded-For', ip)
+      .send({ email: 'tenant-indep@test.com', password: wrongPassword, clinicSlug: 'no-such-clinic-418-indep' })
+    expect(tenantLoginUnaffected.status).toBe(401)
+
+    // And the reverse: exhaust tenant login's IP bucket on a fresh IP, then
+    // confirm admin login from that same IP is unaffected.
+    const ip2 = '198.51.100.191'
+    for (let i = 0; i < 20; i++) {
+      await api()
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', ip2)
+        .send({ email: `tenant-indep-${i}@test.com`, password: wrongPassword, clinicSlug: 'no-such-clinic-418-indep' })
+    }
+    const tenantBlocked = await api()
+      .post('/api/auth/login')
+      .set('X-Forwarded-For', ip2)
+      .send({ email: 'tenant-indep-20@test.com', password: wrongPassword, clinicSlug: 'no-such-clinic-418-indep' })
+    expect(tenantBlocked.status).toBe(429)
+
+    const adminLoginUnaffected = await api()
+      .post('/api/admin/auth/login')
+      .set('X-Forwarded-For', ip2)
+      .send({ email: 'admin-unaffected@test.com', password: wrongPassword })
+    expect(adminLoginUnaffected.status).toBe(401)
   })
 })
