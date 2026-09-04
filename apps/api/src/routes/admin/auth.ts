@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request } from 'express'
 import { z } from 'zod'
 import { prisma } from '@dental/database'
+import { checkResetSendAllowed } from '../../services/password-reset.service.js'
 import {
   hashPassword,
   hashToken,
@@ -255,6 +256,20 @@ authRouter.post('/forgot-password', adminForgotPasswordRateLimit, async (req, re
     if (!user) {
       // Don't reveal that the user doesn't exist
       logger.info({ email: normalizedEmail }, 'Password reset requested for non-existent super admin')
+      return res.status(200).json(successResponse)
+    }
+
+    // Task #415: per-account send cooldown. This MUST return before the
+    // invalidation below — see the fuller note on the tenant handler in
+    // routes/auth.ts. Checking next to the send instead would suppress the
+    // email while still killing the victim's outstanding token, which is the
+    // half of the attack that actually locks them out.
+    const sendDecision = await checkResetSendAllowed(user.id)
+    if (!sendDecision.allowed) {
+      logger.info(
+        { userId: user.id, reason: sendDecision.reason },
+        'Password reset send suppressed by per-account cooldown'
+      )
       return res.status(200).json(successResponse)
     }
 

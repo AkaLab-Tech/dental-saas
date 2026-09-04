@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request } from 'express'
 import { z } from 'zod'
 import { prisma } from '@dental/database'
+import { checkResetSendAllowed } from '../services/password-reset.service.js'
 import { type Language } from '@dental/shared'
 import {
   hashPassword,
@@ -745,6 +746,23 @@ authRouter.post('/forgot-password', forgotPasswordRateLimit, async (req, res, ne
     if (!user || !user.isActive || user.role === 'SUPER_ADMIN') {
       // Don't reveal that the user doesn't exist or is inactive
       logger.info({ email: normalizedEmail, clinicSlug }, 'Password reset requested for non-existent or ineligible user')
+      return res.status(200).json(successResponse)
+    }
+
+    // Task #415: per-account send cooldown. This MUST return before the
+    // invalidation below. The intuitive place to ask "did we send recently?"
+    // is next to the send, which is after the invalidation — and by then the
+    // victim's outstanding token is already dead, so the check would suppress
+    // the email while still completing the lockout it exists to prevent.
+    // The outstanding token has to SURVIVE a suppressed request.
+    const sendDecision = await checkResetSendAllowed(user.id)
+    if (!sendDecision.allowed) {
+      logger.info(
+        { userId: user.id, clinicSlug, reason: sendDecision.reason },
+        'Password reset send suppressed by per-account cooldown'
+      )
+      // Same body as every other branch — a cooldown must not become the
+      // enumeration oracle the rest of this handler is careful to avoid.
       return res.status(200).json(successResponse)
     }
 
