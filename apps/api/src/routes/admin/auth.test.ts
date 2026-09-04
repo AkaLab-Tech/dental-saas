@@ -3,10 +3,17 @@ import crypto from 'crypto'
 import { api } from '../../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword, hashToken } from '../../services/auth.service.js'
-import { loginIpRateLimitStore, loginAccountRateLimitStore } from './auth.js'
+import {
+  loginIpRateLimitStore,
+  loginAccountRateLimitStore,
+  adminForgotPasswordRateLimitStore,
+  adminResetPasswordRateLimitStore,
+} from './auth.js'
 import {
   loginIpRateLimitStore as tenantLoginIpRateLimitStore,
   loginAccountRateLimitStore as tenantLoginAccountRateLimitStore,
+  forgotPasswordRateLimitStore as tenantForgotPasswordRateLimitStore,
+  resetPasswordRateLimitStore as tenantResetPasswordRateLimitStore,
 } from '../auth.js'
 
 describe('Admin Auth - Password Recovery', () => {
@@ -51,6 +58,13 @@ describe('Admin Auth - Password Recovery', () => {
     await prisma.passwordResetToken.deleteMany({
       where: { userId: superAdminId },
     })
+    // #417: these endpoints are now rate limited (10 per 15 min). Without a
+    // reset the cases below share one budget and the later ones would 429 —
+    // note they currently total 7 and 6 requests, i.e. they would pass by
+    // luck today and break on the next test anyone adds. Reset, rather than
+    // bypassing the limiter under NODE_ENV === 'test' (#254's ruling).
+    await adminForgotPasswordRateLimitStore.resetAll()
+    await adminResetPasswordRateLimitStore.resetAll()
   })
 
   describe('POST /api/admin/auth/forgot-password', () => {
@@ -577,5 +591,232 @@ describe('Task #418: admin login rate limiting', () => {
       .set('X-Forwarded-For', ip2)
       .send({ email: 'admin-unaffected@test.com', password: wrongPassword })
     expect(adminLoginUnaffected.status).toBe(401)
+  })
+})
+
+describe('Task #417: admin password-recovery rate limiting', () => {
+  const unknownEmail = 'no-such-superadmin-417@test.com'
+  // A REAL super admin, scoped to this describe. The enumeration case below
+  // is worthless without one: the describes above delete their own fixtures
+  // in afterAll, so by the time this block runs there is no super admin in
+  // the database and a test comparing "exists" against "does not exist"
+  // would be comparing "does not exist" against itself — true by
+  // construction, and still true if an oracle appeared.
+  const existingEmail = `superadmin-417-${Date.now()}@test.com`
+  let existingId: string | undefined
+
+  beforeAll(async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: existingEmail,
+        passwordHash: await hashPassword('OldPassword123!'),
+        firstName: 'Test',
+        lastName: 'SuperAdmin417',
+        role: 'SUPER_ADMIN',
+        tenantId: null,
+      },
+    })
+    existingId = user.id
+  })
+
+  afterAll(async () => {
+    if (existingId) {
+      await prisma.passwordResetToken.deleteMany({ where: { userId: existingId } })
+      await prisma.user.delete({ where: { id: existingId } }).catch(() => {
+        // User may already be gone.
+      })
+    }
+  })
+
+  beforeEach(async () => {
+    // All four recovery buckets, both routers: the independence tests below
+    // assert across routers, so a leftover hit in either would make them
+    // pass or fail for the wrong reason.
+    await adminForgotPasswordRateLimitStore.resetAll()
+    await adminResetPasswordRateLimitStore.resetAll()
+    await tenantForgotPasswordRateLimitStore.resetAll()
+    await tenantResetPasswordRateLimitStore.resetAll()
+  })
+
+  it('allows 10 forgot-password requests per IP and 429s the 11th', async () => {
+    const ip = '198.51.100.211'
+    for (let i = 0; i < 10; i++) {
+      const response = await api()
+        .post('/api/admin/auth/forgot-password')
+        .set('X-Forwarded-For', ip)
+        .send({ email: unknownEmail })
+      expect(response.status).toBe(200)
+    }
+
+    const eleventh = await api()
+      .post('/api/admin/auth/forgot-password')
+      .set('X-Forwarded-For', ip)
+      .send({ email: unknownEmail })
+    expect(eleventh.status).toBe(429)
+    expect(eleventh.body).toEqual({
+      success: false,
+      error: {
+        message: 'Too many password recovery attempts. Please try again later.',
+        code: 'RATE_LIMITED',
+        retryAfter: expect.any(Number),
+      },
+    })
+  })
+
+  it('allows 10 reset-password requests per IP and 429s the 11th', async () => {
+    const ip = '198.51.100.212'
+    for (let i = 0; i < 10; i++) {
+      const response = await api()
+        .post('/api/admin/auth/reset-password')
+        .set('X-Forwarded-For', ip)
+        .send({ token: 'not-a-real-token', password: 'NewPassword123!' })
+      // The limiter counts REQUESTS, not failures, so the rejected token
+      // status here is irrelevant to the budget — only that it is not 429.
+      expect(response.status).not.toBe(429)
+    }
+
+    const eleventh = await api()
+      .post('/api/admin/auth/reset-password')
+      .set('X-Forwarded-For', ip)
+      .send({ token: 'not-a-real-token', password: 'NewPassword123!' })
+    expect(eleventh.status).toBe(429)
+    expect(eleventh.body.error.code).toBe('RATE_LIMITED')
+  })
+
+  it('gives the two admin recovery endpoints independent buckets', async () => {
+    const ip = '198.51.100.213'
+    for (let i = 0; i < 10; i++) {
+      await api()
+        .post('/api/admin/auth/forgot-password')
+        .set('X-Forwarded-For', ip)
+        .send({ email: unknownEmail })
+    }
+    const forgotBlocked = await api()
+      .post('/api/admin/auth/forgot-password')
+      .set('X-Forwarded-For', ip)
+      .send({ email: unknownEmail })
+    expect(forgotBlocked.status).toBe(429)
+
+    // Separate buckets exist so a cheap, unauthenticated forgot-password
+    // flood cannot starve reset-password for everyone behind one office NAT.
+    const resetUnaffected = await api()
+      .post('/api/admin/auth/reset-password')
+      .set('X-Forwarded-For', ip)
+      .send({ token: 'not-a-real-token', password: 'NewPassword123!' })
+    expect(resetUnaffected.status).not.toBe(429)
+  })
+
+  it('keeps admin recovery buckets independent of the tenant ones, in both directions', async () => {
+    // Asserts the PROPERTY (admin and tenant recovery are separately
+    // budgeted), not the mechanism. It is worth being precise about what
+    // does and does not catch a copy-pasted keyPrefix here, because it is
+    // tempting to credit this test with more than it does:
+    //
+    //   - Under MemoryStore every limiter is a distinct instance, so a
+    //     duplicated prefix would NOT change this test's outcome. No
+    //     assertion in this file could catch it.
+    //   - What catches it is the prefix registry in middleware/rate-limit.ts,
+    //     which throws at module evaluation. Verified by setting this
+    //     limiter's prefix to 'forgot-password': the file fails to load with
+    //     "keyPrefix ... is already registered" and reports "no tests" —
+    //     the boot fails before any assertion runs.
+    //
+    // This test still earns its place, and it is worth naming exactly what
+    // it does guarantee:
+    //
+    //   - the buckets being merged some OTHER way — a shared limiter
+    //     instance, or one middleware attached to both routers;
+    //   - that `X-Forwarded-For` is actually honoured as the key. If it were
+    //     not, every request here would key on the same socket address, and
+    //     the final assertion would fail: `adminUnaffected` on ip2 would
+    //     inherit the 11 hits already spent on the admin bucket at ip.
+    const ip = '198.51.100.214'
+    for (let i = 0; i < 10; i++) {
+      await api()
+        .post('/api/admin/auth/forgot-password')
+        .set('X-Forwarded-For', ip)
+        .send({ email: unknownEmail })
+    }
+    const adminBlocked = await api()
+      .post('/api/admin/auth/forgot-password')
+      .set('X-Forwarded-For', ip)
+      .send({ email: unknownEmail })
+    expect(adminBlocked.status).toBe(429)
+
+    const tenantUnaffected = await api()
+      .post('/api/auth/forgot-password')
+      .set('X-Forwarded-For', ip)
+      .send({ email: unknownEmail, clinicSlug: 'no-such-clinic-417' })
+    expect(tenantUnaffected.status).not.toBe(429)
+
+    // And the reverse, on a fresh IP.
+    const ip2 = '198.51.100.215'
+    for (let i = 0; i < 10; i++) {
+      await api()
+        .post('/api/auth/forgot-password')
+        .set('X-Forwarded-For', ip2)
+        .send({ email: unknownEmail, clinicSlug: 'no-such-clinic-417' })
+    }
+    const tenantBlocked = await api()
+      .post('/api/auth/forgot-password')
+      .set('X-Forwarded-For', ip2)
+      .send({ email: unknownEmail, clinicSlug: 'no-such-clinic-417' })
+    expect(tenantBlocked.status).toBe(429)
+
+    const adminUnaffected = await api()
+      .post('/api/admin/auth/forgot-password')
+      .set('X-Forwarded-For', ip2)
+      .send({ email: unknownEmail })
+    expect(adminUnaffected.status).not.toBe(429)
+  })
+
+  it('returns an identical 429 whether the super-admin email exists or not', async () => {
+    // Anti-enumeration: the 200 responses are already indistinguishable, and
+    // the throttled response must not become the side channel that undoes
+    // that.
+    //
+    // The two branches must genuinely differ, which is why this uses the
+    // describe-scoped fixture rather than a made-up address: `existingEmail`
+    // resolves to a real SUPER_ADMIN row, `unknownEmail` resolves to nothing.
+    //
+    // The property does also hold structurally today — the limiter's handler
+    // replies before the route handler ever looks the email up, so the lookup
+    // cannot influence the body. That is an argument for the property, not a
+    // substitute for checking it: it stops holding the moment the limiter
+    // moves after anything email-dependent, or the message becomes dynamic.
+    const bodies: unknown[] = []
+    for (const [email, shouldExist] of [
+      [unknownEmail, false],
+      [existingEmail, true],
+    ] as const) {
+      // Assert the premise about the address ACTUALLY being sent, using the
+      // handler's own predicate (the findFirst in admin/auth.ts's
+      // forgot-password). Checking the fixture instead would not do: the
+      // fixture can be perfectly real while the loop sends something else,
+      // which is exactly how this case was wrong before — both branches used
+      // non-existent addresses, so it compared "does not exist" against
+      // itself and would have stayed green if an oracle appeared.
+      const found = await prisma.user.findFirst({
+        where: { email, tenantId: null, role: 'SUPER_ADMIN', isActive: true },
+        select: { id: true },
+      })
+      expect(Boolean(found)).toBe(shouldExist)
+
+      await adminForgotPasswordRateLimitStore.resetAll()
+      const ip = `198.51.100.${shouldExist ? '217' : '216'}`
+      for (let i = 0; i < 10; i++) {
+        await api()
+          .post('/api/admin/auth/forgot-password')
+          .set('X-Forwarded-For', ip)
+          .send({ email })
+      }
+      const eleventh = await api()
+        .post('/api/admin/auth/forgot-password')
+        .set('X-Forwarded-For', ip)
+        .send({ email })
+      expect(eleventh.status).toBe(429)
+      bodies.push({ ...eleventh.body, error: { ...eleventh.body.error, retryAfter: 0 } })
+    }
+    expect(bodies[0]).toEqual(bodies[1])
   })
 })

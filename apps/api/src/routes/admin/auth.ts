@@ -24,6 +24,8 @@ import {
   LOGIN_RATE_LIMIT_WINDOW_MS,
   LOGIN_IP_RATE_LIMIT,
   LOGIN_ACCOUNT_RATE_LIMIT,
+  RECOVERY_RATE_LIMIT_WINDOW_MS,
+  RECOVERY_RATE_LIMIT,
   type ResettableStore,
 } from '../../middleware/rate-limit.js'
 
@@ -69,6 +71,44 @@ export const loginAccountRateLimitStore = loginAccountLimiter.store as Resettabl
 
 const loginIpRateLimit = loginIpLimiter.limiter
 const loginAccountRateLimit = loginAccountLimiter.limiter
+
+// #417: #254 rate-limited the TENANT recovery pair and left these two
+// unlimited. They are structurally identical and unauthenticated, against
+// the highest-value credential in the system.
+//
+// The threat model is stated once, beside the tenant pair in routes/auth.ts
+// — read it there. It is referenced rather than restated on purpose: its
+// load-bearing sentence is a NEGATION (this is not a defence against
+// reset-token brute force), and a paraphrase is exactly how a negation gets
+// dropped and a limiter ends up described as a control it is not.
+//
+// What IS specific here: these buckets are separate from the tenant ones.
+// The keyPrefix is the only thing separating them under Redis, so reusing
+// 'forgot-password' / 'reset-password' would silently merge super-admin and
+// tenant recovery into one bucket per IP in production while every
+// MemoryStore-backed test still passed. The registry in
+// middleware/rate-limit.ts turns that specific mistake into a boot failure,
+// but the naming below is what makes it not arise.
+const adminForgotPasswordLimiter = createRateLimiter({
+  windowMs: RECOVERY_RATE_LIMIT_WINDOW_MS,
+  limit: RECOVERY_RATE_LIMIT,
+  keyPrefix: 'admin-forgot-password',
+  message: 'Too many password recovery attempts. Please try again later.',
+})
+const adminResetPasswordLimiter = createRateLimiter({
+  windowMs: RECOVERY_RATE_LIMIT_WINDOW_MS,
+  limit: RECOVERY_RATE_LIMIT,
+  keyPrefix: 'admin-reset-password',
+  message: 'Too many password recovery attempts. Please try again later.',
+})
+
+export const adminForgotPasswordRateLimitStore =
+  adminForgotPasswordLimiter.store as ResettableStore
+export const adminResetPasswordRateLimitStore =
+  adminResetPasswordLimiter.store as ResettableStore
+
+const adminForgotPasswordRateLimit = adminForgotPasswordLimiter.limiter
+const adminResetPasswordRateLimit = adminResetPasswordLimiter.limiter
 
 // Password validation schema (same as registration)
 const passwordSchema = z
@@ -178,7 +218,7 @@ authRouter.post('/login', loginIpRateLimit, loginAccountRateLimit, async (req, r
 })
 
 // POST /api/admin/auth/forgot-password
-authRouter.post('/forgot-password', async (req, res, next) => {
+authRouter.post('/forgot-password', adminForgotPasswordRateLimit, async (req, res, next) => {
   try {
     const parse = forgotPasswordSchema.safeParse(req.body)
     if (!parse.success) {
@@ -264,7 +304,7 @@ authRouter.post('/forgot-password', async (req, res, next) => {
 })
 
 // POST /api/admin/auth/reset-password
-authRouter.post('/reset-password', async (req, res, next) => {
+authRouter.post('/reset-password', adminResetPasswordRateLimit, async (req, res, next) => {
   try {
     const parse = resetPasswordSchema.safeParse(req.body)
     if (!parse.success) {

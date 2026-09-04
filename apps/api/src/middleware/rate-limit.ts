@@ -283,6 +283,18 @@ export const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
 export const LOGIN_IP_RATE_LIMIT = 20
 export const LOGIN_ACCOUNT_RATE_LIMIT = 10
 
+// #417: shared ceilings for every password-recovery limiter (tenant + super
+// admin). Four buckets across two routers now use these; hard-coding the
+// numbers in each router is what would let them drift apart, and a drift
+// here is invisible — each endpoint keeps working, just with a different
+// budget than its counterpart. Unlike the login ceilings above these count
+// REQUESTS, not failures: a successful recovery request is exactly what an
+// automation abuser sends, so refunding it would defeat the limiter.
+// The rationale for the values, and for why the two endpoints do NOT share
+// a bucket, is in routes/auth.ts beside the tenant pair.
+export const RECOVERY_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
+export const RECOVERY_RATE_LIMIT = 10
+
 export function createRateLimiter({
   windowMs,
   limit,
