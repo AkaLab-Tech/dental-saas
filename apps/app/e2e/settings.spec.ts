@@ -35,51 +35,45 @@ test.describe('Settings and Profile', () => {
   })
 
   test.describe('Language Switching', () => {
-    test('should be able to change language from dropdown', async ({ authedPage: page }) => {
+    test('changes the interface language from the Preferences dropdown', async ({
+      authedPage: page,
+    }) => {
       await page.goto('/settings')
 
-      // Try to find language dropdown
-      const languageSelect = page.getByRole('combobox').first()
-      const isVisible = await languageSelect.isVisible().catch(() => false)
+      // Like the selector test above, the control only exists on the
+      // Preferences tab; the default Profile tab has no language field.
+      await page.getByRole('button', { name: /preferencias/i }).click()
 
-      if (isVisible) {
-        // Get current value
-        const currentValue = await languageSelect.inputValue()
+      // Located by id, not by label text or role: the label itself is
+      // translated, so a text locator would stop matching the moment this
+      // test does its job. `getByRole('combobox').first()` is worse still —
+      // this tab renders several selects (date format, time format, ...) and
+      // .first() is a coin toss between them.
+      const languageSelect = page.locator('#language')
+      await expect(languageSelect).toBeVisible()
 
-        // Change to different language
-        const newLang = currentValue === 'es' ? 'en' : 'es'
-        await languageSelect.selectOption(newLang)
+      // Assert an observable consequence, not just the select's own value:
+      // the heading is rendered through i18n, so it only changes if
+      // changeLanguage actually ran (PreferencesForm's handleChange).
+      await languageSelect.selectOption('en')
+      await expect(languageSelect).toHaveValue('en')
+      await expect(page.getByRole('heading', { name: /^settings$/i })).toBeVisible()
 
-        // Wait for language change to take effect
-        await page.waitForTimeout(500)
-
-        // Verify language changed (page content should reflect new language)
-        expect(await languageSelect.inputValue()).toBe(newLang)
-      } else {
-        test.skip()
-      }
+      // Switch back, so the test proves a real transition in both directions
+      // rather than depending on which language the fixture happens to seed.
+      await languageSelect.selectOption('es')
+      await expect(languageSelect).toHaveValue('es')
+      await expect(page.getByRole('heading', { name: /configuración/i })).toBeVisible()
     })
 
-    test('should be able to change language from buttons', async ({ authedPage: page }) => {
-      await page.goto('/settings')
-
-      // Try to find language buttons
-      const enButton = page.getByRole('button', { name: /EN/i })
-      const isVisible = await enButton.isVisible().catch(() => false)
-
-      if (isVisible) {
-        await enButton.click()
-
-        // Wait for language change
-        await page.waitForTimeout(500)
-
-        // Button should now be highlighted/active
-        const classes = await enButton.getAttribute('class')
-        expect(classes).toContain('bg-blue')
-      } else {
-        test.skip()
-      }
-    })
+    // Removed here: 'should be able to change language from buttons'. It drove
+    // LanguageSelector's `variant="buttons"` UI, which is not rendered on
+    // /settings — its only non-test call site is RegisterPage. The locator
+    // `getByRole('button', { name: /EN/i })` therefore resolved to the
+    // "Prefer[en]cias" tab, and the assertion compared a tab's active classes
+    // against a language button's. That variant is covered directly by
+    // LanguageSelector.test.tsx, and the /settings language path by the test
+    // above and by PreferencesForm.test.tsx.
   })
 
   test.describe('Clinic Information Update', () => {
@@ -92,19 +86,15 @@ test.describe('Settings and Profile', () => {
     test('should allow editing clinic name', async ({ authedPage: page }) => {
       await page.goto('/settings')
 
-      // Find clinic name input
-      const nameInput = page.getByRole('textbox').first()
-      const isVisible = await nameInput.isVisible().catch(() => false)
+      // Anchored to the field's own label rather than `getByRole('textbox')
+      // .first()`, which asserted nothing about WHICH of the profile form's
+      // several text inputs it was editing.
+      const nameInput = page.getByLabel(/nombre de la clínica/i)
+      await expect(nameInput).toBeVisible()
 
-      if (isVisible) {
-        // Clear and type new name
-        await nameInput.fill('Test Clinic Name')
+      await nameInput.fill('Test Clinic Name')
 
-        // Value should be updated
-        await expect(nameInput).toHaveValue('Test Clinic Name')
-      } else {
-        test.skip()
-      }
+      await expect(nameInput).toHaveValue('Test Clinic Name')
     })
   })
 
@@ -134,15 +124,10 @@ test.describe('Settings and Profile', () => {
     })
   })
 
-  test.describe('User Profile', () => {
-    test('should display user profile section', async ({ authedPage: page }) => {
-      await page.goto('/settings')
-
-      // Should have user profile information
-      const hasUserSection = await page.getByText(/perfil/i).isVisible().catch(() => false)
-
-      // User profile might be in different section
-      expect(typeof hasUserSection).toBe('boolean')
-    })
-  })
+  // Removed here: the 'User Profile' block's 'should display user profile
+  // section'. It visited /settings, where the only "perfil" text is the
+  // "Perfil de Clínica" tab — a CLINIC profile; user profiles live on
+  // /users. Its assertion was `expect(typeof hasUserSection).toBe('boolean')`,
+  // which is true whether or not anything was found, so the test could not
+  // fail and never covered the section it was named after.
 })
