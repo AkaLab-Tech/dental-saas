@@ -26,10 +26,14 @@ let client: Redis | null | undefined
  * read this as licence to branch actual request-handling behaviour on
  * NODE_ENV.
  *
- * Known limitation, accepted for now: because of this choice, the Redis path
- * is covered only through the fake sendCommand in middleware/rate-limit.test.ts,
- * so rate-limit-redis's actual Lua script is never executed against a real
- * Redis anywhere in the suite.
+ * The NODE_ENV === 'test' MemoryStore choice above still holds, for the
+ * reasons given. Within the main suite the Redis path is exercised only
+ * through the fake sendCommand in middleware/rate-limit.test.ts — this
+ * function's own behaviour does not change for that. The real Lua script IS
+ * covered, separately: middleware/rate-limit.integration.test.ts builds its
+ * own client and runs FallbackStore/RedisStore against a real Redis,
+ * bypassing this function entirely, guarded by a reachability probe that
+ * skips the file when Redis is unreachable.
  */
 export function getRedisClient(): Redis | null {
   if (client !== undefined) return client

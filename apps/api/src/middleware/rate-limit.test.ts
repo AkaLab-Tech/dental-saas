@@ -1,9 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import express, { type Express, type RequestHandler } from 'express'
 import request from 'supertest'
-import { MemoryStore, type Store } from 'express-rate-limit'
-import RedisStore from 'rate-limit-redis'
-import { createRateLimiter, resetRateLimiterRegistry } from './rate-limit.js'
+import {
+  rateLimit,
+  MemoryStore,
+  type Store,
+  type IncrementResponse,
+  type ClientRateLimitInfo,
+} from 'express-rate-limit'
+import { createRateLimiter, resetRateLimiterRegistry, FallbackStore } from './rate-limit.js'
 import { getRedisClient } from '../config/redis.js'
 import { env } from '../config/env.js'
 import { logger } from '../utils/logger.js'
@@ -54,6 +59,73 @@ function createFakeRedis(): FakeRedis {
   }
 
   return { client: { call }, calls }
+}
+
+/**
+ * A minimal express-rate-limit Store double for testing FallbackStore's own
+ * logic in isolation (breaker timing, delegation, error swallowing) — a level
+ * below the fake Redis protocol above, and independent of MemoryStore's real
+ * bucket/expiry logic. `fail` is mutable so a single instance can simulate a
+ * primary going down and later recovering.
+ */
+interface SpyStore extends Store {
+  fail: boolean
+  initCalls: number
+  getCalls: number
+  incrementCalls: number
+  decrementCalls: number
+  resetKeyCalls: number
+  resetAllCalls: number
+}
+
+function makeSpyStore(name: string, fail = false): SpyStore {
+  const hits = new Map<string, number>()
+  const maybeFail = (op: string): void => {
+    if (store.fail) throw new Error(`${name} ${op} failed`)
+  }
+
+  const store: SpyStore = {
+    localKeys: false,
+    fail,
+    initCalls: 0,
+    getCalls: 0,
+    incrementCalls: 0,
+    decrementCalls: 0,
+    resetKeyCalls: 0,
+    resetAllCalls: 0,
+    init() {
+      store.initCalls++
+      maybeFail('init')
+    },
+    async get(key: string): Promise<ClientRateLimitInfo | undefined> {
+      store.getCalls++
+      maybeFail('get')
+      return { totalHits: hits.get(key) ?? 0, resetTime: undefined }
+    },
+    async increment(key: string): Promise<IncrementResponse> {
+      store.incrementCalls++
+      maybeFail('increment')
+      const next = (hits.get(key) ?? 0) + 1
+      hits.set(key, next)
+      return { totalHits: next, resetTime: undefined }
+    },
+    async decrement(key: string): Promise<void> {
+      store.decrementCalls++
+      maybeFail('decrement')
+      hits.set(key, Math.max(0, (hits.get(key) ?? 0) - 1))
+    },
+    async resetKey(key: string): Promise<void> {
+      store.resetKeyCalls++
+      maybeFail('resetKey')
+      hits.delete(key)
+    },
+    async resetAll(): Promise<void> {
+      store.resetAllCalls++
+      maybeFail('resetAll')
+      hits.clear()
+    },
+  }
+  return store
 }
 
 /** Pulls the `rl:<prefix>:<id>` key out of a recorded argv, if it has one. */
@@ -112,7 +184,7 @@ describe('createRateLimiter', () => {
     expect(store).toBeInstanceOf(MemoryStore)
   })
 
-  it('drives the Redis store when a client is injected, and 429s at the configured limit', async () => {
+  it('drives the Redis store through FallbackStore when a client is injected, and 429s at the configured limit', async () => {
     const fake = createFakeRedis()
     const { limiter, store } = createRateLimiter({
       windowMs: WINDOW_MS,
@@ -123,7 +195,11 @@ describe('createRateLimiter', () => {
     })
     const app = appWith(limiter)
 
-    expect(store).toBeInstanceOf(RedisStore)
+    // #420: a client turns the store into a FallbackStore wrapping the
+    // Redis-backed store, not a bare RedisStore — the assertions below (the
+    // client really being driven) are what proves the Redis path still
+    // works underneath it.
+    expect(store).toBeInstanceOf(FallbackStore)
     expect(store).not.toBeInstanceOf(MemoryStore)
 
     expect((await request(app).get('/probe')).status).toBe(200)
@@ -241,7 +317,7 @@ describe('createRateLimiter', () => {
     expect(() => build()).toThrow(/already registered/)
   })
 
-  it('fails OPEN and logs when the Redis client rejects (passOnStoreError)', async () => {
+  it('degrades to the in-process memory secondary when the Redis client rejects, and still enforces the limit (#420)', async () => {
     const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined)
     const brokenClient = {
       call: async () => {
@@ -251,25 +327,163 @@ describe('createRateLimiter', () => {
 
     const { limiter } = createRateLimiter({
       windowMs: WINDOW_MS,
-      limit: 1,
+      limit: 2,
       keyPrefix: 'broken-redis',
       message: MESSAGE,
       client: brokenClient,
     })
     const app = appWith(limiter)
 
-    // Well past the limit: every one of these must still be served.
-    for (let i = 0; i < 3; i++) {
-      const response = await request(app).get('/probe')
-      expect(response.status).toBe(200)
-      expect(response.status).not.toBe(429)
-      // A 500 here means passOnStoreError regressed and a Redis outage became
-      // a password-recovery outage.
+    const first = await request(app).get('/probe')
+    const second = await request(app).get('/probe')
+    expect(first.status).toBe(200)
+    expect(second.status).toBe(200)
+
+    // This is the single most important assertion in #420: a dead Redis
+    // primary must still produce a 429 at the ceiling, served by the
+    // per-process memory secondary — NOT the pre-#420 unlimited pass-through
+    // (that old behaviour is exactly what this test used to assert; do not
+    // restore it).
+    const third = await request(app).get('/probe')
+    expect(third.status).toBe(429)
+    expect(third.body).toEqual({
+      success: false,
+      error: { message: MESSAGE, code: 'RATE_LIMITED', retryAfter: expect.any(Number) },
+    })
+
+    // Degrade, not fail-open: passOnStoreError still backstops any error this
+    // store does not itself originate, but must never surface as a 500 —
+    // that would turn a Redis outage into a password-recovery outage.
+    for (const response of [first, second, third]) {
       expect(response.status).not.toBe(500)
-      expect(response.body).toEqual({ success: true })
     }
 
     expect(errorSpy).toHaveBeenCalled()
+  })
+})
+
+describe('FallbackStore', () => {
+  it('degrades to the secondary store when the primary rejects, and keeps requests limited', async () => {
+    const primary = makeSpyStore('primary', true)
+    const secondary = new MemoryStore()
+    // breakerWindowMs: 0 isolates this test from breaker suppression (that
+    // is the next test's job) — every request genuinely retries, and fails,
+    // the primary, so the assertion below proves the request path, not just
+    // the breaker's memory.
+    const store = new FallbackStore({ primary, secondary, breakerWindowMs: 0 })
+    const limiter = rateLimit({
+      windowMs: WINDOW_MS,
+      limit: 2,
+      standardHeaders: true,
+      legacyHeaders: false,
+      store,
+      passOnStoreError: true,
+    })
+    const app = appWith(limiter)
+
+    expect((await request(app).get('/probe')).status).toBe(200)
+    expect((await request(app).get('/probe')).status).toBe(200)
+    // The primary is dead for the whole test, yet the ceiling still bites —
+    // this is the property that distinguishes "degrade" from "fail open".
+    expect((await request(app).get('/probe')).status).toBe(429)
+
+    expect(primary.incrementCalls).toBeGreaterThanOrEqual(3)
+  })
+
+  it('opens a circuit breaker after a primary failure, skipping the primary until the window elapses', async () => {
+    vi.useFakeTimers()
+    try {
+      const primary = makeSpyStore('primary', true)
+      const secondary = makeSpyStore('secondary')
+      const store = new FallbackStore({ primary, secondary, breakerWindowMs: 1_000 })
+
+      await store.increment('k')
+      expect(primary.incrementCalls).toBe(1)
+      expect(secondary.incrementCalls).toBe(1)
+
+      // Breaker is open: further calls must not pay the primary's cost at
+      // all, not even to fail — that is the whole point of the breaker.
+      await store.increment('k')
+      await store.increment('k')
+      expect(primary.incrementCalls).toBe(1)
+      expect(secondary.incrementCalls).toBe(3)
+
+      // Window elapses and the primary has recovered.
+      vi.advanceTimersByTime(1_001)
+      primary.fail = false
+      await store.increment('k')
+      expect(primary.incrementCalls).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('logs the primary-down/primary-up transition once, not on every request', async () => {
+    vi.useFakeTimers()
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined)
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => undefined)
+    try {
+      const primary = makeSpyStore('primary', true)
+      const secondary = makeSpyStore('secondary')
+      const store = new FallbackStore({ primary, secondary, breakerWindowMs: 1_000 })
+
+      await store.increment('k')
+      await store.increment('k')
+      await store.increment('k')
+      expect(errorSpy).toHaveBeenCalledTimes(1)
+
+      vi.advanceTimersByTime(1_001)
+      primary.fail = false
+      await store.increment('k')
+      expect(warnSpy).toHaveBeenCalledTimes(1)
+
+      await store.increment('k')
+      await store.increment('k')
+      expect(warnSpy).toHaveBeenCalledTimes(1)
+
+      primary.fail = true
+      await store.increment('k')
+      expect(errorSpy).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('never throws, even when both the primary and the secondary fail', async () => {
+    const primary = makeSpyStore('primary', true)
+    const secondary = makeSpyStore('secondary', true)
+    const store = new FallbackStore({ primary, secondary })
+
+    await expect(store.get('k')).resolves.toBeUndefined()
+    await expect(store.increment('k')).resolves.toEqual({ totalHits: 0, resetTime: undefined })
+    await expect(store.decrement('k')).resolves.toBeUndefined()
+    await expect(store.resetKey('k')).resolves.toBeUndefined()
+    await expect(store.resetAll()).resolves.toBeUndefined()
+  })
+
+  it('reaches both stores on init, and both stores on resetAll', async () => {
+    const primary = makeSpyStore('primary')
+    const secondary = makeSpyStore('secondary')
+    const store = new FallbackStore({ primary, secondary })
+
+    // express-rate-limit calls store.init() synchronously while building the
+    // middleware (see rateLimit() in express-rate-limit), so building one is
+    // enough to exercise it without a request.
+    rateLimit({ windowMs: WINDOW_MS, limit: 1, store })
+    expect(primary.initCalls).toBe(1)
+    expect(secondary.initCalls).toBe(1)
+
+    await store.resetAll()
+    expect(primary.resetAllCalls).toBe(1)
+    expect(secondary.resetAllCalls).toBe(1)
+  })
+
+  it('reports localKeys as false — no single backend can be assumed authoritative statically', () => {
+    const store = new FallbackStore({
+      primary: makeSpyStore('primary'),
+      secondary: makeSpyStore('secondary'),
+    })
+    expect(store.localKeys).toBe(false)
   })
 })
 
