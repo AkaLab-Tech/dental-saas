@@ -21,6 +21,11 @@ import {
   hashToken,
   generateProfileToken,
 } from '../services/auth.service.js'
+import { sendPasswordResetEmail } from '../services/email.service.js'
+import {
+  RESET_SEND_COOLDOWN_MS,
+  RESET_SEND_MAX_PER_WINDOW,
+} from '../services/password-reset.service.js'
 import {
   forgotPasswordRateLimitStore,
   resetPasswordRateLimitStore,
@@ -209,6 +214,20 @@ const FIXTURE_RESET_TOKENS = [
   'token-for-invalidation-test',
   'inactive-user-token',
   'superadmin-tenant-reset-token',
+  // Task #415 seeds deterministic tokens too, so they belong in the same
+  // delete-then-insert net — an aborted run otherwise strands them against
+  // the globally @unique tokenHash and the next run fails at create().
+  'token-415-survives-suppression',
+  'token-415-ceiling-0',
+  'token-415-ceiling-1',
+  'token-415-ceiling-2',
+  'token-415-ceiling-3',
+  'token-415-ceiling-4',
+  'token-415-oracle-0',
+  'token-415-oracle-1',
+  'token-415-oracle-2',
+  'token-415-oracle-3',
+  'token-415-oracle-4',
 ]
 
 async function clearAuthFixtures() {
@@ -365,6 +384,16 @@ describe('Auth - Tenant User Password Recovery', () => {
         where: { userId, usedAt: null },
       })
       expect(firstToken).not.toBeNull()
+
+      // Task #415: back-to-back requests no longer both issue — the second
+      // would be suppressed by the per-account cooldown and this test would
+      // be asserting the cooldown rather than the invalidation. Age the first
+      // send past the window so the request below actually reaches the
+      // invalidate-then-issue path this test is about.
+      await prisma.passwordResetToken.update({
+        where: { id: firstToken!.id },
+        data: { createdAt: new Date(Date.now() - RESET_SEND_COOLDOWN_MS - 1000) },
+      })
 
       // Request second token
       await api()
@@ -794,6 +823,188 @@ describe('Auth - Tenant User Password Recovery', () => {
         .set('X-Forwarded-For', '203.0.113.20')
         .send({ email: testEmail, clinicSlug: testClinicSlug })
       expect(firstRequestFromSecondClient.status).toBe(200)
+    })
+  })
+  // Task #415: the per-account send cooldown. Distinct from #254's limiter in
+  // both axis and primitive: #254 caps one IP via express-rate-limit, this
+  // caps one ACCOUNT via PasswordResetToken.createdAt. Every request below
+  // varies X-Forwarded-For precisely so that a pass cannot be #254's doing.
+  describe('Task #415: per-account recovery send cooldown', () => {
+    let ip = 200
+    const freshIp = () => `203.0.113.${ip++}`
+    const inFifteenMinutes = () => new Date(Date.now() + 15 * 60 * 1000)
+
+    beforeEach(async () => {
+      vi.mocked(sendPasswordResetEmail).mockClear()
+    })
+
+    it('sends once per cooldown window for one account, even from different IPs', async () => {
+      // The distinct X-Forwarded-For on each request is load-bearing, not
+      // over-specification: with one shared origin, #254's per-IP limiter
+      // would be a second explanation for a single send, and this test could
+      // not tell the two controls apart. Two origins leave one hit in each of
+      // those buckets, so the suppression can only be the account's.
+      const first = await api()
+        .post('/api/auth/forgot-password')
+        .set('X-Forwarded-For', freshIp())
+        .send({ email: testEmail, clinicSlug: testClinicSlug })
+      expect(first.status).toBe(200)
+
+      const second = await api()
+        .post('/api/auth/forgot-password')
+        .set('X-Forwarded-For', freshIp())
+        .send({ email: testEmail, clinicSlug: testClinicSlug })
+      expect(second.status).toBe(200)
+
+      // Two different origins, so #254's per-IP limiter never fired — each of
+      // those buckets has exactly one hit. The suppression is the account's.
+      expect(vi.mocked(sendPasswordResetEmail)).toHaveBeenCalledTimes(1)
+      expect(await prisma.passwordResetToken.count({ where: { userId } })).toBe(1)
+    })
+
+    it('leaves a token already delivered to the user redeemable when a later request is suppressed', async () => {
+      // THE ordering test. The cooldown has to return BEFORE the handler
+      // invalidates outstanding tokens. Checked next to the send instead —
+      // the intuitive place — it would suppress the email while still killing
+      // this token, i.e. complete the lockout it exists to prevent.
+      const plainToken = 'token-415-survives-suppression'
+      await prisma.passwordResetToken.create({
+        data: { userId, tokenHash: hashToken(plainToken), expiresAt: inFifteenMinutes() },
+      })
+
+      const suppressed = await api()
+        .post('/api/auth/forgot-password')
+        .set('X-Forwarded-For', freshIp())
+        .send({ email: testEmail, clinicSlug: testClinicSlug })
+      expect(suppressed.status).toBe(200)
+      expect(vi.mocked(sendPasswordResetEmail)).not.toHaveBeenCalled()
+
+      // Drive the REAL token through the REAL endpoint. Asserting instead
+      // that some row exists with usedAt: null would be a weaker claim that a
+      // freshly issued token also satisfies — so it would pass against the
+      // broken ordering, which is the one thing this test must not do.
+      const redeemed = await api()
+        .post('/api/auth/reset-password')
+        .send({ token: plainToken, password: 'NewPassword415!' })
+      expect(redeemed.status).toBe(200)
+
+      // Put the fixture password back; later describes are independent, but a
+      // test that leaves a changed credential behind is a trap for the next one.
+      await prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash: await hashPassword(testPassword) },
+      })
+    })
+
+    it('suppresses the 6th send within the hour even when every send is outside the 2-minute cooldown', async () => {
+      // Spread the seeded sends 5 minutes apart. The most recent is well
+      // outside RESET_SEND_COOLDOWN_MS, so a pass here cannot be the cooldown
+      // doing the work — only the hourly ceiling can produce it.
+      const spacingMs = 5 * 60 * 1000
+      // Guards the test's own premise, not the code: if the cooldown were
+      // ever raised past this spacing, the seeded sends would fall inside it
+      // and this case would quietly start proving the cooldown instead.
+      expect(spacingMs).toBeGreaterThan(RESET_SEND_COOLDOWN_MS)
+
+      const now = Date.now()
+      for (let i = 0; i < RESET_SEND_MAX_PER_WINDOW; i++) {
+        await prisma.passwordResetToken.create({
+          data: {
+            userId,
+            tokenHash: hashToken(`token-415-ceiling-${i}`),
+            expiresAt: inFifteenMinutes(),
+            createdAt: new Date(now - (i + 1) * spacingMs),
+            usedAt: new Date(),
+          },
+        })
+      }
+
+      const blocked = await api()
+        .post('/api/auth/forgot-password')
+        .set('X-Forwarded-For', freshIp())
+        .send({ email: testEmail, clinicSlug: testClinicSlug })
+      expect(blocked.status).toBe(200)
+      expect(vi.mocked(sendPasswordResetEmail)).not.toHaveBeenCalled()
+      expect(await prisma.passwordResetToken.count({ where: { userId } })).toBe(
+        RESET_SEND_MAX_PER_WINDOW
+      )
+    })
+
+    it('returns a byte-identical response whether the account exists, is unknown, is in cooldown, or is over the ceiling', async () => {
+      const post = (email: string) =>
+        api()
+          .post('/api/auth/forgot-password')
+          .set('X-Forwarded-For', freshIp())
+          .send({ email, clinicSlug: testClinicSlug })
+
+      // 1. exists, allowed — also arms the cooldown for 2.
+      const allowed = await post(testEmail)
+      // 2. exists, in cooldown.
+      const cooled = await post(testEmail)
+      // 3. does not exist.
+      const unknown = await post('no-such-user-415@test.com')
+      // 4. exists, over the hourly ceiling.
+      const now = Date.now()
+      for (let i = 0; i < RESET_SEND_MAX_PER_WINDOW; i++) {
+        await prisma.passwordResetToken.create({
+          data: {
+            userId,
+            tokenHash: hashToken(`token-415-oracle-${i}`),
+            expiresAt: inFifteenMinutes(),
+            createdAt: new Date(now - (i + 1) * 6 * 60 * 1000),
+            usedAt: new Date(),
+          },
+        })
+      }
+      const overCeiling = await post(testEmail)
+
+      for (const res of [allowed, cooled, unknown, overCeiling]) {
+        expect(res.status).toBe(200)
+        expect(res.body).toEqual(allowed.body)
+      }
+    })
+
+    it('budgets the same email address in two tenants independently', async () => {
+      // @@unique([tenantId, email]) means one address in two clinics is two
+      // users. The cooldown is keyed on userId, so the budgets must not
+      // couple — asserted explicitly so a future refactor to email-keying
+      // cannot introduce cross-tenant denial of recovery silently.
+      const otherTenant = await prisma.tenant.create({
+        data: { name: 'Other Clinic 415', slug: `test-clinic-415-other-${Date.now()}` },
+      })
+      const otherUser = await prisma.user.create({
+        data: {
+          email: testEmail,
+          passwordHash: await hashPassword(testPassword),
+          firstName: 'Other',
+          lastName: 'TenantUser',
+          role: 'OWNER',
+          tenantId: otherTenant.id,
+        },
+      })
+
+      try {
+        await api()
+          .post('/api/auth/forgot-password')
+          .set('X-Forwarded-For', freshIp())
+          .send({ email: testEmail, clinicSlug: testClinicSlug })
+        await api()
+          .post('/api/auth/forgot-password')
+          .set('X-Forwarded-For', freshIp())
+          .send({ email: testEmail, clinicSlug: testClinicSlug })
+        expect(await prisma.passwordResetToken.count({ where: { userId } })).toBe(1)
+
+        // The other tenant's user is untouched by that spent budget.
+        await api()
+          .post('/api/auth/forgot-password')
+          .set('X-Forwarded-For', freshIp())
+          .send({ email: testEmail, clinicSlug: otherTenant.slug })
+        expect(await prisma.passwordResetToken.count({ where: { userId: otherUser.id } })).toBe(1)
+      } finally {
+        await prisma.passwordResetToken.deleteMany({ where: { userId: otherUser.id } })
+        await prisma.user.delete({ where: { id: otherUser.id } })
+        await prisma.tenant.delete({ where: { id: otherTenant.id } })
+      }
     })
   })
 })

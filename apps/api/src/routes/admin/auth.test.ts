@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import { api } from '../../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword, hashToken } from '../../services/auth.service.js'
+import { RESET_SEND_COOLDOWN_MS } from '../../services/password-reset.service.js'
 import {
   loginIpRateLimitStore,
   loginAccountRateLimitStore,
@@ -115,6 +116,18 @@ describe('Admin Auth - Password Recovery', () => {
         where: { userId: superAdminId, usedAt: null },
       })
       expect(firstToken).not.toBeNull()
+
+      // Task #415: back-to-back requests no longer both issue — the second is
+      // suppressed by the per-account cooldown, so without this the test would
+      // be asserting the cooldown rather than the invalidation it is named for.
+      // Age the first send past the window to reach the invalidate-then-issue
+      // path again. The timestamp is moved in the DB rather than by shifting
+      // the clock: a global shift would also move JWT expiry and every other
+      // time-dependent assertion in this file.
+      await prisma.passwordResetToken.update({
+        where: { id: firstToken!.id },
+        data: { createdAt: new Date(Date.now() - RESET_SEND_COOLDOWN_MS - 1000) },
+      })
 
       // Request second token
       await api()
@@ -818,5 +831,83 @@ describe('Task #417: admin password-recovery rate limiting', () => {
       bodies.push({ ...eleventh.body, error: { ...eleventh.body.error, retryAfter: 0 } })
     }
     expect(bodies[0]).toEqual(bodies[1])
+  })
+})
+
+// Task #415: the per-account send cooldown, super-admin half. The two
+// recovery handlers carry the identical invalidate-then-issue shape, so they
+// carry the identical lockout and get the identical control. The tenant half
+// of these assertions — the hourly ceiling, the anti-enumeration comparison
+// across all four branches, cross-tenant independence — lives in
+// routes/auth.test.ts against the shared service; what is checked here is
+// that this router is wired to it, and wired in the right ORDER.
+describe('Task #415: super-admin recovery send cooldown', () => {
+  let superAdminId: string | undefined
+  const testEmail = `superadmin-415-${Date.now()}@test.com`
+
+  beforeAll(async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: testEmail,
+        passwordHash: await hashPassword('OldPassword123!'),
+        firstName: 'Test',
+        lastName: 'SuperAdmin415',
+        role: 'SUPER_ADMIN',
+        tenantId: null,
+      },
+    })
+    superAdminId = user.id
+  })
+
+  afterAll(async () => {
+    if (superAdminId) {
+      await prisma.passwordResetToken.deleteMany({ where: { userId: superAdminId } })
+      await prisma.user.delete({ where: { id: superAdminId } }).catch(() => {
+        // User may already be gone.
+      })
+    }
+  })
+
+  beforeEach(async () => {
+    if (superAdminId) {
+      await prisma.passwordResetToken.deleteMany({ where: { userId: superAdminId } })
+    }
+    // Task #417 put a per-IP limiter on this endpoint. Every request below
+    // comes from the same loopback address, so without this reset the cases
+    // would inherit each other's hits.
+    await adminForgotPasswordRateLimitStore.resetAll()
+  })
+
+  it('issues one token per cooldown window for one super admin', async () => {
+    const first = await api().post('/api/admin/auth/forgot-password').send({ email: testEmail })
+    expect(first.status).toBe(200)
+    const second = await api().post('/api/admin/auth/forgot-password').send({ email: testEmail })
+    expect(second.status).toBe(200)
+    expect(await prisma.passwordResetToken.count({ where: { userId: superAdminId } })).toBe(1)
+  })
+
+  it('leaves an already-issued super-admin token redeemable when a later request is suppressed', async () => {
+    // The ordering assertion. If the cooldown were checked next to the send —
+    // i.e. after the updateMany — this token would already be marked used and
+    // reset-password would reject it, while the suppressed request still
+    // looked like a success from the outside.
+    const plainToken = 'token-415-admin-survives-suppression'
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: superAdminId!,
+        tokenHash: hashToken(plainToken),
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      },
+    })
+
+    const suppressed = await api()
+      .post('/api/admin/auth/forgot-password')
+      .send({ email: testEmail })
+    expect(suppressed.status).toBe(200)
+
+    const redeemed = await api()
+      .post('/api/admin/auth/reset-password')
+      .send({ token: plainToken, password: 'NewPassword415!' })
+    expect(redeemed.status).toBe(200)
   })
 })
