@@ -596,6 +596,37 @@ describe('Task #418: admin login rate limiting', () => {
 
 describe('Task #417: admin password-recovery rate limiting', () => {
   const unknownEmail = 'no-such-superadmin-417@test.com'
+  // A REAL super admin, scoped to this describe. The enumeration case below
+  // is worthless without one: the describes above delete their own fixtures
+  // in afterAll, so by the time this block runs there is no super admin in
+  // the database and a test comparing "exists" against "does not exist"
+  // would be comparing "does not exist" against itself — true by
+  // construction, and still true if an oracle appeared.
+  const existingEmail = `superadmin-417-${Date.now()}@test.com`
+  let existingId: string | undefined
+
+  beforeAll(async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: existingEmail,
+        passwordHash: await hashPassword('OldPassword123!'),
+        firstName: 'Test',
+        lastName: 'SuperAdmin417',
+        role: 'SUPER_ADMIN',
+        tenantId: null,
+      },
+    })
+    existingId = user.id
+  })
+
+  afterAll(async () => {
+    if (existingId) {
+      await prisma.passwordResetToken.deleteMany({ where: { userId: existingId } })
+      await prisma.user.delete({ where: { id: existingId } }).catch(() => {
+        // User may already be gone.
+      })
+    }
+  })
 
   beforeEach(async () => {
     // All four recovery buckets, both routers: the independence tests below
@@ -690,9 +721,15 @@ describe('Task #417: admin password-recovery rate limiting', () => {
     //     "keyPrefix ... is already registered" and reports "no tests" —
     //     the boot fails before any assertion runs.
     //
-    // This test still earns its place: it is what would catch the buckets
-    // being merged some OTHER way — a shared limiter instance, or one
-    // middleware attached to both routers.
+    // This test still earns its place, and it is worth naming exactly what
+    // it does guarantee:
+    //
+    //   - the buckets being merged some OTHER way — a shared limiter
+    //     instance, or one middleware attached to both routers;
+    //   - that `X-Forwarded-For` is actually honoured as the key. If it were
+    //     not, every request here would key on the same socket address, and
+    //     the final assertion would fail: `adminUnaffected` on ip2 would
+    //     inherit the 11 hits already spent on the admin bucket at ip.
     const ip = '198.51.100.214'
     for (let i = 0; i < 10; i++) {
       await api()
@@ -737,10 +774,36 @@ describe('Task #417: admin password-recovery rate limiting', () => {
     // Anti-enumeration: the 200 responses are already indistinguishable, and
     // the throttled response must not become the side channel that undoes
     // that.
+    //
+    // The two branches must genuinely differ, which is why this uses the
+    // describe-scoped fixture rather than a made-up address: `existingEmail`
+    // resolves to a real SUPER_ADMIN row, `unknownEmail` resolves to nothing.
+    //
+    // The property does also hold structurally today — the limiter's handler
+    // replies before the route handler ever looks the email up, so the lookup
+    // cannot influence the body. That is an argument for the property, not a
+    // substitute for checking it: it stops holding the moment the limiter
+    // moves after anything email-dependent, or the message becomes dynamic.
     const bodies: unknown[] = []
-    for (const email of [unknownEmail, `superadmin-recovery-${Date.now()}@test.com`]) {
+    for (const [email, shouldExist] of [
+      [unknownEmail, false],
+      [existingEmail, true],
+    ] as const) {
+      // Assert the premise about the address ACTUALLY being sent, using the
+      // handler's own predicate (the findFirst in admin/auth.ts's
+      // forgot-password). Checking the fixture instead would not do: the
+      // fixture can be perfectly real while the loop sends something else,
+      // which is exactly how this case was wrong before — both branches used
+      // non-existent addresses, so it compared "does not exist" against
+      // itself and would have stayed green if an oracle appeared.
+      const found = await prisma.user.findFirst({
+        where: { email, tenantId: null, role: 'SUPER_ADMIN', isActive: true },
+        select: { id: true },
+      })
+      expect(Boolean(found)).toBe(shouldExist)
+
       await adminForgotPasswordRateLimitStore.resetAll()
-      const ip = `198.51.100.${email === unknownEmail ? '216' : '217'}`
+      const ip = `198.51.100.${shouldExist ? '217' : '216'}`
       for (let i = 0; i < 10; i++) {
         await api()
           .post('/api/admin/auth/forgot-password')
