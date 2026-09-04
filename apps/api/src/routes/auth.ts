@@ -20,6 +20,8 @@ import {
   LOGIN_RATE_LIMIT_WINDOW_MS,
   LOGIN_IP_RATE_LIMIT,
   LOGIN_ACCOUNT_RATE_LIMIT,
+  RECOVERY_RATE_LIMIT_WINDOW_MS,
+  RECOVERY_RATE_LIMIT,
   type ResettableStore,
 } from '../middleware/rate-limit.js'
 import { sendWelcomeEmail, sendPasswordResetEmail } from '../services/email.service.js'
@@ -59,15 +61,19 @@ const authRouter: IRouter = Router()
 // limiter under NODE_ENV === 'test'. Under test the factory always yields a
 // MemoryStore (config/redis.ts returns no client there), which is the only
 // context that calls resetAll() — RedisStore has none, hence the narrowing.
+//
+// Task #417: the ceilings moved to middleware/rate-limit.ts so the super-admin
+// recovery pair uses the same two numbers rather than its own copies. The
+// reasoning for the values stays here, where it was written.
 const forgotPassword = createRateLimiter({
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
+  windowMs: RECOVERY_RATE_LIMIT_WINDOW_MS,
+  limit: RECOVERY_RATE_LIMIT,
   keyPrefix: 'forgot-password',
   message: 'Too many password recovery attempts. Please try again later.',
 })
 const resetPasswordLimiter = createRateLimiter({
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
+  windowMs: RECOVERY_RATE_LIMIT_WINDOW_MS,
+  limit: RECOVERY_RATE_LIMIT,
   keyPrefix: 'reset-password',
   message: 'Too many password recovery attempts. Please try again later.',
 })
