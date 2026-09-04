@@ -4,6 +4,9 @@ import {
   rateLimit,
   MemoryStore,
   type Store,
+  type Options,
+  type ClientRateLimitInfo,
+  type IncrementResponse,
   type RateLimitInfo,
   type ValueDeterminingMiddleware,
 } from 'express-rate-limit'
@@ -41,6 +44,176 @@ const registeredKeyPrefixes = new Set<string>()
 /** Test-only: clears the prefix registry so a file can build limiters freely. */
 export function resetRateLimiterRegistry(): void {
   registeredKeyPrefixes.clear()
+}
+
+/**
+ * #420: how long, in ms, FallbackStore stops calling a failing primary after
+ * it rejects. Without this, every request during an outage would still pay
+ * the primary's `commandTimeout` (500ms, see config/redis.ts) before falling
+ * through — this breaker skips straight to the secondary instead.
+ */
+export const FALLBACK_STORE_BREAKER_WINDOW_MS = 5_000
+
+export interface FallbackStoreOptions {
+  /** Preferred store — the Redis-backed store in production. */
+  primary: Store
+  /** Store used while the primary is failing or the breaker is open. */
+  secondary: Store
+  /**
+   * Overrides FALLBACK_STORE_BREAKER_WINDOW_MS. Exists so tests can exercise
+   * breaker-open and breaker-recovered behaviour without sleeping the real
+   * window.
+   */
+  breakerWindowMs?: number
+}
+
+/**
+ * #420: wraps a primary store (Redis-backed in production) with a secondary
+ * store (a per-process MemoryStore) that takes over when the primary is
+ * unavailable, so a Redis outage degrades the limit rather than removing it.
+ *
+ * Every operation prefers the primary. On rejection it opens a short circuit
+ * breaker (see FALLBACK_STORE_BREAKER_WINDOW_MS) so a dead primary is not
+ * retried — and does not pay its command timeout — on every single request;
+ * while the breaker is open, calls go straight to the secondary. A
+ * transition between primary and secondary service is logged once, not on
+ * every request that follows it.
+ *
+ * Known, accepted limitations of degrading to a per-process MemoryStore
+ * (rather than, say, a second Redis or a shared external store):
+ *   - The secondary starts every counter at zero when an outage begins, and
+ *     that state is discarded once the primary recovers. An attacker gets
+ *     one fresh budget per primary-down/primary-up transition — bounded, and
+ *     far short of the unlimited window a bare fail-open leaves.
+ *   - Counting is per-process, so with N API instances an outage allows up
+ *     to N times the configured ceiling (each instance keeps its own
+ *     MemoryStore). Also bounded, and exactly the pre-#419 behaviour by
+ *     definition, since #419 predates cross-process coordination entirely.
+ *
+ * This store never throws or rejects: if the secondary also fails, the
+ * failure is logged and swallowed, and the operation resolves to a value
+ * that lets the request through — today's behaviour, kept as the last
+ * resort. `passOnStoreError: true` (see createRateLimiter below) stays in
+ * place as a backstop for any error this store does not originate.
+ */
+export class FallbackStore implements Store {
+  // Which backend actually served a request cannot be known statically —
+  // this is the conservative answer express-rate-limit uses to detect
+  // double-counting misconfigurations.
+  localKeys = false
+
+  private readonly primary: Store
+  private readonly secondary: Store
+  private readonly breakerWindowMs: number
+  private breakerOpenUntil = 0
+  private onSecondary = false
+
+  constructor({
+    primary,
+    secondary,
+    breakerWindowMs = FALLBACK_STORE_BREAKER_WINDOW_MS,
+  }: FallbackStoreOptions) {
+    this.primary = primary
+    this.secondary = secondary
+    this.breakerWindowMs = breakerWindowMs
+  }
+
+  init(options: Options): void {
+    try {
+      Promise.resolve(this.primary.init?.(options)).catch((err: unknown) => {
+        this.tripBreaker(err)
+      })
+    } catch (err) {
+      this.tripBreaker(err)
+    }
+    this.secondary.init?.(options)
+  }
+
+  async get(key: string): Promise<ClientRateLimitInfo | undefined> {
+    return this.delegate(
+      (store) => store.get?.(key),
+      () => undefined
+    )
+  }
+
+  async increment(key: string): Promise<IncrementResponse> {
+    return this.delegate(
+      (store) => store.increment(key),
+      () => ({ totalHits: 0, resetTime: undefined })
+    )
+  }
+
+  async decrement(key: string): Promise<void> {
+    await this.delegate(
+      (store) => store.decrement(key),
+      () => undefined
+    )
+  }
+
+  async resetKey(key: string): Promise<void> {
+    await this.delegate(
+      (store) => store.resetKey(key),
+      () => undefined
+    )
+  }
+
+  async resetAll(): Promise<void> {
+    await Promise.allSettled([this.primary.resetAll?.(), this.secondary.resetAll?.()])
+  }
+
+  async shutdown(): Promise<void> {
+    await Promise.allSettled([this.primary.shutdown?.(), this.secondary.shutdown?.()])
+  }
+
+  private isBreakerOpen(): boolean {
+    return Date.now() < this.breakerOpenUntil
+  }
+
+  private tripBreaker(err: unknown): void {
+    this.breakerOpenUntil = Date.now() + this.breakerWindowMs
+    if (!this.onSecondary) {
+      this.onSecondary = true
+      logger.error(
+        { err },
+        'Rate limiter primary store failed; falling back to per-process in-memory store'
+      )
+    }
+  }
+
+  private noteRecovered(): void {
+    if (this.onSecondary) {
+      this.onSecondary = false
+      logger.warn('Rate limiter primary store recovered; resuming Redis-backed limiting')
+    }
+  }
+
+  /**
+   * Runs `op` against the primary unless the breaker is open, falling back to
+   * the secondary on rejection. Never throws: if the secondary also rejects,
+   * `onSecondaryFailure` supplies a value that lets the caller — and, as a
+   * last resort, express-rate-limit's `passOnStoreError` — proceed rather
+   * than see a rejected promise.
+   */
+  private async delegate<T>(
+    op: (store: Store) => Promise<T> | T | undefined,
+    onSecondaryFailure: () => T
+  ): Promise<T> {
+    if (!this.isBreakerOpen()) {
+      try {
+        const result = await op(this.primary)
+        this.noteRecovered()
+        return result as T
+      } catch (err) {
+        this.tripBreaker(err)
+      }
+    }
+    try {
+      return (await op(this.secondary)) as T
+    } catch (err) {
+      logger.error({ err }, 'Rate limiter secondary store failed; allowing request through')
+      return onSecondaryFailure()
+    }
+  }
 }
 
 export interface CreateRateLimiterOptions {
@@ -130,9 +303,12 @@ export function createRateLimiter({
   registeredKeyPrefixes.add(keyPrefix)
 
   const store: Store = client
-    ? new RedisStore({
-        prefix: `rl:${keyPrefix}:`,
-        sendCommand: (...args: string[]) => client.call(...args) as Promise<RedisReply>,
+    ? new FallbackStore({
+        primary: new RedisStore({
+          prefix: `rl:${keyPrefix}:`,
+          sendCommand: (...args: string[]) => client.call(...args) as Promise<RedisReply>,
+        }),
+        secondary: new MemoryStore(),
       })
     : new MemoryStore()
 
@@ -146,22 +322,32 @@ export function createRateLimiter({
     skip,
     skipSuccessfulRequests,
     requestWasSuccessful,
-    // Fail OPEN. For the original callers of this factory (forgot/reset
-    // password) these are anti-automation and resource protection, not
-    // authentication controls (see the threat model in routes/auth.ts), so
-    // failing closed would turn a Redis outage into a password-recovery and
-    // public-budget outage for no security gain.
+    // #420: when `client` is set, `store` above is a FallbackStore, so a
+    // primary (Redis) error degrades this limiter to a per-process
+    // MemoryStore rather than passing requests through unlimited — a Redis
+    // outage keeps requests LIMITED, just with a smaller, per-process,
+    // reset-on-recovery budget (see FallbackStore's doc comment for the
+    // exact trade-offs). `passOnStoreError: true` no longer does the
+    // fail-open work itself; it stays only as a last-resort backstop for an
+    // error this store does not originate — e.g. the fallback's own
+    // secondary failing too, or an error from a caller-supplied
+    // `keyGenerator`/`skip`.
     //
-    // #418 login limiters reuse this factory and DO NOT get that reasoning
-    // for free: they are the standard control against credential brute force,
-    // so fail-open here means a Redis outage silently removes the only
-    // guessing limit on tenant and super-admin credentials alike. Fail-closed
-    // is worse — it would turn a Redis outage into a total login outage,
-    // locking out every clinic during business hours and the super admin out
-    // of the incident they are fixing. The real fix is #420 (a FallbackStore
-    // that degrades to a per-process MemoryStore instead of passing through
-    // unlimited); until that lands, login ships fail-open too, as a
-    // deliberate and temporary trade-off, not an inherited default.
+    // For the original callers of this factory (forgot/reset password) that
+    // backstop firing at all would still be tolerable: these are
+    // anti-automation and resource protection, not authentication controls
+    // (see the threat model in routes/auth.ts), so even a total failure
+    // letting a request through costs no more than today's occasional
+    // false negative.
+    //
+    // #418 login limiters reuse this factory and do NOT get that slack for
+    // free: they are the standard control against credential brute force, so
+    // the backstop firing there would silently remove the only guessing
+    // limit on tenant and super-admin credentials. That is precisely why
+    // FallbackStore matters for login — it makes the backstop fire only on
+    // the rare double-failure case instead of on every single Redis hiccup,
+    // while still refusing to fail closed and lock every clinic (and the
+    // super admin) out during an outage.
     passOnStoreError: true,
     logger: {
       error: (err, msg) => logger.error({ err }, msg),
