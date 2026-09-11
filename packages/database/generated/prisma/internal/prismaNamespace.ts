@@ -396,6 +396,7 @@ export const ModelName = {
   Labwork: 'Labwork',
   Expense: 'Expense',
   PatientPayment: 'PatientPayment',
+  PatientPaymentEvent: 'PatientPaymentEvent',
   Budget: 'Budget',
   BudgetItem: 'BudgetItem',
   BudgetItemAppointment: 'BudgetItemAppointment',
@@ -417,7 +418,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "plan" | "subscription" | "payment" | "tenant" | "tenantSettings" | "user" | "patient" | "doctor" | "appointment" | "labwork" | "expense" | "patientPayment" | "budget" | "budgetItem" | "budgetItemAppointment" | "refreshToken" | "passwordResetToken" | "attachment"
+    modelProps: "plan" | "subscription" | "payment" | "tenant" | "tenantSettings" | "user" | "patient" | "doctor" | "appointment" | "labwork" | "expense" | "patientPayment" | "patientPaymentEvent" | "budget" | "budgetItem" | "budgetItemAppointment" | "refreshToken" | "passwordResetToken" | "attachment"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1309,6 +1310,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    PatientPaymentEvent: {
+      payload: Prisma.$PatientPaymentEventPayload<ExtArgs>
+      fields: Prisma.PatientPaymentEventFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PatientPaymentEventFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientPaymentEventPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PatientPaymentEventFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientPaymentEventPayload>
+        }
+        findFirst: {
+          args: Prisma.PatientPaymentEventFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientPaymentEventPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PatientPaymentEventFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientPaymentEventPayload>
+        }
+        findMany: {
+          args: Prisma.PatientPaymentEventFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientPaymentEventPayload>[]
+        }
+        create: {
+          args: Prisma.PatientPaymentEventCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientPaymentEventPayload>
+        }
+        createMany: {
+          args: Prisma.PatientPaymentEventCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PatientPaymentEventCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientPaymentEventPayload>[]
+        }
+        delete: {
+          args: Prisma.PatientPaymentEventDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientPaymentEventPayload>
+        }
+        update: {
+          args: Prisma.PatientPaymentEventUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientPaymentEventPayload>
+        }
+        deleteMany: {
+          args: Prisma.PatientPaymentEventDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PatientPaymentEventUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PatientPaymentEventUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientPaymentEventPayload>[]
+        }
+        upsert: {
+          args: Prisma.PatientPaymentEventUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientPaymentEventPayload>
+        }
+        aggregate: {
+          args: Prisma.PatientPaymentEventAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePatientPaymentEvent>
+        }
+        groupBy: {
+          args: Prisma.PatientPaymentEventGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PatientPaymentEventGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PatientPaymentEventCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PatientPaymentEventCountAggregateOutputType> | number
+        }
+      }
+    }
     Budget: {
       payload: Prisma.$BudgetPayload<ExtArgs>
       fields: Prisma.BudgetFieldRefs
@@ -2042,6 +2117,19 @@ export const PatientPaymentScalarFieldEnum = {
 export type PatientPaymentScalarFieldEnum = (typeof PatientPaymentScalarFieldEnum)[keyof typeof PatientPaymentScalarFieldEnum]
 
 
+export const PatientPaymentEventScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  paymentId: 'paymentId',
+  type: 'type',
+  actorUserId: 'actorUserId',
+  reason: 'reason',
+  occurredAt: 'occurredAt'
+} as const
+
+export type PatientPaymentEventScalarFieldEnum = (typeof PatientPaymentEventScalarFieldEnum)[keyof typeof PatientPaymentEventScalarFieldEnum]
+
+
 export const BudgetScalarFieldEnum = {
   id: 'id',
   tenantId: 'tenantId',
@@ -2364,6 +2452,20 @@ export type ListEnumPatientPaymentKindFieldRefInput<$PrismaModel> = FieldRefInpu
 
 
 /**
+ * Reference to a field of type 'PatientPaymentEventType'
+ */
+export type EnumPatientPaymentEventTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PatientPaymentEventType'>
+    
+
+
+/**
+ * Reference to a field of type 'PatientPaymentEventType[]'
+ */
+export type ListEnumPatientPaymentEventTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PatientPaymentEventType[]'>
+    
+
+
+/**
  * Reference to a field of type 'BudgetStatus'
  */
 export type EnumBudgetStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BudgetStatus'>
@@ -2539,6 +2641,7 @@ export type GlobalOmitConfig = {
   labwork?: Prisma.LabworkOmit
   expense?: Prisma.ExpenseOmit
   patientPayment?: Prisma.PatientPaymentOmit
+  patientPaymentEvent?: Prisma.PatientPaymentEventOmit
   budget?: Prisma.BudgetOmit
   budgetItem?: Prisma.BudgetItemOmit
   budgetItemAppointment?: Prisma.BudgetItemAppointmentOmit

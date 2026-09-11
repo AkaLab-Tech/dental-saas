@@ -1092,6 +1092,7 @@
     "paymentDeleted": "Entrega eliminada exitosamente",
     "noOutstandingBalance": "No hay saldo pendiente",
     "consultationPayment": "Cobrado en consulta (reversible)",
+    "reversalReasonPrompt": "Motivo de la reversión (obligatorio):",
     "reverseConsultationPayment": "Revertir pago de consulta",
     "reverseConsultationConfirm": "¿Revertir el pago registrado en esta consulta? El saldo del paciente se recalculará.",
     "cancelWithRecordedPayment": "Esta cita tiene un pago registrado de {{amount}}. Al cancelarla, ese importe quedará como saldo a favor del paciente, visible en Entregas.",

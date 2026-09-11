@@ -1039,6 +1039,8 @@ describe('PatientAppointmentsSection', () => {
 
     it('confirming calls deletePayment with the patient and recorded payment ids, then refreshes and bubbles onPaymentsChange', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true)
+      // Task #392: the reversal now also asks for a reason.
+      vi.spyOn(window, 'prompt').mockReturnValue('Test reason')
       mockDeletePayment.mockResolvedValue(undefined)
       const onPaymentsChange = vi.fn()
 
@@ -1055,7 +1057,7 @@ describe('PatientAppointmentsSection', () => {
         fireEvent.click(screen.getByText('payments.reverseConsultationPayment'))
       })
 
-      expect(mockDeletePayment).toHaveBeenCalledWith('p1', 'pay-1')
+      expect(mockDeletePayment).toHaveBeenCalledWith('p1', 'pay-1', 'Test reason')
       await waitFor(() => {
         expect(onPaymentsChange).toHaveBeenCalledTimes(1)
       })
@@ -1065,8 +1067,45 @@ describe('PatientAppointmentsSection', () => {
       expect(mockGetAppointmentsByPatient.mock.calls.length).toBeGreaterThan(callsBeforeReversal)
     })
 
+    // Task #392: the reason is required, so the UI must not reverse without
+    // one. Cancelling the prompt returns null and a blank answer trims to '' —
+    // both have to abort, or the API would be asked to record a reversal with
+    // nothing explaining it.
+    it('does not reverse when the reason prompt is cancelled', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      vi.spyOn(window, 'prompt').mockReturnValue(null)
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByLabelText('common.options'))
+      fireEvent.click(screen.getByText('payments.reverseConsultationPayment'))
+
+      expect(window.prompt).toHaveBeenCalled()
+      expect(mockDeletePayment).not.toHaveBeenCalled()
+    })
+
+    it('does not reverse when the reason is only whitespace', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      vi.spyOn(window, 'prompt').mockReturnValue('   ')
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByLabelText('common.options'))
+      fireEvent.click(screen.getByText('payments.reverseConsultationPayment'))
+
+      expect(mockDeletePayment).not.toHaveBeenCalled()
+    })
+
     it('a rejected deletePayment surfaces the error via onError and does not fire onPaymentsChange', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true)
+      // Task #392: the reversal now also asks for a reason.
+      vi.spyOn(window, 'prompt').mockReturnValue('Test reason')
       mockDeletePayment.mockRejectedValue(new Error('Cannot reverse payment'))
       const onPaymentsChange = vi.fn()
 

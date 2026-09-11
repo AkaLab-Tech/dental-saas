@@ -167,10 +167,13 @@ describe('payment-api', () => {
     it('should delete a payment', async () => {
       vi.mocked(apiClient.delete).mockResolvedValue({ data: { success: true } })
 
-      await deletePayment('patient-789', 'payment-123')
+      await deletePayment('patient-789', 'payment-123', 'Cobrado por error')
 
+      // Task #392: the reason travels in the DELETE body, not the URL, so
+      // operator free text never reaches a server access log.
       expect(apiClient.delete).toHaveBeenCalledWith(
-        '/patients/patient-789/payments/payment-123'
+        '/patients/patient-789/payments/payment-123',
+        { data: { reason: 'Cobrado por error' } }
       )
     })
   })

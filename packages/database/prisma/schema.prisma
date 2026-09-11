@@ -142,17 +142,18 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  subscription    Subscription?
-  settings        TenantSettings?
-  users           User[]
-  patients        Patient[]
-  doctors         Doctor[]
-  appointments    Appointment[]
-  labworks        Labwork[]
-  expenses        Expense[]
-  attachments     Attachment[]
-  patientPayments PatientPayment[]
-  budgets         Budget[]
+  subscription         Subscription?
+  settings             TenantSettings?
+  users                User[]
+  patients             Patient[]
+  doctors              Doctor[]
+  appointments         Appointment[]
+  labworks             Labwork[]
+  expenses             Expense[]
+  attachments          Attachment[]
+  patientPayments      PatientPayment[]
+  patientPaymentEvents PatientPaymentEvent[]
+  budgets              Budget[]
 
   @@index([slug])
   @@index([isActive])
@@ -263,8 +264,8 @@ model Patient {
   coverageType PatientCoverageType @default(PARTICULAR)
   convenioName String?             @db.VarChar(120)
 
-  address   String?   @db.Text
-  notes     Json?
+  address String? @db.Text
+  notes   Json?
 
   /// Dental chart notes per tooth (ISO 3950 notation)
   /// Format: { "11": "Crown needed", "21": "Caries", ... }
@@ -563,9 +564,10 @@ model PatientPayment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient     Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment Appointment?          @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  events      PatientPaymentEvent[]
 
   @@index([tenantId])
   @@index([patientId])
@@ -573,6 +575,53 @@ model PatientPayment {
   @@index([appointmentId])
   @@index([patientId, kind])
   @@map("patient_payments")
+}
+
+/// Task #392: append-only log of every transition that changes what a recorded
+/// payment MEANS — reversal today, the cancellation-driven kind conversions
+/// next. Chosen over reversal columns on PatientPayment because a conversion is
+/// not a reversal and has nowhere to live in reversal-named fields, and because
+/// one row can only hold one reversal.
+///
+/// Rows are never updated or deleted. The payment's current state plus its
+/// ordered events is what lets a disputed balance be walked.
+enum PatientPaymentEventType {
+  /// isActive true -> false. The money was given back or the entry was a mistake.
+  REVERSED
+  /// kind APPOINTMENT -> ADVANCE, because the appointment was cancelled (#391).
+  CONVERTED_TO_ADVANCE
+  /// kind ADVANCE -> APPOINTMENT, the inverse, on appointment restore. Logged
+  /// because a ledger holding half a round trip reads as a real imbalance.
+  RESTORED_TO_APPOINTMENT
+}
+
+model PatientPaymentEvent {
+  id        String @id @default(cuid())
+  tenantId  String
+  paymentId String
+
+  type PatientPaymentEventType
+
+  /// Who did it. Deliberately a plain column with no relation, matching
+  /// PatientPayment.createdBy: an audit row must outlive the user it names.
+  /// Holds the PIN-profile id when a profile is active, so it answers "who",
+  /// not "which terminal" — see #444 for the same fix on createdBy.
+  actorUserId String?
+
+  /// Why. Required by product decision for REVERSED; free text, no taxonomy —
+  /// a closed list needs ES/EN/AR ratification and an incomplete one pushes
+  /// operators into the wrong option. Nullable in the schema because the
+  /// conversion events have no operator-supplied reason.
+  reason String? @db.Text
+
+  occurredAt DateTime @default(now())
+
+  tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payment PatientPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([tenantId, occurredAt])
+  @@map("patient_payment_events")
 }
 
 // ============================================================================

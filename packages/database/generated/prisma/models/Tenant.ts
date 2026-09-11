@@ -290,6 +290,7 @@ export type TenantWhereInput = {
   expenses?: Prisma.ExpenseListRelationFilter
   attachments?: Prisma.AttachmentListRelationFilter
   patientPayments?: Prisma.PatientPaymentListRelationFilter
+  patientPaymentEvents?: Prisma.PatientPaymentEventListRelationFilter
   budgets?: Prisma.BudgetListRelationFilter
 }
 
@@ -317,6 +318,7 @@ export type TenantOrderByWithRelationInput = {
   expenses?: Prisma.ExpenseOrderByRelationAggregateInput
   attachments?: Prisma.AttachmentOrderByRelationAggregateInput
   patientPayments?: Prisma.PatientPaymentOrderByRelationAggregateInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventOrderByRelationAggregateInput
   budgets?: Prisma.BudgetOrderByRelationAggregateInput
 }
 
@@ -347,6 +349,7 @@ export type TenantWhereUniqueInput = Prisma.AtLeast<{
   expenses?: Prisma.ExpenseListRelationFilter
   attachments?: Prisma.AttachmentListRelationFilter
   patientPayments?: Prisma.PatientPaymentListRelationFilter
+  patientPaymentEvents?: Prisma.PatientPaymentEventListRelationFilter
   budgets?: Prisma.BudgetListRelationFilter
 }, "id" | "slug">
 
@@ -414,6 +417,7 @@ export type TenantCreateInput = {
   expenses?: Prisma.ExpenseCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetCreateNestedManyWithoutTenantInput
 }
 
@@ -441,6 +445,7 @@ export type TenantUncheckedCreateInput = {
   expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentUncheckedCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentUncheckedCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -468,6 +473,7 @@ export type TenantUpdateInput = {
   expenses?: Prisma.ExpenseUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUpdateManyWithoutTenantNestedInput
 }
 
@@ -495,6 +501,7 @@ export type TenantUncheckedUpdateInput = {
   expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUncheckedUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUncheckedUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -748,6 +755,20 @@ export type TenantUpdateOneRequiredWithoutPatientPaymentsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.TenantUpdateToOneWithWhereWithoutPatientPaymentsInput, Prisma.TenantUpdateWithoutPatientPaymentsInput>, Prisma.TenantUncheckedUpdateWithoutPatientPaymentsInput>
 }
 
+export type TenantCreateNestedOneWithoutPatientPaymentEventsInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutPatientPaymentEventsInput, Prisma.TenantUncheckedCreateWithoutPatientPaymentEventsInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutPatientPaymentEventsInput
+  connect?: Prisma.TenantWhereUniqueInput
+}
+
+export type TenantUpdateOneRequiredWithoutPatientPaymentEventsNestedInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutPatientPaymentEventsInput, Prisma.TenantUncheckedCreateWithoutPatientPaymentEventsInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutPatientPaymentEventsInput
+  upsert?: Prisma.TenantUpsertWithoutPatientPaymentEventsInput
+  connect?: Prisma.TenantWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.TenantUpdateToOneWithWhereWithoutPatientPaymentEventsInput, Prisma.TenantUpdateWithoutPatientPaymentEventsInput>, Prisma.TenantUncheckedUpdateWithoutPatientPaymentEventsInput>
+}
+
 export type TenantCreateNestedOneWithoutBudgetsInput = {
   create?: Prisma.XOR<Prisma.TenantCreateWithoutBudgetsInput, Prisma.TenantUncheckedCreateWithoutBudgetsInput>
   connectOrCreate?: Prisma.TenantCreateOrConnectWithoutBudgetsInput
@@ -799,6 +820,7 @@ export type TenantCreateWithoutSubscriptionInput = {
   expenses?: Prisma.ExpenseCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetCreateNestedManyWithoutTenantInput
 }
 
@@ -825,6 +847,7 @@ export type TenantUncheckedCreateWithoutSubscriptionInput = {
   expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentUncheckedCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentUncheckedCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -867,6 +890,7 @@ export type TenantUpdateWithoutSubscriptionInput = {
   expenses?: Prisma.ExpenseUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUpdateManyWithoutTenantNestedInput
 }
 
@@ -893,6 +917,7 @@ export type TenantUncheckedUpdateWithoutSubscriptionInput = {
   expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUncheckedUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUncheckedUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -919,6 +944,7 @@ export type TenantCreateWithoutSettingsInput = {
   expenses?: Prisma.ExpenseCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetCreateNestedManyWithoutTenantInput
 }
 
@@ -945,6 +971,7 @@ export type TenantUncheckedCreateWithoutSettingsInput = {
   expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentUncheckedCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentUncheckedCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -987,6 +1014,7 @@ export type TenantUpdateWithoutSettingsInput = {
   expenses?: Prisma.ExpenseUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUpdateManyWithoutTenantNestedInput
 }
 
@@ -1013,6 +1041,7 @@ export type TenantUncheckedUpdateWithoutSettingsInput = {
   expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUncheckedUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUncheckedUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1039,6 +1068,7 @@ export type TenantCreateWithoutUsersInput = {
   expenses?: Prisma.ExpenseCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetCreateNestedManyWithoutTenantInput
 }
 
@@ -1065,6 +1095,7 @@ export type TenantUncheckedCreateWithoutUsersInput = {
   expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentUncheckedCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentUncheckedCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1107,6 +1138,7 @@ export type TenantUpdateWithoutUsersInput = {
   expenses?: Prisma.ExpenseUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUpdateManyWithoutTenantNestedInput
 }
 
@@ -1133,6 +1165,7 @@ export type TenantUncheckedUpdateWithoutUsersInput = {
   expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUncheckedUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUncheckedUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1159,6 +1192,7 @@ export type TenantCreateWithoutPatientsInput = {
   expenses?: Prisma.ExpenseCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetCreateNestedManyWithoutTenantInput
 }
 
@@ -1185,6 +1219,7 @@ export type TenantUncheckedCreateWithoutPatientsInput = {
   expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentUncheckedCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentUncheckedCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1227,6 +1262,7 @@ export type TenantUpdateWithoutPatientsInput = {
   expenses?: Prisma.ExpenseUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUpdateManyWithoutTenantNestedInput
 }
 
@@ -1253,6 +1289,7 @@ export type TenantUncheckedUpdateWithoutPatientsInput = {
   expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUncheckedUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUncheckedUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1279,6 +1316,7 @@ export type TenantCreateWithoutDoctorsInput = {
   expenses?: Prisma.ExpenseCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetCreateNestedManyWithoutTenantInput
 }
 
@@ -1305,6 +1343,7 @@ export type TenantUncheckedCreateWithoutDoctorsInput = {
   expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentUncheckedCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentUncheckedCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1347,6 +1386,7 @@ export type TenantUpdateWithoutDoctorsInput = {
   expenses?: Prisma.ExpenseUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUpdateManyWithoutTenantNestedInput
 }
 
@@ -1373,6 +1413,7 @@ export type TenantUncheckedUpdateWithoutDoctorsInput = {
   expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUncheckedUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUncheckedUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1399,6 +1440,7 @@ export type TenantCreateWithoutAppointmentsInput = {
   expenses?: Prisma.ExpenseCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetCreateNestedManyWithoutTenantInput
 }
 
@@ -1425,6 +1467,7 @@ export type TenantUncheckedCreateWithoutAppointmentsInput = {
   expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentUncheckedCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentUncheckedCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1467,6 +1510,7 @@ export type TenantUpdateWithoutAppointmentsInput = {
   expenses?: Prisma.ExpenseUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUpdateManyWithoutTenantNestedInput
 }
 
@@ -1493,6 +1537,7 @@ export type TenantUncheckedUpdateWithoutAppointmentsInput = {
   expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUncheckedUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUncheckedUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1519,6 +1564,7 @@ export type TenantCreateWithoutLabworksInput = {
   expenses?: Prisma.ExpenseCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetCreateNestedManyWithoutTenantInput
 }
 
@@ -1545,6 +1591,7 @@ export type TenantUncheckedCreateWithoutLabworksInput = {
   expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentUncheckedCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentUncheckedCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1587,6 +1634,7 @@ export type TenantUpdateWithoutLabworksInput = {
   expenses?: Prisma.ExpenseUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUpdateManyWithoutTenantNestedInput
 }
 
@@ -1613,6 +1661,7 @@ export type TenantUncheckedUpdateWithoutLabworksInput = {
   expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUncheckedUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUncheckedUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1639,6 +1688,7 @@ export type TenantCreateWithoutExpensesInput = {
   labworks?: Prisma.LabworkCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetCreateNestedManyWithoutTenantInput
 }
 
@@ -1665,6 +1715,7 @@ export type TenantUncheckedCreateWithoutExpensesInput = {
   labworks?: Prisma.LabworkUncheckedCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentUncheckedCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentUncheckedCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1707,6 +1758,7 @@ export type TenantUpdateWithoutExpensesInput = {
   labworks?: Prisma.LabworkUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUpdateManyWithoutTenantNestedInput
 }
 
@@ -1733,6 +1785,7 @@ export type TenantUncheckedUpdateWithoutExpensesInput = {
   labworks?: Prisma.LabworkUncheckedUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUncheckedUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUncheckedUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1759,6 +1812,7 @@ export type TenantCreateWithoutPatientPaymentsInput = {
   labworks?: Prisma.LabworkCreateNestedManyWithoutTenantInput
   expenses?: Prisma.ExpenseCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetCreateNestedManyWithoutTenantInput
 }
 
@@ -1785,6 +1839,7 @@ export type TenantUncheckedCreateWithoutPatientPaymentsInput = {
   labworks?: Prisma.LabworkUncheckedCreateNestedManyWithoutTenantInput
   expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentUncheckedCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1827,6 +1882,7 @@ export type TenantUpdateWithoutPatientPaymentsInput = {
   labworks?: Prisma.LabworkUpdateManyWithoutTenantNestedInput
   expenses?: Prisma.ExpenseUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUpdateManyWithoutTenantNestedInput
 }
 
@@ -1853,6 +1909,131 @@ export type TenantUncheckedUpdateWithoutPatientPaymentsInput = {
   labworks?: Prisma.LabworkUncheckedUpdateManyWithoutTenantNestedInput
   expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUncheckedUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedUpdateManyWithoutTenantNestedInput
+  budgets?: Prisma.BudgetUncheckedUpdateManyWithoutTenantNestedInput
+}
+
+export type TenantCreateWithoutPatientPaymentEventsInput = {
+  id?: string
+  name: string
+  slug: string
+  email?: string | null
+  phone?: string | null
+  address?: string | null
+  logo?: string | null
+  timezone?: string
+  currency?: string
+  storageUsedBytes?: bigint | number
+  isActive?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  subscription?: Prisma.SubscriptionCreateNestedOneWithoutTenantInput
+  settings?: Prisma.TenantSettingsCreateNestedOneWithoutTenantInput
+  users?: Prisma.UserCreateNestedManyWithoutTenantInput
+  patients?: Prisma.PatientCreateNestedManyWithoutTenantInput
+  doctors?: Prisma.DoctorCreateNestedManyWithoutTenantInput
+  appointments?: Prisma.AppointmentCreateNestedManyWithoutTenantInput
+  labworks?: Prisma.LabworkCreateNestedManyWithoutTenantInput
+  expenses?: Prisma.ExpenseCreateNestedManyWithoutTenantInput
+  attachments?: Prisma.AttachmentCreateNestedManyWithoutTenantInput
+  patientPayments?: Prisma.PatientPaymentCreateNestedManyWithoutTenantInput
+  budgets?: Prisma.BudgetCreateNestedManyWithoutTenantInput
+}
+
+export type TenantUncheckedCreateWithoutPatientPaymentEventsInput = {
+  id?: string
+  name: string
+  slug: string
+  email?: string | null
+  phone?: string | null
+  address?: string | null
+  logo?: string | null
+  timezone?: string
+  currency?: string
+  storageUsedBytes?: bigint | number
+  isActive?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  subscription?: Prisma.SubscriptionUncheckedCreateNestedOneWithoutTenantInput
+  settings?: Prisma.TenantSettingsUncheckedCreateNestedOneWithoutTenantInput
+  users?: Prisma.UserUncheckedCreateNestedManyWithoutTenantInput
+  patients?: Prisma.PatientUncheckedCreateNestedManyWithoutTenantInput
+  doctors?: Prisma.DoctorUncheckedCreateNestedManyWithoutTenantInput
+  appointments?: Prisma.AppointmentUncheckedCreateNestedManyWithoutTenantInput
+  labworks?: Prisma.LabworkUncheckedCreateNestedManyWithoutTenantInput
+  expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutTenantInput
+  attachments?: Prisma.AttachmentUncheckedCreateNestedManyWithoutTenantInput
+  patientPayments?: Prisma.PatientPaymentUncheckedCreateNestedManyWithoutTenantInput
+  budgets?: Prisma.BudgetUncheckedCreateNestedManyWithoutTenantInput
+}
+
+export type TenantCreateOrConnectWithoutPatientPaymentEventsInput = {
+  where: Prisma.TenantWhereUniqueInput
+  create: Prisma.XOR<Prisma.TenantCreateWithoutPatientPaymentEventsInput, Prisma.TenantUncheckedCreateWithoutPatientPaymentEventsInput>
+}
+
+export type TenantUpsertWithoutPatientPaymentEventsInput = {
+  update: Prisma.XOR<Prisma.TenantUpdateWithoutPatientPaymentEventsInput, Prisma.TenantUncheckedUpdateWithoutPatientPaymentEventsInput>
+  create: Prisma.XOR<Prisma.TenantCreateWithoutPatientPaymentEventsInput, Prisma.TenantUncheckedCreateWithoutPatientPaymentEventsInput>
+  where?: Prisma.TenantWhereInput
+}
+
+export type TenantUpdateToOneWithWhereWithoutPatientPaymentEventsInput = {
+  where?: Prisma.TenantWhereInput
+  data: Prisma.XOR<Prisma.TenantUpdateWithoutPatientPaymentEventsInput, Prisma.TenantUncheckedUpdateWithoutPatientPaymentEventsInput>
+}
+
+export type TenantUpdateWithoutPatientPaymentEventsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  address?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  currency?: Prisma.StringFieldUpdateOperationsInput | string
+  storageUsedBytes?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  subscription?: Prisma.SubscriptionUpdateOneWithoutTenantNestedInput
+  settings?: Prisma.TenantSettingsUpdateOneWithoutTenantNestedInput
+  users?: Prisma.UserUpdateManyWithoutTenantNestedInput
+  patients?: Prisma.PatientUpdateManyWithoutTenantNestedInput
+  doctors?: Prisma.DoctorUpdateManyWithoutTenantNestedInput
+  appointments?: Prisma.AppointmentUpdateManyWithoutTenantNestedInput
+  labworks?: Prisma.LabworkUpdateManyWithoutTenantNestedInput
+  expenses?: Prisma.ExpenseUpdateManyWithoutTenantNestedInput
+  attachments?: Prisma.AttachmentUpdateManyWithoutTenantNestedInput
+  patientPayments?: Prisma.PatientPaymentUpdateManyWithoutTenantNestedInput
+  budgets?: Prisma.BudgetUpdateManyWithoutTenantNestedInput
+}
+
+export type TenantUncheckedUpdateWithoutPatientPaymentEventsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  address?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  currency?: Prisma.StringFieldUpdateOperationsInput | string
+  storageUsedBytes?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  subscription?: Prisma.SubscriptionUncheckedUpdateOneWithoutTenantNestedInput
+  settings?: Prisma.TenantSettingsUncheckedUpdateOneWithoutTenantNestedInput
+  users?: Prisma.UserUncheckedUpdateManyWithoutTenantNestedInput
+  patients?: Prisma.PatientUncheckedUpdateManyWithoutTenantNestedInput
+  doctors?: Prisma.DoctorUncheckedUpdateManyWithoutTenantNestedInput
+  appointments?: Prisma.AppointmentUncheckedUpdateManyWithoutTenantNestedInput
+  labworks?: Prisma.LabworkUncheckedUpdateManyWithoutTenantNestedInput
+  expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutTenantNestedInput
+  attachments?: Prisma.AttachmentUncheckedUpdateManyWithoutTenantNestedInput
+  patientPayments?: Prisma.PatientPaymentUncheckedUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1880,6 +2061,7 @@ export type TenantCreateWithoutBudgetsInput = {
   expenses?: Prisma.ExpenseCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventCreateNestedManyWithoutTenantInput
 }
 
 export type TenantUncheckedCreateWithoutBudgetsInput = {
@@ -1906,6 +2088,7 @@ export type TenantUncheckedCreateWithoutBudgetsInput = {
   expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutTenantInput
   attachments?: Prisma.AttachmentUncheckedCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentUncheckedCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedCreateNestedManyWithoutTenantInput
 }
 
 export type TenantCreateOrConnectWithoutBudgetsInput = {
@@ -1948,6 +2131,7 @@ export type TenantUpdateWithoutBudgetsInput = {
   expenses?: Prisma.ExpenseUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUpdateManyWithoutTenantNestedInput
 }
 
 export type TenantUncheckedUpdateWithoutBudgetsInput = {
@@ -1974,6 +2158,7 @@ export type TenantUncheckedUpdateWithoutBudgetsInput = {
   expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutTenantNestedInput
   attachments?: Prisma.AttachmentUncheckedUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUncheckedUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedUpdateManyWithoutTenantNestedInput
 }
 
 export type TenantCreateWithoutAttachmentsInput = {
@@ -1999,6 +2184,7 @@ export type TenantCreateWithoutAttachmentsInput = {
   labworks?: Prisma.LabworkCreateNestedManyWithoutTenantInput
   expenses?: Prisma.ExpenseCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetCreateNestedManyWithoutTenantInput
 }
 
@@ -2025,6 +2211,7 @@ export type TenantUncheckedCreateWithoutAttachmentsInput = {
   labworks?: Prisma.LabworkUncheckedCreateNestedManyWithoutTenantInput
   expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutTenantInput
   patientPayments?: Prisma.PatientPaymentUncheckedCreateNestedManyWithoutTenantInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedCreateNestedManyWithoutTenantInput
   budgets?: Prisma.BudgetUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -2067,6 +2254,7 @@ export type TenantUpdateWithoutAttachmentsInput = {
   labworks?: Prisma.LabworkUpdateManyWithoutTenantNestedInput
   expenses?: Prisma.ExpenseUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUpdateManyWithoutTenantNestedInput
 }
 
@@ -2093,6 +2281,7 @@ export type TenantUncheckedUpdateWithoutAttachmentsInput = {
   labworks?: Prisma.LabworkUncheckedUpdateManyWithoutTenantNestedInput
   expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutTenantNestedInput
   patientPayments?: Prisma.PatientPaymentUncheckedUpdateManyWithoutTenantNestedInput
+  patientPaymentEvents?: Prisma.PatientPaymentEventUncheckedUpdateManyWithoutTenantNestedInput
   budgets?: Prisma.BudgetUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -2110,6 +2299,7 @@ export type TenantCountOutputType = {
   expenses: number
   attachments: number
   patientPayments: number
+  patientPaymentEvents: number
   budgets: number
 }
 
@@ -2122,6 +2312,7 @@ export type TenantCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions
   expenses?: boolean | TenantCountOutputTypeCountExpensesArgs
   attachments?: boolean | TenantCountOutputTypeCountAttachmentsArgs
   patientPayments?: boolean | TenantCountOutputTypeCountPatientPaymentsArgs
+  patientPaymentEvents?: boolean | TenantCountOutputTypeCountPatientPaymentEventsArgs
   budgets?: boolean | TenantCountOutputTypeCountBudgetsArgs
 }
 
@@ -2194,6 +2385,13 @@ export type TenantCountOutputTypeCountPatientPaymentsArgs<ExtArgs extends runtim
 /**
  * TenantCountOutputType without action
  */
+export type TenantCountOutputTypeCountPatientPaymentEventsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.PatientPaymentEventWhereInput
+}
+
+/**
+ * TenantCountOutputType without action
+ */
 export type TenantCountOutputTypeCountBudgetsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.BudgetWhereInput
 }
@@ -2223,6 +2421,7 @@ export type TenantSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   expenses?: boolean | Prisma.Tenant$expensesArgs<ExtArgs>
   attachments?: boolean | Prisma.Tenant$attachmentsArgs<ExtArgs>
   patientPayments?: boolean | Prisma.Tenant$patientPaymentsArgs<ExtArgs>
+  patientPaymentEvents?: boolean | Prisma.Tenant$patientPaymentEventsArgs<ExtArgs>
   budgets?: boolean | Prisma.Tenant$budgetsArgs<ExtArgs>
   _count?: boolean | Prisma.TenantCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["tenant"]>
@@ -2287,6 +2486,7 @@ export type TenantInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   expenses?: boolean | Prisma.Tenant$expensesArgs<ExtArgs>
   attachments?: boolean | Prisma.Tenant$attachmentsArgs<ExtArgs>
   patientPayments?: boolean | Prisma.Tenant$patientPaymentsArgs<ExtArgs>
+  patientPaymentEvents?: boolean | Prisma.Tenant$patientPaymentEventsArgs<ExtArgs>
   budgets?: boolean | Prisma.Tenant$budgetsArgs<ExtArgs>
   _count?: boolean | Prisma.TenantCountOutputTypeDefaultArgs<ExtArgs>
 }
@@ -2306,6 +2506,7 @@ export type $TenantPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs
     expenses: Prisma.$ExpensePayload<ExtArgs>[]
     attachments: Prisma.$AttachmentPayload<ExtArgs>[]
     patientPayments: Prisma.$PatientPaymentPayload<ExtArgs>[]
+    patientPaymentEvents: Prisma.$PatientPaymentEventPayload<ExtArgs>[]
     budgets: Prisma.$BudgetPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
@@ -2739,6 +2940,7 @@ export interface Prisma__TenantClient<T, Null = never, ExtArgs extends runtime.T
   expenses<T extends Prisma.Tenant$expensesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$expensesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ExpensePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   attachments<T extends Prisma.Tenant$attachmentsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$attachmentsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AttachmentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   patientPayments<T extends Prisma.Tenant$patientPaymentsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$patientPaymentsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PatientPaymentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  patientPaymentEvents<T extends Prisma.Tenant$patientPaymentEventsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$patientPaymentEventsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PatientPaymentEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   budgets<T extends Prisma.Tenant$budgetsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$budgetsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$BudgetPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
@@ -3397,6 +3599,30 @@ export type Tenant$patientPaymentsArgs<ExtArgs extends runtime.Types.Extensions.
   take?: number
   skip?: number
   distinct?: Prisma.PatientPaymentScalarFieldEnum | Prisma.PatientPaymentScalarFieldEnum[]
+}
+
+/**
+ * Tenant.patientPaymentEvents
+ */
+export type Tenant$patientPaymentEventsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PatientPaymentEvent
+   */
+  select?: Prisma.PatientPaymentEventSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the PatientPaymentEvent
+   */
+  omit?: Prisma.PatientPaymentEventOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PatientPaymentEventInclude<ExtArgs> | null
+  where?: Prisma.PatientPaymentEventWhereInput
+  orderBy?: Prisma.PatientPaymentEventOrderByWithRelationInput | Prisma.PatientPaymentEventOrderByWithRelationInput[]
+  cursor?: Prisma.PatientPaymentEventWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.PatientPaymentEventScalarFieldEnum | Prisma.PatientPaymentEventScalarFieldEnum[]
 }
 
 /**

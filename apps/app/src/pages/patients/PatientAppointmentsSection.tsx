@@ -185,9 +185,17 @@ function PatientAppointmentCard({
                   onClick={async () => {
                     if (!appointment.recordedPaymentId) return
                     if (!confirm(t('payments.reverseConsultationConfirm'))) return
+                    // Task #392 — see the note in PaymentSection: a blank
+                    // reason aborts instead of writing an empty audit row.
+                    const reason = prompt(t('payments.reversalReasonPrompt'))?.trim()
+                    if (!reason) return
                     setIsReversingPayment(true)
                     try {
-                      await deletePayment(appointment.patientId, appointment.recordedPaymentId)
+                      await deletePayment(
+                        appointment.patientId,
+                        appointment.recordedPaymentId,
+                        reason
+                      )
                       onPaymentReversed()
                     } catch (e) {
                       onError?.(e instanceof Error ? e.message : 'Error')

@@ -78,6 +78,11 @@ export type Expense = Prisma.ExpenseModel
  */
 export type PatientPayment = Prisma.PatientPaymentModel
 /**
+ * Model PatientPaymentEvent
+ * 
+ */
+export type PatientPaymentEvent = Prisma.PatientPaymentEventModel
+/**
  * Model Budget
  * 
  */

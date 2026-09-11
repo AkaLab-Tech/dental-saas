@@ -256,6 +256,7 @@ describe('Patient Payments Routes', () => {
       const res = await api()
         .delete(`/api/patients/${patientId}/payments/${paymentId}`)
         .set('Authorization', `Bearer ${staffToken}`)
+        .send({ reason: 'Test reversal' })
 
       expect(res.status).toBe(403)
     })
@@ -272,6 +273,7 @@ describe('Patient Payments Routes', () => {
       const res = await api()
         .delete(`/api/patients/${patientId}/payments/${paymentId}`)
         .set('Authorization', `Bearer ${adminToken}`)
+        .send({ reason: 'Test reversal' })
 
       expect(res.status).toBe(200)
     })
@@ -280,6 +282,7 @@ describe('Patient Payments Routes', () => {
       const res = await api()
         .delete(`/api/patients/${patientId}/payments/non-existent-id`)
         .set('Authorization', `Bearer ${adminToken}`)
+        .send({ reason: 'Test reversal' })
 
       expect(res.status).toBe(404)
     })
@@ -336,6 +339,7 @@ describe('Patient Payments Routes', () => {
         const res = await api()
           .delete(`/api/patients/${consultPatientId}/payments/${consultPaymentId}`)
           .set('Authorization', `Bearer ${staffToken}`)
+          .send({ reason: 'Test reversal' })
 
         expect(res.status).toBe(403)
 
@@ -347,6 +351,7 @@ describe('Patient Payments Routes', () => {
         const res = await api()
           .delete(`/api/patients/${consultPatientId}/payments/${consultPaymentId}`)
           .set('Authorization', `Bearer ${adminToken}`)
+          .send({ reason: 'Test reversal' })
 
         expect(res.status).toBe(200)
 
@@ -364,6 +369,146 @@ describe('Patient Payments Routes', () => {
         expect(after.body.data.paidAmount).toBe(0)
         expect(after.body.data.hasRecordedPayment).toBe(false)
         expect(after.body.data.recordedPaymentId).toBeNull()
+      })
+    })
+
+    // Task #392: reversing a payment writes an append-only audit event saying
+    // who did it, when, and why. Chosen over reversal columns on
+    // PatientPayment because the cancellation-driven kind conversions are not
+    // reversals and would have had nowhere to live.
+    describe('Task #392: the reversal is logged', () => {
+      let auditPatientId: string
+
+      // This file's generateToken signs { sub }, NOT { userId } — and the auth
+      // middleware assigns the decoded payload straight to req.user, so
+      // req.user.userId is undefined for those tokens. An "actor was recorded"
+      // assertion written against them would pass with null and prove nothing,
+      // so the cases below mint their own.
+      const tokenWithUserId = (userId: string, role: string) =>
+        sign({ userId, tenantId, role }, JWT_SECRET, { expiresIn: '1h' })
+
+      async function seedPayment(): Promise<string> {
+        const payment = await prisma.patientPayment.create({
+          data: { tenantId, patientId: auditPatientId, amount: 30, date: new Date(), kind: 'ADVANCE' },
+        })
+        return payment.id
+      }
+
+      beforeAll(async () => {
+        const patient = await prisma.patient.create({
+          data: { tenantId, firstName: 'Audit', lastName: 'Trail' },
+        })
+        auditPatientId = patient.id
+      })
+
+      afterAll(async () => {
+        await prisma.patientPaymentEvent.deleteMany({ where: { tenantId } })
+        await prisma.patientPayment.deleteMany({ where: { patientId: auditPatientId } })
+        await prisma.patient.delete({ where: { id: auditPatientId } }).catch(() => {
+          // Already gone.
+        })
+      })
+
+      it('records exactly one REVERSED event carrying the actor and the reason', async () => {
+        const paymentId = await seedPayment()
+
+        const res = await api()
+          .delete(`/api/patients/${auditPatientId}/payments/${paymentId}`)
+          .set('Authorization', `Bearer ${tokenWithUserId('user-392-admin', 'ADMIN')}`)
+          .send({ reason: 'Cobrado por error, devuelto en efectivo' })
+
+        expect(res.status).toBe(200)
+
+        const events = await prisma.patientPaymentEvent.findMany({ where: { paymentId } })
+        expect(events).toHaveLength(1)
+        expect(events[0]).toMatchObject({
+          type: 'REVERSED',
+          actorUserId: 'user-392-admin',
+          reason: 'Cobrado por error, devuelto en efectivo',
+        })
+      })
+
+      it('records the PIN PROFILE as the actor, not the shared login', async () => {
+        // The case that decides whether this log is worth anything. Under the
+        // kiosk model one browser holds one shared clinic login and staff
+        // identify themselves by PIN, so the login names a terminal and only
+        // the profile names a person. A test that exercised the plain login
+        // would pass against a bare `req.user.userId` and miss exactly this.
+        const paymentId = await seedPayment()
+        const profileToken = sign(
+          { profileUserId: 'profile-392-operator', role: 'ADMIN', tenantId, type: 'profile' },
+          JWT_SECRET,
+          { expiresIn: '1h' }
+        )
+
+        const res = await api()
+          .delete(`/api/patients/${auditPatientId}/payments/${paymentId}`)
+          .set('Authorization', `Bearer ${tokenWithUserId('shared-clinic-login', 'ADMIN')}`)
+          .set('X-Profile-Token', profileToken)
+          .send({ reason: 'Reversión desde el kiosco' })
+
+        expect(res.status).toBe(200)
+
+        const events = await prisma.patientPaymentEvent.findMany({ where: { paymentId } })
+        expect(events).toHaveLength(1)
+        expect(events[0].actorUserId).toBe('profile-392-operator')
+        expect(events[0].actorUserId).not.toBe('shared-clinic-login')
+      })
+
+      it('rejects a reversal with no reason and leaves the payment untouched', async () => {
+        const paymentId = await seedPayment()
+
+        const res = await api()
+          .delete(`/api/patients/${auditPatientId}/payments/${paymentId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+
+        expect(res.status).toBe(400)
+        expect(res.body.error.code).toBe('VALIDATION_ERROR')
+
+        // The whole point: a rejected reversal must not half-happen.
+        const paymentInDb = await prisma.patientPayment.findUnique({ where: { id: paymentId } })
+        expect(paymentInDb?.isActive).toBe(true)
+        expect(await prisma.patientPaymentEvent.count({ where: { paymentId } })).toBe(0)
+      })
+
+      it('rejects a whitespace-only reason', async () => {
+        // `.trim().min(1)` rather than `.min(1)`: a space satisfies a bare
+        // length check and produces an audit row that says nothing, which is
+        // worse than the confirm-only flow it replaced because it looks like
+        // evidence.
+        const paymentId = await seedPayment()
+
+        const res = await api()
+          .delete(`/api/patients/${auditPatientId}/payments/${paymentId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ reason: '   ' })
+
+        expect(res.status).toBe(400)
+        const paymentInDb = await prisma.patientPayment.findUnique({ where: { id: paymentId } })
+        expect(paymentInDb?.isActive).toBe(true)
+      })
+
+      it('does not log anything when the reversal fails on an already-reversed payment', async () => {
+        const paymentId = await seedPayment()
+        const reason = 'Primera reversión'
+
+        const first = await api()
+          .delete(`/api/patients/${auditPatientId}/payments/${paymentId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ reason })
+        expect(first.status).toBe(200)
+
+        const second = await api()
+          .delete(`/api/patients/${auditPatientId}/payments/${paymentId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ reason: 'Segunda reversión' })
+        expect(second.status).toBe(400)
+
+        // One reversal, one event — the ALREADY_INACTIVE path returns before
+        // the transaction, so a rejected retry cannot inflate the ledger.
+        const events = await prisma.patientPaymentEvent.findMany({ where: { paymentId } })
+        expect(events).toHaveLength(1)
+        expect(events[0].reason).toBe(reason)
       })
     })
   })
@@ -514,6 +659,7 @@ describe('Patient Payments Routes', () => {
       await api()
         .delete(`/api/patients/${fifoPatientId}/payments/${lastPayment.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
+        .send({ reason: 'Test reversal' })
 
       // Third appointment should be unpaid again
       const appointments = await prisma.appointment.findMany({
@@ -2671,6 +2817,7 @@ describe('Patient Payments Routes', () => {
       const deleteRes = await api()
         .delete(`/api/patients/${pid}/payments/${linkedPayment.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
+        .send({ reason: 'Test reversal' })
       expect(deleteRes.status).toBe(200)
 
       const earmarksAfter = await getAppointmentEarmarks(tenantId, pid)
