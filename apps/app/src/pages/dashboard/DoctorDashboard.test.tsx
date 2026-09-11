@@ -204,4 +204,45 @@ describe('DoctorDashboard', () => {
 
     expect(screen.getByText('Failed to load doctor stats')).toBeInTheDocument()
   })
+
+  // Task #395: the clinic dashboard's figure became CASH, which cannot be
+  // attributed to a doctor — payments carry no doctorId and advances have no
+  // appointment, so the API returns monthlyCollected: null for a doctor-scoped
+  // request. This card must read the ACCRUAL field instead; reading the cash
+  // one would render a confident $0 for every doctor, every month.
+  it('shows the accrual figure, not the doctor-scoped null cash figure', () => {
+    ;(useStatsStore as unknown as Mock).mockReturnValue(
+      buildStoreDefaults({
+        myDoctorId: 'doc-1',
+        overview: {
+          totalPatients: 0,
+          totalDoctors: 0,
+          totalAppointments: 0,
+          appointmentsThisMonth: 0,
+          completedAppointmentsThisMonth: 0,
+          pendingLabworks: 0,
+          unpaidLabworks: 0,
+          monthlyCollected: null,
+          monthlyBilledPaid: 1234,
+          pendingPayments: null,
+        },
+      })
+    )
+    ;(useAuthStore as unknown as Mock).mockReturnValue({
+      user: mockDoctorUser,
+      accessToken: 'test-access-token',
+    })
+
+    render(
+      <BrowserRouter>
+        <DoctorDashboard />
+      </BrowserRouter>
+    )
+
+    expect(screen.getByText('dashboard.doctor.monthBilledPaid')).toBeInTheDocument()
+    // The rendered amount comes from monthlyBilledPaid. If the card were wired
+    // to monthlyCollected it would show a zero here instead.
+    expect(screen.queryByText(/1[.,]?234/)).toBeInTheDocument()
+  })
+
 })

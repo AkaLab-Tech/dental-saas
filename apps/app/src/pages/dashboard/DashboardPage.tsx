@@ -189,8 +189,8 @@ export default function DashboardPage() {
             in an anchor — adding it would nest anchors (invalid HTML) and
             send the revenue card to /patients/debts. */}
         <StatCard
-          title={t('dashboard.statCards.monthlyRevenue')}
-          value={formatCurrency(overview?.monthlyRevenue || 0, currency)}
+          title={t('dashboard.statCards.monthlyCollected')}
+          value={formatCurrency(overview?.monthlyCollected ?? 0, currency)}
           subtitle={
             overview?.pendingPayments ? (
               <Link

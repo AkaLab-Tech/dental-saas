@@ -48,7 +48,8 @@ const mockOverview = {
   totalAppointments: 500,
   appointmentsThisMonth: 45,
   completedAppointmentsThisMonth: 38,
-  monthlyRevenue: 25000,
+  monthlyCollected: 25000,
+  monthlyBilledPaid: 25000,
   pendingPayments: 5000,
   pendingLabworks: 3,
   unpaidLabworks: 1,
@@ -210,7 +211,7 @@ describe('DashboardPage', () => {
     expect(screen.getByText('dashboard.statCards.appointmentsThisMonth')).toBeInTheDocument()
     expect(screen.getByText('45')).toBeInTheDocument()
     expect(screen.getByText('dashboard.statCards.completedCount 38')).toBeInTheDocument()
-    expect(screen.getByText('dashboard.statCards.monthlyRevenue')).toBeInTheDocument()
+    expect(screen.getByText('dashboard.statCards.monthlyCollected')).toBeInTheDocument()
     // Regex, not a plain string: accessible-name matching is not
     // whitespace-normalized and formatCurrency separates the code from the
     // amount with a non-breaking space.

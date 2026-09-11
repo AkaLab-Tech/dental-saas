@@ -12,7 +12,10 @@ export interface OverviewStats {
   completedAppointmentsThisMonth: number
   pendingLabworks: number
   unpaidLabworks: number
-  monthlyRevenue: number
+  /** Task #395: cash collected this month. null when doctor-scoped. */
+  monthlyCollected: number | null
+  /** Task #395: the accrual figure (billed for work this month, marked paid). */
+  monthlyBilledPaid: number
   /**
    * Net outstanding across all patient-billable work (see the API's
    * OverviewStats). `null` when the overview is doctor-scoped.

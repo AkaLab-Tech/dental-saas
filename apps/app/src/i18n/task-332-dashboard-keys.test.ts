@@ -54,7 +54,7 @@ const DASHBOARD_NEW_KEYS = [
   'statCards.doctors',
   'statCards.appointmentsThisMonth',
   'statCards.completedCount',
-  'statCards.monthlyRevenue',
+  'statCards.monthlyCollected',
   'statCards.pendingAmount',
   'statCards.pendingLabworks',
   'statCards.unpaidCount',
@@ -86,7 +86,11 @@ const EXPECTED_ES_VALUES: Record<(typeof DASHBOARD_NEW_KEYS)[number], string> = 
   'statCards.doctors': 'Doctores',
   'statCards.appointmentsThisMonth': 'Citas del Mes',
   'statCards.completedCount': '{{count}} completadas',
-  'statCards.monthlyRevenue': 'Ingresos del Mes',
+  // Retexted and re-keyed by #395: the figure changed BASIS, from appointment
+  // cost bucketed by startTime to cash actually collected. The key moved with
+  // it deliberately — a consumer still reading `monthlyRevenue` would have got
+  // a different question's answer under the same name.
+  'statCards.monthlyCollected': 'Cobrado este mes',
   // Retexted by #396: the figure is now the net outstanding across all
   // patient-billable work, so the copy names that basis instead of the bare
   // "pendientes" the #332 migration moved over.

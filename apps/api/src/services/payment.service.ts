@@ -752,6 +752,62 @@ export async function listPayments(
   return { data, total }
 }
 
+/**
+ * Task #395: cash collected in a period, on a CONTRA-ENTRY basis.
+ *
+ * "What came in this month" is the sum of payments DATED in the month, minus
+ * reversals that HAPPENED in the month. A month, once reported, never changes
+ * afterwards.
+ *
+ * That is why the positive leg deliberately does NOT filter `isActive`. Doing
+ * so would make a payment taken in December and reversed in March disappear
+ * from December's figure, in March — reintroducing the very defect #395 exists
+ * to fix (a revenue number moving with no money moving), just by a different
+ * mechanism. The reversal is booked where it happened instead.
+ *
+ * Immune to FIFO/earmark allocation by construction: it reads amounts and
+ * dates, never `Appointment.isPaid`. A change like #390 cannot move it.
+ */
+export async function getCashCollectedBetween(
+  tenantId: string,
+  from: Date,
+  to: Date
+): Promise<number> {
+  const [collected, reversals, legacyReversals] = await Promise.all([
+    prisma.patientPayment.aggregate({
+      where: { tenantId, date: { gte: from, lte: to } },
+      _sum: { amount: true },
+    }),
+    // Reversals booked at the moment they happened (#392 records occurredAt).
+    // An aggregate cannot sum across the relation, and the row count here is
+    // bounded by how many reversals a clinic performs in a month.
+    prisma.patientPaymentEvent.findMany({
+      where: { tenantId, type: 'REVERSED', occurredAt: { gte: from, lte: to } },
+      select: { payment: { select: { amount: true } } },
+    }),
+    // Reversals from before #392 have no event, so there is no record of WHEN
+    // they happened. `updatedAt` is the closest thing the row carries, and the
+    // alternative is worse: without this leg such a payment would count
+    // positively in its month forever and never be subtracted anywhere.
+    prisma.patientPayment.findMany({
+      where: {
+        tenantId,
+        isActive: false,
+        updatedAt: { gte: from, lte: to },
+        events: { none: { type: 'REVERSED' } },
+      },
+      select: { amount: true },
+    }),
+  ])
+
+  const collectedCents = toCents(collected._sum.amount?.toNumber() ?? 0)
+  const reversedCents =
+    reversals.reduce((sum, e) => sum + toCents(e.payment.amount.toNumber()), 0) +
+    legacyReversals.reduce((sum, p) => sum + toCents(p.amount.toNumber()), 0)
+
+  return fromCents(collectedCents - reversedCents)
+}
+
 // Appended to a converted payment's note so it reads as self-explanatory in
 // Entregas; stripped back off on restore via a suffix match.
 export const CANCELLED_APPOINTMENT_NOTE_SUFFIX = ' (cita cancelada)'
