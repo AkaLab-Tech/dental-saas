@@ -5,7 +5,19 @@ test.describe('Appointments Management', () => {
     test('should display appointments page when authenticated', async ({ authedPage: page }) => {
       await page.goto('/appointments')
 
-      await expect(page.getByRole('heading', { name: /citas/i })).toBeVisible()
+      // Task #404: BOTH filters are load-bearing and neither alone is enough.
+      //
+      //   name  excludes the shell's <h1>Alveo</h1> (AppLayout.tsx), which is
+      //         on every page and would otherwise collide with `level: 1`.
+      //   level excludes the empty-state <h3>"No hay citas para este período"</h3>
+      //         (AppointmentsPage.tsx), which also matches /citas/i and renders
+      //         only when the tenant has no appointments in the period — which
+      //         is why this failed intermittently rather than always.
+      //
+      // Level rather than a tighter regex on purpose: `/^citas$/i` would also
+      // pass today and would break again the next time the empty-state copy
+      // changes. The heading level is structural.
+      await expect(page.getByRole('heading', { name: /citas/i, level: 1 })).toBeVisible()
     })
 
     test('should have calendar navigation visible', async ({ authedPage: page }) => {
