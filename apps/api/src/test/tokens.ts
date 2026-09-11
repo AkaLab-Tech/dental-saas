@@ -20,12 +20,26 @@ const JWT_SECRET = process.env.JWT_SECRET || 'test-secret'
  * the two `tokenWithUserId` arrows that existed in payments/appointments tests
  * purely to work around the bug this removes.
  *
- * Three local helpers are deliberately kept and are not violations of that
- * rule: `settings.test.ts` and `export.test.ts` take a payload object and use a
- * different JWT secret default, and `middleware/ownership.test.ts` is a
- * middleware test with a different arity whose own comment about `userId` vs
- * `sub` is true. None ever had the bug. `pin.test.ts` mints an expired profile
- * token as the SUBJECT of an expiry test, which this helper cannot express.
+ * Six local mints are deliberately kept and are not violations of that rule.
+ * The list is derived from
+ * `git grep -nE "(^|[^a-zA-Z.])(jwt\.)?sign\(" -- apps/api/src`, not from
+ * memory — an earlier version of this comment named four, because the query
+ * that produced it was shaped by the instances already in mind and missed
+ * every `jwt.sign(` and every multi-line call:
+ *
+ *   settings.test.ts, export.test.ts   payload-object signature, and a
+ *                                      different JWT secret default
+ *   middleware/ownership.test.ts       a middleware test, different arity, and
+ *                                      its comment about userId vs sub is TRUE
+ *   routes/auth.test.ts                tokens are the subject of the suite, and
+ *                                      its helper also carries `email`
+ *   routes/admin/stats.test.ts         SUPER_ADMIN with `tenantId: null`, a
+ *                                      shape this helper's signature cannot
+ *                                      express
+ *   routes/pin.test.ts                 an EXPIRED profile token, the subject of
+ *                                      an expiry test
+ *
+ * None ever had the `sub` bug.
  */
 export function generateToken(userId: string, tenantId: string, role: string): string {
   return sign({ userId, tenantId, role }, JWT_SECRET, { expiresIn: '1h' })
