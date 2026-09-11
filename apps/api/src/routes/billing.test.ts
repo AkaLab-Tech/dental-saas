@@ -10,7 +10,6 @@ describe('Billing API', () => {
   let adminToken: string
   let staffToken: string
 
-  // Helper to generate JWT token
 
   beforeAll(async () => {
     // Get or create free plan

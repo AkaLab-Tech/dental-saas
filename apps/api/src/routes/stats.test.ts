@@ -13,7 +13,6 @@ describe('Stats API', () => {
   let doctorId: string
   const testSlug = `test-clinic-stats-${Date.now()}`
 
-  // Helper to generate JWT token
 
   beforeAll(async () => {
     // Create a test tenant with a free plan subscription

@@ -11,7 +11,6 @@ describe('Expenses Routes - Permission Tests', () => {
   let testExpenseId: string
   const testSlug = `test-expenses-${Date.now()}`
 
-  // Helper to generate JWT token
 
   beforeAll(async () => {
     // Create test tenant

@@ -3,7 +3,6 @@ import { api } from '../test/http.js'
 import { prisma, Prisma } from '@dental/database'
 import { Permission, UserRole, hasPermission } from '@dental/shared'
 import { hashPassword } from '../services/auth.service.js'
-import { sign } from 'jsonwebtoken'
 import { generateProfileToken, generateToken } from '../test/tokens.js'
 import {
   computeOutstandingByPatient,
@@ -15,8 +14,6 @@ import {
   listPayments,
   recalculatePaidStatus,
 } from '../services/payment.service.js'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'test-secret'
 
 describe('Patient Payments Routes', () => {
   let tenantId: string
@@ -442,14 +439,6 @@ describe('Patient Payments Routes', () => {
     describe('Task #392: the reversal is logged', () => {
       let auditPatientId: string
 
-      // This file's generateToken signs { sub }, NOT { userId } — and the auth
-      // middleware assigns the decoded payload straight to req.user, so
-      // req.user.userId is undefined for those tokens. An "actor was recorded"
-      // assertion written against them would pass with null and prove nothing,
-      // so the cases below mint their own.
-      const tokenWithUserId = (userId: string, role: string) =>
-        sign({ userId, tenantId, role }, JWT_SECRET, { expiresIn: '1h' })
-
       async function seedPayment(): Promise<string> {
         const payment = await prisma.patientPayment.create({
           data: { tenantId, patientId: auditPatientId, amount: 30, date: new Date(), kind: 'ADVANCE' },
@@ -477,7 +466,7 @@ describe('Patient Payments Routes', () => {
 
         const res = await api()
           .delete(`/api/patients/${auditPatientId}/payments/${paymentId}`)
-          .set('Authorization', `Bearer ${tokenWithUserId('user-392-admin', 'ADMIN')}`)
+          .set('Authorization', `Bearer ${generateToken('user-392-admin', tenantId, 'ADMIN')}`)
           .send({ reason: 'Cobrado por error, devuelto en efectivo' })
 
         expect(res.status).toBe(200)
@@ -498,15 +487,11 @@ describe('Patient Payments Routes', () => {
         // the profile names a person. A test that exercised the plain login
         // would pass against a bare `req.user.userId` and miss exactly this.
         const paymentId = await seedPayment()
-        const profileToken = sign(
-          { profileUserId: 'profile-392-operator', role: 'ADMIN', tenantId, type: 'profile' },
-          JWT_SECRET,
-          { expiresIn: '1h' }
-        )
+        const profileToken = generateProfileToken('profile-392-operator', tenantId, 'ADMIN')
 
         const res = await api()
           .delete(`/api/patients/${auditPatientId}/payments/${paymentId}`)
-          .set('Authorization', `Bearer ${tokenWithUserId('shared-clinic-login', 'ADMIN')}`)
+          .set('Authorization', `Bearer ${generateToken('shared-clinic-login', tenantId, 'ADMIN')}`)
           .set('X-Profile-Token', profileToken)
           .send({ reason: 'Reversión desde el kiosco' })
 

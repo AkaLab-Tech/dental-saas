@@ -2,11 +2,8 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
-import { sign } from 'jsonwebtoken'
 import { getPatientBalance } from '../services/payment.service.js'
-import { generateToken } from '../test/tokens.js'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'test-secret'
+import { generateProfileToken, generateToken } from '../test/tokens.js'
 
 describe('Appointments API', () => {
   let tenantId: string
@@ -20,7 +17,6 @@ describe('Appointments API', () => {
   let doctor2Id: string
   const testSlug = `test-clinic-appointments-${Date.now()}`
 
-  // Helper to generate JWT token
 
   // Helper to create an appointment time in the future
   function getFutureTime(daysFromNow: number, hour: number = 10): { startTime: string; endTime: string } {
@@ -2092,17 +2088,11 @@ describe('Appointments API', () => {
         return { apptId: created.body.data.id as string, paymentId: created.body.data.recordedPaymentId as string }
       }
 
-      // This file's generateToken signs { sub }, not { userId }, so
-      // req.user.userId is undefined for it and an actor assertion written
-      // against it would pass with null and prove nothing — see #447.
-      const tokenWithUserId = (userId: string, role: string) =>
-        sign({ userId, tenantId, role }, JWT_SECRET, { expiresIn: '1h' })
-
       it('logs a cancel and its restore as TWO events, in order', async () => {
         // The round trip is the point. A ledger holding only the cancel half
         // reads as a real imbalance and invites someone to investigate a
         // discrepancy the system invented — which is worse than no ledger.
-        const adminWithId = tokenWithUserId('user-392b-admin', 'ADMIN')
+        const adminWithId = generateToken('user-392b-admin', tenantId, 'ADMIN')
         const { apptId, paymentId } = await seedPaidAppointment(60, adminWithId)
 
         const del = await api()
@@ -2127,13 +2117,9 @@ describe('Appointments API', () => {
       })
 
       it('records the PIN PROFILE as the actor on a cancellation, not the shared login', async () => {
-        const sharedLogin = tokenWithUserId('shared-clinic-login', 'ADMIN')
+        const sharedLogin = generateToken('shared-clinic-login', tenantId, 'ADMIN')
         const { apptId, paymentId } = await seedPaidAppointment(61, sharedLogin)
-        const profileToken = sign(
-          { profileUserId: 'profile-392b-operator', role: 'ADMIN', tenantId, type: 'profile' },
-          JWT_SECRET,
-          { expiresIn: '1h' }
-        )
+        const profileToken = generateProfileToken('profile-392b-operator', tenantId, 'ADMIN')
 
         const del = await api()
           .delete(`/api/appointments/${apptId}`)
@@ -2152,7 +2138,7 @@ describe('Appointments API', () => {
         // doc comment) because the single-active-payment invariant could be
         // violated by a race. If that happens the ledger must still hold one
         // row per payment, or a disputed balance cannot be walked per payment.
-        const adminWithId = tokenWithUserId('user-392b-admin', 'ADMIN')
+        const adminWithId = generateToken('user-392b-admin', tenantId, 'ADMIN')
         const { apptId, paymentId } = await seedPaidAppointment(62, adminWithId)
 
         const patientId = (
@@ -2172,7 +2158,7 @@ describe('Appointments API', () => {
       })
 
       it('logs nothing when the cancelled appointment had no linked payment', async () => {
-        const adminWithId = tokenWithUserId('user-392b-admin', 'ADMIN')
+        const adminWithId = generateToken('user-392b-admin', tenantId, 'ADMIN')
         const patient = await prisma.patient.create({
           data: { tenantId, firstName: 'Audit392b', lastName: 'NoPayment' },
         })
@@ -3095,11 +3081,7 @@ describe('Appointments API', () => {
         },
       })
       doctorUserId = doctorUser.id
-      // Production access tokens carry `userId` (TokenPayload) — the ownership
-      // middleware and route handlers read req.user.userId, not `sub`.
-      doctorToken = sign({ userId: doctorUserId, tenantId, role: 'DOCTOR' }, JWT_SECRET, {
-        expiresIn: '1h',
-      })
+      doctorToken = generateToken(doctorUserId, tenantId, 'DOCTOR')
 
       const linkedDoctor = await prisma.doctor.create({
         data: {

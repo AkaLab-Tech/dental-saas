@@ -14,7 +14,6 @@ describe('PDF Endpoints Integration', () => {
   let labworkId: string
   const testSlug = `test-clinic-pdf-${Date.now()}`
 
-  // Helper to generate JWT token
 
   beforeAll(async () => {
     // Create test tenant

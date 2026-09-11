@@ -5,18 +5,20 @@ const JWT_SECRET = process.env.JWT_SECRET || 'test-secret'
 /**
  * Task #447: the ONE place route tests mint auth tokens.
  *
- * It exists because there were fourteen copies of this function across ten
- * files and every one of them signed `sub` instead of `userId`. The middleware
+ * It exists because there were sixteen copies of this function across twelve
+ * files, thirteen of which signed `sub` instead of `userId`. The middleware
  * assigns the decoded payload straight to `req.user` (middleware/auth.ts), so
- * `req.user.userId` — read at nineteen production sites, including every
+ * `req.user.userId` — read at twenty production sites, including every
  * `createdBy` / `createdById` / `actorUserId` — was `undefined` for every
  * request those suites made. The tokens still authenticated, because
  * `tenantId` and `role` are the claims the middleware and requirePermission
  * actually use, so nothing failed. Values silently became null and any
  * assertion about WHO did something passed vacuously.
  *
- * Keep this the only definition. Fourteen copies is how the wrong shape
- * spread, and a local copy is how it would come back.
+ * Keep this the only definition. Sixteen copies is how the wrong shape
+ * spread, and a local copy is how it would come back — including the two
+ * `tokenWithUserId` arrows that existed in payments/appointments tests purely
+ * to work around the bug this removes.
  */
 export function generateToken(userId: string, tenantId: string, role: string): string {
   return sign({ userId, tenantId, role }, JWT_SECRET, { expiresIn: '1h' })

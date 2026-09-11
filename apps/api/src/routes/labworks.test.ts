@@ -11,7 +11,6 @@ describe('Labworks Routes - Permission Tests', () => {
   let testLabworkId: string
   const testSlug = `test-labworks-${Date.now()}`
 
-  // Helper to generate JWT token
 
   beforeAll(async () => {
     // Create test tenant
@@ -993,10 +992,6 @@ describe('GET /api/labworks/export (CSV export)', () => {
   let garciaPatientId: string
   const testSlug = `test-labworks-export-${Date.now()}`
   const otherSlug = `test-labworks-export-other-${Date.now()}`
-
-  // Mirrors export.test.ts's token-signing approach: this project's API
-  // reads req.user.userId (not req.user.sub), so test tokens are signed
-  // with `userId`.
 
   async function createTenant(slug: string, name: string) {
     const tenant = await prisma.tenant.create({

@@ -12,7 +12,6 @@ describe('Patients API', () => {
   let staffToken: string
   const testSlug = `test-clinic-patients-${Date.now()}`
 
-  // Helper to generate JWT token
 
   beforeAll(async () => {
     // Create a test tenant with a free plan subscription
