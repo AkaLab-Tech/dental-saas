@@ -179,8 +179,12 @@ export default function DoctorDashboard() {
           color="green"
         />
         <StatCard
-          title={t('dashboard.doctor.monthRevenue')}
-          value={formatCurrency(overview?.monthlyRevenue || 0, currency)}
+          // Task #395: the ACCRUAL figure, not the clinic dashboard's cash one.
+          // Cash cannot be attributed to a doctor — payments carry no doctorId
+          // and advances have no appointment — so monthlyCollected is null here
+          // and would render as a confident $0.
+          title={t('dashboard.doctor.monthBilledPaid')}
+          value={formatCurrency(overview?.monthlyBilledPaid || 0, currency)}
           icon={<DollarSign className="h-6 w-6" />}
           color="orange"
         />

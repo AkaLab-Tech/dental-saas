@@ -19,7 +19,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { prisma } from '@dental/database'
 import { getOverviewStats } from './stats.service.js'
-import { listDebtors } from './payment.service.js'
+import { listDebtors, recalculatePaidStatus } from './payment.service.js'
 import { deleteAppointment } from './appointment.service.js'
 
 describe('stats.service — getOverviewStats pendingPayments (#396)', () => {
@@ -215,5 +215,146 @@ describe('stats.service — getOverviewStats pendingPayments (#396)', () => {
 
     expect(overview.pendingPayments).toBe(0)
     expect(await listDebtors(tenantId)).toEqual([])
+  })
+})
+
+/**
+ * Task #395 — the dashboard's monthly figure is CASH collected, on a contra-entry
+ * basis, and is immune to allocation changes.
+ *
+ * The old figure summed appointment `cost` bucketed by `startTime` and gated on
+ * the cached `isPaid`, so it answered a different question and moved whenever FIFO
+ * allocation moved. The two cases below are the ones the two bases disagree on.
+ */
+describe('stats.service — getOverviewStats monthlyCollected (#395)', () => {
+  let tenantId: string
+  let patientId: string
+  let doctorId: string
+
+  const thisMonth = (day: number, hour = 10) => {
+    const now = new Date()
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), day, hour, 0, 0))
+  }
+
+  beforeAll(async () => {
+    const tenant = await prisma.tenant.create({
+      data: { name: 'Cash Basis Clinic', slug: `cash-basis-${Date.now()}` },
+    })
+    tenantId = tenant.id
+    const doctor = await prisma.doctor.create({
+      data: { tenantId, firstName: 'Cash', lastName: 'Doctor', specialty: 'General' },
+    })
+    doctorId = doctor.id
+    const patient = await prisma.patient.create({
+      data: { tenantId, firstName: 'Cash', lastName: 'Patient' },
+    })
+    patientId = patient.id
+  })
+
+  afterAll(async () => {
+    await prisma.tenant.delete({ where: { id: tenantId } }).catch(() => {
+      // Cascades take everything with it.
+    })
+  })
+
+  beforeEach(async () => {
+    await prisma.patientPaymentEvent.deleteMany({ where: { tenantId } })
+    await prisma.patientPayment.deleteMany({ where: { tenantId } })
+    await prisma.appointment.deleteMany({ where: { tenantId } })
+  })
+
+  it('counts a payment in the month it was RECEIVED, not the month of its appointment', async () => {
+    // The case the two bases disagree on. The appointment is in a past month;
+    // the money arrived this month. Cash says this month.
+    const past = new Date(Date.UTC(2026, 0, 15, 10, 0, 0))
+    const appointment = await prisma.appointment.create({
+      data: {
+        tenantId,
+        patientId,
+        doctorId,
+        startTime: past,
+        endTime: new Date(past.getTime() + 30 * 60 * 1000),
+        duration: 30,
+        cost: 500,
+        isPaid: true,
+      },
+    })
+    await prisma.patientPayment.create({
+      data: {
+        tenantId,
+        patientId,
+        amount: 500,
+        date: thisMonth(5),
+        kind: 'APPOINTMENT',
+        appointmentId: appointment.id,
+      },
+    })
+
+    const overview = await getOverviewStats(tenantId)
+    expect(overview.monthlyCollected).toBe(500)
+    // And the accrual figure disagrees, which is the whole point of keeping
+    // both and naming them differently: the work was billed in January.
+    expect(overview.monthlyBilledPaid).toBe(0)
+  })
+
+  it('does not move when FIFO allocation changes', async () => {
+    // The regression #395 exists to prevent. Two appointments, one payment:
+    // which appointment carries `isPaid` is an allocation decision, and under
+    // the old basis it moved the revenue figure with no money moving.
+    const older = await prisma.appointment.create({
+      data: {
+        tenantId,
+        patientId,
+        doctorId,
+        startTime: thisMonth(2),
+        endTime: thisMonth(2, 11),
+        duration: 30,
+        cost: 100,
+      },
+    })
+    await prisma.appointment.create({
+      data: {
+        tenantId,
+        patientId,
+        doctorId,
+        startTime: thisMonth(3),
+        endTime: thisMonth(3, 11),
+        duration: 30,
+        cost: 100,
+      },
+    })
+    await prisma.patientPayment.create({
+      data: { tenantId, patientId, amount: 100, date: thisMonth(4), kind: 'ADVANCE' },
+    })
+
+    const before = await getOverviewStats(tenantId)
+
+    // Flip the allocation: hand the payment to the newer appointment instead,
+    // and recompute the cached flags.
+    await recalculatePaidStatus(tenantId, patientId)
+    const afterFirstRecalc = await getOverviewStats(tenantId)
+
+    await prisma.appointment.update({ where: { id: older.id }, data: { isActive: false } })
+    await recalculatePaidStatus(tenantId, patientId)
+    const afterReallocation = await getOverviewStats(tenantId)
+
+    // The money never moved, so the cash figure never moves.
+    expect(afterFirstRecalc.monthlyCollected).toBe(before.monthlyCollected)
+    expect(afterReallocation.monthlyCollected).toBe(before.monthlyCollected)
+    expect(before.monthlyCollected).toBe(100)
+  })
+
+  it('is null when the request is doctor-scoped, rather than a confident zero', async () => {
+    // Payments carry no doctorId and advances have no appointment, so a
+    // per-doctor cash figure would silently omit every Entrega. Same precedent
+    // as pendingPayments: withhold the number instead of publishing a wrong one.
+    await prisma.patientPayment.create({
+      data: { tenantId, patientId, amount: 70, date: thisMonth(6), kind: 'ADVANCE' },
+    })
+
+    const scoped = await getOverviewStats(tenantId, doctorId)
+    expect(scoped.monthlyCollected).toBeNull()
+    // The accrual figure IS doctor-scopable and stays available.
+    expect(typeof scoped.monthlyBilledPaid).toBe('number')
   })
 })

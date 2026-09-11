@@ -5,6 +5,7 @@ import {
   computeOutstandingByPatient,
   convertAppointmentPaymentsToAdvance,
   deletePayment,
+  getCashCollectedBetween,
   getTenantOutstandingTotal,
   listDebtors,
   restoreAppointmentPaymentsFromAdvance,
@@ -972,5 +973,112 @@ describe('deletePayment transactional integrity (#392)', () => {
     const after = await prisma.patientPayment.findUnique({ where: { id: payment.id } })
     expect(after?.isActive).toBe(true)
     expect(await prisma.patientPaymentEvent.count({ where: { paymentId: payment.id } })).toBe(0)
+  })
+})
+
+// ============================================================================
+// Task #395 — cash collected, on a contra-entry basis
+// ============================================================================
+
+describe('getCashCollectedBetween (#395)', () => {
+  let tenantId: string
+  let patientId: string
+
+  const DEC = { from: new Date(Date.UTC(2025, 11, 1)), to: new Date(Date.UTC(2025, 11, 31, 23, 59, 59)) }
+  const MAR = { from: new Date(Date.UTC(2026, 2, 1)), to: new Date(Date.UTC(2026, 2, 31, 23, 59, 59)) }
+
+  beforeAll(async () => {
+    const tenant = await prisma.tenant.create({
+      data: { name: 'Contra Entry Clinic', slug: `contra-entry-${Date.now()}` },
+    })
+    tenantId = tenant.id
+    const patient = await prisma.patient.create({
+      data: { tenantId, firstName: 'Contra', lastName: 'Entry' },
+    })
+    patientId = patient.id
+  })
+
+  afterAll(async () => {
+    await prisma.tenant.delete({ where: { id: tenantId } }).catch(() => {
+      // Cascades take everything.
+    })
+  })
+
+  beforeEach(async () => {
+    await prisma.patientPaymentEvent.deleteMany({ where: { tenantId } })
+    await prisma.patientPayment.deleteMany({ where: { tenantId } })
+  })
+
+  it('leaves the earlier month UNCHANGED when a payment is reversed later, and books the reversal where it happened', async () => {
+    // The decision this implements. Filtering isActive instead would make
+    // December's figure drop in March — a reported month changing after the
+    // fact, with no money moving, which is the defect #395 was filed against.
+    const payment = await prisma.patientPayment.create({
+      data: { tenantId, patientId, amount: 300, date: new Date(Date.UTC(2025, 11, 10)), kind: 'ADVANCE' },
+    })
+
+    expect(await getCashCollectedBetween(tenantId, DEC.from, DEC.to)).toBe(300)
+
+    // Reversed in March.
+    await prisma.patientPayment.update({ where: { id: payment.id }, data: { isActive: false } })
+    await prisma.patientPaymentEvent.create({
+      data: {
+        tenantId,
+        paymentId: payment.id,
+        type: 'REVERSED',
+        actorUserId: 'u-395',
+        reason: 'Devuelto',
+        occurredAt: new Date(Date.UTC(2026, 2, 5)),
+      },
+    })
+
+    expect(await getCashCollectedBetween(tenantId, DEC.from, DEC.to)).toBe(300)
+    expect(await getCashCollectedBetween(tenantId, MAR.from, MAR.to)).toBe(-300)
+  })
+
+  it('books a pre-#392 reversal (no event) at the row updatedAt rather than never', async () => {
+    // Rows reversed before the audit log existed carry no record of WHEN.
+    // updatedAt is the closest the row has; the alternative is that such a
+    // payment counts positively in its month forever and is never subtracted.
+    const payment = await prisma.patientPayment.create({
+      data: {
+        tenantId,
+        patientId,
+        amount: 120,
+        date: new Date(Date.UTC(2025, 11, 20)),
+        kind: 'ADVANCE',
+        isActive: false,
+      },
+    })
+    await prisma.$executeRaw`UPDATE patient_payments SET "updatedAt" = ${new Date(Date.UTC(2026, 2, 9))} WHERE id = ${payment.id}`
+
+    expect(await getCashCollectedBetween(tenantId, DEC.from, DEC.to)).toBe(120)
+    expect(await getCashCollectedBetween(tenantId, MAR.from, MAR.to)).toBe(-120)
+  })
+
+  it('does not double-count a reversal that has an event', async () => {
+    // The legacy leg selects `events: { none: { type: REVERSED } }`. Without
+    // that clause a reversed payment with an event would be subtracted twice —
+    // once at occurredAt and once at updatedAt.
+    const payment = await prisma.patientPayment.create({
+      data: {
+        tenantId,
+        patientId,
+        amount: 50,
+        date: new Date(Date.UTC(2026, 2, 2)),
+        kind: 'ADVANCE',
+        isActive: false,
+      },
+    })
+    await prisma.patientPaymentEvent.create({
+      data: { tenantId, paymentId: payment.id, type: 'REVERSED', occurredAt: new Date(Date.UTC(2026, 2, 3)) },
+    })
+    // updatedAt must land in the SAME window as the event, or the legacy leg
+    // never looks at this row and the test proves nothing about the clause.
+    // A real reversal sets both at once, which is exactly the double-count risk.
+    await prisma.$executeRaw`UPDATE patient_payments SET "updatedAt" = ${new Date(Date.UTC(2026, 2, 3))} WHERE id = ${payment.id}`
+
+    // +50 in, -50 out, both in March. Not -50.
+    expect(await getCashCollectedBetween(tenantId, MAR.from, MAR.to)).toBe(0)
   })
 })

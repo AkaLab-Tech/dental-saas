@@ -1,6 +1,6 @@
 import { prisma } from '@dental/database'
 import { logger } from '../utils/logger.js'
-import { getTenantOutstandingTotal } from './payment.service.js'
+import { getCashCollectedBetween, getTenantOutstandingTotal } from './payment.service.js'
 
 // ============================================================================
 // Types
@@ -14,7 +14,26 @@ export interface OverviewStats {
   completedAppointmentsThisMonth: number
   pendingLabworks: number
   unpaidLabworks: number
-  monthlyRevenue: number
+  /**
+   * Task #395: CASH collected this month — payments dated in the month minus
+   * reversals that happened in it. Renamed from `monthlyRevenue`, deliberately:
+   * the basis changed, and a consumer that kept reading `monthlyRevenue` would
+   * have silently got a different question's answer.
+   *
+   * `null` when the request is doctor-scoped — payments carry no doctor, and
+   * the only route (appointmentId -> doctorId) exists solely for
+   * kind='APPOINTMENT', so a per-doctor cash figure would silently omit every
+   * advance. Same precedent as pendingPayments below.
+   */
+  monthlyCollected: number | null
+  /**
+   * Task #395: the ACCRUAL figure the dashboard used to call `monthlyRevenue` —
+   * appointment `cost` for work scheduled this month that is currently marked
+   * paid. Kept, doctor-scopable, and renamed to say which question it answers.
+   * It is what the per-doctor dashboard shows, because cash cannot be
+   * attributed to a doctor at all.
+   */
+  monthlyBilledPaid: number
   /**
    * Net amount still owed by patients: the outstanding on all active
    * patient-billable work (appointments carrying a cost + labworks whose
@@ -120,7 +139,8 @@ export async function getOverviewStats(tenantId: string, doctorId?: string): Pro
     completedAppointmentsThisMonth,
     pendingLabworks,
     unpaidLabworks,
-    revenueData,
+    monthlyCollected,
+    billedPaidData,
     pendingPayments,
   ] = await Promise.all([
     // Total active patients (for doctor: distinct patients from their appointments)
@@ -168,7 +188,16 @@ export async function getOverviewStats(tenantId: string, doctorId?: string): Pro
     prisma.labwork.count({
       where: { tenantId, isPaid: false },
     }),
-    // Monthly revenue (paid appointments)
+    // Task #395: cash collected this month, from PatientPayment. The previous
+    // version summed appointment `cost` bucketed by `startTime` and gated on
+    // the cached `isPaid`, so it answered "what was billed for work scheduled
+    // this month that is currently marked paid" — which moved whenever FIFO
+    // allocation changed, with no money moving. See getCashCollectedBetween.
+    doctorId ? Promise.resolve(null) : getCashCollectedBetween(tenantId, monthStart, monthEnd),
+    // The accrual figure, unchanged in meaning and doctor-scopable. It is no
+    // longer what the clinic dashboard headlines, but removing it would leave
+    // the per-doctor dashboard with nothing, and a cash figure there would be
+    // null — rendering as a confident $0.
     prisma.appointment.aggregate({
       where: {
         tenantId,
@@ -193,7 +222,8 @@ export async function getOverviewStats(tenantId: string, doctorId?: string): Pro
     completedAppointmentsThisMonth,
     pendingLabworks,
     unpaidLabworks,
-    monthlyRevenue: revenueData._sum.cost?.toNumber() ?? 0,
+    monthlyCollected,
+    monthlyBilledPaid: billedPaidData._sum.cost?.toNumber() ?? 0,
     pendingPayments,
   }
 }

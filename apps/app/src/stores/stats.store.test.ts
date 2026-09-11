@@ -38,7 +38,8 @@ const mockOverview: OverviewStats = {
   completedAppointmentsThisMonth: 38,
   pendingLabworks: 3,
   unpaidLabworks: 1,
-  monthlyRevenue: 25000,
+  monthlyCollected: 25000,
+  monthlyBilledPaid: 25000,
   pendingPayments: 5000,
 }
 
