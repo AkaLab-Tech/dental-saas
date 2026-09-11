@@ -79,6 +79,14 @@ export type SafeAppointment = {
   hasRecordedPayment?: boolean
   recordedPaidAmount?: number
   recordedPaymentId?: string | null
+  /**
+   * Task #451: consultation payments recorded on this appointment and later
+   * reversed. Empty on endpoints that do not compute the payment breakdown.
+   * Separate from the fields above on purpose — those describe the money that
+   * currently counts, this is history, and conflating them is what would put
+   * the reversal control back on an already-reversed payment.
+   */
+  reversedPayments?: Array<{ amount: number; at: Date; by: string | null; reason: string | null }>
   patient?: {
     id: string
     firstName: string
@@ -387,15 +395,54 @@ async function attachRecordedPayments(
   appointments: SafeAppointment[]
 ): Promise<SafeAppointment[]> {
   if (appointments.length === 0) return appointments
-  const payments = await prisma.patientPayment.findMany({
-    where: {
-      tenantId,
-      appointmentId: { in: appointments.map((a) => a.id) },
-      kind: 'APPOINTMENT',
-      isActive: true,
-    },
-    select: { id: true, appointmentId: true, amount: true },
-  })
+  const appointmentIds = appointments.map((a) => a.id)
+
+  // Task #451: two queries, not one relaxed filter.
+  //
+  // The `isActive: true` below is what makes `hasRecordedPayment` mean "there
+  // is a payment here that can be reversed" — three behaviours hang off it: the
+  // reversal control, #402's disclosure line, and the cancel warning. Relaxing
+  // it to pick up reversed rows would resurrect the reversal control on a
+  // payment the API already answers ALREADY_INACTIVE for, and would move
+  // recordedPaidAmount and paidAmount, which are money figures. So reversed
+  // rows are fetched separately and land in a separate field.
+  //
+  // The two lookups are deliberately shaped differently and must stay that way:
+  // at most ONE payment can be active on an appointment, but any number can
+  // have been reversed over its life.
+  const [payments, reversed] = await Promise.all([
+    prisma.patientPayment.findMany({
+      where: {
+        tenantId,
+        appointmentId: { in: appointmentIds },
+        kind: 'APPOINTMENT',
+        isActive: true,
+      },
+      select: { id: true, appointmentId: true, amount: true },
+    }),
+    prisma.patientPayment.findMany({
+      where: {
+        tenantId,
+        appointmentId: { in: appointmentIds },
+        kind: 'APPOINTMENT',
+        isActive: false,
+      },
+      select: {
+        appointmentId: true,
+        amount: true,
+        updatedAt: true,
+        // One round trip for the whole page, not one per appointment.
+        events: {
+          where: { type: 'REVERSED' },
+          select: { occurredAt: true, actorUserId: true, reason: true },
+          orderBy: { occurredAt: 'desc' },
+          take: 1,
+        },
+      },
+      orderBy: { date: 'desc' },
+    }),
+  ])
+
   return appointments.map((a) => {
     const payment = payments.find((p) => p.appointmentId === a.id)
     return {
@@ -403,6 +450,18 @@ async function attachRecordedPayments(
       recordedPaidAmount: payment?.amount.toNumber() ?? 0,
       hasRecordedPayment: !!payment,
       recordedPaymentId: payment?.id ?? null,
+      reversedPayments: reversed
+        .filter((p) => p.appointmentId === a.id)
+        .map((p) => ({
+          amount: p.amount.toNumber(),
+          // A reversal recorded before #392 has no event. `updatedAt` is the
+          // closest date the row carries; actor and reason stay null rather
+          // than being invented, matching what listPayments does for the
+          // Entregas surface.
+          at: p.events[0]?.occurredAt ?? p.updatedAt,
+          by: p.events[0]?.actorUserId ?? null,
+          reason: p.events[0]?.reason ?? null,
+        })),
     }
   })
 }

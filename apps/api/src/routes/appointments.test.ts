@@ -949,6 +949,142 @@ describe('Appointments API', () => {
     // GREATER. These two cases prove that shape is producible through the
     // real read path, so the frontend condition is defending a state the API
     // actually emits — not a hypothetical.
+    // Task #451: a reversed consultation payment used to appear in NO payment
+    // surface. Entregas asks for kind='ADVANCE'; this card's
+    // hasRecordedPayment goes false the moment the payment is reversed, so the
+    // card forgot the payment rather than merely omitting the reversal.
+    describe('Task #451: reversed consultation payments on the appointment', () => {
+      async function seedReversedPayment(
+        dayOffset: number,
+        opts: { withEvent: boolean; amount?: number }
+      ) {
+        const patient = await prisma.patient.create({
+          data: { tenantId, firstName: 'Reversed451', lastName: `D${dayOffset}` },
+        })
+        const times = getFutureTime(dayOffset, 9)
+        const appointment = await prisma.appointment.create({
+          data: {
+            tenantId,
+            patientId: patient.id,
+            doctorId,
+            startTime: new Date(times.startTime),
+            endTime: new Date(times.endTime),
+            duration: 30,
+            cost: 80,
+          },
+        })
+        const payment = await prisma.patientPayment.create({
+          data: {
+            tenantId,
+            patientId: patient.id,
+            amount: opts.amount ?? 80,
+            date: new Date(times.startTime),
+            kind: 'APPOINTMENT',
+            appointmentId: appointment.id,
+            isActive: false,
+          },
+        })
+        if (opts.withEvent) {
+          await prisma.patientPaymentEvent.create({
+            data: {
+              tenantId,
+              paymentId: payment.id,
+              type: 'REVERSED',
+              actorUserId: 'user-451',
+              reason: 'Cobrado por error',
+            },
+          })
+        }
+        return { appointmentId: appointment.id, patientId: patient.id }
+      }
+
+      it('returns the reversal with its actor and reason, and leaves every money figure untouched', async () => {
+        const { appointmentId } = await seedReversedPayment(70, { withEvent: true })
+
+        const res = await api()
+          .get(`/api/appointments/${appointmentId}`)
+          .set('Authorization', `Bearer ${staffToken}`)
+
+        expect(res.status).toBe(200)
+        expect(res.body.data.reversedPayments).toHaveLength(1)
+        expect(res.body.data.reversedPayments[0]).toMatchObject({
+          amount: 80,
+          by: 'user-451',
+          reason: 'Cobrado por error',
+        })
+
+        // The money side must be EXACTLY as it was before this change. The
+        // cheap implementation — relaxing `isActive: true` in the existing
+        // lookup — would break all three of these, and would also put the
+        // reversal control back on a payment the API answers ALREADY_INACTIVE
+        // for. Asserted here so that path cannot be taken quietly later.
+        expect(res.body.data.hasRecordedPayment).toBe(false)
+        expect(res.body.data.recordedPaidAmount).toBe(0)
+        expect(res.body.data.recordedPaymentId).toBeNull()
+        expect(res.body.data.paidAmount).toBe(0)
+      })
+
+      it('returns a pre-#392 reversal without inventing an actor or a reason', async () => {
+        const { appointmentId } = await seedReversedPayment(71, { withEvent: false })
+
+        const res = await api()
+          .get(`/api/appointments/${appointmentId}`)
+          .set('Authorization', `Bearer ${staffToken}`)
+
+        expect(res.status).toBe(200)
+        expect(res.body.data.reversedPayments).toHaveLength(1)
+        expect(res.body.data.reversedPayments[0].by).toBeNull()
+        expect(res.body.data.reversedPayments[0].reason).toBeNull()
+        // `at` still has a value so the UI has a date to show.
+        expect(res.body.data.reversedPayments[0].at).toBeTruthy()
+      })
+
+      it('returns BOTH reversals when an appointment carries two', async () => {
+        // ALREADY_INACTIVE stops the same ROW being reversed twice; it does not
+        // stop a second payment being recorded and reversed in turn. Collapsing
+        // them to one would hide exactly the case worth seeing.
+        const { appointmentId, patientId: p } = await seedReversedPayment(72, { withEvent: true })
+        await prisma.patientPayment.create({
+          data: {
+            tenantId,
+            patientId: p,
+            amount: 25,
+            date: new Date(),
+            kind: 'APPOINTMENT',
+            appointmentId,
+            isActive: false,
+          },
+        })
+
+        const res = await api()
+          .get(`/api/appointments/${appointmentId}`)
+          .set('Authorization', `Bearer ${staffToken}`)
+
+        expect(res.status).toBe(200)
+        expect(res.body.data.reversedPayments.map((r: { amount: number }) => r.amount).sort()).toEqual([25, 80])
+      })
+
+      it('returns an empty list for an appointment with an ACTIVE payment', async () => {
+        // The pair that keeps the two lookups from being "simplified" into one.
+        const patient = await prisma.patient.create({
+          data: { tenantId, firstName: 'Reversed451', lastName: 'Active' },
+        })
+        const times = getFutureTime(73, 9)
+        const created = await api()
+          .post('/api/appointments')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ patientId: patient.id, doctorId, ...times, cost: 80, paidAmount: 80 })
+        expect(created.status).toBe(201)
+
+        const res = await api()
+          .get(`/api/appointments/${created.body.data.id}`)
+          .set('Authorization', `Bearer ${staffToken}`)
+
+        expect(res.body.data.reversedPayments).toEqual([])
+        expect(res.body.data.hasRecordedPayment).toBe(true)
+      })
+    })
+
     it('reports recordedPaidAmount ABOVE paidAmount when the linked payment exceeds the cost (#402 premise)', async () => {
       await prisma.appointment.deleteMany({ where: { tenantId, patientId } })
       await prisma.patientPayment.deleteMany({ where: { tenantId, patientId } })

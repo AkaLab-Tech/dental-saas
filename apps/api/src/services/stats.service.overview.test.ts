@@ -342,6 +342,13 @@ describe('stats.service — getOverviewStats monthlyCollected (#395)', () => {
     expect(afterFirstRecalc.monthlyCollected).toBe(before.monthlyCollected)
     expect(afterReallocation.monthlyCollected).toBe(before.monthlyCollected)
     expect(before.monthlyCollected).toBe(100)
+
+    // Drive-by sharpening (#451, from the #395 review): without this the test
+    // could not fail for the right reason — a reallocation that did nothing at
+    // all would satisfy every assertion above. Proving the ACCRUAL figure moved
+    // is what establishes that something happened for the cash figure to have
+    // been immune to.
+    expect(afterFirstRecalc.monthlyBilledPaid).not.toBe(before.monthlyBilledPaid)
   })
 
   it('is null when the request is doctor-scoped, rather than a confident zero', async () => {
