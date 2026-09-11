@@ -284,13 +284,30 @@ function PatientAppointmentCard({
       })()}
 
       {/* Reversible share of the paid figure (kind=APPOINTMENT payment recorded on
-          this appointment). Shown only in the mixed case — a consultation payment
-          plus older pool/advance money both covering this appointment — where the
-          cost/paid breakdown above and the amount the reversal button would undo
-          genuinely differ. When they're equal, this line would just repeat the
-          figure already shown above. */}
+          this appointment). Shown whenever the amount the reversal button would
+          undo differs from the paid figure shown above, in EITHER direction.
+          When they're equal, this line would just repeat that figure.
+
+          Task #402: this was `recordedPaidAmount < paidAmount`, written for the
+          mixed case (a consultation payment plus older pool money both covering
+          the appointment). The inverse is not an edge case — it is the arithmetic
+          of the FIFO earmark, which is capped at the appointment's cost:
+
+            payment.service.ts:120
+              costCents[i] > 0 ? Math.min(earmarkCents, costCents[i]) : 0
+
+          So any payment larger than the cost, and any payment on a zero- or
+          null-cost appointment (the `> 0` guard yields an earmark of 0), lands
+          with recordedPaidAmount > paidAmount. Under the old condition the line
+          hid exactly there — while the reversal control above stayed visible and
+          would undo MORE than the figure on the card, with nothing to say so.
+
+          `!==` rather than a signed comparison also covers `paidAmount` being
+          undefined on endpoints that do not compute the FIFO breakdown (see the
+          field comment in appointment.service.ts:70-72): undefined can't be
+          compared, so the honest default is to show what was collected. */}
       {appointment.hasRecordedPayment &&
-        (appointment.recordedPaidAmount ?? 0) < (appointment.paidAmount ?? 0) && (
+        appointment.recordedPaidAmount !== appointment.paidAmount && (
           <div className="mt-1 text-[11px] text-gray-500">
             {t('payments.consultationPayment')}: {formatCurrency(appointment.recordedPaidAmount ?? 0, currency)}
           </div>

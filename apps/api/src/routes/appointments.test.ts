@@ -942,6 +942,94 @@ describe('Appointments API', () => {
       expect(olderApt?.isPaid).toBe(false)
     })
 
+    // Task #402 — the PREMISE of the frontend fix, constructed rather than
+    // inferred. PatientAppointmentsSection hid its "Cobrado en consulta
+    // (reversible)" disclosure whenever recordedPaidAmount was not strictly
+    // LESS than paidAmount, which silently covered the case where it is
+    // GREATER. These two cases prove that shape is producible through the
+    // real read path, so the frontend condition is defending a state the API
+    // actually emits — not a hypothetical.
+    it('reports recordedPaidAmount ABOVE paidAmount when the linked payment exceeds the cost (#402 premise)', async () => {
+      await prisma.appointment.deleteMany({ where: { tenantId, patientId } })
+      await prisma.patientPayment.deleteMany({ where: { tenantId, patientId } })
+
+      const slot = getFutureTime(3, 8)
+      const apt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(slot.startTime),
+          endTime: new Date(slot.endTime),
+          duration: 30,
+          cost: 50,
+        },
+      })
+      // Overpaying is deliberate product behaviour, not a validation hole:
+      // the surplus becomes patient credit. The earmark, however, is capped
+      // at the appointment's cost by computeFifoAllocation.
+      await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId,
+          amount: 80,
+          date: new Date(slot.startTime),
+          kind: 'APPOINTMENT',
+          appointmentId: apt.id,
+        },
+      })
+
+      const response = await api()
+        .get(`/api/appointments/${apt.id}`)
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(200)
+      expect(response.body.data.recordedPaidAmount).toBe(80)
+      expect(response.body.data.paidAmount).toBe(50)
+      // The relation, stated directly — this is the inequality the frontend
+      // condition has to cover and the old one did not.
+      expect(response.body.data.recordedPaidAmount).toBeGreaterThan(response.body.data.paidAmount)
+    })
+
+    it('reports recordedPaidAmount ABOVE paidAmount for a null-cost appointment with a linked payment (#402 premise)', async () => {
+      await prisma.appointment.deleteMany({ where: { tenantId, patientId } })
+      await prisma.patientPayment.deleteMany({ where: { tenantId, patientId } })
+
+      // A null-cost appointment is not billable, so it absorbs no earmark at
+      // all and paidAmount stays 0 however large the recorded payment is.
+      const slot = getFutureTime(4, 8)
+      const apt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(slot.startTime),
+          endTime: new Date(slot.endTime),
+          duration: 30,
+          cost: null,
+        },
+      })
+      await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId,
+          amount: 60,
+          date: new Date(slot.startTime),
+          kind: 'APPOINTMENT',
+          appointmentId: apt.id,
+        },
+      })
+
+      const response = await api()
+        .get(`/api/appointments/${apt.id}`)
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(200)
+      expect(response.body.data.recordedPaidAmount).toBe(60)
+      expect(response.body.data.paidAmount).toBe(0)
+      expect(response.body.data.recordedPaidAmount).toBeGreaterThan(response.body.data.paidAmount)
+    })
+
     // ADVANCE-funded variant preserving the original point of the test
     // above (pre-#390): hasRecordedPayment/recordedPaidAmount reflect only
     // the *specific* payment recorded directly against an appointment,
