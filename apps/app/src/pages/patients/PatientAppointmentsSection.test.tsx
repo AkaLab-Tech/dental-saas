@@ -177,11 +177,13 @@ const noShowAppointment: Appointment = {
 
 // #384: an appointment with a recorded (kind=APPOINTMENT) consultation
 // payment linked to it.
-// #390: the "Cobrado en consulta (reversible)" line is shown only in the
-// mixed case (recordedPaidAmount < paidAmount) — see the table in the
-// "consultation payment reversal" describe block below. This base fixture
-// is deliberately the mixed case: fully-earmarked $75 recorded payment plus
-// $25 more from the FIFO pool/advances, covering the full $100 cost.
+// #390 / #402: the "Cobrado en consulta (reversible)" line is shown whenever
+// recordedPaidAmount and paidAmount DIFFER, in either direction — see the
+// table in the "consultation payment reversal" describe block below. This
+// base fixture is deliberately the mixed case: fully-earmarked $75 recorded
+// payment plus $25 more from the FIFO pool/advances, covering the full $100
+// cost. #402 added the inverse (recordedPaidAmount > paidAmount), which #390
+// left hidden.
 const paidConsultationAppointment: Appointment = {
   ...upcomingAppointment,
   id: 'a6',
@@ -884,6 +886,117 @@ describe('PatientAppointmentsSection', () => {
       })
 
       expect(screen.queryByText(/payments\.consultationPayment/)).not.toBeInTheDocument()
+    })
+
+    // Task #402 — the inverse, which the original `recordedPaidAmount <
+    // paidAmount` condition hid. These are not contrived shapes: the FIFO
+    // earmark is capped at the appointment's cost
+    // (payment.service.ts:120, `Math.min(earmarkCents, costCents[i])`), so
+    // every payment larger than the cost lands here by arithmetic. The
+    // premise is constructed end-to-end through the real endpoints in
+    // apps/api/src/routes/appointments.test.ts rather than assumed here.
+    it('renders the line when the recorded payment EXCEEDS the appointment paid figure (overpayment)', async () => {
+      mockGetAppointmentsByPatient.mockResolvedValue([
+        {
+          ...paidConsultationAppointment,
+          cost: 50,
+          isPaid: true,
+          paidAmount: 50,
+          recordedPaidAmount: 80,
+        },
+      ])
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
+      })
+
+      expect(
+        screen.getByText(
+          (_content, element) => element?.textContent === 'payments.consultationPayment: $80'
+        )
+      ).toBeInTheDocument()
+    })
+
+    it('offers the reversal control in the overpayment case, which is why the line has to be there', async () => {
+      // This is the actual defect, not the missing line on its own: the
+      // control is gated only on hasRecordedPayment, so it stayed visible
+      // while the disclosure hid — undoing $80 with $50 shown on the card and
+      // nothing saying otherwise. Asserting both together is what pins it.
+      mockGetAppointmentsByPatient.mockResolvedValue([
+        {
+          ...paidConsultationAppointment,
+          cost: 50,
+          isPaid: true,
+          paidAmount: 50,
+          recordedPaidAmount: 80,
+        },
+      ])
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
+      })
+
+      expect(
+        screen.getByText(
+          (_content, element) => element?.textContent === 'payments.consultationPayment: $80'
+        )
+      ).toBeInTheDocument()
+
+      fireEvent.click(screen.getByLabelText('common.options'))
+      expect(screen.getByText('payments.reverseConsultationPayment')).toBeInTheDocument()
+    })
+
+    it('renders the line for a zero-cost appointment carrying a linked payment (earmark is 0, so paidAmount is 0)', async () => {
+      // payment.service.ts:120 guards the earmark with `costCents[i] > 0`, so
+      // a zero- or null-cost appointment absorbs nothing and paidAmount stays
+      // 0 however large the recorded payment is.
+      mockGetAppointmentsByPatient.mockResolvedValue([
+        {
+          ...paidConsultationAppointment,
+          cost: 0,
+          isPaid: false,
+          paidAmount: 0,
+          recordedPaidAmount: 60,
+        },
+      ])
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
+      })
+
+      expect(
+        screen.getByText(
+          (_content, element) => element?.textContent === 'payments.consultationPayment: $60'
+        )
+      ).toBeInTheDocument()
+    })
+
+    it('renders the line when paidAmount is undefined (endpoint did not compute the FIFO breakdown)', async () => {
+      // appointment.service.ts:70-72 — paidAmount is present only on the
+      // endpoints that compute it per patient. undefined cannot be compared,
+      // so the honest default is to show what was collected rather than to
+      // silently treat it as zero, which is what `?? 0` used to do.
+      mockGetAppointmentsByPatient.mockResolvedValue([
+        {
+          ...paidConsultationAppointment,
+          paidAmount: undefined,
+          recordedPaidAmount: 80,
+        },
+      ])
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
+      })
+
+      expect(
+        screen.getByText(
+          (_content, element) => element?.textContent === 'payments.consultationPayment: $80'
+        )
+      ).toBeInTheDocument()
     })
 
     it('hides the reversal menu item when the user lacks PAYMENTS_DELETE', async () => {
