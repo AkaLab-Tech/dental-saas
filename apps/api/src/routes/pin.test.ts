@@ -3,6 +3,7 @@ import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
 import { sign } from 'jsonwebtoken'
+import { generateToken } from '../test/tokens.js'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'test-secret'
 
@@ -15,9 +16,6 @@ describe('PIN Authentication Routes', () => {
   let staffToken: string
   const testSlug = `test-pin-${Date.now()}`
 
-  function generateToken(userId: string, tenantId: string, role: string) {
-    return sign({ userId, tenantId, email: 'test@test.com', role }, JWT_SECRET, { expiresIn: '1h' })
-  }
 
   beforeAll(async () => {
     const tenant = await prisma.tenant.create({

@@ -2,9 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
-import { sign } from 'jsonwebtoken'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'test-secret'
+import { generateToken } from '../test/tokens.js'
 
 describe('Patients API', () => {
   let tenantId: string
@@ -14,14 +12,6 @@ describe('Patients API', () => {
   let staffToken: string
   const testSlug = `test-clinic-patients-${Date.now()}`
 
-  // Helper to generate JWT token
-  function generateToken(userId: string, tenantId: string, role: string) {
-    return sign(
-      { sub: userId, tenantId, role },
-      JWT_SECRET,
-      { expiresIn: '1h' }
-    )
-  }
 
   beforeAll(async () => {
     // Create a test tenant with a free plan subscription
