@@ -677,6 +677,12 @@ const listPaymentsQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(100).optional(),
   offset: z.coerce.number().int().nonnegative().optional(),
   kind: z.enum(['ADVANCE', 'APPOINTMENT']).optional(),
+  // Task #392: opt-in, so existing callers keep getting only payments that
+  // count. Accepts the string a query string actually carries.
+  includeReversed: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => v === 'true'),
 })
 
 /**
@@ -748,9 +754,9 @@ patientsRouter.get('/:id/payments', requirePermission(Permission.PAYMENTS_VIEW),
       })
       return
     }
-    const { limit, offset, kind } = parsedQuery.data
+    const { limit, offset, kind, includeReversed } = parsedQuery.data
 
-    const result = await listPayments(tenantId, id, { limit, offset, kind })
+    const result = await listPayments(tenantId, id, { limit, offset, kind, includeReversed })
 
     res.json({
       success: true,

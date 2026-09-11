@@ -1093,6 +1093,8 @@
     "noOutstandingBalance": "لا يوجد رصيد مستحق",
     "consultationPayment": "المحصّل في الاستشارة (قابل للتراجع)",
     "reversalReasonPrompt": "سبب التراجع (إلزامي):",
+    "reversed": "تم التراجع",
+    "reversedWithReason": "تم التراجع: {{reason}}",
     "reverseConsultationPayment": "التراجع عن دفعة الاستشارة",
     "reverseConsultationConfirm": "هل تريد التراجع عن الدفعة المسجلة في هذا الموعد؟ سيتم إعادة حساب رصيد المريض.",
     "cancelWithRecordedPayment": "يحتوي هذا الموعد على دفعة مسجلة بقيمة {{amount}}. عند إلغائه، سيصبح هذا المبلغ رصيدًا لصالح المريض، ويظهر في المدفوعات.",

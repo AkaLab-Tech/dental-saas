@@ -219,7 +219,7 @@ describe('PaymentSection', () => {
       renderSection()
 
       await waitFor(() => {
-        expect(getPatientPaymentsMock).toHaveBeenCalledWith('patient-1', { limit: 50, kind: 'ADVANCE' })
+        expect(getPatientPaymentsMock).toHaveBeenCalledWith('patient-1', { limit: 50, kind: 'ADVANCE', includeReversed: true })
       })
     })
 
@@ -231,7 +231,7 @@ describe('PaymentSection', () => {
       rerender(<PaymentSection patientId="patient-1" refreshKey={1} />)
 
       await waitFor(() => expect(getPatientPaymentsMock).toHaveBeenCalledTimes(2))
-      expect(getPatientPaymentsMock).toHaveBeenLastCalledWith('patient-1', { limit: 50, kind: 'ADVANCE' })
+      expect(getPatientPaymentsMock).toHaveBeenLastCalledWith('patient-1', { limit: 50, kind: 'ADVANCE', includeReversed: true })
       expect(getAccountStatementMock).toHaveBeenCalledTimes(2)
       expect(getAccountStatementMock).toHaveBeenLastCalledWith('patient-1')
     })
@@ -303,6 +303,85 @@ describe('PaymentSection', () => {
   // re-fetch after the server recalculates FIFO allocation. Task #376: the
   // same refresh must also re-pull the account statement, since a new/removed
   // advance changes appointmentsDebt/advancesCredit.
+  // Task #392 part 3: a reversed payment stays in the list, marked, instead of
+  // disappearing. It contributes nothing to any balance — that is asserted on
+  // the API side — so this is purely a disclosure.
+  describe('Task #392: reversed payments are shown, marked', () => {
+    const reversedPayment = makePayment({
+      id: 'pay-reversed',
+      amount: 250,
+      note: 'Anticipo revertido',
+      isActive: false,
+      reversal: { at: '2026-01-11T10:00:00Z', by: 'user-1', reason: 'Cobrado por error' },
+    })
+
+    it('renders a reversed payment with its reason instead of hiding it', async () => {
+      getPatientPaymentsMock.mockResolvedValue({
+        data: [reversedPayment],
+        pagination: { total: 1, limit: 50, offset: 0 },
+      })
+      renderSection()
+
+      await waitFor(() => {
+        // This file does not mock react-i18next, so the real Spanish strings
+        // render — asserting the key would silently never match.
+        expect(screen.getByText('Revertido: Cobrado por error')).toBeInTheDocument()
+      })
+    })
+
+    it('does not offer the delete control on a reversed payment', async () => {
+      // The API answers ALREADY_INACTIVE, so the control could only ever
+      // produce an error — an affordance that cannot succeed is worse than
+      // no affordance.
+      getPatientPaymentsMock.mockResolvedValue({
+        data: [reversedPayment],
+        pagination: { total: 1, limit: 50, offset: 0 },
+      })
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Anticipo revertido')).toBeInTheDocument()
+      })
+      expect(screen.queryByTitle('Eliminar')).not.toBeInTheDocument()
+    })
+
+    it('still offers the delete control on an active payment', async () => {
+      // The pair matters: without this, hiding the control unconditionally
+      // would pass the case above.
+      getPatientPaymentsMock.mockResolvedValue({
+        data: [makePayment({ id: 'pay-active', amount: 100, note: 'Anticipo activo' })],
+        pagination: { total: 1, limit: 50, offset: 0 },
+      })
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Anticipo activo')).toBeInTheDocument()
+      })
+      expect(screen.getByTitle('Eliminar')).toBeInTheDocument()
+    })
+
+    it('renders a pre-#392 reversal without inventing metadata', async () => {
+      getPatientPaymentsMock.mockResolvedValue({
+        data: [
+          makePayment({
+            id: 'pay-legacy',
+            amount: 40,
+            note: 'Anticipo antiguo',
+            isActive: false,
+            reversal: { at: '2026-01-01T00:00:00Z', by: null, reason: null },
+          }),
+        ],
+        pagination: { total: 1, limit: 50, offset: 0 },
+      })
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Revertido')).toBeInTheDocument()
+      })
+      expect(screen.queryByText(/Revertido: /)).not.toBeInTheDocument()
+    })
+  })
+
   describe('onPaymentsChange callback (task #374 / #376)', () => {
     it('fires onPaymentsChange and re-fetches the account statement after successfully creating a payment', async () => {
       const onPaymentsChange = vi.fn()
@@ -332,7 +411,7 @@ describe('PaymentSection', () => {
       })
       // fetchData is re-run after create, so both the ADVANCE-only filter
       // and the account statement are re-fetched on refresh too.
-      expect(getPatientPaymentsMock).toHaveBeenLastCalledWith('patient-1', { limit: 50, kind: 'ADVANCE' })
+      expect(getPatientPaymentsMock).toHaveBeenLastCalledWith('patient-1', { limit: 50, kind: 'ADVANCE', includeReversed: true })
       expect(getAccountStatementMock).toHaveBeenCalledTimes(2)
     })
 
