@@ -98,7 +98,7 @@ describe('deleteAppointment / restoreAppointment transaction rollback (#391)', (
       new Error('boom: simulated mid-transaction failure')
     )
 
-    await expect(deleteAppointment(tenantId, appointment.id)).rejects.toThrow(
+    await expect(deleteAppointment(tenantId, appointment.id, 'actor-392b')).rejects.toThrow(
       'boom: simulated mid-transaction failure'
     )
 
@@ -146,7 +146,7 @@ describe('deleteAppointment / restoreAppointment transaction rollback (#391)', (
       new Error('boom: simulated restore failure')
     )
 
-    await expect(restoreAppointment(tenantId, appointment.id)).rejects.toThrow('boom: simulated restore failure')
+    await expect(restoreAppointment(tenantId, appointment.id, 'actor-392b')).rejects.toThrow('boom: simulated restore failure')
 
     // Neither write persisted: the appointment is still cancelled/inactive...
     const appointmentAfter = await prisma.appointment.findUniqueOrThrow({ where: { id: appointment.id } })

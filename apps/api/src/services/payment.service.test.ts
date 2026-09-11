@@ -497,7 +497,7 @@ describe('convertAppointmentPaymentsToAdvance / restoreAppointmentPaymentsFromAd
         },
       })
 
-      await prisma.$transaction((tx) => convertAppointmentPaymentsToAdvance(tx, tenantId, appointmentId))
+      await prisma.$transaction((tx) => convertAppointmentPaymentsToAdvance(tx, tenantId, appointmentId, 'actor-392b'))
 
       const updated = await prisma.patientPayment.findUniqueOrThrow({ where: { id: payment.id } })
       expect(updated.kind).toBe('ADVANCE')
@@ -512,7 +512,7 @@ describe('convertAppointmentPaymentsToAdvance / restoreAppointmentPaymentsFromAd
         data: { tenantId, patientId, appointmentId, amount: 40, date: new Date(), kind: 'APPOINTMENT', note: null },
       })
 
-      await prisma.$transaction((tx) => convertAppointmentPaymentsToAdvance(tx, tenantId, appointmentId))
+      await prisma.$transaction((tx) => convertAppointmentPaymentsToAdvance(tx, tenantId, appointmentId, 'actor-392b'))
 
       const updated = await prisma.patientPayment.findUniqueOrThrow({ where: { id: payment.id } })
       expect(updated.note).toBe(' (cita cancelada)')
@@ -532,7 +532,7 @@ describe('convertAppointmentPaymentsToAdvance / restoreAppointmentPaymentsFromAd
         },
       })
 
-      await prisma.$transaction((tx) => convertAppointmentPaymentsToAdvance(tx, tenantId, appointmentId))
+      await prisma.$transaction((tx) => convertAppointmentPaymentsToAdvance(tx, tenantId, appointmentId, 'actor-392b'))
 
       const unchanged = await prisma.patientPayment.findUniqueOrThrow({ where: { id: payment.id } })
       expect(unchanged.kind).toBe('APPOINTMENT')
@@ -541,7 +541,7 @@ describe('convertAppointmentPaymentsToAdvance / restoreAppointmentPaymentsFromAd
 
     it('is a no-op (resolves, writes nothing) when no APPOINTMENT payment is linked to the appointment', async () => {
       await expect(
-        prisma.$transaction((tx) => convertAppointmentPaymentsToAdvance(tx, tenantId, appointmentId))
+        prisma.$transaction((tx) => convertAppointmentPaymentsToAdvance(tx, tenantId, appointmentId, 'actor-392b'))
       ).resolves.toBeUndefined()
     })
   })
@@ -560,7 +560,7 @@ describe('convertAppointmentPaymentsToAdvance / restoreAppointmentPaymentsFromAd
         },
       })
 
-      await prisma.$transaction((tx) => restoreAppointmentPaymentsFromAdvance(tx, tenantId, appointmentId))
+      await prisma.$transaction((tx) => restoreAppointmentPaymentsFromAdvance(tx, tenantId, appointmentId, 'actor-392b'))
 
       const updated = await prisma.patientPayment.findUniqueOrThrow({ where: { id: payment.id } })
       expect(updated.kind).toBe('APPOINTMENT')
@@ -574,7 +574,7 @@ describe('convertAppointmentPaymentsToAdvance / restoreAppointmentPaymentsFromAd
         data: { tenantId, patientId, appointmentId, amount: 30, date: new Date(), kind: 'ADVANCE', note: 'Entrega manual' },
       })
 
-      await prisma.$transaction((tx) => restoreAppointmentPaymentsFromAdvance(tx, tenantId, appointmentId))
+      await prisma.$transaction((tx) => restoreAppointmentPaymentsFromAdvance(tx, tenantId, appointmentId, 'actor-392b'))
 
       const updated = await prisma.patientPayment.findUniqueOrThrow({ where: { id: payment.id } })
       expect(updated.kind).toBe('APPOINTMENT')
@@ -599,7 +599,7 @@ describe('convertAppointmentPaymentsToAdvance / restoreAppointmentPaymentsFromAd
         },
       })
 
-      await prisma.$transaction((tx) => restoreAppointmentPaymentsFromAdvance(tx, tenantId, appointmentId))
+      await prisma.$transaction((tx) => restoreAppointmentPaymentsFromAdvance(tx, tenantId, appointmentId, 'actor-392b'))
 
       const unchanged = await prisma.patientPayment.findUniqueOrThrow({ where: { id: payment.id } })
       expect(unchanged.kind).toBe('ADVANCE')
