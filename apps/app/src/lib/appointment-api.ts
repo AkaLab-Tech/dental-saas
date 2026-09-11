@@ -54,6 +54,12 @@ export interface Appointment {
   hasRecordedPayment?: boolean
   recordedPaidAmount?: number
   recordedPaymentId?: string | null
+  /**
+   * Task #451: consultation payments recorded on this appointment and later
+   * reversed. `by`/`reason` are null for a reversal recorded before #392 —
+   * the actor is unrecoverable and a placeholder would read as a record.
+   */
+  reversedPayments?: Array<{ amount: number; at: string; by: string | null; reason: string | null }>
   isActive: boolean
   createdAt: string
   updatedAt: string

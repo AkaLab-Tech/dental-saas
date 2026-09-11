@@ -320,6 +320,29 @@ function PatientAppointmentCard({
             {t('payments.consultationPayment')}: {formatCurrency(appointment.recordedPaidAmount ?? 0, currency)}
           </div>
         )}
+
+      {/* Task #451: consultation payments recorded here and later reversed.
+          Before this, a reversed consultation payment appeared in NO payment
+          surface at all — Entregas asks for kind='ADVANCE', and this card's
+          hasRecordedPayment goes false the moment the payment is reversed, so
+          the card forgot the payment rather than merely omitting the reversal.
+
+          Deliberately NOT gated on hasRecordedPayment: that flag is about the
+          money that currently counts, and this is history. They are separate
+          fields for the same reason. */}
+      {appointment.reversedPayments?.map((reversal, i) => (
+        <div key={i} className="mt-1 text-[11px] text-red-600">
+          <span className="line-through">{formatCurrency(reversal.amount, currency)}</span>{' '}
+          {reversal.reason
+            ? t('payments.reversedOnWithReason', {
+                date: new Date(reversal.at).toLocaleDateString(i18n.language),
+                reason: reversal.reason,
+              })
+            : t('payments.reversedOn', {
+                date: new Date(reversal.at).toLocaleDateString(i18n.language),
+              })}
+        </div>
+      ))}
     </div>
   )
 }

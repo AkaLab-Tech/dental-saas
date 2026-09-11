@@ -999,6 +999,60 @@ describe('PatientAppointmentsSection', () => {
       ).toBeInTheDocument()
     })
 
+    // Task #451: before this, a reversed consultation payment appeared in no
+    // payment surface at all. Entregas asks for kind='ADVANCE'; this card's
+    // hasRecordedPayment goes false the moment the payment is reversed, so the
+    // card forgot the payment rather than merely omitting the reversal.
+    it('shows a reversed consultation payment, with its reason, and does NOT offer the reversal control', async () => {
+      // Asserted as a pair on purpose. The disclosure must not resurrect the
+      // affordance — the API answers ALREADY_INACTIVE — and two separate tests
+      // would let the two drift apart, which is the same mistake #402 fixed
+      // for the disclosure line and the control.
+      mockGetAppointmentsByPatient.mockResolvedValue([
+        {
+          ...paidConsultationAppointment,
+          isPaid: false,
+          paidAmount: 0,
+          hasRecordedPayment: false,
+          recordedPaidAmount: 0,
+          recordedPaymentId: null,
+          reversedPayments: [
+            { amount: 80, at: '2026-09-11T10:00:00Z', by: 'user-451', reason: 'Cobrado por error' },
+          ],
+        },
+      ])
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
+      })
+
+      expect(screen.getByText(/payments\.reversedOnWithReason/)).toBeInTheDocument()
+
+      fireEvent.click(screen.getByLabelText('common.options'))
+      expect(screen.queryByText('payments.reverseConsultationPayment')).not.toBeInTheDocument()
+    })
+
+    it('shows a pre-#392 reversal without inventing a reason', async () => {
+      mockGetAppointmentsByPatient.mockResolvedValue([
+        {
+          ...paidConsultationAppointment,
+          hasRecordedPayment: false,
+          recordedPaidAmount: 0,
+          recordedPaymentId: null,
+          reversedPayments: [{ amount: 40, at: '2026-01-01T00:00:00Z', by: null, reason: null }],
+        },
+      ])
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
+      })
+
+      expect(screen.getByText(/payments\.reversedOn$|payments\.reversedOn[^W]/)).toBeInTheDocument()
+      expect(screen.queryByText(/payments\.reversedOnWithReason/)).not.toBeInTheDocument()
+    })
+
     it('hides the reversal menu item when the user lacks PAYMENTS_DELETE', async () => {
       mockCanDeletePayments = false
       renderSection()
