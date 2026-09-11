@@ -13,6 +13,12 @@ export interface Payment {
   note: string | null
   createdBy: string | null
   isActive: boolean
+  /**
+   * Task #392: set only when the list was requested with includeReversed.
+   * `by`/`reason` are null for a reversal recorded before #392 — the actor is
+   * genuinely unrecoverable and a placeholder would read as a record.
+   */
+  reversal?: { at: string; by: string | null; reason: string | null } | null
   kind: 'APPOINTMENT' | 'ADVANCE'
   appointmentId: string | null
   createdAt: string
@@ -99,13 +105,20 @@ export async function getAccountStatement(patientId: string): Promise<AccountSta
 
 export async function getPatientPayments(
   patientId: string,
-  params?: { limit?: number; offset?: number; kind?: 'APPOINTMENT' | 'ADVANCE' }
+  params?: {
+    limit?: number
+    offset?: number
+    kind?: 'APPOINTMENT' | 'ADVANCE'
+    /** Task #392: also return reversed payments, marked rather than hidden. */
+    includeReversed?: boolean
+  }
 ): Promise<PaymentListResponse> {
   const queryParams = new URLSearchParams()
 
   if (params?.limit) queryParams.set('limit', String(params.limit))
   if (params?.offset) queryParams.set('offset', String(params.offset))
   if (params?.kind) queryParams.set('kind', params.kind)
+  if (params?.includeReversed) queryParams.set('includeReversed', 'true')
 
   const queryString = queryParams.toString()
   const url = `/patients/${patientId}/payments${queryString ? `?${queryString}` : ''}`

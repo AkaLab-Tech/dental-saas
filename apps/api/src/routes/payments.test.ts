@@ -4,7 +4,16 @@ import { prisma, Prisma } from '@dental/database'
 import { Permission, UserRole, hasPermission } from '@dental/shared'
 import { hashPassword } from '../services/auth.service.js'
 import { sign } from 'jsonwebtoken'
-import { getAppointmentEarmarks, recalculatePaidStatus } from '../services/payment.service.js'
+import {
+  computeOutstandingByPatient,
+  getAppointmentEarmarks,
+  getPatientAccountStatement,
+  getPatientBalance,
+  getTenantOutstandingTotal,
+  getTotalPaid,
+  listPayments,
+  recalculatePaidStatus,
+} from '../services/payment.service.js'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'test-secret'
 
@@ -510,6 +519,240 @@ describe('Patient Payments Routes', () => {
         expect(events).toHaveLength(1)
         expect(events[0].reason).toBe(reason)
       })
+    })
+  })
+
+  // Task #392 part 3: reversed payments become VISIBLE. They must not become
+  // money. listPayments' isActive filter is the only one in payment.service.ts
+  // that this part relaxes; the balance-side ones at :185, :263, :367, :441 and
+  // :542 keep excluding reversed rows, and the first case below is what fails
+  // if any of them is relaxed too.
+  describe('Task #392: reversed payments are visible but never counted', () => {
+    let visPatientId: string
+    let activeId: string
+    let reversedId: string
+    let visAppointmentId: string
+    let reversedAdvanceId: string
+
+    beforeAll(async () => {
+      const patient = await prisma.patient.create({
+        data: { tenantId, firstName: 'Visible', lastName: 'Reversed' },
+      })
+      visPatientId = patient.id
+
+      const active = await prisma.patientPayment.create({
+        data: { tenantId, patientId: visPatientId, amount: 100, date: new Date('2026-01-10'), kind: 'ADVANCE' },
+      })
+      activeId = active.id
+
+      // An UNPAID appointment, so the snapshot exercises the FIFO recompute
+      // and the earmark query too: if the reversed payment ever counted, this
+      // item would flip to paid.
+      const appointment = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId: visPatientId,
+          doctorId,
+          startTime: new Date('2026-01-20T10:00:00Z'),
+          endTime: new Date('2026-01-20T10:30:00Z'),
+          duration: 30,
+          cost: 200,
+        },
+      })
+      visAppointmentId = appointment.id
+
+      // kind=APPOINTMENT and linked, so relaxing the EARMARK filter changes an
+      // answer too — an ADVANCE-only fixture leaves that one untested.
+      const reversed = await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId: visPatientId,
+          amount: 250,
+          date: new Date('2026-01-11'),
+          kind: 'APPOINTMENT',
+          appointmentId: appointment.id,
+          isActive: false,
+        },
+      })
+      reversedId = reversed.id
+
+      // A second reversed row, kind=ADVANCE. Without it the ADVANCE-only
+      // aggregate behind advancesCredit is never exercised: an APPOINTMENT
+      // payment does not match that query whatever its isActive value, so
+      // relaxing that one filter left the guard green.
+      const reversedAdvance = await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId: visPatientId,
+          amount: 90,
+          date: new Date('2026-01-09'),
+          kind: 'ADVANCE',
+          isActive: false,
+        },
+      })
+      reversedAdvanceId = reversedAdvance.id
+
+      await prisma.patientPaymentEvent.create({
+        data: {
+          tenantId,
+          paymentId: reversedId,
+          type: 'REVERSED',
+          actorUserId: 'user-392c',
+          reason: 'Cobrado por error',
+        },
+      })
+    })
+
+    afterAll(async () => {
+      await prisma.patientPaymentEvent.deleteMany({ where: { payment: { patientId: visPatientId } } })
+      await prisma.patientPayment.deleteMany({ where: { patientId: visPatientId } })
+      await prisma.appointment.deleteMany({ where: { patientId: visPatientId } })
+      await prisma.patient.delete({ where: { id: visPatientId } }).catch(() => {
+        // Already gone.
+      })
+    })
+
+    it('is invisible to every money computation — same answers as if the row did not exist', async () => {
+      // The guard the whole part rests on, and it is written as a COMPARISON
+      // of two worlds rather than a list of expected numbers. Asserting
+      // specific figures only catches a relaxed filter when that particular
+      // figure happens to move, and an earlier version of this test passed
+      // with four of the six balance-side filters relaxed for exactly that
+      // reason. Comparing "reversed row present" against "row hard-deleted"
+      // catches any filter that starts counting it, without my having to
+      // predict which number it would disturb.
+      const snapshot = async () => {
+        const [totalPaid, balance, statement, outstanding, tenantTotal, recalc] = await Promise.all([
+          getTotalPaid(tenantId, visPatientId),
+          getPatientBalance(tenantId, visPatientId),
+          getPatientAccountStatement(tenantId, visPatientId),
+          computeOutstandingByPatient(tenantId),
+          getTenantOutstandingTotal(tenantId),
+          recalculatePaidStatus(tenantId, visPatientId, { dryRun: true }),
+        ])
+        return JSON.stringify({
+          totalPaid,
+          balance,
+          statement,
+          outstanding: outstanding.get(visPatientId) ?? null,
+          tenantTotal,
+          recalc,
+        })
+      }
+
+      const withReversedRow = await snapshot()
+
+      // Hard-delete them: the only way to be sure the rows contribute nothing
+      // is to compare against a world where they genuinely are not there.
+      // BOTH reversed rows, not just one — a row left in place on both sides
+      // of the comparison is invisible to it, which is how an earlier version
+      // of this test failed to notice the ADVANCE-only aggregate.
+      await prisma.patientPaymentEvent.deleteMany({
+        where: { paymentId: { in: [reversedId, reversedAdvanceId] } },
+      })
+      await prisma.patientPayment.deleteMany({
+        where: { id: { in: [reversedId, reversedAdvanceId] } },
+      })
+      const withoutRow = await snapshot()
+
+      expect(withReversedRow).toBe(withoutRow)
+
+      // Put them back for the cases below.
+      await prisma.patientPayment.create({
+        data: {
+          id: reversedAdvanceId,
+          tenantId,
+          patientId: visPatientId,
+          amount: 90,
+          date: new Date('2026-01-09'),
+          kind: 'ADVANCE',
+          isActive: false,
+        },
+      })
+      await prisma.patientPayment.create({
+        data: {
+          id: reversedId,
+          tenantId,
+          patientId: visPatientId,
+          amount: 250,
+          date: new Date('2026-01-11'),
+          kind: 'APPOINTMENT',
+          appointmentId: visAppointmentId,
+          isActive: false,
+        },
+      })
+      await prisma.patientPaymentEvent.create({
+        data: {
+          tenantId,
+          paymentId: reversedId,
+          type: 'REVERSED',
+          actorUserId: 'user-392c',
+          reason: 'Cobrado por error',
+        },
+      })
+    })
+
+    it('is EXCLUDED from listPayments by default and INCLUDED when asked for', async () => {
+      const hidden = await listPayments(tenantId, visPatientId)
+      expect(hidden.data.map((p) => p.id)).toEqual([activeId])
+      // Opt-in: an existing caller means "the payments that count", and
+      // widening that silently would change what it displays unasked.
+      expect(hidden.data[0]).not.toHaveProperty('reversal')
+
+      const shown = await listPayments(tenantId, visPatientId, { includeReversed: true })
+      expect(shown.data.map((p) => p.id).sort()).toEqual([activeId, reversedId, reversedAdvanceId].sort())
+      expect(shown.total).toBe(3)
+
+      const reversedRow = shown.data.find((p) => p.id === reversedId)
+      expect(reversedRow?.isActive).toBe(false)
+      expect(reversedRow?.reversal).toMatchObject({ by: 'user-392c', reason: 'Cobrado por error' })
+
+      // An active row in the same response carries an explicit null, not the
+      // previous row's metadata.
+      expect(shown.data.find((p) => p.id === activeId)?.reversal).toBeNull()
+    })
+
+    it('renders a PRE-#392 reversal with the metadata absent rather than invented', async () => {
+      // Rows reversed before this feature have no event. The actor is
+      // genuinely unrecoverable; a placeholder would read as a record of
+      // something nobody did.
+      const legacy = await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId: visPatientId,
+          amount: 15,
+          date: new Date('2026-01-12'),
+          kind: 'ADVANCE',
+          isActive: false,
+        },
+      })
+
+      const shown = await listPayments(tenantId, visPatientId, { includeReversed: true })
+      const row = shown.data.find((p) => p.id === legacy.id)
+      expect(row?.reversal).not.toBeUndefined()
+      expect(row?.reversal?.by).toBeNull()
+      expect(row?.reversal?.reason).toBeNull()
+      // `at` falls back to the row's own updatedAt so the UI still has a date.
+      expect(row?.reversal?.at).toBeInstanceOf(Date)
+
+      await prisma.patientPayment.delete({ where: { id: legacy.id } })
+    })
+
+    it('exposes the flag over HTTP', async () => {
+      const hidden = await api()
+        .get(`/api/patients/${visPatientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+      expect(hidden.status).toBe(200)
+      expect(hidden.body.data.map((p: { id: string }) => p.id)).toEqual([activeId])
+
+      const shown = await api()
+        .get(`/api/patients/${visPatientId}/payments?includeReversed=true`)
+        .set('Authorization', `Bearer ${adminToken}`)
+      expect(shown.status).toBe(200)
+      expect(shown.body.data).toHaveLength(3)
+      expect(shown.body.data.find((p: { id: string }) => p.id === reversedId).reversal.reason).toBe(
+        'Cobrado por error'
+      )
     })
   })
 

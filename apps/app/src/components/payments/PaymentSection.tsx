@@ -60,7 +60,7 @@ export function PaymentSection({
     try {
       const [statementData, paymentsData] = await Promise.all([
         getAccountStatement(patientId),
-        getPatientPayments(patientId, { limit: 50, kind: 'ADVANCE' }),
+        getPatientPayments(patientId, { limit: 50, kind: 'ADVANCE', includeReversed: true }),
       ])
       setStatement(statementData)
       setPayments(paymentsData.data)
@@ -170,14 +170,39 @@ export function PaymentSection({
           {payments.map((payment) => (
             <div
               key={payment.id}
-              className="flex items-center justify-between p-3 border border-gray-100 rounded-lg hover:bg-gray-50 hover:border-gray-200 transition-colors"
+              // Task #392: a reversed payment stays in the list, greyed and
+              // labelled, instead of disappearing. It contributes nothing to
+              // any balance — the API's balance queries still exclude it — so
+              // this is a disclosure, not a change to the money.
+              className={`flex items-center justify-between p-3 border rounded-lg transition-colors ${
+                payment.isActive
+                  ? 'border-gray-100 hover:bg-gray-50 hover:border-gray-200'
+                  : 'border-gray-200 bg-gray-50 opacity-75'
+              }`}
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-green-100 shrink-0">
-                  <DollarSign className="h-4 w-4 text-green-600" />
+                <div
+                  className={`flex items-center justify-center w-8 h-8 rounded-full shrink-0 ${
+                    payment.isActive ? 'bg-green-100' : 'bg-gray-200'
+                  }`}
+                >
+                  <DollarSign className={`h-4 w-4 ${payment.isActive ? 'text-green-600' : 'text-gray-500'}`} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{fmtCurrency(payment.amount)}</p>
+                  <p
+                    className={`text-sm font-semibold truncate ${
+                      payment.isActive ? 'text-gray-900' : 'text-gray-500 line-through'
+                    }`}
+                  >
+                    {fmtCurrency(payment.amount)}
+                  </p>
+                  {!payment.isActive && (
+                    <p className="text-xs font-medium text-red-600">
+                      {payment.reversal?.reason
+                        ? t('payments.reversedWithReason', { reason: payment.reversal.reason })
+                        : t('payments.reversed')}
+                    </p>
+                  )}
                   <p className="text-xs text-gray-500">
                     {new Date(payment.date).toLocaleDateString(i18n.language, {
                       year: 'numeric',
@@ -190,7 +215,10 @@ export function PaymentSection({
                   )}
                 </div>
               </div>
-              {can(Permission.PAYMENTS_DELETE) && (
+              {/* Task #392: a reversed payment cannot be reversed again — the
+                  API answers ALREADY_INACTIVE — so offering the control would
+                  be an affordance that only produces an error. */}
+              {payment.isActive && can(Permission.PAYMENTS_DELETE) && (
                 <button
                   onClick={() => handleDeletePayment(payment.id)}
                   disabled={deletingId === payment.id}

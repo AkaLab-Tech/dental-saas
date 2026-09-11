@@ -30,6 +30,12 @@ export type SafePayment = {
   isActive: boolean
   createdAt: Date
   updatedAt: Date
+  /**
+   * Task #392: present only when listPayments was asked for reversed rows.
+   * `null` on a row that is still active; absent entirely otherwise, so a
+   * caller that did not ask cannot accidentally read a half-populated field.
+   */
+  reversal?: PaymentReversal | null
 }
 
 export type PaymentErrorCode =
@@ -51,6 +57,26 @@ export interface ListPaymentsOptions {
   limit?: number
   offset?: number
   kind?: PatientPaymentKind
+  /**
+   * Task #392: include reversed (isActive=false) payments, marked, instead of
+   * hiding them. Opt-in rather than the default because every existing caller
+   * means "the payments that count", and silently widening that would change
+   * what they display without anyone asking for it.
+   *
+   * This is the ONLY payment `isActive` filter in this service that may be
+   * relaxed. The balance-side ones — getTotalPaid, the account statement, the
+   * outstanding computations — must keep excluding reversed rows, and there is
+   * a test asserting a reversed payment still contributes nothing to any of
+   * them. A reversed payment becomes visible here; it never becomes money.
+   */
+  includeReversed?: boolean
+}
+
+/** Task #392: the reversal metadata a marked row needs, or null if not reversed. */
+export interface PaymentReversal {
+  at: Date
+  by: string | null
+  reason: string | null
 }
 
 // Money arithmetic in this service runs in integer cents. `cost`/`price`/
@@ -674,14 +700,31 @@ export async function listPayments(
   const where: Prisma.PatientPaymentWhereInput = {
     tenantId,
     patientId,
-    isActive: true,
+    // Task #392: the one relaxable filter. See ListPaymentsOptions.
+    ...(options?.includeReversed ? {} : { isActive: true }),
     ...(options?.kind && { kind: options.kind }),
   }
 
   const [payments, total] = await Promise.all([
     prisma.patientPayment.findMany({
       where,
-      select: PAYMENT_SELECT,
+      select: {
+        ...PAYMENT_SELECT,
+        // Only fetched when asked for. The REVERSED event is the one that
+        // carries an operator-written reason; the cancellation conversions
+        // have none, and showing "reversed by" next to a payment that was
+        // merely reclassified would be a false statement about what happened.
+        ...(options?.includeReversed
+          ? {
+              events: {
+                where: { type: 'REVERSED' as const },
+                select: { occurredAt: true, actorUserId: true, reason: true },
+                orderBy: { occurredAt: 'desc' as const },
+                take: 1,
+              },
+            }
+          : {}),
+      },
       orderBy: { date: 'desc' },
       take: options?.limit || 50,
       skip: options?.offset || 0,
@@ -689,7 +732,24 @@ export async function listPayments(
     prisma.patientPayment.count({ where }),
   ])
 
-  return { data: payments, total }
+  if (!options?.includeReversed) {
+    return { data: payments as SafePayment[], total }
+  }
+
+  const data: SafePayment[] = (
+    payments as Array<SafePayment & { events?: Array<{ occurredAt: Date; actorUserId: string | null; reason: string | null }> }>
+  ).map(({ events, ...payment }) => {
+    const event = events?.[0]
+    return {
+      ...payment,
+      // A pre-#392 reversal has no event. It still renders as reversed, with
+      // the metadata absent rather than invented — the actor who reversed it
+      // is genuinely unrecoverable, and a placeholder would read as a record.
+      reversal: payment.isActive ? null : { at: event?.occurredAt ?? payment.updatedAt, by: event?.actorUserId ?? null, reason: event?.reason ?? null },
+    }
+  })
+
+  return { data, total }
 }
 
 // Appended to a converted payment's note so it reads as self-explanatory in
