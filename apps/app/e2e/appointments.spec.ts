@@ -11,8 +11,10 @@ test.describe('Appointments Management', () => {
       //         on every page and would otherwise collide with `level: 1`.
       //   level excludes the empty-state <h3>"No hay citas para este período"</h3>
       //         (AppointmentsPage.tsx), which also matches /citas/i and renders
-      //         only when the tenant has no appointments in the period — which
-      //         is why this failed intermittently rather than always.
+      //         whenever the tenant has no appointments in the period — which,
+      //         because global-setup.ts mints a fresh tenant per run, is EVERY
+      //         run. The intermittency was never the empty state: it was a race,
+      //         a fast page resolving the locator before the empty state mounted.
       //
       // Level rather than a tighter regex on purpose: `/^citas$/i` would also
       // pass today and would break again the next time the empty-state copy
