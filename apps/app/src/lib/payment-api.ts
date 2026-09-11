@@ -125,11 +125,19 @@ export async function createPayment(
   return response.data.data
 }
 
+/**
+ * Task #392: reversing a payment requires a reason. Sent as a DELETE body —
+ * express.json() parses it and axios supports it — rather than a query string,
+ * so operator-written free text never lands in a URL or a server access log.
+ */
 export async function deletePayment(
   patientId: string,
-  paymentId: string
+  paymentId: string,
+  reason: string
 ): Promise<void> {
-  await apiClient.delete(`/patients/${patientId}/payments/${paymentId}`)
+  await apiClient.delete(`/patients/${patientId}/payments/${paymentId}`, {
+    data: { reason },
+  })
 }
 
 export async function getDebtors(): Promise<Debtor[]> {

@@ -1986,6 +1986,7 @@ describe('Appointments API', () => {
         const deletePayment = await api()
           .delete(`/api/patients/${patient.id}/payments/${paymentId}`)
           .set('Authorization', `Bearer ${adminToken}`)
+          .send({ reason: 'Test reversal (#392)' })
         expect(deletePayment.status).toBe(200)
         const finalPayment = await prisma.patientPayment.findUniqueOrThrow({ where: { id: paymentId } })
         expect(finalPayment.isActive).toBe(false)
@@ -2207,6 +2208,7 @@ describe('Appointments API', () => {
         const deletePayment = await api()
           .delete(`/api/patients/${patient.id}/payments/${originalPaymentId}`)
           .set('Authorization', `Bearer ${adminToken}`)
+          .send({ reason: 'Test reversal (#392)' })
         expect(deletePayment.status).toBe(200)
 
         const restore = await api()

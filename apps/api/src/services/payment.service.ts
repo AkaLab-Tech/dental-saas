@@ -771,12 +771,35 @@ export async function restoreAppointmentPaymentsFromAdvance(
   }
 }
 
+export interface ReversePaymentInput {
+  /**
+   * Task #392: who reversed it. The PIN-profile id when a profile is active —
+   * the caller passes `profileUserId || userId`, so this answers "who", not
+   * "which terminal". Nullable only because the token may carry neither.
+   */
+  actorUserId: string | null
+  /** Why. Required by product decision; free text, no taxonomy. */
+  reason: string
+}
+
 /**
- * Soft delete a payment and recalculate FIFO allocation
+ * Reverse a payment (soft delete), log the reversal, and recalculate FIFO.
+ *
+ * Task #392: the payment update and its audit event are written in ONE
+ * transaction. Reversing money and recording who reversed it are not two
+ * independent facts — a reversal that lands without its event is precisely the
+ * silent undo this task exists to remove, and it would be invisible because the
+ * balance would still look right.
+ *
+ * recalculatePaidStatus stays OUTSIDE the transaction, where it already was: it
+ * recomputes cached columns across every billable item for the patient, and
+ * holding a write transaction open for that is a different trade from the one
+ * being made here.
  */
 export async function deletePayment(
   tenantId: string,
-  paymentId: string
+  paymentId: string,
+  input: ReversePaymentInput
 ): Promise<{ success: true; data: SafePayment } | { success: false; code: PaymentErrorCode }> {
   const payment = await prisma.patientPayment.findFirst({
     where: { id: paymentId, tenantId },
@@ -791,16 +814,31 @@ export async function deletePayment(
     return { success: false, code: 'ALREADY_INACTIVE' }
   }
 
-  const updated = await prisma.patientPayment.update({
-    where: { id: paymentId },
-    data: { isActive: false },
-    select: PAYMENT_SELECT,
+  const updated = await prisma.$transaction(async (tx) => {
+    const row = await tx.patientPayment.update({
+      where: { id: paymentId },
+      data: { isActive: false },
+      select: PAYMENT_SELECT,
+    })
+    await tx.patientPaymentEvent.create({
+      data: {
+        tenantId,
+        paymentId,
+        type: 'REVERSED',
+        actorUserId: input.actorUserId,
+        reason: input.reason,
+      },
+    })
+    return row
   })
 
   // Recalculate FIFO after removing payment
   await recalculatePaidStatus(tenantId, payment.patientId)
 
-  logger.info({ paymentId, tenantId, patientId: payment.patientId }, 'Payment soft deleted')
+  logger.info(
+    { paymentId, tenantId, patientId: payment.patientId, actorUserId: input.actorUserId },
+    'Payment reversed'
+  )
 
   return { success: true, data: updated }
 }

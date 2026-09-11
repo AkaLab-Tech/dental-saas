@@ -72,6 +72,15 @@ export const PatientPaymentKind = {
 export type PatientPaymentKind = (typeof PatientPaymentKind)[keyof typeof PatientPaymentKind]
 
 
+export const PatientPaymentEventType = {
+  REVERSED: 'REVERSED',
+  CONVERTED_TO_ADVANCE: 'CONVERTED_TO_ADVANCE',
+  RESTORED_TO_APPOINTMENT: 'RESTORED_TO_APPOINTMENT'
+} as const
+
+export type PatientPaymentEventType = (typeof PatientPaymentEventType)[keyof typeof PatientPaymentEventType]
+
+
 export const BudgetStatus = {
   DRAFT: 'DRAFT',
   APPROVED: 'APPROVED',

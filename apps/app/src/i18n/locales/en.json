@@ -1083,6 +1083,7 @@
     "paymentDeleted": "Payment deleted successfully",
     "noOutstandingBalance": "No outstanding balance",
     "consultationPayment": "Collected at consultation (reversible)",
+    "reversalReasonPrompt": "Reason for the reversal (required):",
     "reverseConsultationPayment": "Reverse consultation payment",
     "reverseConsultationConfirm": "Reverse the payment recorded on this appointment? The patient balance will be recalculated.",
     "cancelWithRecordedPayment": "This appointment has a recorded payment of {{amount}}. Cancelling it will leave that amount as credit in the patient's favor, visible in Payments.",

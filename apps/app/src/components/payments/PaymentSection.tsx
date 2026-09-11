@@ -92,9 +92,15 @@ export function PaymentSection({
   const handleDeletePayment = async (paymentId: string) => {
     if (!confirm(t('payments.deleteConfirm'))) return
 
+    // Task #392: the reason is required, so a blank answer aborts rather than
+    // reversing with an empty string — an audit row that says nothing is worse
+    // than the confirm-only flow it replaced, because it looks like evidence.
+    const reason = prompt(t('payments.reversalReasonPrompt'))?.trim()
+    if (!reason) return
+
     setDeletingId(paymentId)
     try {
-      await deletePayment(patientId, paymentId)
+      await deletePayment(patientId, paymentId, reason)
       await fetchData()
       onPaymentsChange?.()
     } catch (e) {

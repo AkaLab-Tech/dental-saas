@@ -359,6 +359,8 @@ describe('PaymentSection', () => {
     it('fires onPaymentsChange and re-fetches the account statement after successfully deleting a payment', async () => {
       const onPaymentsChange = vi.fn()
       const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+      // Task #392: the reversal now also asks for a reason.
+      vi.spyOn(window, 'prompt').mockReturnValue('Test reason')
       getPatientPaymentsMock.mockResolvedValue({
         data: [makePayment({ id: 'pay-del', amount: 40, kind: 'ADVANCE' })],
         pagination: { total: 1, limit: 50, offset: 0 },
@@ -374,7 +376,7 @@ describe('PaymentSection', () => {
 
       expect(confirmSpy).toHaveBeenCalled()
       await waitFor(() => {
-        expect(deletePaymentMock).toHaveBeenCalledWith('patient-1', 'pay-del')
+        expect(deletePaymentMock).toHaveBeenCalledWith('patient-1', 'pay-del', 'Test reason')
       })
       await waitFor(() => {
         expect(onPaymentsChange).toHaveBeenCalledTimes(1)
@@ -407,6 +409,8 @@ describe('PaymentSection', () => {
     it('does not fire onPaymentsChange when deletePayment rejects', async () => {
       const onPaymentsChange = vi.fn()
       const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+      // Task #392: the reversal now also asks for a reason.
+      vi.spyOn(window, 'prompt').mockReturnValue('Test reason')
       getPatientPaymentsMock.mockResolvedValue({
         data: [makePayment({ id: 'pay-fail', amount: 40, kind: 'ADVANCE' })],
         pagination: { total: 1, limit: 50, offset: 0 },

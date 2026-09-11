@@ -460,6 +460,23 @@ export type EnumPatientPaymentKindWithAggregatesFilter<$PrismaModel = never> = {
   _max?: Prisma.NestedEnumPatientPaymentKindFilter<$PrismaModel>
 }
 
+export type EnumPatientPaymentEventTypeFilter<$PrismaModel = never> = {
+  equals?: $Enums.PatientPaymentEventType | Prisma.EnumPatientPaymentEventTypeFieldRefInput<$PrismaModel>
+  in?: $Enums.PatientPaymentEventType[] | Prisma.ListEnumPatientPaymentEventTypeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PatientPaymentEventType[] | Prisma.ListEnumPatientPaymentEventTypeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPatientPaymentEventTypeFilter<$PrismaModel> | $Enums.PatientPaymentEventType
+}
+
+export type EnumPatientPaymentEventTypeWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.PatientPaymentEventType | Prisma.EnumPatientPaymentEventTypeFieldRefInput<$PrismaModel>
+  in?: $Enums.PatientPaymentEventType[] | Prisma.ListEnumPatientPaymentEventTypeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PatientPaymentEventType[] | Prisma.ListEnumPatientPaymentEventTypeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPatientPaymentEventTypeWithAggregatesFilter<$PrismaModel> | $Enums.PatientPaymentEventType
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumPatientPaymentEventTypeFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumPatientPaymentEventTypeFilter<$PrismaModel>
+}
+
 export type EnumBudgetStatusFilter<$PrismaModel = never> = {
   equals?: $Enums.BudgetStatus | Prisma.EnumBudgetStatusFieldRefInput<$PrismaModel>
   in?: $Enums.BudgetStatus[] | Prisma.ListEnumBudgetStatusFieldRefInput<$PrismaModel>
@@ -931,6 +948,23 @@ export type NestedEnumPatientPaymentKindWithAggregatesFilter<$PrismaModel = neve
   _count?: Prisma.NestedIntFilter<$PrismaModel>
   _min?: Prisma.NestedEnumPatientPaymentKindFilter<$PrismaModel>
   _max?: Prisma.NestedEnumPatientPaymentKindFilter<$PrismaModel>
+}
+
+export type NestedEnumPatientPaymentEventTypeFilter<$PrismaModel = never> = {
+  equals?: $Enums.PatientPaymentEventType | Prisma.EnumPatientPaymentEventTypeFieldRefInput<$PrismaModel>
+  in?: $Enums.PatientPaymentEventType[] | Prisma.ListEnumPatientPaymentEventTypeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PatientPaymentEventType[] | Prisma.ListEnumPatientPaymentEventTypeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPatientPaymentEventTypeFilter<$PrismaModel> | $Enums.PatientPaymentEventType
+}
+
+export type NestedEnumPatientPaymentEventTypeWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.PatientPaymentEventType | Prisma.EnumPatientPaymentEventTypeFieldRefInput<$PrismaModel>
+  in?: $Enums.PatientPaymentEventType[] | Prisma.ListEnumPatientPaymentEventTypeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PatientPaymentEventType[] | Prisma.ListEnumPatientPaymentEventTypeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPatientPaymentEventTypeWithAggregatesFilter<$PrismaModel> | $Enums.PatientPaymentEventType
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumPatientPaymentEventTypeFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumPatientPaymentEventTypeFilter<$PrismaModel>
 }
 
 export type NestedEnumBudgetStatusFilter<$PrismaModel = never> = {

@@ -666,6 +666,13 @@ const createPaymentSchema = z.object({
   note: z.string().optional(),
 })
 
+// Task #392: a reversal must say why. Required by product decision and free
+// text on purpose — a closed taxonomy needs ES/EN/AR ratification, and an
+// incomplete list pushes operators into whichever option is least wrong.
+const reversePaymentSchema = z.object({
+  reason: z.string().trim().min(1, 'A reason is required').max(500, 'Reason cannot exceed 500 characters'),
+})
+
 const listPaymentsQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(100).optional(),
   offset: z.coerce.number().int().nonnegative().optional(),
@@ -816,7 +823,22 @@ patientsRouter.delete('/:patientId/payments/:paymentId', requirePermission(Permi
     const tenantId = req.user!.tenantId!
     const { paymentId } = req.params
 
-    const result = await deletePayment(tenantId, paymentId)
+    const parsed = reversePaymentSchema.safeParse(req.body)
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid request body', code: 'VALIDATION_ERROR', details: parsed.error.errors },
+      })
+    }
+
+    const result = await deletePayment(tenantId, paymentId, {
+      // profileUserId first: under the kiosk model the login is shared, so the
+      // profile is the only thing that names a person. Same expression every
+      // other actor site uses — payment CREATION is the one that does not,
+      // which is #444, not this.
+      actorUserId: req.user!.profileUserId || req.user!.userId,
+      reason: parsed.data.reason,
+    })
 
     if (!result.success) {
       const statusMap: Record<string, number> = {

@@ -63,6 +63,7 @@ export const ModelName = {
   Labwork: 'Labwork',
   Expense: 'Expense',
   PatientPayment: 'PatientPayment',
+  PatientPaymentEvent: 'PatientPaymentEvent',
   Budget: 'Budget',
   BudgetItem: 'BudgetItem',
   BudgetItemAppointment: 'BudgetItemAppointment',
@@ -335,6 +336,19 @@ export const PatientPaymentScalarFieldEnum = {
 } as const
 
 export type PatientPaymentScalarFieldEnum = (typeof PatientPaymentScalarFieldEnum)[keyof typeof PatientPaymentScalarFieldEnum]
+
+
+export const PatientPaymentEventScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  paymentId: 'paymentId',
+  type: 'type',
+  actorUserId: 'actorUserId',
+  reason: 'reason',
+  occurredAt: 'occurredAt'
+} as const
+
+export type PatientPaymentEventScalarFieldEnum = (typeof PatientPaymentEventScalarFieldEnum)[keyof typeof PatientPaymentEventScalarFieldEnum]
 
 
 export const BudgetScalarFieldEnum = {

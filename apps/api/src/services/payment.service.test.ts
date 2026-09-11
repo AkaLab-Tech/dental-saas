@@ -4,6 +4,7 @@ import {
   computeFifoAllocation,
   computeOutstandingByPatient,
   convertAppointmentPaymentsToAdvance,
+  deletePayment,
   getTenantOutstandingTotal,
   listDebtors,
   restoreAppointmentPaymentsFromAdvance,
@@ -915,5 +916,61 @@ describe('computeOutstandingByPatient / getTenantOutstandingTotal (#396)', () =>
 
     expect(await getTenantOutstandingTotal(tenantId)).toBe(56.1)
     expect(sumOfColumn).toBe(56.1)
+  })
+})
+
+// ============================================================================
+// Task #392 — the reversal and its audit event are ONE transaction
+// ============================================================================
+
+// The claim this file exists to test is not "an event is written" (the route
+// tests cover that) but "a reversal cannot land without its event". That is the
+// failure mode the whole task is about: a payment silently flipped to inactive
+// with nothing recording who did it. If the two writes were sequential rather
+// than transactional, an error between them would produce exactly that state
+// and every balance would still look correct.
+describe('deletePayment transactional integrity (#392)', () => {
+  let tenantId: string
+  let patientId: string
+
+  beforeAll(async () => {
+    const tenant = await prisma.tenant.create({
+      data: { name: 'Reversal Atomicity Clinic', slug: `reversal-atomicity-${Date.now()}` },
+    })
+    tenantId = tenant.id
+    const patient = await prisma.patient.create({
+      data: { tenantId, firstName: 'Atomic', lastName: 'Reversal' },
+    })
+    patientId = patient.id
+  })
+
+  afterAll(async () => {
+    await prisma.tenant.delete({ where: { id: tenantId } }).catch(() => {
+      // Cascades take the patient, payments and events with it.
+    })
+  })
+
+  it('leaves the payment ACTIVE when the audit event cannot be written', async () => {
+    const payment = await prisma.patientPayment.create({
+      data: { tenantId, patientId, amount: 40, date: new Date(), kind: 'ADVANCE' },
+    })
+
+    // The failure is forced through the PUBLIC input rather than by mocking.
+    // A spy on `prisma.patientPaymentEvent.create` would not fire at all: the
+    // service writes through the transaction client `tx`, which is a different
+    // object — a mock there passes while proving nothing, which is worse than
+    // no test. A NUL byte is rejected by Postgres `text` and reaches the insert
+    // intact (zod's .trim().min(1).max(500) does not strip it), so it fails the
+    // event write and only the event write, after the payment row has already
+    // been updated inside the same transaction.
+    await expect(
+      deletePayment(tenantId, payment.id, { actorUserId: 'u1', reason: 'roll\u0000back' })
+    ).rejects.toThrow()
+
+    // The reversal rolled back with it. Anything else here means a payment was
+    // undone with no record of who undid it — the exact state #392 removes.
+    const after = await prisma.patientPayment.findUnique({ where: { id: payment.id } })
+    expect(after?.isActive).toBe(true)
+    expect(await prisma.patientPaymentEvent.count({ where: { paymentId: payment.id } })).toBe(0)
   })
 })
