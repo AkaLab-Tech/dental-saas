@@ -426,7 +426,7 @@ describe('backfillCancelledAppointmentPayments (#406)', () => {
       await backfillCancelledAppointmentPayments({ dryRun: false })
       expect(await payment(pConvertWithNoteId)).toMatchObject({ kind: 'ADVANCE' })
 
-      const restored = await restoreAppointment(tenantAId, apptInactiveCancelledId)
+      const restored = await restoreAppointment(tenantAId, apptInactiveCancelledId, 'actor-392b')
       expect(restored.error).toBeUndefined()
 
       // Only possible because the backfill preserved appointmentId: the

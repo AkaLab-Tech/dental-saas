@@ -719,7 +719,8 @@ export const CANCELLED_APPOINTMENT_NOTE_SUFFIX = ' (cita cancelada)'
 export async function convertAppointmentPaymentsToAdvance(
   tx: Prisma.TransactionClient,
   tenantId: string,
-  appointmentId: string
+  appointmentId: string,
+  actorUserId: string | null
 ): Promise<void> {
   const payments = await tx.patientPayment.findMany({
     where: { tenantId, appointmentId, kind: 'APPOINTMENT', isActive: true },
@@ -733,6 +734,13 @@ export async function convertAppointmentPaymentsToAdvance(
         kind: 'ADVANCE',
         note: `${payment.note ?? ''}${CANCELLED_APPOINTMENT_NOTE_SUFFIX}`,
       },
+    })
+    // Task #392: one event per payment, not one per appointment — each
+    // payment's history has to stand on its own when a balance is disputed.
+    // Written in the caller's transaction, so a cancellation cannot half-land:
+    // money changing meaning and the record of it changing are one fact.
+    await tx.patientPaymentEvent.create({
+      data: { tenantId, paymentId: payment.id, type: 'CONVERTED_TO_ADVANCE', actorUserId },
     })
   }
 }
@@ -751,7 +759,8 @@ export async function convertAppointmentPaymentsToAdvance(
 export async function restoreAppointmentPaymentsFromAdvance(
   tx: Prisma.TransactionClient,
   tenantId: string,
-  appointmentId: string
+  appointmentId: string,
+  actorUserId: string | null
 ): Promise<void> {
   const payments = await tx.patientPayment.findMany({
     where: { tenantId, appointmentId, kind: 'ADVANCE', isActive: true },
@@ -767,6 +776,14 @@ export async function restoreAppointmentPaymentsFromAdvance(
           ? payment.note.slice(0, -CANCELLED_APPOINTMENT_NOTE_SUFFIX.length)
           : payment.note,
       },
+    })
+    // Task #392: the inverse is logged for the same reason the conversion is,
+    // and NOT logging it would be worse than logging neither. A ledger holding
+    // only the cancel half of a cancel/restore round trip reads as a genuine
+    // imbalance and invites someone to investigate a discrepancy the system
+    // invented.
+    await tx.patientPaymentEvent.create({
+      data: { tenantId, paymentId: payment.id, type: 'RESTORED_TO_APPOINTMENT', actorUserId },
     })
   }
 }

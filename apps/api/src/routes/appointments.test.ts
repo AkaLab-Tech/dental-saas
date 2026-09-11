@@ -1941,6 +1941,126 @@ describe('Appointments API', () => {
     // earmarking its linked kind=APPOINTMENT payment, converting it to a plain
     // ADVANCE inside the same transaction as the soft delete.
     // ==========================================================================
+    // Task #392: cancelling and restoring an appointment change what a
+    // recorded payment MEANS, so both are audited payment transitions — not
+    // only appointment ones.
+    describe('Task #392: the cancellation transitions are logged', () => {
+      async function seedPaidAppointment(dayOffset: number, token: string) {
+        const patient = await prisma.patient.create({
+          data: { tenantId, firstName: 'Audit392b', lastName: `D${dayOffset}` },
+        })
+        const times = getFutureTime(dayOffset, 9)
+        const created = await api()
+          .post('/api/appointments')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ patientId: patient.id, doctorId, ...times, cost: 80, paidAmount: 80 })
+        expect(created.status).toBe(201)
+        return { apptId: created.body.data.id as string, paymentId: created.body.data.recordedPaymentId as string }
+      }
+
+      // This file's generateToken signs { sub }, not { userId }, so
+      // req.user.userId is undefined for it and an actor assertion written
+      // against it would pass with null and prove nothing — see #447.
+      const tokenWithUserId = (userId: string, role: string) =>
+        sign({ userId, tenantId, role }, JWT_SECRET, { expiresIn: '1h' })
+
+      it('logs a cancel and its restore as TWO events, in order', async () => {
+        // The round trip is the point. A ledger holding only the cancel half
+        // reads as a real imbalance and invites someone to investigate a
+        // discrepancy the system invented — which is worse than no ledger.
+        const adminWithId = tokenWithUserId('user-392b-admin', 'ADMIN')
+        const { apptId, paymentId } = await seedPaidAppointment(60, adminWithId)
+
+        const del = await api()
+          .delete(`/api/appointments/${apptId}`)
+          .set('Authorization', `Bearer ${adminWithId}`)
+        expect(del.status).toBe(200)
+
+        const restore = await api()
+          .put(`/api/appointments/${apptId}/restore`)
+          .set('Authorization', `Bearer ${adminWithId}`)
+        expect(restore.status).toBe(200)
+
+        const events = await prisma.patientPaymentEvent.findMany({
+          where: { paymentId },
+          orderBy: { occurredAt: 'asc' },
+        })
+        expect(events.map((e) => e.type)).toEqual(['CONVERTED_TO_ADVANCE', 'RESTORED_TO_APPOINTMENT'])
+        expect(events.every((e) => e.actorUserId === 'user-392b-admin')).toBe(true)
+        // The conversions carry no operator-supplied reason: nobody typed one.
+        // An invented string here would read like evidence of intent.
+        expect(events.every((e) => e.reason === null)).toBe(true)
+      })
+
+      it('records the PIN PROFILE as the actor on a cancellation, not the shared login', async () => {
+        const sharedLogin = tokenWithUserId('shared-clinic-login', 'ADMIN')
+        const { apptId, paymentId } = await seedPaidAppointment(61, sharedLogin)
+        const profileToken = sign(
+          { profileUserId: 'profile-392b-operator', role: 'ADMIN', tenantId, type: 'profile' },
+          JWT_SECRET,
+          { expiresIn: '1h' }
+        )
+
+        const del = await api()
+          .delete(`/api/appointments/${apptId}`)
+          .set('Authorization', `Bearer ${sharedLogin}`)
+          .set('X-Profile-Token', profileToken)
+        expect(del.status).toBe(200)
+
+        const events = await prisma.patientPaymentEvent.findMany({ where: { paymentId } })
+        expect(events).toHaveLength(1)
+        expect(events[0].actorUserId).toBe('profile-392b-operator')
+        expect(events[0].actorUserId).not.toBe('shared-clinic-login')
+      })
+
+      it('writes one event per payment, not one per appointment', async () => {
+        // convertAppointmentPaymentsToAdvance loops deliberately (see its
+        // doc comment) because the single-active-payment invariant could be
+        // violated by a race. If that happens the ledger must still hold one
+        // row per payment, or a disputed balance cannot be walked per payment.
+        const adminWithId = tokenWithUserId('user-392b-admin', 'ADMIN')
+        const { apptId, paymentId } = await seedPaidAppointment(62, adminWithId)
+
+        const patientId = (
+          await prisma.patientPayment.findUniqueOrThrow({ where: { id: paymentId } })
+        ).patientId
+        const second = await prisma.patientPayment.create({
+          data: { tenantId, patientId, amount: 20, date: new Date(), kind: 'APPOINTMENT', appointmentId: apptId },
+        })
+
+        const del = await api()
+          .delete(`/api/appointments/${apptId}`)
+          .set('Authorization', `Bearer ${adminWithId}`)
+        expect(del.status).toBe(200)
+
+        expect(await prisma.patientPaymentEvent.count({ where: { paymentId } })).toBe(1)
+        expect(await prisma.patientPaymentEvent.count({ where: { paymentId: second.id } })).toBe(1)
+      })
+
+      it('logs nothing when the cancelled appointment had no linked payment', async () => {
+        const adminWithId = tokenWithUserId('user-392b-admin', 'ADMIN')
+        const patient = await prisma.patient.create({
+          data: { tenantId, firstName: 'Audit392b', lastName: 'NoPayment' },
+        })
+        const times = getFutureTime(63, 9)
+        const created = await api()
+          .post('/api/appointments')
+          .set('Authorization', `Bearer ${adminWithId}`)
+          .send({ patientId: patient.id, doctorId, ...times, cost: 80 })
+        expect(created.status).toBe(201)
+
+        const before = await prisma.patientPaymentEvent.count({ where: { tenantId } })
+        const del = await api()
+          .delete(`/api/appointments/${created.body.data.id}`)
+          .set('Authorization', `Bearer ${adminWithId}`)
+        expect(del.status).toBe(200)
+
+        // No payment changed meaning, so there is nothing to record. An event
+        // here would be noise in a log whose value is that every row matters.
+        expect(await prisma.patientPaymentEvent.count({ where: { tenantId } })).toBe(before)
+      })
+    })
+
     describe('payment conversion on cancel (#391)', () => {
       it('converts every active kind=APPOINTMENT payment on the appointment to kind=ADVANCE in the same transaction as the soft delete, and the converted payment is reachable in Entregas and deletable by an ADMIN', async () => {
         const patient = await prisma.patient.create({

@@ -186,7 +186,7 @@ describe('stats.service — getOverviewStats pendingPayments (#396)', () => {
     const before = await getOverviewStats(tenantId)
     expect(before.pendingPayments).toBe(178.3) // (88.40 + 178.30) - 88.40
 
-    const result = await deleteAppointment(tenantId, cancelled.id)
+    const result = await deleteAppointment(tenantId, cancelled.id, 'actor-392b')
     expect(result.error).toBeUndefined()
 
     const converted = await prisma.patientPayment.findFirstOrThrow({

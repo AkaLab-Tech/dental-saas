@@ -749,7 +749,14 @@ export async function updateAppointment(
  */
 export async function deleteAppointment(
   tenantId: string,
-  id: string
+  id: string,
+  /**
+   * Task #392: who cancelled it. Cancelling converts the appointment's
+   * consultation payment to an advance (#391), which changes what recorded
+   * money MEANS — so the cancellation is an audited payment transition, not
+   * only an appointment one, and it needs an actor like any other.
+   */
+  actorUserId: string | null
 ): Promise<{ appointment?: SafeAppointment; error?: { code: AppointmentErrorCode; message: string } }> {
   const existing = await prisma.appointment.findUnique({
     where: { id },
@@ -772,7 +779,7 @@ export async function deleteAppointment(
     // Freed from the billable set, the appointment's linked consultation
     // payment (if any) must stop being earmarked to it — otherwise FIFO
     // silently re-allocates that money to other items with no visible trace.
-    await convertAppointmentPaymentsToAdvance(tx, tenantId, id)
+    await convertAppointmentPaymentsToAdvance(tx, tenantId, id, actorUserId)
   })
 
   // Cancelling changes the billable set for every other item too (FIFO
@@ -790,7 +797,9 @@ export async function deleteAppointment(
  */
 export async function restoreAppointment(
   tenantId: string,
-  id: string
+  id: string,
+  /** Task #392: who restored it — see deleteAppointment. */
+  actorUserId: string | null
 ): Promise<{ appointment?: SafeAppointment; error?: { code: AppointmentErrorCode; message: string } }> {
   const existing = await prisma.appointment.findUnique({
     where: { id },
@@ -832,7 +841,7 @@ export async function restoreAppointment(
     // the converted advance (isActive=false), this matches nothing on
     // purpose — the money was given back, so the restored appointment must
     // read as unpaid, not double-charged on the next edit.
-    await restoreAppointmentPaymentsFromAdvance(tx, tenantId, id)
+    await restoreAppointmentPaymentsFromAdvance(tx, tenantId, id, actorUserId)
   })
 
   await recalculatePaidStatus(tenantId, existing.patientId)

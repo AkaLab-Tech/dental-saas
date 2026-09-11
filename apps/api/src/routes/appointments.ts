@@ -555,7 +555,7 @@ appointmentsRouter.put('/:id/restore', requireMinRole('CLINIC_ADMIN'), async (re
     const tenantId = req.user!.tenantId
     const { id } = req.params
 
-    const result = await restoreAppointment(tenantId, id)
+    const result = await restoreAppointment(tenantId, id, req.user!.profileUserId || req.user!.userId)
 
     if (result.error) {
       const status = mapErrorCodeToStatus(result.error.code)
@@ -615,7 +615,7 @@ appointmentsRouter.delete('/:id', requireMinRole('DOCTOR'), requireOwnership('ap
     const tenantId = req.user!.tenantId
     const { id } = req.params
 
-    const result = await deleteAppointment(tenantId, id)
+    const result = await deleteAppointment(tenantId, id, req.user!.profileUserId || req.user!.userId)
 
     if (result.error) {
       const status = mapErrorCodeToStatus(result.error.code)
