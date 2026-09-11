@@ -4,6 +4,7 @@ import { prisma, Prisma } from '@dental/database'
 import { Permission, UserRole, hasPermission } from '@dental/shared'
 import { hashPassword } from '../services/auth.service.js'
 import { sign } from 'jsonwebtoken'
+import { generateProfileToken, generateToken } from '../test/tokens.js'
 import {
   computeOutstandingByPatient,
   getAppointmentEarmarks,
@@ -20,14 +21,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'test-secret'
 describe('Patient Payments Routes', () => {
   let tenantId: string
   let adminToken: string
+  let adminUserId: string
   let staffToken: string
   let patientId: string
   let doctorId: string
   const testSlug = `test-payments-${Date.now()}`
 
-  function generateToken(userId: string, tenantId: string, role: string) {
-    return sign({ sub: userId, tenantId, role }, JWT_SECRET, { expiresIn: '1h' })
-  }
 
   beforeAll(async () => {
     const tenant = await prisma.tenant.create({
@@ -76,6 +75,7 @@ describe('Patient Payments Routes', () => {
         role: 'ADMIN',
       },
     })
+    adminUserId = adminUser.id
     adminToken = generateToken(adminUser.id, tenantId, 'ADMIN')
 
     const staffUser = await prisma.user.create({
@@ -237,6 +237,60 @@ describe('Patient Payments Routes', () => {
         .send({ amount: 10, date: new Date().toISOString() })
 
       expect(res.status).toBe(404)
+    })
+  })
+
+  // Task #447: the guard this whole task exists to leave behind.
+  //
+  // Ten route test files signed `sub` instead of `userId`. The middleware
+  // assigns the decoded payload straight to req.user, so req.user.userId was
+  // `undefined` for every request they made and every actor-derived column
+  // came out null. Nothing failed, because NO route test asserted an actor at
+  // all — which is exactly why it survived long enough to be filed twice.
+  //
+  // Fixing the helper without leaving an assertion behind would fix the
+  // instance and not the class: the suite would go green again either way,
+  // and "green" was the state that hid it.
+  describe('Task #447: the recorded actor is a real user id', () => {
+    it('records createdBy as the authenticated user, not null', async () => {
+      const res = await api()
+        .post(`/api/patients/${patientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 12, date: new Date().toISOString() })
+
+      expect(res.status).toBe(201)
+      const row = await prisma.patientPayment.findUniqueOrThrow({ where: { id: res.body.data.id } })
+      // The specific value matters. `not.toBeNull()` would pass against a
+      // token carrying any junk id; this pins that the id travelled from the
+      // claim the middleware reads to the column production writes.
+      expect(row.createdBy).toBe(adminUserId)
+    })
+
+    it('prefers the PIN profile over the shared login where the site asks for it', async () => {
+      // Payment CREATION deliberately still records the bare login — that is
+      // #444, filed separately and not fixed here. The REVERSAL does prefer
+      // the profile, so this asserts the claim reaches both paths correctly
+      // and documents which site chooses which.
+      const created = await api()
+        .post(`/api/patients/${patientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 13, date: new Date().toISOString() })
+      expect(created.status).toBe(201)
+
+      const reversal = await api()
+        .delete(`/api/patients/${patientId}/payments/${created.body.data.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('X-Profile-Token', generateProfileToken('profile-447', tenantId, 'ADMIN'))
+        .send({ reason: 'Guard for #447' })
+      expect(reversal.status).toBe(200)
+
+      const event = await prisma.patientPaymentEvent.findFirstOrThrow({
+        where: { paymentId: created.body.data.id },
+      })
+      expect(event.actorUserId).toBe('profile-447')
+
+      const row = await prisma.patientPayment.findUniqueOrThrow({ where: { id: created.body.data.id } })
+      expect(row.createdBy).toBe(adminUserId)
     })
   })
 

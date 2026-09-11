@@ -312,7 +312,7 @@ describe('stats.service — getOverviewStats monthlyCollected (#395)', () => {
         cost: 100,
       },
     })
-    await prisma.appointment.create({
+    const newer = await prisma.appointment.create({
       data: {
         tenantId,
         patientId,
@@ -334,20 +334,33 @@ describe('stats.service — getOverviewStats monthlyCollected (#395)', () => {
     await recalculatePaidStatus(tenantId, patientId)
     const afterFirstRecalc = await getOverviewStats(tenantId)
 
+    const newerBefore = await prisma.appointment.findUniqueOrThrow({ where: { id: newer.id } })
+
     await prisma.appointment.update({ where: { id: older.id }, data: { isActive: false } })
     await recalculatePaidStatus(tenantId, patientId)
     const afterReallocation = await getOverviewStats(tenantId)
+
+    const newerAfter = await prisma.appointment.findUniqueOrThrow({ where: { id: newer.id } })
 
     // The money never moved, so the cash figure never moves.
     expect(afterFirstRecalc.monthlyCollected).toBe(before.monthlyCollected)
     expect(afterReallocation.monthlyCollected).toBe(before.monthlyCollected)
     expect(before.monthlyCollected).toBe(100)
 
-    // Drive-by sharpening (#451, from the #395 review): without this the test
-    // could not fail for the right reason — a reallocation that did nothing at
-    // all would satisfy every assertion above. Proving the ACCRUAL figure moved
-    // is what establishes that something happened for the cash figure to have
-    // been immune to.
+    // Sharpened twice, and the second time is the one that works.
+    //
+    // #451 added the monthlyBilledPaid assertion below, which pins that the
+    // FIRST recalc did something. It does not pin the reallocation step: that
+    // step could be deleted entirely and this test still passed — the same
+    // defect it was added to fix, one step along. Both appointments are
+    // in-month, so monthlyBilledPaid cannot distinguish which of them carries
+    // the payment.
+    //
+    // What does distinguish it is the flag itself. The newer appointment goes
+    // from unpaid to paid across the reallocation, because the older one
+    // leaving the billable set frees the money FIFO had given it.
+    expect(newerBefore.isPaid).toBe(false)
+    expect(newerAfter.isPaid).toBe(true)
     expect(afterFirstRecalc.monthlyBilledPaid).not.toBe(before.monthlyBilledPaid)
   })
 

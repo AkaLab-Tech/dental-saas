@@ -1,14 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
-import { sign } from 'jsonwebtoken'
 import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
+import { generateToken } from '../test/tokens.js'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'test-secret'
-
-function generateToken(userId: string, tenantId: string, role: string) {
-  return sign({ sub: userId, tenantId, role }, JWT_SECRET, { expiresIn: '1h' })
-}
 
 describe('Budgets routes', () => {
   let tenantId: string

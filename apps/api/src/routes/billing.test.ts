@@ -2,9 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
-import { sign } from 'jsonwebtoken'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'test-secret'
+import { generateToken } from '../test/tokens.js'
 
 describe('Billing API', () => {
   let tenantId: string
@@ -13,13 +11,6 @@ describe('Billing API', () => {
   let staffToken: string
 
   // Helper to generate JWT token
-  function generateToken(userId: string, tenantId: string, role: string) {
-    return sign(
-      { sub: userId, tenantId, role },
-      JWT_SECRET,
-      { expiresIn: '1h' }
-    )
-  }
 
   beforeAll(async () => {
     // Get or create free plan

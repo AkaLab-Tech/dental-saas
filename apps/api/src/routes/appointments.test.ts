@@ -4,6 +4,7 @@ import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
 import { sign } from 'jsonwebtoken'
 import { getPatientBalance } from '../services/payment.service.js'
+import { generateToken } from '../test/tokens.js'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'test-secret'
 
@@ -20,9 +21,6 @@ describe('Appointments API', () => {
   const testSlug = `test-clinic-appointments-${Date.now()}`
 
   // Helper to generate JWT token
-  function generateToken(userId: string, tenantId: string, role: string) {
-    return sign({ sub: userId, tenantId, role }, JWT_SECRET, { expiresIn: '1h' })
-  }
 
   // Helper to create an appointment time in the future
   function getFutureTime(daysFromNow: number, hour: number = 10): { startTime: string; endTime: string } {

@@ -4,10 +4,8 @@ import { unlink } from 'fs/promises'
 import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
-import { sign } from 'jsonwebtoken'
 import { env } from '../config/env.js'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'test-secret'
+import { generateToken } from '../test/tokens.js'
 
 describe('Attachments Routes', () => {
   let tenantId: string
@@ -17,13 +15,6 @@ describe('Attachments Routes', () => {
   const testSlug = `test-attach-${Date.now()}`
   const createdFiles: string[] = []
 
-  function generateToken(userId: string, tenantId: string, role: string) {
-    return sign(
-      { userId, tenantId, role, email: `${role.toLowerCase()}@test.com` },
-      JWT_SECRET,
-      { expiresIn: '1h' }
-    )
-  }
 
   beforeAll(async () => {
     // Create tenant

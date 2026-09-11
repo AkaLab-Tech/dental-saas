@@ -2,9 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
-import { sign } from 'jsonwebtoken'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'test-secret'
+import { generateToken } from '../test/tokens.js'
 
 describe('Labworks Routes - Permission Tests', () => {
   let tenantId: string
@@ -14,13 +12,6 @@ describe('Labworks Routes - Permission Tests', () => {
   const testSlug = `test-labworks-${Date.now()}`
 
   // Helper to generate JWT token
-  function generateToken(userId: string, tenantId: string, role: string) {
-    return sign(
-      { sub: userId, tenantId, role },
-      JWT_SECRET,
-      { expiresIn: '1h' }
-    )
-  }
 
   beforeAll(async () => {
     // Create test tenant
@@ -335,9 +326,6 @@ describe('GET /api/labworks?search= (server-side search by lab and patient)', ()
   const testSlug = `test-labworks-search-${Date.now()}`
   const otherSlug = `test-labworks-search-other-${Date.now()}`
 
-  function generateToken(userId: string, tenantId: string, role: string) {
-    return sign({ sub: userId, tenantId, role }, JWT_SECRET, { expiresIn: '1h' })
-  }
 
   async function createTenant(slug: string, name: string) {
     const tenant = await prisma.tenant.create({
@@ -585,13 +573,6 @@ describe('GET /api/labworks/labs (Lab name autocomplete)', () => {
   const otherSlug = `test-labworks-labs-other-${Date.now()}`
   const emptySlug = `test-labworks-labs-empty-${Date.now()}`
 
-  function generateToken(userId: string, tenantId: string, role: string) {
-    return sign(
-      { sub: userId, tenantId, role },
-      JWT_SECRET,
-      { expiresIn: '1h' }
-    )
-  }
 
   async function createTenant(slug: string, name: string) {
     const tenant = await prisma.tenant.create({
@@ -781,9 +762,6 @@ describe('GET /api/labworks?overdue= (overdue filter & stats)', () => {
     return d
   }
 
-  function generateToken(userId: string, tenantId: string, role: string) {
-    return sign({ sub: userId, tenantId, role }, JWT_SECRET, { expiresIn: '1h' })
-  }
 
   let overdueLabworkId: string
 
@@ -1019,9 +997,6 @@ describe('GET /api/labworks/export (CSV export)', () => {
   // Mirrors export.test.ts's token-signing approach: this project's API
   // reads req.user.userId (not req.user.sub), so test tokens are signed
   // with `userId`.
-  function generateToken(userId: string, tenantId: string, role: string) {
-    return sign({ userId, tenantId, role }, JWT_SECRET, { expiresIn: '1h' })
-  }
 
   async function createTenant(slug: string, name: string) {
     const tenant = await prisma.tenant.create({
