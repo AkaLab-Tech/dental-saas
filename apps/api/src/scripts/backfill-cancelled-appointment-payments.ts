@@ -39,7 +39,8 @@ import { basename, extname } from 'node:path'
 
 import { prisma, disconnectDatabase } from '@dental/database'
 import {
-  CANCELLED_APPOINTMENT_NOTE_SUFFIX,
+  SYSTEM_ACTOR_BACKFILL_406,
+  convertAppointmentPaymentsToAdvance,
   recalculatePaidStatus,
 } from '../services/payment.service.js'
 
@@ -56,26 +57,45 @@ export interface BackfillCancelledAppointmentPaymentsResult {
 
 /**
  * Convert every active kind='APPOINTMENT' payment whose appointment is
- * inactive into a kind='ADVANCE' payment, shaped exactly like the rows #391
- * produces (appointmentId preserved, note suffix appended) so
- * restoreAppointmentPaymentsFromAdvance() can round-trip them.
+ * inactive into a kind='ADVANCE' payment, identical to what #391 produces —
+ * appointmentId preserved, note suffix appended, AND a CONVERTED_TO_ADVANCE
+ * audit event — so restoreAppointmentPaymentsFromAdvance() can round-trip them.
+ *
+ * Task #449: that last clause used to be false in a way that mattered. This
+ * script duplicated the update inline, so a backfilled row carried no event —
+ * and the restore path matches { kind: 'ADVANCE', appointmentId, isActive },
+ * which a backfilled row satisfies. Restoring one therefore emitted a
+ * RESTORED_TO_APPOINTMENT with no matching conversion: HALF A ROUND TRIP in
+ * the ledger, which reads as a real imbalance and invites someone to
+ * investigate a discrepancy the system invented.
+ *
+ * The fix is to call the shared helper rather than re-implement it. Two
+ * producers that must not drift is exactly how the gap was created: the inline
+ * update was a faithful copy on the day it was written, and then the original
+ * grew a second half.
  */
 export async function backfillCancelledAppointmentPayments(options: {
   dryRun: boolean
 }): Promise<BackfillCancelledAppointmentPaymentsResult> {
   const { dryRun } = options
 
+  // The selector stays exactly as it was, and deliberately so: `isActive` alone,
+  // never `status = 'CANCELLED'` — see the note at the top of this file. It is
+  // the SCRIPT's scope, not the helper's, and the helper must not inherit it.
   const payments = await prisma.patientPayment.findMany({
     where: {
       isActive: true,
       kind: 'APPOINTMENT',
       appointment: { isActive: false },
     },
-    select: { id: true, note: true, tenantId: true, patientId: true },
+    select: { id: true, tenantId: true, patientId: true, appointmentId: true },
   })
 
   const perTenantCounts = new Map<string, number>()
   const affectedPatients = new Map<string, { tenantId: string; patientId: string }>()
+  // The helper works per appointment; the selector above finds payments. Group
+  // so each appointment is converted once, however many payments hang off it.
+  const appointmentsToConvert = new Map<string, { tenantId: string; appointmentId: string }>()
 
   for (const payment of payments) {
     perTenantCounts.set(payment.tenantId, (perTenantCounts.get(payment.tenantId) ?? 0) + 1)
@@ -83,15 +103,23 @@ export async function backfillCancelledAppointmentPayments(options: {
       tenantId: payment.tenantId,
       patientId: payment.patientId,
     })
-
-    if (!dryRun) {
-      await prisma.patientPayment.update({
-        where: { id: payment.id },
-        data: {
-          kind: 'ADVANCE',
-          note: `${payment.note ?? ''}${CANCELLED_APPOINTMENT_NOTE_SUFFIX}`,
-        },
+    if (payment.appointmentId) {
+      appointmentsToConvert.set(`${payment.tenantId}:${payment.appointmentId}`, {
+        tenantId: payment.tenantId,
+        appointmentId: payment.appointmentId,
       })
+    }
+  }
+
+  if (!dryRun) {
+    for (const { tenantId, appointmentId } of appointmentsToConvert.values()) {
+      // One transaction per appointment: the update and its audit event are one
+      // fact, exactly as they are on the live cancellation path. A dry run
+      // reaches none of this — an audit row for work that did not happen is the
+      // same defect as a placeholder actor, from the other direction.
+      await prisma.$transaction((tx) =>
+        convertAppointmentPaymentsToAdvance(tx, tenantId, appointmentId, SYSTEM_ACTOR_BACKFILL_406)
+      )
     }
   }
 

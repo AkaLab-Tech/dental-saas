@@ -813,6 +813,27 @@ export async function getCashCollectedBetween(
 export const CANCELLED_APPOINTMENT_NOTE_SUFFIX = ' (cita cancelada)'
 
 /**
+ * Task #449: the actor recorded for a transition no person performed.
+ *
+ * `PatientPaymentEvent.actorUserId` is nullable, and that null is ALREADY
+ * TAKEN: #392 renders a pre-#392 reversal with a null actor precisely because
+ * the actor is UNRECOVERABLE. A script writing null would collapse "a system
+ * process did this" into "we do not know who did this" — in the one column
+ * whose whole purpose is telling those apart. A sentinel says something true;
+ * a null says something false by omission.
+ *
+ * The `system:` prefix is the contract. Keep this the only such constant: the
+ * column has no foreign key, so nothing stops a future writer inventing
+ * `'system-backfill'` instead, and two spellings of the same idea is how the
+ * duplication this task exists to remove got started.
+ *
+ * Any UI that renders an actor must treat a `system:` value as "system" rather
+ * than printing it. Nothing renders conversion events today — that is #453 —
+ * so this is a constraint on #453, not a defect now.
+ */
+export const SYSTEM_ACTOR_BACKFILL_406 = 'system:backfill-406'
+
+/**
  * Convert every active kind=APPOINTMENT payment linked to a cancelled
  * appointment into a kind=ADVANCE payment, inside the caller's transaction.
  * appointmentId is deliberately kept (not nulled) — it is the only

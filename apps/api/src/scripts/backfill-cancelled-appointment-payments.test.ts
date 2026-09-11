@@ -4,6 +4,7 @@ import { prisma } from '@dental/database'
 import { backfillCancelledAppointmentPayments } from './backfill-cancelled-appointment-payments.js'
 import {
   CANCELLED_APPOINTMENT_NOTE_SUFFIX,
+  SYSTEM_ACTOR_BACKFILL_406,
   getTotalPaid,
   recalculatePaidStatus,
 } from '../services/payment.service.js'
@@ -349,6 +350,64 @@ describe('backfillCancelledAppointmentPayments (#406)', () => {
 
       expect(await payment(pConvertA2Id)).toMatchObject({ kind: 'ADVANCE', tenantId: tenantAId, patientId: patientA2Id })
       expect(await payment(pConvertB1Id)).toMatchObject({ kind: 'ADVANCE', tenantId: tenantBId, patientId: patientB1Id })
+    })
+
+    // Task #449: the script used to duplicate the conversion inline, so a row
+    // it converted carried no audit event. It now calls the shared helper.
+    describe('Task #449: the conversion is audited', () => {
+      it('writes a CONVERTED_TO_ADVANCE event attributed to the system actor', async () => {
+        await backfillCancelledAppointmentPayments({ dryRun: false })
+
+        const events = await prisma.patientPaymentEvent.findMany({
+          where: { paymentId: pConvertWithNoteId },
+        })
+        expect(events).toHaveLength(1)
+        expect(events[0]).toMatchObject({
+          type: 'CONVERTED_TO_ADVANCE',
+          // NOT null. Null already means "the actor is unrecoverable" (#392
+          // renders pre-#392 reversals that way), so a script writing null
+          // would say something false by omission.
+          actorUserId: SYSTEM_ACTOR_BACKFILL_406,
+        })
+        expect(events[0].actorUserId).not.toBeNull()
+      })
+
+      it('a dry run writes NO events', async () => {
+        // An audit row for work that did not happen is the same defect as a
+        // placeholder actor, from the other direction: both put something in
+        // the ledger that is not true.
+        const before = await prisma.patientPaymentEvent.count()
+
+        await backfillCancelledAppointmentPayments({ dryRun: true })
+
+        expect(await prisma.patientPaymentEvent.count()).toBe(before)
+        expect(await prisma.patientPaymentEvent.count({ where: { paymentId: pConvertWithNoteId } })).toBe(0)
+      })
+
+      it('a backfilled row later restored leaves a MATCHED PAIR, not an orphan restore', async () => {
+        // The consequence that made this worth fixing rather than watching.
+        // restoreAppointmentPaymentsFromAdvance matches { kind: 'ADVANCE',
+        // appointmentId, isActive: true } — which a backfilled row satisfies.
+        // Before this change the restore emitted RESTORED_TO_APPOINTMENT with
+        // no matching conversion: half a round trip, which reads as a real
+        // imbalance and invites someone to investigate a discrepancy the
+        // system invented.
+        await backfillCancelledAppointmentPayments({ dryRun: false })
+        await restoreAppointment(tenantAId, apptInactiveCancelledId, 'operator-449')
+
+        const events = await prisma.patientPaymentEvent.findMany({
+          where: { paymentId: pConvertWithNoteId },
+          orderBy: { occurredAt: 'asc' },
+        })
+        expect(events.map((e) => e.type)).toEqual([
+          'CONVERTED_TO_ADVANCE',
+          'RESTORED_TO_APPOINTMENT',
+        ])
+        // And the two halves name different doers, which is the point of
+        // recording an actor at all.
+        expect(events[0].actorUserId).toBe(SYSTEM_ACTOR_BACKFILL_406)
+        expect(events[1].actorUserId).toBe('operator-449')
+      })
     })
 
     describe('untouched cases', () => {

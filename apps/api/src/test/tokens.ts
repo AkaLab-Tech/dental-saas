@@ -15,10 +15,17 @@ const JWT_SECRET = process.env.JWT_SECRET || 'test-secret'
  * actually use, so nothing failed. Values silently became null and any
  * assertion about WHO did something passed vacuously.
  *
- * Keep this the only definition. Sixteen copies is how the wrong shape
- * spread, and a local copy is how it would come back — including the two
- * `tokenWithUserId` arrows that existed in payments/appointments tests purely
- * to work around the bug this removes.
+ * Keep this the only definition **for route tests**. Sixteen copies is how the
+ * wrong shape spread, and a local copy is how it would come back — including
+ * the two `tokenWithUserId` arrows that existed in payments/appointments tests
+ * purely to work around the bug this removes.
+ *
+ * Three local helpers are deliberately kept and are not violations of that
+ * rule: `settings.test.ts` and `export.test.ts` take a payload object and use a
+ * different JWT secret default, and `middleware/ownership.test.ts` is a
+ * middleware test with a different arity whose own comment about `userId` vs
+ * `sub` is true. None ever had the bug. `pin.test.ts` mints an expired profile
+ * token as the SUBJECT of an expiry test, which this helper cannot express.
  */
 export function generateToken(userId: string, tenantId: string, role: string): string {
   return sign({ userId, tenantId, role }, JWT_SECRET, { expiresIn: '1h' })
