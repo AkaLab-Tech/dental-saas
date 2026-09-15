@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request } from 'express'
 import { z } from 'zod'
 import { prisma } from '@dental/database'
-import { checkResetSendAllowed } from '../services/password-reset.service.js'
+import { issueResetTokenIfAllowed } from '../services/password-reset.service.js'
 import { type Language } from '@dental/shared'
 import {
   hashPassword,
@@ -30,8 +30,6 @@ import { logger } from '../utils/logger.js'
 import { env } from '../config/env.js'
 import {
   TOKEN_EXPIRY_MINUTES,
-  generateResetToken,
-  getTokenExpiryDate,
   buildTenantResetUrl,
 } from '../utils/password-reset.js'
 
@@ -749,47 +747,23 @@ authRouter.post('/forgot-password', forgotPasswordRateLimit, async (req, res, ne
       return res.status(200).json(successResponse)
     }
 
-    // Task #415: per-account send cooldown. This MUST return before the
-    // invalidation below. The intuitive place to ask "did we send recently?"
-    // is next to the send, which is after the invalidation — and by then the
-    // victim's outstanding token is already dead, so the check would suppress
-    // the email while still completing the lockout it exists to prevent.
-    // The outstanding token has to SURVIVE a suppressed request.
-    const sendDecision = await checkResetSendAllowed(user.id)
-    if (!sendDecision.allowed) {
+    // Tasks #415/#442: cooldown, invalidation and issuing are one exclusive
+    // per-account step in the service. It checks BEFORE it invalidates, so a
+    // suppressed request never kills the token already in the user's inbox,
+    // and it holds a per-user lock across all three, so a concurrent burst
+    // issues one token instead of one per request. Do not issue or invalidate
+    // reset tokens here directly — that is how the race existed.
+    const issue = await issueResetTokenIfAllowed(user.id)
+    if (!issue.issued) {
       logger.info(
-        { userId: user.id, clinicSlug, reason: sendDecision.reason },
+        { userId: user.id, clinicSlug, reason: issue.reason },
         'Password reset send suppressed by per-account cooldown'
       )
       // Same body as every other branch — a cooldown must not become the
       // enumeration oracle the rest of this handler is careful to avoid.
       return res.status(200).json(successResponse)
     }
-
-    // Invalidate any existing tokens for this user
-    await prisma.passwordResetToken.updateMany({
-      where: {
-        userId: user.id,
-        usedAt: null,
-      },
-      data: {
-        usedAt: new Date(), // Mark as used to invalidate
-      },
-    })
-
-    // Generate new token
-    const plainToken = generateResetToken()
-    const tokenHash = hashToken(plainToken)
-    const expiresAt = getTokenExpiryDate()
-
-    // Store hashed token
-    await prisma.passwordResetToken.create({
-      data: {
-        userId: user.id,
-        tokenHash,
-        expiresAt,
-      },
-    })
+    const { plainToken } = issue
 
     // Fetch tenant language setting
     const tenantWithSettings = await prisma.tenant.findUnique({

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import crypto from 'crypto'
 import { api } from '../../test/http.js'
+import { burstBehindTableLock } from '../../test/table-lock-barrier.js'
 import { prisma } from '@dental/database'
 import { hashPassword, hashToken } from '../../services/auth.service.js'
 import { RESET_SEND_COOLDOWN_MS } from '../../services/password-reset.service.js'
@@ -893,6 +894,27 @@ describe('Task #415: super-admin recovery send cooldown', () => {
     const second = await api().post('/api/admin/auth/forgot-password').send({ email: testEmail })
     expect(second.status).toBe(200)
     expect(await prisma.passwordResetToken.count({ where: { userId: superAdminId } })).toBe(1)
+  })
+
+  it('issues exactly one token for a concurrent burst (#442)', async () => {
+    // Task #442: see the tenant case in routes/auth.test.ts. Same interleaving,
+    // forced by the same barrier, against the super-admin handler.
+    const burst = 5
+    const { results, parkedAtRelease } = await burstBehindTableLock('password_reset_tokens', burst, (i) =>
+      api()
+        .post('/api/admin/auth/forgot-password')
+        .set('X-Forwarded-For', `203.0.113.${40 + i}`)
+        .send({ email: testEmail })
+    )
+
+    // See the tenant case: without a parked write the burst ran sequentially.
+    expect(parkedAtRelease).toBeGreaterThan(0)
+    expect(results.map((r) => r.status)).toEqual(Array(burst).fill(200))
+    expect(new Set(results.map((r) => JSON.stringify(r.body))).size).toBe(1)
+    expect(await prisma.passwordResetToken.count({ where: { userId: superAdminId } })).toBe(1)
+    expect(
+      await prisma.passwordResetToken.count({ where: { userId: superAdminId, usedAt: null } })
+    ).toBe(1)
   })
 
   it('leaves an already-issued super-admin token redeemable when a later request is suppressed', async () => {

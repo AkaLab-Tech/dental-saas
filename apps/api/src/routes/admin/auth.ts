@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request } from 'express'
 import { z } from 'zod'
 import { prisma } from '@dental/database'
-import { checkResetSendAllowed } from '../../services/password-reset.service.js'
+import { issueResetTokenIfAllowed } from '../../services/password-reset.service.js'
 import {
   hashPassword,
   hashToken,
@@ -15,8 +15,6 @@ import { logger } from '../../utils/logger.js'
 import { env } from '../../config/env.js'
 import {
   TOKEN_EXPIRY_MINUTES,
-  generateResetToken,
-  getTokenExpiryDate,
   buildAdminResetUrl,
 } from '../../utils/password-reset.js'
 import {
@@ -259,44 +257,19 @@ authRouter.post('/forgot-password', adminForgotPasswordRateLimit, async (req, re
       return res.status(200).json(successResponse)
     }
 
-    // Task #415: per-account send cooldown. This MUST return before the
-    // invalidation below — see the fuller note on the tenant handler in
-    // routes/auth.ts. Checking next to the send instead would suppress the
-    // email while still killing the victim's outstanding token, which is the
-    // half of the attack that actually locks them out.
-    const sendDecision = await checkResetSendAllowed(user.id)
-    if (!sendDecision.allowed) {
+    // Tasks #415/#442: cooldown, invalidation and issuing are one exclusive
+    // per-account step in the service — see issueResetTokenIfAllowed and the
+    // note on the tenant handler in routes/auth.ts. Do not issue or invalidate
+    // reset tokens here directly.
+    const issue = await issueResetTokenIfAllowed(user.id)
+    if (!issue.issued) {
       logger.info(
-        { userId: user.id, reason: sendDecision.reason },
+        { userId: user.id, reason: issue.reason },
         'Password reset send suppressed by per-account cooldown'
       )
       return res.status(200).json(successResponse)
     }
-
-    // Invalidate any existing tokens for this user
-    await prisma.passwordResetToken.updateMany({
-      where: {
-        userId: user.id,
-        usedAt: null,
-      },
-      data: {
-        usedAt: new Date(), // Mark as used to invalidate
-      },
-    })
-
-    // Generate new token
-    const plainToken = generateResetToken()
-    const tokenHash = hashToken(plainToken)
-    const expiresAt = getTokenExpiryDate()
-
-    // Store hashed token
-    await prisma.passwordResetToken.create({
-      data: {
-        userId: user.id,
-        tokenHash,
-        expiresAt,
-      },
-    })
+    const { plainToken } = issue
 
     // Send email (fire-and-forget, don't block response)
     // Super admin emails default to English

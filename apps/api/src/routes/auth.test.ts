@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest'
+import crypto from 'crypto'
 
 // Task #221: assert the welcome email is sent in the persisted (resolved)
 // language, without making a real network call. `vi.hoisted` is required
@@ -13,6 +14,7 @@ vi.mock('../services/email.service.js', () => ({
 }))
 
 import { api } from '../test/http.js'
+import { burstBehindTableLock } from '../test/table-lock-barrier.js'
 import { prisma } from '@dental/database'
 import bcrypt from 'bcrypt'
 import { sign } from 'jsonwebtoken'
@@ -25,6 +27,7 @@ import { sendPasswordResetEmail } from '../services/email.service.js'
 import {
   RESET_SEND_COOLDOWN_MS,
   RESET_SEND_MAX_PER_WINDOW,
+  RESET_SEND_LOCK_NAMESPACE,
 } from '../services/password-reset.service.js'
 import {
   forgotPasswordRateLimitStore,
@@ -1005,6 +1008,103 @@ describe('Auth - Tenant User Password Recovery', () => {
         await prisma.user.delete({ where: { id: otherUser.id } })
         await prisma.tenant.delete({ where: { id: otherTenant.id } })
       }
+    })
+
+    it('issues exactly one token and one email for a concurrent burst (#442)', async () => {
+      // Task #442: the cooldown check only reads, and the write is the
+      // create() at the end of the handler, so concurrent requests all passed
+      // the check before any of them wrote. The barrier makes that
+      // interleaving certain: every request runs its reads, then parks on its
+      // first write. Against the unfixed handler this issued one token PER
+      // REQUEST, all still outstanding — neither the send bound nor the
+      // invalidation held.
+      const burst = 5
+      const { results, parkedAtRelease } = await burstBehindTableLock(
+        'password_reset_tokens',
+        burst,
+        () =>
+          api()
+            .post('/api/auth/forgot-password')
+            .set('X-Forwarded-For', freshIp())
+            .send({ email: testEmail, clinicSlug: testClinicSlug })
+      )
+      // The barrier must actually have held a write. If token writes ever move
+      // off this table, nothing parks, the burst runs sequentially, and every
+      // assertion below would pass for the wrong reason.
+      expect(parkedAtRelease).toBeGreaterThan(0)
+
+      // Suppression must stay invisible from outside, as on every other branch.
+      expect(results.map((r) => r.status)).toEqual(Array(burst).fill(200))
+      expect(new Set(results.map((r) => JSON.stringify(r.body))).size).toBe(1)
+
+      expect(vi.mocked(sendPasswordResetEmail)).toHaveBeenCalledTimes(1)
+      expect(await prisma.passwordResetToken.count({ where: { userId } })).toBe(1)
+      expect(
+        await prisma.passwordResetToken.count({ where: { userId, usedAt: null } })
+      ).toBe(1)
+    })
+
+    it('leaves a delivered token redeemable when a request is suppressed as in-flight (#442)', async () => {
+      // The #415 ordering guarantee, for the suppression #442 adds. The token is
+      // dated two hours back so the cooldown and the ceiling would both ALLOW a
+      // send — the only thing that can suppress this request is the per-user
+      // lock, held below exactly as a concurrent request would hold it. If the
+      // lock were taken after the invalidation, this token would already be dead.
+      const plainToken = crypto.randomBytes(32).toString('hex')
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000)
+      await prisma.passwordResetToken.create({
+        data: {
+          userId,
+          tokenHash: hashToken(plainToken),
+          expiresAt: inFifteenMinutes(),
+          createdAt: twoHoursAgo,
+        },
+      })
+
+      let release!: () => void
+      const gate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      let signalLocked!: () => void
+      const locked = new Promise<void>((resolve) => {
+        signalLocked = resolve
+      })
+      const holder = prisma.$transaction(
+        async (tx) => {
+          // $executeRaw: pg_advisory_xact_lock returns void, which $queryRaw cannot map.
+          await tx.$executeRaw`
+            SELECT pg_advisory_xact_lock(${RESET_SEND_LOCK_NAMESPACE}::int4, hashtext(${userId}))`
+          signalLocked()
+          await gate
+        },
+        { maxWait: 5_000, timeout: 30_000 }
+      )
+
+      try {
+        await Promise.race([locked, holder])
+        const suppressed = await api()
+          .post('/api/auth/forgot-password')
+          .set('X-Forwarded-For', freshIp())
+          .send({ email: testEmail, clinicSlug: testClinicSlug })
+        expect(suppressed.status).toBe(200)
+        expect(vi.mocked(sendPasswordResetEmail)).not.toHaveBeenCalled()
+        expect(await prisma.passwordResetToken.count({ where: { userId } })).toBe(1)
+      } finally {
+        release()
+        await holder.catch(() => {})
+      }
+
+      // Drive the real token through the real endpoint — see the #415 case above
+      // for why a row check would be the weaker claim.
+      const redeemed = await api()
+        .post('/api/auth/reset-password')
+        .send({ token: plainToken, password: 'NewPassword442!' })
+      expect(redeemed.status).toBe(200)
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash: await hashPassword(testPassword) },
+      })
     })
   })
 })
