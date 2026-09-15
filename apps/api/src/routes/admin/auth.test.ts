@@ -872,10 +872,13 @@ describe('Task #415: super-admin recovery send cooldown', () => {
     if (superAdminId) {
       await prisma.passwordResetToken.deleteMany({ where: { userId: superAdminId } })
     }
-    // Task #417 put a per-IP limiter on this endpoint. Every request below
-    // comes from the same loopback address, so without this reset the cases
-    // would inherit each other's hits.
+    // Task #417 put a per-IP limiter on both recovery endpoints. Every request
+    // below comes from the same loopback address, so without these resets the
+    // cases would inherit each other's hits. Task #443: reset-password too —
+    // the redeem case calls it, and skipping it was safe only because the case
+    // above this describe happened not to.
     await adminForgotPasswordRateLimitStore.resetAll()
+    await adminResetPasswordRateLimitStore.resetAll()
   })
 
   it('issues one token per cooldown window for one super admin', async () => {
@@ -891,7 +894,13 @@ describe('Task #415: super-admin recovery send cooldown', () => {
     // i.e. after the updateMany — this token would already be marked used and
     // reset-password would reject it, while the suppressed request still
     // looked like a success from the outside.
-    const plainToken = 'token-415-admin-survives-suppression'
+    //
+    // Task #443: random, like every other token in this file. A fixed string
+    // here strands on an aborted run — afterAll never deletes the owning user,
+    // the next run's user-scoped cleanup cannot see it, and tokenHash is
+    // globally @unique, so every later run fails at create(). The assertion
+    // holds for any token, so nothing requires a deterministic one.
+    const plainToken = crypto.randomBytes(32).toString('hex')
     await prisma.passwordResetToken.create({
       data: {
         userId: superAdminId!,
