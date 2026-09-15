@@ -376,13 +376,32 @@ export async function updateUserRole(
   return { success: true, user: toSafeUser(user) }
 }
 
+/** Who is deleting: both identities in play when a PIN profile is active. */
+export interface UserDeleteActor {
+  /** The user the access token was issued to — the shared login. */
+  loginUserId: string
+  /** The acting person: the PIN profile's user when one is active, else the login's. */
+  actorUserId: string
+  /** The effective role, i.e. the PIN profile's role when one is active. */
+  role: string
+}
+
 /**
- * Soft delete a user (set isActive = false)
+ * Soft-delete a user: deactivate them and revoke their refresh tokens.
+ *
+ * Refused, in this order:
+ *   - the requester's own account. Both identities count: the person acting
+ *     and the account of the login in use. Deleting either would leave the
+ *     requester, or the terminal they are using, unable to sign in.
+ *   - an OWNER (ownership has to be transferred first).
+ *   - any user whose role is not STRICTLY lower than the requester's, using
+ *     the same ordering as requireMinRole. An unrecognised requester role ranks
+ *     below every tenant role.
  */
 export async function deleteUser(
   tenantId: string,
   userId: string,
-  requestingUserId: string
+  actor: UserDeleteActor
 ): Promise<{ success: boolean; error?: string }> {
   // Verify user belongs to tenant
   const existing = await prisma.user.findFirst({
@@ -395,13 +414,19 @@ export async function deleteUser(
   }
 
   // Prevent self-deletion
-  if (userId === requestingUserId) {
+  if (userId === actor.loginUserId || userId === actor.actorUserId) {
     return { success: false, error: 'Cannot delete your own account' }
   }
 
   // Prevent deleting owners (must transfer ownership first)
   if (existing.role === 'OWNER') {
     return { success: false, error: 'Cannot delete an owner. Transfer ownership first.' }
+  }
+
+  const actorRank = ROLE_HIERARCHY[actor.role as keyof typeof ROLE_HIERARCHY] ?? 0
+  const targetRank = ROLE_HIERARCHY[existing.role as keyof typeof ROLE_HIERARCHY] ?? 0
+  if (actorRank <= targetRank) {
+    return { success: false, error: 'Deleting this user requires a higher role than theirs' }
   }
 
   await prisma.user.update({
