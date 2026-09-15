@@ -16,6 +16,7 @@ import {
 } from '@/lib/payment-api'
 import { PaymentFormModal } from './PaymentFormModal'
 import { AccountStatement } from './AccountStatement'
+import { formatActor } from '@/lib/format-actor'
 
 // ============================================================================
 // Main Component
@@ -201,6 +202,9 @@ export function PaymentSection({
                       {payment.reversal?.reason
                         ? t('payments.reversedWithReason', { reason: payment.reversal.reason })
                         : t('payments.reversed')}
+                      {formatActor(payment.reversal?.actor, t) && (
+                        <span> {formatActor(payment.reversal?.actor, t)}</span>
+                      )}
                     </p>
                   )}
                   <p className="text-xs text-gray-500">

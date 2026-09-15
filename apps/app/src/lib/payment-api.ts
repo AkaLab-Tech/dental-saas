@@ -4,6 +4,16 @@ import { apiClient } from './api'
 // Types
 // ============================================================================
 
+/**
+ * Task #461: a recorded actor, resolved by the API for display. `null` (where a
+ * field allows it) means the actor was never recorded; `removed` means a user
+ * who no longer exists. The two must never render alike.
+ */
+export type ActorView =
+  | { kind: 'user'; name: string; active: boolean }
+  | { kind: 'removed' }
+  | { kind: 'system' }
+
 export interface Payment {
   id: string
   tenantId: string
@@ -15,10 +25,10 @@ export interface Payment {
   isActive: boolean
   /**
    * Task #392: set only when the list was requested with includeReversed.
-   * `by`/`reason` are null for a reversal recorded before #392 — the actor is
+   * `actor`/`reason` are null for a reversal recorded before #392 — the actor is
    * genuinely unrecoverable and a placeholder would read as a record.
    */
-  reversal?: { at: string; by: string | null; reason: string | null } | null
+  reversal?: { at: string; actor: ActorView | null; reason: string | null } | null
   kind: 'APPOINTMENT' | 'ADVANCE'
   appointmentId: string | null
   createdAt: string

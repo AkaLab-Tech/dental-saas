@@ -1017,7 +1017,12 @@ describe('PatientAppointmentsSection', () => {
           recordedPaidAmount: 0,
           recordedPaymentId: null,
           reversedPayments: [
-            { amount: 80, at: '2026-09-11T10:00:00Z', by: 'user-451', reason: 'Cobrado por error' },
+            {
+              amount: 80,
+              at: '2026-09-11T10:00:00Z',
+              actor: { kind: 'user', name: 'Ana Pérez', active: true },
+              reason: 'Cobrado por error',
+            },
           ],
         },
       ])
@@ -1028,6 +1033,9 @@ describe('PatientAppointmentsSection', () => {
       })
 
       expect(screen.getByText(/payments\.reversedOnWithReason/)).toBeInTheDocument()
+      // Task #461: the actor is part of the disclosure — #451 asked for it and
+      // this test did not check it, which is how it went missing.
+      expect(screen.getByText('payments.actorBy:{"name":"Ana Pérez"}')).toBeInTheDocument()
 
       fireEvent.click(screen.getByLabelText('common.options'))
       expect(screen.queryByText('payments.reverseConsultationPayment')).not.toBeInTheDocument()
@@ -1040,7 +1048,7 @@ describe('PatientAppointmentsSection', () => {
           hasRecordedPayment: false,
           recordedPaidAmount: 0,
           recordedPaymentId: null,
-          reversedPayments: [{ amount: 40, at: '2026-01-01T00:00:00Z', by: null, reason: null }],
+          reversedPayments: [{ amount: 40, at: '2026-01-01T00:00:00Z', actor: null, reason: null }],
         },
       ])
       renderSection()
@@ -1051,6 +1059,36 @@ describe('PatientAppointmentsSection', () => {
 
       expect(screen.getByText(/payments\.reversedOn$|payments\.reversedOn[^W]/)).toBeInTheDocument()
       expect(screen.queryByText(/payments\.reversedOnWithReason/)).not.toBeInTheDocument()
+      // Nor an actor: absent rather than invented.
+      expect(screen.queryByText(/payments\.actorBy/)).not.toBeInTheDocument()
+    })
+
+    // Task #461: every actor state renders distinctly. Removed and never-recorded
+    // in particular must not look alike — one is someone who is gone, the other
+    // is nothing known.
+    it.each([
+      ['a deactivated user, by name and marked', { kind: 'user', name: 'Luis Gómez', active: false }, 'payments.actorByDeactivated:{"name":"Luis Gómez"}'],
+      ['a removed user, without a name', { kind: 'removed' }, 'payments.actorByRemoved'],
+      ['the system', { kind: 'system' }, 'payments.actorBySystem'],
+    ])('names the actor of a reversal: %s', async (_label, actor, expected) => {
+      mockGetAppointmentsByPatient.mockResolvedValue([
+        {
+          ...paidConsultationAppointment,
+          hasRecordedPayment: false,
+          recordedPaidAmount: 0,
+          recordedPaymentId: null,
+          reversedPayments: [{ amount: 40, at: '2026-09-01T00:00:00Z', actor, reason: 'x' }],
+        },
+      ])
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
+      })
+
+      expect(screen.getByText(expected)).toBeInTheDocument()
+      // Exactly one actor line, so no other state's text leaked in beside it.
+      expect(screen.getAllByText(/payments\.actorBy/)).toHaveLength(1)
     })
 
     it('hides the reversal menu item when the user lacks PAYMENTS_DELETE', async () => {

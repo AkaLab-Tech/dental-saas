@@ -1003,7 +1003,9 @@ describe('Appointments API', () => {
         expect(res.body.data.reversedPayments).toHaveLength(1)
         expect(res.body.data.reversedPayments[0]).toMatchObject({
           amount: 80,
-          by: 'user-451',
+          // Task #461: the seeded actor id has no user row in this tenant —
+          // exactly what a hard-deleted user leaves behind.
+          actor: { kind: 'removed' },
           reason: 'Cobrado por error',
         })
 
@@ -1027,7 +1029,7 @@ describe('Appointments API', () => {
 
         expect(res.status).toBe(200)
         expect(res.body.data.reversedPayments).toHaveLength(1)
-        expect(res.body.data.reversedPayments[0].by).toBeNull()
+        expect(res.body.data.reversedPayments[0].actor).toBeNull()
         expect(res.body.data.reversedPayments[0].reason).toBeNull()
         // `at` still has a value so the UI has a date to show.
         expect(res.body.data.reversedPayments[0].at).toBeTruthy()
