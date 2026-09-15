@@ -327,7 +327,11 @@ describe('Admin Auth - Password Recovery', () => {
       await prisma.refreshToken.create({
         data: {
           userId: superAdminId,
-          tokenHash: 'test-refresh-hash',
+          // Task #443: random for the same reason as the #415 token below —
+          // RefreshToken.tokenHash is globally @unique and this describe only
+          // clears refresh tokens in afterAll, so a fixed hash strands on an
+          // aborted run and fails every later run at create().
+          tokenHash: hashToken(crypto.randomBytes(32).toString('hex')),
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         },
       })
@@ -875,8 +879,10 @@ describe('Task #415: super-admin recovery send cooldown', () => {
     // Task #417 put a per-IP limiter on both recovery endpoints. Every request
     // below comes from the same loopback address, so without these resets the
     // cases would inherit each other's hits. Task #443: reset-password too —
-    // the redeem case calls it, and skipping it was safe only because the case
-    // above this describe happened not to.
+    // the redeem case calls it from loopback. Omitting this was safe only
+    // because nothing since the previous describe's reset spends the LOOPBACK
+    // reset-password budget: the #417 cases that call it send X-Forwarded-For,
+    // which `trust proxy` (app.ts) keys as a different client.
     await adminForgotPasswordRateLimitStore.resetAll()
     await adminResetPasswordRateLimitStore.resetAll()
   })
@@ -895,7 +901,7 @@ describe('Task #415: super-admin recovery send cooldown', () => {
     // reset-password would reject it, while the suppressed request still
     // looked like a success from the outside.
     //
-    // Task #443: random, like every other token in this file. A fixed string
+    // Task #443: random, not a fixed string. A fixed string
     // here strands on an aborted run — afterAll never deletes the owning user,
     // the next run's user-scoped cleanup cannot see it, and tokenHash is
     // globally @unique, so every later run fails at create(). The assertion
