@@ -34,6 +34,7 @@ import { downloadAppointmentPdf } from '@/lib/pdf-api'
 import { deletePayment } from '@/lib/payment-api'
 import { formatCurrency } from '@/lib/format'
 import i18n from '@/i18n'
+import { formatActor } from '@/lib/format-actor'
 
 // ============================================================================
 // Types
@@ -341,6 +342,7 @@ function PatientAppointmentCard({
             : t('payments.reversedOn', {
                 date: new Date(reversal.at).toLocaleDateString(i18n.language),
               })}
+          {formatActor(reversal.actor, t) && <span> {formatActor(reversal.actor, t)}</span>}
         </div>
       ))}
     </div>

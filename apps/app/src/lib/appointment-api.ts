@@ -2,6 +2,7 @@ import { apiClient } from './api'
 import { formatCurrency } from './format'
 import i18n from '@/i18n'
 import type { BudgetItemStatus } from './budget-api'
+import type { ActorView } from './payment-api'
 
 // ============================================================================
 // Types
@@ -56,10 +57,10 @@ export interface Appointment {
   recordedPaymentId?: string | null
   /**
    * Task #451: consultation payments recorded on this appointment and later
-   * reversed. `by`/`reason` are null for a reversal recorded before #392 —
+   * reversed. `actor`/`reason` are null for a reversal recorded before #392 —
    * the actor is unrecoverable and a placeholder would read as a record.
    */
-  reversedPayments?: Array<{ amount: number; at: string; by: string | null; reason: string | null }>
+  reversedPayments?: Array<{ amount: number; at: string; actor: ActorView | null; reason: string | null }>
   isActive: boolean
   createdAt: string
   updatedAt: string

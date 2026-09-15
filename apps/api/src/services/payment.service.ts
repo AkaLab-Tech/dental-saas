@@ -1,5 +1,6 @@
 import { prisma, Prisma, PatientPaymentKind } from '@dental/database'
 import { logger } from '../utils/logger.js'
+import { resolveActors, type ActorView } from './actor.service.js'
 
 // Fields to include in payment responses
 const PAYMENT_SELECT = {
@@ -75,7 +76,8 @@ export interface ListPaymentsOptions {
 /** Task #392: the reversal metadata a marked row needs, or null if not reversed. */
 export interface PaymentReversal {
   at: Date
-  by: string | null
+  /** Task #461: who reversed it, resolved for display; null when never recorded. */
+  actor: ActorView | null
   reason: string | null
 }
 
@@ -736,16 +738,25 @@ export async function listPayments(
     return { data: payments as SafePayment[], total }
   }
 
-  const data: SafePayment[] = (
-    payments as Array<SafePayment & { events?: Array<{ occurredAt: Date; actorUserId: string | null; reason: string | null }> }>
-  ).map(({ events, ...payment }) => {
+  const withEvents = payments as Array<
+    SafePayment & { events?: Array<{ occurredAt: Date; actorUserId: string | null; reason: string | null }> }
+  >
+  // Task #461: one lookup for every actor on the page.
+  const actorOf = await resolveActors(
+    tenantId,
+    withEvents.map((p) => p.events?.[0]?.actorUserId)
+  )
+
+  const data: SafePayment[] = withEvents.map(({ events, ...payment }) => {
     const event = events?.[0]
     return {
       ...payment,
       // A pre-#392 reversal has no event. It still renders as reversed, with
       // the metadata absent rather than invented — the actor who reversed it
       // is genuinely unrecoverable, and a placeholder would read as a record.
-      reversal: payment.isActive ? null : { at: event?.occurredAt ?? payment.updatedAt, by: event?.actorUserId ?? null, reason: event?.reason ?? null },
+      reversal: payment.isActive
+        ? null
+        : { at: event?.occurredAt ?? payment.updatedAt, actor: actorOf(event?.actorUserId), reason: event?.reason ?? null },
     }
   })
 

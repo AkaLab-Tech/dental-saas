@@ -1,5 +1,6 @@
 import { prisma, Prisma, AppointmentStatus } from '@dental/database'
 import { logger } from '../utils/logger.js'
+import { resolveActors, type ActorView } from './actor.service.js'
 import {
   computeFifoAllocation,
   convertAppointmentPaymentsToAdvance,
@@ -86,7 +87,7 @@ export type SafeAppointment = {
    * currently counts, this is history, and conflating them is what would put
    * the reversal control back on an already-reversed payment.
    */
-  reversedPayments?: Array<{ amount: number; at: Date; by: string | null; reason: string | null }>
+  reversedPayments?: Array<{ amount: number; at: Date; actor: ActorView | null; reason: string | null }>
   patient?: {
     id: string
     firstName: string
@@ -443,6 +444,12 @@ async function attachRecordedPayments(
     }),
   ])
 
+  // Task #461: one lookup for every actor on the page.
+  const actorOf = await resolveActors(
+    tenantId,
+    reversed.map((p) => p.events[0]?.actorUserId)
+  )
+
   return appointments.map((a) => {
     const payment = payments.find((p) => p.appointmentId === a.id)
     return {
@@ -459,7 +466,7 @@ async function attachRecordedPayments(
           // than being invented, matching what listPayments does for the
           // Entregas surface.
           at: p.events[0]?.occurredAt ?? p.updatedAt,
-          by: p.events[0]?.actorUserId ?? null,
+          actor: actorOf(p.events[0]?.actorUserId),
           reason: p.events[0]?.reason ?? null,
         })),
     }
