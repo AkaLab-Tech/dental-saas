@@ -8,6 +8,8 @@ import { generateToken, generateProfileToken } from '../test/tokens.js'
 // PUT /api/users/:id applies the role hierarchy to a user's email and active
 // status: a requester may change them on themselves, or on a user whose role
 // is strictly lower than their own. Everything else is 403 and changes nothing.
+// DELETE /api/users/:id (nested below, sharing these fixtures) applies the same
+// ordering to deletion, and never allows deleting your own account.
 //
 // Every rejection below asserts BOTH the status and the unchanged row. A 403
 // alone would still pass if the update had already been written before the
@@ -16,16 +18,17 @@ import { generateToken, generateProfileToken } from '../test/tokens.js'
 // When a PIN profile is active, the requester is the profile's person and role,
 // not the shared login's. The kiosk cases pin that down in both directions.
 
-describe('PUT /api/users/:id — role hierarchy for email and active status', () => {
+describe('/api/users/:id — role hierarchy', () => {
   const run = crypto.randomBytes(4).toString('hex')
   const emailFor = (who: string) => `${who}-${run}@users-hierarchy.test`
 
   let tenantId: string
-  const ids: Record<'owner' | 'admin' | 'otherAdmin' | 'staff', string> = {
+  const ids: Record<'owner' | 'admin' | 'otherAdmin' | 'staff' | 'clinicAdmin', string> = {
     owner: '',
     admin: '',
     otherAdmin: '',
     staff: '',
+    clinicAdmin: '',
   }
 
   beforeAll(async () => {
@@ -40,6 +43,7 @@ describe('PUT /api/users/:id — role hierarchy for email and active status', ()
       ['admin', 'ADMIN'],
       ['otherAdmin', 'ADMIN'],
       ['staff', 'STAFF'],
+      ['clinicAdmin', 'CLINIC_ADMIN'],
     ] as const) {
       const user = await prisma.user.create({
         data: { tenantId, email: emailFor(key), firstName: key, lastName: 'Hierarchy', passwordHash, role },
@@ -158,6 +162,87 @@ describe('PUT /api/users/:id — role hierarchy for email and active status', ()
 
       expect(res.status).toBe(403)
       expect((await stored(ids.staff)).email).toBe(emailFor('staff'))
+    })
+  })
+
+  describe('DELETE /api/users/:id — role hierarchy', () => {
+    // A requester may delete only a user whose role is strictly lower than
+    // their own. Neither the person acting nor the account of the login in use
+    // may be deleted. Each rejection asserts both the 403 and that the user is
+    // still active, because deletion here is the active flag.
+
+    function del(id: string, opts: { token: string; profileToken?: string }) {
+      const req = api().delete(`/api/users/${id}`).set('Authorization', `Bearer ${opts.token}`)
+      if (opts.profileToken) req.set('X-Profile-Token', opts.profileToken)
+      return req
+    }
+
+    async function reactivate(id: string) {
+      await prisma.user.update({ where: { id }, data: { isActive: true } })
+    }
+
+    it('rejects deleting a user with an equal role', async () => {
+      const res = await del(ids.otherAdmin, { token: adminToken() })
+
+      expect(res.status).toBe(403)
+      expect((await stored(ids.otherAdmin)).isActive).toBe(true)
+    })
+
+    it('allows deleting a user with a strictly lower role', async () => {
+      const res = await del(ids.staff, { token: adminToken() })
+
+      expect(res.status).toBe(200)
+      expect((await stored(ids.staff)).isActive).toBe(false)
+
+      await reactivate(ids.staff)
+    })
+
+    it('rejects deleting your own account', async () => {
+      const res = await del(ids.admin, { token: adminToken() })
+
+      expect(res.status).toBe(403)
+      expect((await stored(ids.admin)).isActive).toBe(true)
+    })
+
+    it("rejects a PIN profile deleting its own person on another user's login", async () => {
+      // Note: with a current token the profile's role equals its person's role,
+      // so the hierarchy refuses this too. The next case isolates the
+      // own-account rule.
+      const res = await del(ids.admin, {
+        token: generateToken(ids.owner, tenantId, 'OWNER'),
+        profileToken: generateProfileToken(ids.admin, tenantId, 'ADMIN'),
+      })
+
+      expect(res.status).toBe(403)
+      expect((await stored(ids.admin)).isActive).toBe(true)
+    })
+
+    it("rejects a PIN profile deleting its own person even when the token's role outranks that person's current role", async () => {
+      // A profile token carries the role it was issued with. If the person has
+      // since been given a lower role, the hierarchy alone would allow this;
+      // only the own-account rule refuses it.
+      await prisma.user.update({ where: { id: ids.otherAdmin }, data: { role: 'STAFF' } })
+      try {
+        const res = await del(ids.otherAdmin, {
+          token: generateToken(ids.owner, tenantId, 'OWNER'),
+          profileToken: generateProfileToken(ids.otherAdmin, tenantId, 'ADMIN'),
+        })
+
+        expect(res.status).toBe(403)
+        expect((await stored(ids.otherAdmin)).isActive).toBe(true)
+      } finally {
+        await prisma.user.update({ where: { id: ids.otherAdmin }, data: { role: 'ADMIN', isActive: true } })
+      }
+    })
+
+    it('rejects a PIN profile deleting the account of the login it is using, even when that role is lower', async () => {
+      const res = await del(ids.clinicAdmin, {
+        token: generateToken(ids.clinicAdmin, tenantId, 'CLINIC_ADMIN'),
+        profileToken: generateProfileToken(ids.admin, tenantId, 'ADMIN'),
+      })
+
+      expect(res.status).toBe(403)
+      expect((await stored(ids.clinicAdmin)).isActive).toBe(true)
     })
   })
 })

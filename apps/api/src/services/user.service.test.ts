@@ -464,30 +464,97 @@ describe('user.service', () => {
   })
 
   describe('deleteUser', () => {
+    // The actor: the shared login's user, the effective person (the PIN profile
+    // when one is active, else the login), and the effective role.
+    const actor = (over: Partial<userService.UserDeleteActor> = {}): userService.UserDeleteActor => ({
+      loginUserId: 'admin-1',
+      actorUserId: 'admin-1',
+      role: 'ADMIN',
+      ...over,
+    })
+
     it('should prevent self-deletion', async () => {
       vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 'user-1', role: 'ADMIN' } as never)
 
-      const result = await userService.deleteUser('tenant-1', 'user-1', 'user-1')
+      const result = await userService.deleteUser(
+        'tenant-1',
+        'user-1',
+        actor({ loginUserId: 'user-1', actorUserId: 'user-1' })
+      )
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('Cannot delete your own account')
+      expect(prisma.user.update).not.toHaveBeenCalled()
+    })
+
+    it("rejects deleting the active PIN profile's own person", async () => {
+      vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 'person-1', role: 'STAFF' } as never)
+
+      const result = await userService.deleteUser(
+        'tenant-1',
+        'person-1',
+        actor({ loginUserId: 'login-1', actorUserId: 'person-1' })
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Cannot delete your own account')
+      expect(prisma.user.update).not.toHaveBeenCalled()
+    })
+
+    it('rejects deleting the account of the login in use, even when its role is lower', async () => {
+      vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 'login-1', role: 'STAFF' } as never)
+
+      const result = await userService.deleteUser(
+        'tenant-1',
+        'login-1',
+        actor({ loginUserId: 'login-1', actorUserId: 'person-1', role: 'ADMIN' })
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Cannot delete your own account')
+      expect(prisma.user.update).not.toHaveBeenCalled()
     })
 
     it('should prevent deleting owners', async () => {
       vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 'user-1', role: 'OWNER' } as never)
 
-      const result = await userService.deleteUser('tenant-1', 'user-1', 'user-2')
+      const result = await userService.deleteUser('tenant-1', 'user-1', actor({ role: 'OWNER' }))
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('Cannot delete an owner')
+      expect(prisma.user.update).not.toHaveBeenCalled()
     })
 
-    it('should soft delete user and invalidate tokens', async () => {
+    it.each([
+      ['an equal role', 'ADMIN', 'ADMIN'],
+      ['a higher role', 'CLINIC_ADMIN', 'ADMIN'],
+      ['an equal role, further down', 'DOCTOR', 'DOCTOR'],
+    ])('rejects deleting a user with %s', async (_label, actorRole, targetRole) => {
+      vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 'target', role: targetRole } as never)
+
+      const result = await userService.deleteUser('tenant-1', 'target', actor({ role: actorRole }))
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('higher role')
+      expect(prisma.user.update).not.toHaveBeenCalled()
+      expect(prisma.refreshToken.deleteMany).not.toHaveBeenCalled()
+    })
+
+    it('treats an unrecognised requester role as the lowest, never as privileged', async () => {
+      vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 'target', role: 'STAFF' } as never)
+
+      const result = await userService.deleteUser('tenant-1', 'target', actor({ role: 'SUPER_ADMIN' }))
+
+      expect(result.success).toBe(false)
+      expect(prisma.user.update).not.toHaveBeenCalled()
+    })
+
+    it('should soft delete a user with a strictly lower role and invalidate their tokens', async () => {
       vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: 'user-1', role: 'STAFF' } as never)
       vi.mocked(prisma.user.update).mockResolvedValue({} as never)
       vi.mocked(prisma.refreshToken.deleteMany).mockResolvedValue({ count: 1 })
 
-      const result = await userService.deleteUser('tenant-1', 'user-1', 'admin-1')
+      const result = await userService.deleteUser('tenant-1', 'user-1', actor())
 
       expect(result.success).toBe(true)
       expect(prisma.user.update).toHaveBeenCalledWith(

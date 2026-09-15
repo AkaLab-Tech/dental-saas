@@ -365,10 +365,15 @@ usersRouter.put('/:id/role', requireMinRole('ADMIN'), async (req, res, next) => 
 usersRouter.delete('/:id', requireMinRole('ADMIN'), async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId
-    const requestingUserId = req.user!.userId
     const { id } = req.params
 
-    const result = await deleteUser(tenantId, id, requestingUserId)
+    // Both identities: the login in use, and the effective person (the PIN
+    // profile's user when one is active — the resolution ownership.ts uses).
+    const result = await deleteUser(tenantId, id, {
+      loginUserId: req.user!.userId,
+      actorUserId: req.user!.profileUserId || req.user!.userId,
+      role: req.user!.role,
+    })
 
     if (!result.success) {
       const statusCode = result.error === 'User not found' ? 404 : 403
