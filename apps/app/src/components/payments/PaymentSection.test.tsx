@@ -312,7 +312,11 @@ describe('PaymentSection', () => {
       amount: 250,
       note: 'Anticipo revertido',
       isActive: false,
-      reversal: { at: '2026-01-11T10:00:00Z', by: 'user-1', reason: 'Cobrado por error' },
+      reversal: {
+        at: '2026-01-11T10:00:00Z',
+        actor: { kind: 'user', name: 'Ana Pérez', active: true },
+        reason: 'Cobrado por error',
+      },
     })
 
     it('renders a reversed payment with its reason instead of hiding it', async () => {
@@ -327,6 +331,8 @@ describe('PaymentSection', () => {
         // render — asserting the key would silently never match.
         expect(screen.getByText('Revertido: Cobrado por error')).toBeInTheDocument()
       })
+      // Task #461: and who did it.
+      expect(screen.getByText('por Ana Pérez')).toBeInTheDocument()
     })
 
     it('does not offer the delete control on a reversed payment', async () => {
@@ -368,7 +374,7 @@ describe('PaymentSection', () => {
             amount: 40,
             note: 'Anticipo antiguo',
             isActive: false,
-            reversal: { at: '2026-01-01T00:00:00Z', by: null, reason: null },
+            reversal: { at: '2026-01-01T00:00:00Z', actor: null, reason: null },
           }),
         ],
         pagination: { total: 1, limit: 50, offset: 0 },
@@ -379,6 +385,35 @@ describe('PaymentSection', () => {
         expect(screen.getByText('Revertido')).toBeInTheDocument()
       })
       expect(screen.queryByText(/Revertido: /)).not.toBeInTheDocument()
+      // No actor either: absent rather than invented.
+      expect(screen.queryByText(/^por /)).not.toBeInTheDocument()
+    })
+
+    // Task #461: each actor state renders distinctly, in the real Spanish copy.
+    it.each([
+      ['a deactivated user, by name and marked', { kind: 'user', name: 'Luis Gómez', active: false }, 'por Luis Gómez (usuario desactivado)'],
+      ['a removed user, without a name', { kind: 'removed' }, 'por un usuario eliminado'],
+      ['the system', { kind: 'system' }, 'por el sistema'],
+    ] as const)('names the actor of a reversal: %s', async (_label, actor, expected) => {
+      getPatientPaymentsMock.mockResolvedValue({
+        data: [
+          makePayment({
+            id: 'pay-actor',
+            amount: 40,
+            note: 'Anticipo con actor',
+            isActive: false,
+            reversal: { at: '2026-09-01T00:00:00Z', actor, reason: null },
+          }),
+        ],
+        pagination: { total: 1, limit: 50, offset: 0 },
+      })
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Revertido')).toBeInTheDocument()
+      })
+      expect(screen.getByText(expected)).toBeInTheDocument()
+      expect(screen.getAllByText(/^por /)).toHaveLength(1)
     })
   })
 

@@ -725,7 +725,9 @@ describe('Patient Payments Routes', () => {
           tenantId,
           paymentId: reversedId,
           type: 'REVERSED',
-          actorUserId: 'user-392c',
+          // Task #461: a real user of this tenant, so the actor lookup runs
+          // against the database rather than a mock.
+          actorUserId: adminUserId,
           reason: 'Cobrado por error',
         },
       })
@@ -744,11 +746,62 @@ describe('Patient Payments Routes', () => {
 
       const reversedRow = shown.data.find((p) => p.id === reversedId)
       expect(reversedRow?.isActive).toBe(false)
-      expect(reversedRow?.reversal).toMatchObject({ by: 'user-392c', reason: 'Cobrado por error' })
+      expect(reversedRow?.reversal).toMatchObject({
+        actor: { kind: 'user', name: 'Admin User', active: true },
+        reason: 'Cobrado por error',
+      })
 
       // An active row in the same response carries an explicit null, not the
       // previous row's metadata.
       expect(shown.data.find((p) => p.id === activeId)?.reversal).toBeNull()
+    })
+
+    it("resolves an actor id belonging to another tenant as removed, never as that user's name (#461)", async () => {
+      const otherTenant = await prisma.tenant.create({
+        data: { name: 'Other clinic 461', slug: `other-clinic-461-${Date.now()}` },
+      })
+      let paymentId: string | undefined
+      try {
+        const outsider = await prisma.user.create({
+          data: {
+            tenantId: otherTenant.id,
+            email: `outsider-461-${Date.now()}@other.test`,
+            firstName: 'Outsider',
+            lastName: 'Elsewhere',
+            passwordHash: 'x',
+            role: 'ADMIN',
+          },
+        })
+        const payment = await prisma.patientPayment.create({
+          data: {
+            tenantId,
+            patientId: visPatientId,
+            amount: 12,
+            date: new Date('2026-01-13'),
+            kind: 'ADVANCE',
+            isActive: false,
+          },
+        })
+        paymentId = payment.id
+        await prisma.patientPaymentEvent.create({
+          data: { tenantId, paymentId: payment.id, type: 'REVERSED', actorUserId: outsider.id, reason: 'x' },
+        })
+
+        const shown = await listPayments(tenantId, visPatientId, { includeReversed: true })
+        const row = shown.data.find((p) => p.id === payment.id)
+
+        expect(row?.reversal?.actor).toEqual({ kind: 'removed' })
+        expect(JSON.stringify(shown)).not.toContain('Outsider')
+      } finally {
+        // This describe's later cases count the patient's payments, so the row
+        // added here must not outlive the case.
+        if (paymentId) {
+          await prisma.patientPaymentEvent.deleteMany({ where: { paymentId } })
+          await prisma.patientPayment.delete({ where: { id: paymentId } })
+        }
+        await prisma.user.deleteMany({ where: { tenantId: otherTenant.id } })
+        await prisma.tenant.delete({ where: { id: otherTenant.id } }).catch(() => {})
+      }
     })
 
     it('renders a PRE-#392 reversal with the metadata absent rather than invented', async () => {
@@ -769,7 +822,7 @@ describe('Patient Payments Routes', () => {
       const shown = await listPayments(tenantId, visPatientId, { includeReversed: true })
       const row = shown.data.find((p) => p.id === legacy.id)
       expect(row?.reversal).not.toBeUndefined()
-      expect(row?.reversal?.by).toBeNull()
+      expect(row?.reversal?.actor).toBeNull()
       expect(row?.reversal?.reason).toBeNull()
       // `at` falls back to the row's own updatedAt so the UI still has a date.
       expect(row?.reversal?.at).toBeInstanceOf(Date)
