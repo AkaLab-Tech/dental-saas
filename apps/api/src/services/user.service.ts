@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { prisma, UserRole } from '@dental/database'
 import { hashPassword } from './auth.service.js'
 import { logger } from '../utils/logger.js'
+import { ROLE_HIERARCHY } from '../middleware/auth.js'
 
 // Fields to select from user queries (includes pinHash for hasPinSet derivation)
 const USER_SELECT = {
@@ -248,7 +249,36 @@ export async function createProfile(
 }
 
 /**
- * Update a user
+ * The fields whose change is subject to the role hierarchy when made on
+ * another user: the email is the account's recovery address, and the active
+ * flag decides whether the account can sign in at all.
+ */
+const HIERARCHY_GUARDED_FIELDS = ['email', 'isActive'] as const
+
+/** Who is making a change: the effective actor, as the route resolves it. */
+export interface UserUpdateActor {
+  /** The acting person — the PIN profile's user when one is active, else the login's. */
+  userId: string
+  /** The effective role, i.e. the PIN profile's role when one is active. */
+  role: string
+}
+
+export type UpdateUserResult =
+  | { ok: true; user: SafeUser }
+  | { ok: false; reason: 'NOT_FOUND' | 'FORBIDDEN' }
+
+/**
+ * Update a user.
+ *
+ * Role hierarchy: changing another user's email or active status requires the
+ * actor's role to be STRICTLY higher than that user's — the same ordering
+ * requireMinRole uses. Changing your own is always allowed. An unrecognised
+ * role ranks below every tenant role, so it can never satisfy the check.
+ *
+ * "Own" means the effective actor, not the shared login: when a PIN profile is
+ * active the route passes the profile's user id and role. Comparing against the
+ * login's id instead would let a profile act on the login's account as if it
+ * were itself.
  */
 export async function updateUser(
   tenantId: string,
@@ -260,16 +290,26 @@ export async function updateUser(
     phone?: string
     avatar?: string
     isActive?: boolean
-  }
-): Promise<SafeUser | null> {
+  },
+  actor: UserUpdateActor
+): Promise<UpdateUserResult> {
   // Verify user belongs to tenant
   const existing = await prisma.user.findFirst({
     where: { id: userId, tenantId },
-    select: { id: true },
+    select: { id: true, role: true },
   })
 
   if (!existing) {
-    return null
+    return { ok: false, reason: 'NOT_FOUND' }
+  }
+
+  const touchesGuardedField = HIERARCHY_GUARDED_FIELDS.some((field) => data[field] !== undefined)
+  if (touchesGuardedField && existing.id !== actor.userId) {
+    const actorRank = ROLE_HIERARCHY[actor.role as keyof typeof ROLE_HIERARCHY] ?? 0
+    const targetRank = ROLE_HIERARCHY[existing.role as keyof typeof ROLE_HIERARCHY] ?? 0
+    if (actorRank <= targetRank) {
+      return { ok: false, reason: 'FORBIDDEN' }
+    }
   }
 
   const user = await prisma.user.update({
@@ -280,7 +320,7 @@ export async function updateUser(
 
   logger.info({ userId, tenantId }, 'User updated')
 
-  return toSafeUser(user)
+  return { ok: true, user: toSafeUser(user) }
 }
 
 /**

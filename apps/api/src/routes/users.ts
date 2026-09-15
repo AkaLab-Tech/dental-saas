@@ -289,9 +289,23 @@ usersRouter.put('/:id', requireMinRole('ADMIN'), async (req, res, next) => {
       }
     }
 
-    const user = await updateUser(tenantId, id, parse.data)
+    // The effective actor: when a PIN profile is active, the profile's person and
+    // role, not the shared login's — the same resolution ownership.ts uses.
+    const result = await updateUser(tenantId, id, parse.data, {
+      userId: req.user!.profileUserId || req.user!.userId,
+      role: req.user!.role,
+    })
 
-    if (!user) {
+    if (!result.ok) {
+      if (result.reason === 'FORBIDDEN') {
+        return res.status(403).json({
+          success: false,
+          error: {
+            message: "Changing this user's email or active status requires a higher role than theirs",
+            code: 'FORBIDDEN',
+          },
+        })
+      }
       return res.status(404).json({
         success: false,
         error: { message: 'User not found', code: 'NOT_FOUND' },
@@ -300,7 +314,7 @@ usersRouter.put('/:id', requireMinRole('ADMIN'), async (req, res, next) => {
 
     res.json({
       success: true,
-      data: user,
+      data: result.user,
     })
   } catch (e) {
     next(e)
