@@ -129,11 +129,13 @@ export type IssueResetTokenResult =
  * another send for this account is already under way, which is exactly the
  * case the cooldown would suppress a moment later anyway. A BLOCKING lock (or
  * `SELECT ... FOR UPDATE` on the user row) would also serialize correctly, but
- * every request in an attacker's burst would then hold a pool connection while
- * it waited, and a burst could starve the whole API. The route tests' barrier
- * does catch a blocking lock — the waiters neither park on the table nor
- * respond, so its deadline fails the test — but no test shows the harm being
- * avoided. Pool exhaustion under a real burst rests on this reasoning.
+ * every waiter would hold a pool connection for as long as the lock holder's
+ * transaction runs. With the transaction as short as it is today that costs
+ * little, but a slow or stalled holder would let one account's burst tie up the
+ * pool. `try` removes that dependency on the holder's speed. The barrier does
+ * catch a blocking lock — the waiters neither park on the table nor respond,
+ * so its deadline fails the test — but no test shows that harm; it rests on
+ * this reasoning.
  *
  * ORDERING (#415), now enforced here rather than by a comment in two handlers:
  * the lock and the cooldown checks both return BEFORE the invalidation, so a
@@ -141,8 +143,10 @@ export type IssueResetTokenResult =
  * token already sitting in the user's inbox.
  *
  * Accepted cost: `hashtext` is 32-bit, so two different accounts can share a
- * lock key. The only effect is that one of two exactly simultaneous requests
- * for those two accounts is suppressed.
+ * lock key. The effect is that a request for one of them is suppressed as
+ * `in-flight` if it arrives while a request for the other holds the lock —
+ * i.e. overlaps that transaction, which lasts a few queries, not only the
+ * same instant.
  *
  * Email sending is the caller's, after this returns, i.e. after commit: a send
  * is never made for a token whose transaction could still roll back.
