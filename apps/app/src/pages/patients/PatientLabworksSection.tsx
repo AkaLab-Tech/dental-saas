@@ -5,6 +5,7 @@ import type { Labwork } from '@/lib/labwork-api'
 import { getLabworks, getLabworkStatusBadge, formatLabworkDate } from '@/lib/labwork-api'
 import { useAuthStore } from '@/stores/auth.store'
 import { formatCurrency } from '@/lib/format'
+import { PaidStatusBadge } from '@/components/payments/PaidStatusBadge'
 
 interface PatientLabworksSectionProps {
   patientId: string
@@ -23,6 +24,7 @@ const BADGE_STYLES: Record<'default' | 'success' | 'warning' | 'destructive', st
 // ============================================================================
 
 function PatientLabworkRow({ labwork, currency }: { labwork: Labwork; currency: string }) {
+  const { t } = useTranslation()
   const statusBadge = getLabworkStatusBadge(labwork)
 
   return (
@@ -46,6 +48,13 @@ function PatientLabworkRow({ labwork, currency }: { labwork: Labwork; currency: 
           <span className="text-sm font-medium text-gray-900">
             {formatCurrency(labwork.price, currency)}
           </span>
+          {labwork.priceIncludedInAppointment ? (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+              {t('labworks.includedInAppointment')}
+            </span>
+          ) : (
+            <PaidStatusBadge isPaid={labwork.isPaid} cost={labwork.price} />
+          )}
         </div>
       </div>
     </div>

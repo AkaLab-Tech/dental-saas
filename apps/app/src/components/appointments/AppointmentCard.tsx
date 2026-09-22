@@ -7,6 +7,7 @@ import { downloadAppointmentPdf } from '@/lib/pdf-api'
 import type { Appointment } from '@/lib/appointment-api'
 import { ImageUpload } from '@/components/ui/ImageUpload'
 import { ImageGallery } from '@/components/ui/ImageGallery'
+import { PaidStatusBadge } from '@/components/payments/PaidStatusBadge'
 import {
   getStatusLabel,
   getStatusBadgeClasses,
@@ -109,14 +110,8 @@ export function AppointmentCard({
           {/* Cost */}
           {appointment.cost !== null && (
             <div className="mt-2 flex items-center gap-2 text-sm">
-              <span className={appointment.isPaid ? 'text-green-600' : 'text-amber-600'}>
-                {formatCurrency(appointment.cost!, currency)}
-              </span>
-              {appointment.isPaid ? (
-                <span className="text-xs text-green-600">(Pagado)</span>
-              ) : (
-                <span className="text-xs text-amber-600">(Pendiente)</span>
-              )}
+              <span className="text-gray-700">{formatCurrency(appointment.cost!, currency)}</span>
+              <PaidStatusBadge isPaid={appointment.isPaid} cost={appointment.cost!} />
             </div>
           )}
         </div>

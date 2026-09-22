@@ -91,3 +91,48 @@ describe('AppointmentCard — actions menu trigger label (i18n)', () => {
     expect(screen.getByRole('button', { name: 'Editar' })).toBeInTheDocument()
   })
 })
+
+// Task #240: the cost row now renders the shared PaidStatusBadge instead of
+// a hard-coded "(Pagado)"/"(Pendiente)" Spanish suffix. AppointmentCard never
+// passes paidAmount, so it is binary (paid/pending only — never partial).
+describe('AppointmentCard — cost row and paid status badge (#240)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('does not render a cost row when cost is null', () => {
+    renderCard(makeAppointment({ cost: null }))
+
+    expect(screen.queryByText('Pagado')).not.toBeInTheDocument()
+    expect(screen.queryByText('Pendiente')).not.toBeInTheDocument()
+  })
+
+  it('shows the formatted cost and the "Pagado" badge when isPaid is true', () => {
+    renderCard(makeAppointment({ cost: 100, isPaid: true }))
+
+    expect(screen.getByText('USD 100.00')).toBeInTheDocument()
+    expect(screen.getByText('Pagado')).toBeInTheDocument()
+    expect(screen.queryByText('Pendiente')).not.toBeInTheDocument()
+  })
+
+  it('shows the formatted cost and the "Pendiente" badge when isPaid is false', () => {
+    renderCard(makeAppointment({ cost: 100, isPaid: false }))
+
+    expect(screen.getByText('USD 100.00')).toBeInTheDocument()
+    expect(screen.getByText('Pendiente')).toBeInTheDocument()
+    expect(screen.queryByText('Pagado')).not.toBeInTheDocument()
+  })
+
+  it('never shows the "Parcial" badge — AppointmentCard does not pass paidAmount', () => {
+    renderCard(makeAppointment({ cost: 100, isPaid: false }))
+
+    expect(screen.queryByText('Parcial')).not.toBeInTheDocument()
+  })
+
+  it('no longer renders the old hard-coded parenthesised paid/pending suffix', () => {
+    renderCard(makeAppointment({ cost: 100, isPaid: true }))
+
+    expect(screen.queryByText('(Pagado)')).not.toBeInTheDocument()
+    expect(screen.queryByText('(Pendiente)')).not.toBeInTheDocument()
+  })
+})

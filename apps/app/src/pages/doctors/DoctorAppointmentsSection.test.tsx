@@ -165,6 +165,41 @@ describe('DoctorAppointmentsSection', () => {
     expect(screen.getByText('Ana Diaz')).toBeInTheDocument()
   })
 
+  // Task #240: DoctorAppointmentCard never passes paidAmount to
+  // PaidStatusBadge, so it is binary — paid/pending only, never partial.
+  describe('paid status badge (#240)', () => {
+    it('shows "payment.paid" and the formatted cost when isPaid is true', async () => {
+      mockGetAppointmentsByDoctor.mockResolvedValue([{ ...upcomingAppointment, isPaid: true }])
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('$100')).toBeInTheDocument()
+      })
+      expect(screen.getByText('payment.paid')).toBeInTheDocument()
+      expect(screen.queryByText('payment.pending')).not.toBeInTheDocument()
+    })
+
+    it('shows "payment.pending" and the formatted cost when isPaid is false', async () => {
+      mockGetAppointmentsByDoctor.mockResolvedValue([{ ...upcomingAppointment, isPaid: false }])
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('$100')).toBeInTheDocument()
+      })
+      expect(screen.getByText('payment.pending')).toBeInTheDocument()
+      expect(screen.queryByText('payment.paid')).not.toBeInTheDocument()
+    })
+
+    it('never shows "payment.partial" — DoctorAppointmentCard does not pass paidAmount', async () => {
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Limpieza')).toBeInTheDocument()
+      })
+      expect(screen.queryByText('payment.partial')).not.toBeInTheDocument()
+    })
+  })
+
   // --------------------------------------------------------------------------
   // Cancel warning for a recorded consultation payment (#391)
   // --------------------------------------------------------------------------
