@@ -856,7 +856,7 @@ patientsRouter.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREAT
       amount: parsed.data.amount,
       date: new Date(parsed.data.date),
       note: parsed.data.note,
-      createdBy: req.user!.userId,
+      createdBy: req.user!.profileUserId || req.user!.userId,
     })
 
     if (!result.success) {
@@ -900,9 +900,8 @@ patientsRouter.delete('/:patientId/payments/:paymentId', requirePermission(Permi
 
     const result = await deletePayment(tenantId, paymentId, {
       // profileUserId first: under the kiosk model the login is shared, so the
-      // profile is the only thing that names a person. Same expression every
-      // other actor site uses — payment CREATION is the one that does not,
-      // which is #444, not this.
+      // profile is the only thing that names a person. Both payment creation
+      // and reversal record this same expression.
       actorUserId: req.user!.profileUserId || req.user!.userId,
       reason: parsed.data.reason,
     })
