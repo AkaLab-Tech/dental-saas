@@ -98,6 +98,31 @@ const mockStats: AppointmentStats = {
 
 const defaultDate = new Date('2024-01-15T00:00:00Z')
 
+// Task #373 (reviewer fix, cycle 4): a paid create/edit runs pooled FIFO on
+// the server, which can flip `isPaid`/`recordedPaidAmount` on *other*,
+// already-cached appointments (e.g. an older unpaid visit the pool paid off
+// first). Shared across the addAppointment and editAppointment describes
+// (task #380) so both exercise the same stale-row fixture.
+const staleOlderAppointment: Appointment = {
+  ...mockAppointment2,
+  id: 'appointment-older',
+  isPaid: false,
+  hasRecordedPayment: false,
+  recordedPaidAmount: 0,
+}
+
+const flippedOlderAppointment: Appointment = {
+  ...staleOlderAppointment,
+  isPaid: true,
+  hasRecordedPayment: true,
+  recordedPaidAmount: 75,
+}
+
+const newlyCreatedAppointment: Appointment = {
+  ...mockAppointment,
+  id: 'appointment-new',
+}
+
 describe('appointments.store', () => {
   beforeEach(() => {
     // Reset store to initial state before each test
@@ -342,31 +367,9 @@ describe('appointments.store', () => {
       ).rejects.toThrow('Conflict')
     })
 
-    // Task #373 (reviewer fix, cycle 4): a paid create runs pooled FIFO on
-    // the server, which can flip `isPaid`/`recordedPaidAmount` on *other*,
-    // already-cached appointments (e.g. an older unpaid visit the pool paid
-    // off first). The append-only branch below would leave that stale object
-    // in the store; only a full refetch reflects the flip. This is the exact
-    // branch the reviewer found dead (gated on the removed `data.isPaid`).
-    const staleOlderAppointment: Appointment = {
-      ...mockAppointment2,
-      id: 'appointment-older',
-      isPaid: false,
-      hasRecordedPayment: false,
-      recordedPaidAmount: 0,
-    }
-
-    const flippedOlderAppointment: Appointment = {
-      ...staleOlderAppointment,
-      isPaid: true,
-      hasRecordedPayment: true,
-      recordedPaidAmount: 75,
-    }
-
-    const newlyCreatedAppointment: Appointment = {
-      ...mockAppointment,
-      id: 'appointment-new',
-    }
+    // The append-only branch below would leave the stale `staleOlderAppointment`
+    // object in the store; only a full refetch reflects the FIFO flip. This is
+    // the exact branch the reviewer found dead (gated on the removed `data.isPaid`).
 
     it('refetches the full list so a FIFO-flipped older appointment is no longer stale (paidAmount > 0)', async () => {
       useAppointmentsStore.setState({
@@ -474,6 +477,151 @@ describe('appointments.store', () => {
       await useAppointmentsStore.getState().editAppointment('appointment-123', { notes: 'Updated' })
 
       expect(useAppointmentsStore.getState().selectedAppointment).toEqual(updatedAppointment)
+    })
+
+    // Task #380: editAppointment had the same stale-cache bug as addAppointment
+    // (task #373) — a paid edit runs pooled FIFO on the server, which can flip
+    // `isPaid`/`recordedPaidAmount` on the patient's *other* appointments. The
+    // in-place `.map()` swap below only touches the edited row; only a full
+    // refetch reflects the flip on `staleOlderAppointment`.
+    const editedAppointmentPaid: Appointment = {
+      ...mockAppointment,
+      isPaid: true,
+      hasRecordedPayment: true,
+      recordedPaidAmount: 100,
+    }
+
+    it('refetches the full list so a FIFO-flipped older appointment is no longer stale (paidAmount > 0)', async () => {
+      useAppointmentsStore.setState({
+        appointments: [staleOlderAppointment, mockAppointment],
+        calendarAppointments: [staleOlderAppointment, mockAppointment],
+        selectedAppointment: mockAppointment,
+      })
+      ;(updateAppointment as Mock).mockResolvedValue(editedAppointmentPaid)
+      ;(getAppointments as Mock).mockResolvedValue([flippedOlderAppointment, editedAppointmentPaid])
+      ;(getAppointmentStats as Mock).mockResolvedValue(mockStats)
+
+      const result = await useAppointmentsStore
+        .getState()
+        .editAppointment('appointment-123', { paidAmount: 100 })
+
+      expect(result).toEqual(editedAppointmentPaid)
+      expect(getAppointments).toHaveBeenCalledTimes(1)
+
+      const state = useAppointmentsStore.getState()
+      expect(state.appointments).toEqual([flippedOlderAppointment, editedAppointmentPaid])
+      const olderInStore = state.appointments.find((a) => a.id === 'appointment-older')
+      expect(olderInStore?.isPaid).toBe(true)
+      expect(olderInStore?.hasRecordedPayment).toBe(true)
+      expect(olderInStore?.recordedPaidAmount).toBe(75)
+    })
+
+    it('refetches the full list when isPaid is set to true without a paidAmount', async () => {
+      const editedAppointmentIsPaid: Appointment = { ...mockAppointment, isPaid: true }
+      useAppointmentsStore.setState({
+        appointments: [staleOlderAppointment, mockAppointment],
+        calendarAppointments: [staleOlderAppointment, mockAppointment],
+      })
+      ;(updateAppointment as Mock).mockResolvedValue(editedAppointmentIsPaid)
+      ;(getAppointments as Mock).mockResolvedValue([flippedOlderAppointment, editedAppointmentIsPaid])
+      ;(getAppointmentStats as Mock).mockResolvedValue(mockStats)
+
+      await useAppointmentsStore.getState().editAppointment('appointment-123', { isPaid: true })
+
+      expect(getAppointments).toHaveBeenCalledTimes(1)
+      const state = useAppointmentsStore.getState()
+      expect(state.appointments).toEqual([flippedOlderAppointment, editedAppointmentIsPaid])
+    })
+
+    it('does not refetch when paidAmount is absent (in-place swap preserved)', async () => {
+      const editedAppointmentUnpaid: Appointment = { ...mockAppointment, notes: 'Edited, no payment' }
+      useAppointmentsStore.setState({
+        appointments: [staleOlderAppointment, mockAppointment],
+        calendarAppointments: [staleOlderAppointment, mockAppointment],
+        selectedAppointment: mockAppointment,
+      })
+      ;(updateAppointment as Mock).mockResolvedValue(editedAppointmentUnpaid)
+      ;(getAppointmentStats as Mock).mockResolvedValue(mockStats)
+
+      await useAppointmentsStore
+        .getState()
+        .editAppointment('appointment-123', { notes: 'Edited, no payment' })
+
+      expect(getAppointments).not.toHaveBeenCalled()
+      const state = useAppointmentsStore.getState()
+      expect(state.appointments).toEqual([staleOlderAppointment, editedAppointmentUnpaid])
+      expect(state.calendarAppointments).toEqual([staleOlderAppointment, editedAppointmentUnpaid])
+      expect(state.selectedAppointment).toEqual(editedAppointmentUnpaid)
+    })
+
+    it('does not refetch when paidAmount is 0 (in-place swap preserved)', async () => {
+      const editedAppointmentZeroPaid: Appointment = { ...mockAppointment, notes: 'Edited, zero payment' }
+      useAppointmentsStore.setState({
+        appointments: [staleOlderAppointment, mockAppointment],
+        calendarAppointments: [staleOlderAppointment, mockAppointment],
+        selectedAppointment: mockAppointment,
+      })
+      ;(updateAppointment as Mock).mockResolvedValue(editedAppointmentZeroPaid)
+      ;(getAppointmentStats as Mock).mockResolvedValue(mockStats)
+
+      await useAppointmentsStore
+        .getState()
+        .editAppointment('appointment-123', { notes: 'Edited, zero payment', paidAmount: 0 })
+
+      expect(getAppointments).not.toHaveBeenCalled()
+      const state = useAppointmentsStore.getState()
+      expect(state.appointments).toEqual([staleOlderAppointment, editedAppointmentZeroPaid])
+      expect(state.calendarAppointments).toEqual([staleOlderAppointment, editedAppointmentZeroPaid])
+      expect(state.selectedAppointment).toEqual(editedAppointmentZeroPaid)
+    })
+  })
+
+  // Task #380: fetchAppointments records its params as `lastListParams` so a
+  // subsequent paid create/edit can replay the *viewed* query instead of
+  // falling back to the store's `dateRange` (unset outside tests), which
+  // would silently swap the viewed month for the tenant's oldest 50 rows.
+  describe('list params reuse after a paid mutation (task #380)', () => {
+    const viewedRange = { from: '2024-03-01', to: '2024-03-31' }
+
+    it('a paid create replays the last fetchAppointments params', async () => {
+      ;(getAppointments as Mock).mockResolvedValueOnce([mockAppointment2])
+      await useAppointmentsStore.getState().fetchAppointments(viewedRange)
+      expect(getAppointments).toHaveBeenCalledTimes(1)
+
+      ;(createAppointment as Mock).mockResolvedValue(newlyCreatedAppointment)
+      ;(getAppointments as Mock).mockResolvedValueOnce([mockAppointment2, newlyCreatedAppointment])
+      ;(getAppointmentStats as Mock).mockResolvedValue(mockStats)
+
+      await useAppointmentsStore.getState().addAppointment({
+        patientId: 'patient-789',
+        doctorId: 'doctor-101',
+        startTime: '2024-03-15T10:00:00Z',
+        endTime: '2024-03-15T11:00:00Z',
+        paidAmount: 100,
+      })
+
+      expect(getAppointments).toHaveBeenCalledTimes(2)
+      expect(getAppointments).toHaveBeenLastCalledWith(
+        expect.objectContaining({ from: '2024-03-01', to: '2024-03-31' })
+      )
+    })
+
+    it('a paid edit replays the last fetchAppointments params', async () => {
+      ;(getAppointments as Mock).mockResolvedValueOnce([mockAppointment])
+      await useAppointmentsStore.getState().fetchAppointments(viewedRange)
+      expect(getAppointments).toHaveBeenCalledTimes(1)
+
+      const editedAppointment = { ...mockAppointment, isPaid: true, recordedPaidAmount: 100 }
+      ;(updateAppointment as Mock).mockResolvedValue(editedAppointment)
+      ;(getAppointments as Mock).mockResolvedValueOnce([editedAppointment])
+      ;(getAppointmentStats as Mock).mockResolvedValue(mockStats)
+
+      await useAppointmentsStore.getState().editAppointment('appointment-123', { paidAmount: 100 })
+
+      expect(getAppointments).toHaveBeenCalledTimes(2)
+      expect(getAppointments).toHaveBeenLastCalledWith(
+        expect.objectContaining({ from: '2024-03-01', to: '2024-03-31' })
+      )
     })
   })
 

@@ -314,7 +314,7 @@ export async function getCalendarAppointments(
     orderBy: { startTime: 'asc' },
   })
 
-  return appointments as SafeAppointment[]
+  return attachRecordedPayments(tenantId, appointments as SafeAppointment[])
 }
 
 /**
