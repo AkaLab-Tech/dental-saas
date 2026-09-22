@@ -795,6 +795,10 @@ export interface PaymentMovement {
 export interface ListPaymentMovementsOptions {
   from?: Date
   to?: Date
+  // Set by the route when `to` arrived as a bare date: `to` is then the
+  // *next* day's midnight and the bound must exclude it (`lt`), not include
+  // it (`lte`).
+  toExclusive?: boolean
 }
 
 /**
@@ -819,7 +823,7 @@ export async function listPaymentMovements(
     options?.from || options?.to
       ? {
           ...(options.from && { gte: options.from }),
-          ...(options.to && { lte: options.to }),
+          ...(options.to && (options.toExclusive ? { lt: options.to } : { lte: options.to })),
         }
       : undefined
 

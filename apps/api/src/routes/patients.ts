@@ -802,9 +802,28 @@ patientsRouter.get(
       }
       const { from, to } = parsedQuery.data
 
+      // A bare YYYY-MM-DD `to` (a direct API caller, not this app's own
+      // client — which always sends a full local end-of-day ISO instant)
+      // would otherwise parse to UTC midnight at the *start* of that day,
+      // silently dropping the whole day. Treat it as "before the next day's
+      // midnight" instead.
+      const isDateOnly = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value)
+      let toDate: Date | undefined
+      let toExclusive = false
+      if (to) {
+        if (isDateOnly(to)) {
+          toDate = new Date(to)
+          toDate.setUTCDate(toDate.getUTCDate() + 1)
+          toExclusive = true
+        } else {
+          toDate = new Date(to)
+        }
+      }
+
       const data = await listPaymentMovements(tenantId, id, {
         from: from ? new Date(from) : undefined,
-        to: to ? new Date(to) : undefined,
+        to: toDate,
+        toExclusive,
       })
 
       res.json({ success: true, data })

@@ -3535,6 +3535,103 @@ describe('Patient Payments Routes', () => {
       })
     })
 
+    // ==========================================================================
+    // Review-fix cycle 1 (#478): a bare `to=YYYY-MM-DD` used to parse as UTC
+    // midnight at the *start* of that day, silently dropping the whole day.
+    // ==========================================================================
+    describe('a bare-date `to` no longer drops its own day (#453 review fix)', () => {
+      it('includes a payment.date-based row AND an occurredAt-based row stamped late on the `to` day, and excludes both at the next day\'s UTC midnight', async () => {
+        const patientId = await createMovementsPatient('BareDateTo')
+        const from = new Date('2026-01-01T00:00:00.000Z')
+        const day = '2026-01-15'
+        const lateOnDay = new Date('2026-01-15T20:00:00.000Z')
+        const nextDayMidnight = new Date('2026-01-16T00:00:00.000Z')
+
+        // --- RECEIVED leg (uses PatientPayment.date): one late on `day`
+        // (must be included), one at the next day's midnight (must not).
+        const paymentLate = await prisma.patientPayment.create({
+          data: { tenantId, patientId, amount: 15, date: lateOnDay, kind: 'ADVANCE' },
+        })
+        const paymentNextDay = await prisma.patientPayment.create({
+          data: { tenantId, patientId, amount: 16, date: nextDayMidnight, kind: 'ADVANCE' },
+        })
+
+        // --- REVERSED leg (uses PatientPaymentEvent.occurredAt): the
+        // payment's own `date` is pinned well before `from` so only the
+        // event's occurredAt controls whether each reversal is in range.
+        const outOfRange = new Date('2025-01-01T00:00:00.000Z')
+        const paymentToReverseInRange = await prisma.patientPayment.create({
+          data: { tenantId, patientId, amount: 17, date: outOfRange, kind: 'ADVANCE' },
+        })
+        const reverseInRange = await api()
+          .delete(`/api/patients/${patientId}/payments/${paymentToReverseInRange.id}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ reason: 'Late-on-day reversal for #453 review fix' })
+        expect(reverseInRange.status).toBe(200)
+        await prisma.$executeRaw`UPDATE patient_payment_events SET "occurredAt" = ${lateOnDay} WHERE "paymentId" = ${paymentToReverseInRange.id} AND type = 'REVERSED'`
+
+        const paymentToReverseNextDay = await prisma.patientPayment.create({
+          data: { tenantId, patientId, amount: 18, date: outOfRange, kind: 'ADVANCE' },
+        })
+        const reverseNextDay = await api()
+          .delete(`/api/patients/${patientId}/payments/${paymentToReverseNextDay.id}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ reason: 'Next-day reversal for #453 review fix' })
+        expect(reverseNextDay.status).toBe(200)
+        await prisma.$executeRaw`UPDATE patient_payment_events SET "occurredAt" = ${nextDayMidnight} WHERE "paymentId" = ${paymentToReverseNextDay.id} AND type = 'REVERSED'`
+
+        const res = await api()
+          .get(`/api/patients/${patientId}/payment-movements`)
+          .query({ from: from.toISOString(), to: day })
+          .set('Authorization', `Bearer ${adminToken}`)
+
+        expect(res.status).toBe(200)
+        const byPaymentAndType = res.body.data.map((m: { paymentId: string; type: string }) => ({
+          paymentId: m.paymentId,
+          type: m.type,
+        }))
+        expect(byPaymentAndType).toEqual(
+          expect.arrayContaining([
+            { paymentId: paymentLate.id, type: 'RECEIVED' },
+            { paymentId: paymentToReverseInRange.id, type: 'REVERSED' },
+          ])
+        )
+        expect(byPaymentAndType).not.toEqual(
+          expect.arrayContaining([{ paymentId: paymentNextDay.id, type: 'RECEIVED' }])
+        )
+        expect(byPaymentAndType).not.toEqual(
+          expect.arrayContaining([{ paymentId: paymentToReverseNextDay.id, type: 'REVERSED' }])
+        )
+        // The reversal itself leaves no RECEIVED row for the reversed
+        // payments, so only the two positive cases above are expected —
+        // pin the exact count too, not just "contains".
+        expect(res.body.data).toHaveLength(2)
+      })
+
+      it('keeps a full ISO `to` inclusive: an event exactly at `to` is still included', async () => {
+        const patientId = await createMovementsPatient('FullIsoToInclusive')
+        const from = new Date('2026-02-01T00:00:00.000Z')
+        const to = new Date('2026-02-10T12:00:00.000Z')
+
+        const paymentAtBoundary = await prisma.patientPayment.create({
+          data: { tenantId, patientId, amount: 25, date: to, kind: 'ADVANCE' },
+        })
+        const paymentAfterBoundary = await prisma.patientPayment.create({
+          data: { tenantId, patientId, amount: 26, date: new Date(to.getTime() + 1), kind: 'ADVANCE' },
+        })
+
+        const res = await api()
+          .get(`/api/patients/${patientId}/payment-movements`)
+          .query({ from: from.toISOString(), to: to.toISOString() })
+          .set('Authorization', `Bearer ${adminToken}`)
+
+        expect(res.status).toBe(200)
+        const paymentIds = res.body.data.map((m: { paymentId: string }) => m.paymentId)
+        expect(paymentIds).toContain(paymentAtBoundary.id)
+        expect(paymentIds).not.toContain(paymentAfterBoundary.id)
+      })
+    })
+
     describe('access', () => {
       it('rejects a token whose role lacks PAYMENTS_VIEW with 403, same gate as the sibling payments routes', async () => {
         expect(hasPermission(UserRole.SUPER_ADMIN, Permission.PAYMENTS_VIEW)).toBe(false)

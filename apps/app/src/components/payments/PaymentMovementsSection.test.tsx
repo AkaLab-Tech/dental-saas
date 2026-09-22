@@ -52,6 +52,21 @@ function fmtDate(value: string): string {
   return new Date(value).toLocaleDateString('es', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+// The component converts a bare <input type="date"> value to a local-time
+// start/end-of-day ISO instant before calling the API client (#453 review
+// fix). Computed independently from the component's own helpers, from the
+// y/m/d parts, so the expectation is TZ-independent rather than a restatement
+// of the implementation.
+function expectedStartOfLocalDayISO(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  return new Date(year, month - 1, day, 0, 0, 0, 0).toISOString()
+}
+
+function expectedEndOfLocalDayISO(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  return new Date(year, month - 1, day, 23, 59, 59, 999).toISOString()
+}
+
 function renderSection(props: Partial<Parameters<typeof PaymentMovementsSection>[0]> = {}) {
   return render(<PaymentMovementsSection patientId="patient-1" {...props} />)
 }
@@ -294,7 +309,7 @@ describe('PaymentMovementsSection', () => {
       })
     })
 
-    it('refetches with the `from` value once the From input changes', async () => {
+    it('refetches with the `from` value converted to a local start-of-day ISO instant once the From input changes', async () => {
       renderSection()
       await waitFor(() => expect(getPatientPaymentMovementsMock).toHaveBeenCalledTimes(1))
 
@@ -302,13 +317,13 @@ describe('PaymentMovementsSection', () => {
 
       await waitFor(() => {
         expect(getPatientPaymentMovementsMock).toHaveBeenLastCalledWith('patient-1', {
-          from: '2026-05-01',
+          from: expectedStartOfLocalDayISO('2026-05-01'),
           to: undefined,
         })
       })
     })
 
-    it('refetches with both `from` and `to` once both inputs are set', async () => {
+    it('refetches with `from`/`to` converted to local start/end-of-day ISO instants once both inputs are set', async () => {
       renderSection()
       await waitFor(() => expect(getPatientPaymentMovementsMock).toHaveBeenCalledTimes(1))
 
@@ -317,8 +332,8 @@ describe('PaymentMovementsSection', () => {
 
       await waitFor(() => {
         expect(getPatientPaymentMovementsMock).toHaveBeenLastCalledWith('patient-1', {
-          from: '2026-05-01',
-          to: '2026-05-31',
+          from: expectedStartOfLocalDayISO('2026-05-01'),
+          to: expectedEndOfLocalDayISO('2026-05-31'),
         })
       })
     })

@@ -195,7 +195,9 @@ export async function getDebtors(): Promise<Debtor[]> {
 /**
  * Task #453: the interleaved chronological ledger of payments received plus
  * every REVERSED / CONVERTED_TO_ADVANCE / RESTORED_TO_APPOINTMENT transition,
- * newest first. `from`/`to` are plain YYYY-MM-DD strings.
+ * newest first. `from`/`to` are ISO datetime strings (the caller converts a
+ * bare date to local start/end-of-day before calling this) — a bare
+ * YYYY-MM-DD is still accepted by the API for direct callers.
  */
 export async function getPatientPaymentMovements(
   patientId: string,

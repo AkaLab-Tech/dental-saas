@@ -36,6 +36,21 @@ const TYPE_COLOR: Record<PaymentMovementType, string> = {
   RESTORED_TO_APPOINTMENT: 'bg-blue-100 text-blue-600',
 }
 
+// The <input type="date"> value is a bare YYYY-MM-DD. `new Date(dateStr)`
+// parses that as UTC midnight, which is the wrong calendar day in the local
+// zone west of UTC (e.g. Uruguay, UTC-3) — building the Date from its y/m/d
+// parts instead pins it to local midnight, so the ISO instant sent to the
+// API reflects the clinic user's actual local day.
+function startOfLocalDayISO(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  return new Date(year, month - 1, day, 0, 0, 0, 0).toISOString()
+}
+
+function endOfLocalDayISO(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  return new Date(year, month - 1, day, 23, 59, 59, 999).toISOString()
+}
+
 export function PaymentMovementsSection({ patientId, refreshKey = 0 }: PaymentMovementsSectionProps) {
   const { t, i18n } = useTranslation()
   const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
@@ -62,8 +77,8 @@ export function PaymentMovementsSection({ patientId, refreshKey = 0 }: PaymentMo
     setError(null)
     try {
       const data = await getPatientPaymentMovements(patientId, {
-        from: from || undefined,
-        to: to || undefined,
+        from: from ? startOfLocalDayISO(from) : undefined,
+        to: to ? endOfLocalDayISO(to) : undefined,
       })
       setMovements(data)
     } catch (e) {
