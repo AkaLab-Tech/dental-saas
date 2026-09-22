@@ -463,12 +463,8 @@ export const PdfService = {
     }
 
     const labwork = labworkResult.data
-    const doctors = labwork.doctorIds.length
-      ? await prisma.doctor.findMany({
-          where: { id: { in: labwork.doctorIds }, tenantId },
-          select: { id: true, firstName: true, lastName: true },
-        })
-      : []
+    // getLabworkById already resolved doctorIds into full doctor rows.
+    const doctors = labwork.doctors.map((d) => ({ id: d.id, firstName: d.firstName, lastName: d.lastName }))
 
     return {
       data: {

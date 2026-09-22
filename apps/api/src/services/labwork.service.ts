@@ -30,6 +30,20 @@ const PATIENT_INCLUDE = {
   phone: true,
 } as const
 
+const DOCTOR_SUMMARY_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  isActive: true,
+} as const
+
+type DoctorSummary = {
+  id: string
+  firstName: string
+  lastName: string
+  isActive: boolean
+}
+
 export type SafeLabwork = {
   id: string
   tenantId: string
@@ -44,6 +58,7 @@ export type SafeLabwork = {
   isPaid: boolean
   isDelivered: boolean
   doctorIds: string[]
+  doctors: DoctorSummary[]
   isActive: boolean
   createdBy: string | null
   createdAt: Date
@@ -63,6 +78,7 @@ export type LabworkErrorCode =
   | 'ALREADY_ACTIVE'
   | 'INVALID_PATIENT'
   | 'INVALID_APPOINTMENT'
+  | 'DOCTOR_NOT_FOUND'
 
 export interface CreateLabworkInput {
   patientId?: string
@@ -148,7 +164,58 @@ function transformLabwork(labwork: {
   return {
     ...labwork,
     doctorIds: Array.isArray(labwork.doctorIds) ? labwork.doctorIds as string[] : [],
+    doctors: [],
   }
+}
+
+/**
+ * Resolve `doctorIds` into `doctors` (id, name, isActive) for a batch of
+ * labworks with a single query, regardless of how many labworks are passed.
+ * Deactivated doctors still resolve; ids matching no doctor of this tenant
+ * are silently dropped from `doctors` (they remain in `doctorIds`).
+ */
+async function attachDoctors(tenantId: string, labworks: SafeLabwork[]): Promise<SafeLabwork[]> {
+  const doctorIds = Array.from(new Set(labworks.flatMap((l) => l.doctorIds)))
+  const doctors = doctorIds.length
+    ? await prisma.doctor.findMany({
+        where: { id: { in: doctorIds }, tenantId },
+        select: DOCTOR_SUMMARY_SELECT,
+      })
+    : []
+  const doctorsById = new Map(doctors.map((d) => [d.id, d]))
+
+  return labworks.map((labwork) => ({
+    ...labwork,
+    doctors: labwork.doctorIds
+      .map((id) => doctorsById.get(id))
+      .filter((d): d is DoctorSummary => !!d),
+  }))
+}
+
+/**
+ * Verify every id in `doctorIds` belongs to a doctor of this tenant. Does
+ * NOT filter on `isActive` — a labwork can keep a deactivated doctor it was
+ * already assigned to.
+ */
+async function verifyDoctors(
+  doctorIds: string[],
+  tenantId: string
+): Promise<{ success: true } | { success: false; code: LabworkErrorCode }> {
+  const uniqueIds = Array.from(new Set(doctorIds))
+  if (uniqueIds.length === 0) {
+    return { success: true }
+  }
+
+  const doctors = await prisma.doctor.findMany({
+    where: { id: { in: uniqueIds }, tenantId },
+    select: { id: true },
+  })
+
+  if (doctors.length !== uniqueIds.length) {
+    return { success: false, code: 'DOCTOR_NOT_FOUND' }
+  }
+
+  return { success: true }
 }
 
 /**
@@ -236,6 +303,14 @@ export async function createLabwork(
     }
   }
 
+  // Validate doctors if provided
+  if (input.doctorIds) {
+    const doctorsCheck = await verifyDoctors(input.doctorIds, tenantId)
+    if (!doctorsCheck.success) {
+      return doctorsCheck
+    }
+  }
+
   // priceIncludedInAppointment requires appointmentId
   const priceIncluded = input.appointmentId ? (input.priceIncludedInAppointment || false) : false
 
@@ -263,7 +338,8 @@ export async function createLabwork(
 
   logger.info({ labworkId: labwork.id, tenantId }, 'Labwork created')
 
-  return { success: true, data: transformLabwork(labwork) }
+  const [withDoctors] = await attachDoctors(tenantId, [transformLabwork(labwork)])
+  return { success: true, data: withDoctors }
 }
 
 /**
@@ -285,7 +361,8 @@ export async function getLabworkById(
     return { success: false, code: 'NOT_FOUND' }
   }
 
-  return { success: true, data: transformLabwork(labwork) }
+  const [withDoctors] = await attachDoctors(tenantId, [transformLabwork(labwork)])
+  return { success: true, data: withDoctors }
 }
 
 /**
@@ -347,7 +424,7 @@ export async function listLabworks(
   ])
 
   return {
-    data: labworks.map(transformLabwork),
+    data: await attachDoctors(tenantId, labworks.map(transformLabwork)),
     total,
   }
 }
@@ -403,18 +480,12 @@ export async function exportLabworksCsv(
     orderBy: { date: 'desc' },
   })
 
-  const safeLabworks = labworks.map(transformLabwork)
+  const withDoctors = await attachDoctors(tenantId, labworks.map(transformLabwork))
+  const doctorNamesById = Object.fromEntries(
+    withDoctors.flatMap((l) => l.doctors.map((d) => [d.id, `${d.firstName} ${d.lastName}`]))
+  )
 
-  const doctorIds = Array.from(new Set(safeLabworks.flatMap((l) => l.doctorIds)))
-  const doctors = doctorIds.length
-    ? await prisma.doctor.findMany({
-        where: { id: { in: doctorIds }, tenantId },
-        select: { id: true, firstName: true, lastName: true },
-      })
-    : []
-  const doctorNamesById = Object.fromEntries(doctors.map((d) => [d.id, `${d.firstName} ${d.lastName}`]))
-
-  return labworksToCsv(safeLabworks, doctorNamesById)
+  return labworksToCsv(withDoctors, doctorNamesById)
 }
 
 /**
@@ -466,6 +537,14 @@ export async function updateLabwork(
     }
   }
 
+  // Validate doctors if being updated
+  if (input.doctorIds) {
+    const doctorsCheck = await verifyDoctors(input.doctorIds, tenantId)
+    if (!doctorsCheck.success) {
+      return doctorsCheck
+    }
+  }
+
   // Determine effective appointmentId for priceIncluded logic
   const effectiveAppointmentId = input.appointmentId !== undefined ? input.appointmentId : existing.appointmentId
   const priceIncluded = effectiveAppointmentId
@@ -497,7 +576,8 @@ export async function updateLabwork(
 
   logger.info({ labworkId, tenantId }, 'Labwork updated')
 
-  return { success: true, data: transformLabwork(labwork) }
+  const [withDoctors] = await attachDoctors(tenantId, [transformLabwork(labwork)])
+  return { success: true, data: withDoctors }
 }
 
 /**
@@ -531,7 +611,8 @@ export async function deleteLabwork(
 
   logger.info({ labworkId, tenantId }, 'Labwork soft deleted')
 
-  return { success: true, data: transformLabwork(updated) }
+  const [withDoctors] = await attachDoctors(tenantId, [transformLabwork(updated)])
+  return { success: true, data: withDoctors }
 }
 
 /**
@@ -565,7 +646,8 @@ export async function restoreLabwork(
 
   logger.info({ labworkId, tenantId }, 'Labwork restored')
 
-  return { success: true, data: transformLabwork(updated) }
+  const [withDoctors] = await attachDoctors(tenantId, [transformLabwork(updated)])
+  return { success: true, data: withDoctors }
 }
 
 /**

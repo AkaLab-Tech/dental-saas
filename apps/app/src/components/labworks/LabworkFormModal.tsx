@@ -8,6 +8,8 @@ import type { Labwork, CreateLabworkData } from '@/lib/labwork-api'
 import { getLabNames } from '@/lib/labwork-api'
 import type { Appointment } from '@/lib/appointment-api'
 import { getAppointmentsByPatient } from '@/lib/appointment-api'
+import type { Doctor } from '@/lib/doctor-api'
+import { getDoctors } from '@/lib/doctor-api'
 import { useAuthStore } from '@/stores/auth.store'
 import { formatCurrency, formatDateForInput } from '@/lib/format'
 import { PatientSearchCombobox, type PatientOption } from '@/components/ui/PatientSearchCombobox'
@@ -26,6 +28,7 @@ const labworkFormSchema = z.object({
   price: z.coerce.number().min(0, 'El precio debe ser 0 o mayor'),
   isPaid: z.boolean().optional(),
   isDelivered: z.boolean().optional(),
+  doctorIds: z.array(z.string()).optional(),
   notes: z.string().max(2000, 'Las notas no pueden exceder 2000 caracteres').optional(),
 })
 
@@ -57,6 +60,7 @@ export function LabworkFormModal({
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loadingAppointments, setLoadingAppointments] = useState(false)
   const [labNames, setLabNames] = useState<string[]>([])
+  const [doctors, setDoctors] = useState<Doctor[]>([])
 
   const {
     register,
@@ -77,11 +81,29 @@ export function LabworkFormModal({
       price: 0,
       isPaid: false,
       isDelivered: false,
+      doctorIds: [],
       notes: '',
     },
   })
 
   const watchedAppointmentId = watch('appointmentId')
+  const watchedDoctorIds = watch('doctorIds') || []
+
+  const toggleDoctor = (doctorId: string) => {
+    if (watchedDoctorIds.includes(doctorId)) {
+      setValue('doctorIds', watchedDoctorIds.filter((id) => id !== doctorId))
+    } else {
+      setValue('doctorIds', [...watchedDoctorIds, doctorId])
+    }
+  }
+
+  // Active doctors plus any doctor already assigned to this labwork who has
+  // since been deactivated — shown checked so saving never silently drops
+  // them (their label comes from the labwork itself, not the active list).
+  const inactiveAssignedDoctors = (labwork?.doctors || []).filter(
+    (d) => !d.isActive && !doctors.some((active) => active.id === d.id)
+  )
+  const doctorCheckboxOptions = [...doctors, ...inactiveAssignedDoctors]
 
   // Reset form when labwork changes or modal opens
   useEffect(() => {
@@ -97,6 +119,7 @@ export function LabworkFormModal({
           price: labwork.price,
           isPaid: labwork.isPaid,
           isDelivered: labwork.isDelivered,
+          doctorIds: labwork.doctorIds,
           notes: labwork.note || '',
         })
         if (labwork.patient && labwork.patientId) {
@@ -118,6 +141,7 @@ export function LabworkFormModal({
           price: 0,
           isPaid: false,
           isDelivered: false,
+          doctorIds: [],
           notes: '',
         })
         setSelectedPatient(null)
@@ -136,6 +160,20 @@ export function LabworkFormModal({
       })
       .catch(() => {
         if (!cancelled) setLabNames([])
+      })
+    return () => { cancelled = true }
+  }, [isOpen])
+
+  // Fetch active doctors for the assignment checkboxes when the modal opens
+  useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+    getDoctors({ limit: 100 })
+      .then((data) => {
+        if (!cancelled) setDoctors(data)
+      })
+      .catch(() => {
+        if (!cancelled) setDoctors([])
       })
     return () => { cancelled = true }
   }, [isOpen])
@@ -181,6 +219,7 @@ export function LabworkFormModal({
       price: data.price,
       isPaid: data.isPaid ?? false,
       isDelivered: data.isDelivered ?? false,
+      doctorIds: data.doctorIds ?? [],
       ...(data.notes && { notes: data.notes }),
       ...(data.appointmentId && { appointmentId: data.appointmentId }),
       priceIncludedInAppointment: data.appointmentId ? (data.priceIncludedInAppointment ?? false) : false,
@@ -416,6 +455,32 @@ export function LabworkFormModal({
                   />
                   <span className="text-sm text-gray-700">{t('labworks.status.delivered')}</span>
                 </label>
+              </div>
+
+              {/* Assigned doctors */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('labworks.doctors')}
+                </label>
+                <div className="space-y-1.5">
+                  {doctorCheckboxOptions.map((doctor) => (
+                    <label key={doctor.id} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={watchedDoctorIds.includes(doctor.id)}
+                        onChange={() => toggleDoctor(doctor.id)}
+                        className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">
+                        {doctor.firstName} {doctor.lastName}
+                        {!doctor.isActive && ` (${t('common.inactive')})`}
+                      </span>
+                    </label>
+                  ))}
+                  {doctorCheckboxOptions.length === 0 && (
+                    <p className="text-xs text-gray-400">{t('labworks.selectDoctors')}</p>
+                  )}
+                </div>
               </div>
 
               {/* Notes */}

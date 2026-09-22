@@ -657,7 +657,7 @@ describe('PdfService', () => {
       })
       expect(prisma.doctor.findMany).toHaveBeenCalledWith({
         where: { id: { in: ['doctor-1', 'doctor-2'] }, tenantId: 'tenant-123' },
-        select: { id: true, firstName: true, lastName: true },
+        select: { id: true, firstName: true, lastName: true, isActive: true },
       })
     })
 
@@ -684,6 +684,10 @@ describe('PdfService', () => {
       vi.mocked(prisma.labwork.findFirst).mockResolvedValue(
         mockLabworkRow() as unknown as Awaited<ReturnType<typeof prisma.labwork.findFirst>>
       )
+      // getLabworkById resolves doctors (attachDoctors) before the tenant
+      // check runs, so the doctor lookup must be mocked here too even though
+      // this test only cares about the tenant-not-found branch.
+      vi.mocked(prisma.doctor.findMany).mockResolvedValue([])
       vi.mocked(prisma.tenant.findUnique).mockResolvedValue(null)
 
       const result = await PdfService.getLabworkOrderData('tenant-123', 'labwork-123')

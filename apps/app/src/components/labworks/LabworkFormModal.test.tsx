@@ -5,6 +5,7 @@ import i18n from 'i18next'
 import '@/i18n'
 import { LabworkFormModal } from './LabworkFormModal'
 import type { Labwork } from '@/lib/labwork-api'
+import type { Doctor } from '@/lib/doctor-api'
 
 beforeAll(async () => {
   await i18n.changeLanguage('es')
@@ -30,6 +31,16 @@ vi.mock('@/lib/appointment-api', async () => {
   return {
     ...actual,
     getAppointmentsByPatient: (...args: unknown[]) => getAppointmentsByPatientMock(...args),
+  }
+})
+
+const getDoctorsMock = vi.fn()
+
+vi.mock('@/lib/doctor-api', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/doctor-api')>('@/lib/doctor-api')
+  return {
+    ...actual,
+    getDoctors: (...args: unknown[]) => getDoctorsMock(...args),
   }
 })
 
@@ -107,6 +118,7 @@ function makeLabwork(overrides: Partial<Labwork> = {}): Labwork {
     isPaid: false,
     isDelivered: false,
     doctorIds: [],
+    doctors: [],
     isActive: true,
     deletedAt: null,
     createdAt: '2026-01-01T00:00:00Z',
@@ -138,6 +150,7 @@ describe('LabworkFormModal — lab name autocomplete', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getAppointmentsByPatientMock.mockResolvedValue([])
+    getDoctorsMock.mockResolvedValue([])
   })
 
   describe('datalist wiring', () => {
@@ -204,6 +217,7 @@ describe('LabworkFormModal — lab contact phone', () => {
     vi.clearAllMocks()
     getLabNamesMock.mockResolvedValue({ success: true, data: [] })
     getAppointmentsByPatientMock.mockResolvedValue([])
+    getDoctorsMock.mockResolvedValue([])
   })
 
   it('renders a labeled tel input for the lab phone in the create form', async () => {
@@ -258,5 +272,166 @@ describe('LabworkFormModal — lab contact phone', () => {
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalled())
     expect(onSubmit.mock.calls[0][0]).toMatchObject({ phoneNumber: null })
+  })
+})
+
+describe('LabworkFormModal — doctor assignment (#242)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getLabNamesMock.mockResolvedValue({ success: true, data: [] })
+    getAppointmentsByPatientMock.mockResolvedValue([])
+  })
+
+  function makeDoctor(overrides: Partial<Doctor> = {}): Doctor {
+    return {
+      id: 'doc-1',
+      tenantId: 'tenant-1',
+      firstName: 'Jane',
+      lastName: 'Smith',
+      email: null,
+      phone: null,
+      specialty: null,
+      licenseNumber: null,
+      workingDays: [],
+      workingHours: null,
+      consultingRoom: null,
+      avatar: null,
+      bio: null,
+      hourlyRate: null,
+      commissionPercentage: null,
+      isActive: true,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      ...overrides,
+    }
+  }
+
+  it('fetches active doctors with a limit of 100 when the modal opens', async () => {
+    getDoctorsMock.mockResolvedValue([])
+
+    renderModal()
+
+    await waitFor(() => expect(getDoctorsMock).toHaveBeenCalledWith({ limit: 100 }))
+  })
+
+  it('does not fetch doctors while the modal is closed', () => {
+    getDoctorsMock.mockResolvedValue([])
+
+    renderModal({ isOpen: false })
+
+    expect(getDoctorsMock).not.toHaveBeenCalled()
+  })
+
+  it('renders a checkbox per fetched doctor, unchecked by default on create', async () => {
+    getDoctorsMock.mockResolvedValue([makeDoctor({ id: 'doc-1', firstName: 'Jane', lastName: 'Smith' })])
+
+    renderModal()
+
+    await waitFor(() => expect(screen.getByLabelText('Jane Smith')).toBeInTheDocument())
+    expect(screen.getByLabelText('Jane Smith')).not.toBeChecked()
+  })
+
+  it('includes the checked doctor id(s) in the submit payload', async () => {
+    getDoctorsMock.mockResolvedValue([makeDoctor({ id: 'doc-1', firstName: 'Jane', lastName: 'Smith' })])
+    const { onSubmit } = renderModal()
+
+    await waitFor(() => expect(screen.getByLabelText('Jane Smith')).toBeInTheDocument())
+    fireEvent.click(screen.getByLabelText('Jane Smith'))
+
+    await fillRequiredFieldsAndSubmit('Lab Dental Central', { onSubmit })
+
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ doctorIds: ['doc-1'] })
+  })
+
+  it('submits doctorIds: [] (not omitted, not undefined) when no doctor is selected', async () => {
+    getDoctorsMock.mockResolvedValue([makeDoctor({ id: 'doc-1', firstName: 'Jane', lastName: 'Smith' })])
+    const { onSubmit } = renderModal()
+
+    await waitFor(() => expect(screen.getByLabelText('Jane Smith')).toBeInTheDocument())
+
+    await fillRequiredFieldsAndSubmit('Lab Dental Central', { onSubmit })
+
+    expect(onSubmit.mock.calls[0][0]).toHaveProperty('doctorIds')
+    expect(onSubmit.mock.calls[0][0].doctorIds).toEqual([])
+  })
+
+  it('pre-fills the checkboxes for the doctors already assigned to the labwork being edited', async () => {
+    getDoctorsMock.mockResolvedValue([
+      makeDoctor({ id: 'doc-1', firstName: 'Jane', lastName: 'Smith' }),
+      makeDoctor({ id: 'doc-2', firstName: 'Bob', lastName: 'Lee' }),
+    ])
+
+    renderModal({
+      labwork: makeLabwork({
+        doctorIds: ['doc-1'],
+        doctors: [{ id: 'doc-1', firstName: 'Jane', lastName: 'Smith', isActive: true }],
+      }),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Jane Smith')).toBeInTheDocument())
+    expect(screen.getByLabelText('Jane Smith')).toBeChecked()
+    expect(screen.getByLabelText('Bob Lee')).not.toBeChecked()
+  })
+
+  it('clearing every previously-assigned doctor and saving submits doctorIds: []', async () => {
+    getDoctorsMock.mockResolvedValue([makeDoctor({ id: 'doc-1', firstName: 'Jane', lastName: 'Smith' })])
+    const { onSubmit } = renderModal({
+      labwork: makeLabwork({
+        doctorIds: ['doc-1'],
+        doctors: [{ id: 'doc-1', firstName: 'Jane', lastName: 'Smith', isActive: true }],
+      }),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Jane Smith')).toBeChecked())
+    fireEvent.click(screen.getByLabelText('Jane Smith'))
+    expect(screen.getByLabelText('Jane Smith')).not.toBeChecked()
+
+    fireEvent.change(screen.getByLabelText(/Precio/), { target: { value: '100' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar Cambios' }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect(onSubmit.mock.calls[0][0].doctorIds).toEqual([])
+  })
+
+  it('appends an assigned-but-inactive doctor to the checkbox list, labelled "(Inactivo)" and pre-checked', async () => {
+    // doc-2 is no longer in the active list returned by getDoctors, but is
+    // still assigned to this labwork (deactivated after assignment).
+    getDoctorsMock.mockResolvedValue([makeDoctor({ id: 'doc-1', firstName: 'Jane', lastName: 'Smith' })])
+
+    renderModal({
+      labwork: makeLabwork({
+        doctorIds: ['doc-1', 'doc-2'],
+        doctors: [
+          { id: 'doc-1', firstName: 'Jane', lastName: 'Smith', isActive: true },
+          { id: 'doc-2', firstName: 'Bob', lastName: 'Lee', isActive: false },
+        ],
+      }),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Bob Lee (Inactivo)')).toBeInTheDocument())
+    expect(screen.getByLabelText('Bob Lee (Inactivo)')).toBeChecked()
+  })
+
+  it('an inactive assigned doctor survives a save that never touches the doctor field', async () => {
+    getDoctorsMock.mockResolvedValue([makeDoctor({ id: 'doc-1', firstName: 'Jane', lastName: 'Smith' })])
+    const { onSubmit } = renderModal({
+      labwork: makeLabwork({
+        doctorIds: ['doc-1', 'doc-2'],
+        doctors: [
+          { id: 'doc-1', firstName: 'Jane', lastName: 'Smith', isActive: true },
+          { id: 'doc-2', firstName: 'Bob', lastName: 'Lee', isActive: false },
+        ],
+      }),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Bob Lee (Inactivo)')).toBeChecked())
+
+    // Touch an unrelated field only — never interact with a doctor checkbox.
+    fireEvent.change(screen.getByLabelText(/Precio/), { target: { value: '250' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar Cambios' }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect(onSubmit.mock.calls[0][0].doctorIds).toEqual(expect.arrayContaining(['doc-1', 'doc-2']))
+    expect(onSubmit.mock.calls[0][0].doctorIds).toHaveLength(2)
   })
 })

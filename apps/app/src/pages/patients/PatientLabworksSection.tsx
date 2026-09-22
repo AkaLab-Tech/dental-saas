@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { FlaskConical, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Labwork } from '@/lib/labwork-api'
-import { getLabworks, getLabworkStatusBadge, formatLabworkDate } from '@/lib/labwork-api'
+import { getLabworks, getLabworkStatusBadge, formatLabworkDate, formatLabworkDoctors } from '@/lib/labwork-api'
 import { useAuthStore } from '@/stores/auth.store'
 import { formatCurrency } from '@/lib/format'
 import { PaidStatusBadge } from '@/components/payments/PaidStatusBadge'
@@ -26,6 +26,7 @@ const BADGE_STYLES: Record<'default' | 'success' | 'warning' | 'destructive', st
 function PatientLabworkRow({ labwork, currency }: { labwork: Labwork; currency: string }) {
   const { t } = useTranslation()
   const statusBadge = getLabworkStatusBadge(labwork)
+  const doctorNames = formatLabworkDoctors(labwork)
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow p-4">
@@ -37,6 +38,7 @@ function PatientLabworkRow({ labwork, currency }: { labwork: Labwork; currency: 
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-gray-900 truncate">{labwork.lab}</h3>
             <p className="text-xs text-gray-500 mt-0.5">{formatLabworkDate(labwork.date)}</p>
+            <p className="text-xs text-gray-500 mt-0.5 truncate">{doctorNames || t('labworks.noDoctor')}</p>
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 flex-shrink-0">

@@ -56,6 +56,7 @@ function makeSafeLabwork(overrides: Partial<SafeLabwork> = {}): SafeLabwork {
     isPaid: false,
     isDelivered: false,
     doctorIds: [],
+    doctors: [],
     isActive: true,
     createdBy: null,
     createdAt: new Date('2026-03-01T00:00:00.000Z'),
@@ -696,6 +697,99 @@ describe('labwork.service', () => {
 
       expect(csv).toContain('Alice Smith; Bob Jones')
       expect(csv).toContain('Alice Smith')
+    })
+  })
+
+  // Task #242: listLabworks resolves `doctorIds` into a `doctors` summary
+  // array via the private attachDoctors() helper. These tests pin the N+1
+  // guard (one query per page, regardless of row count) and the resolution
+  // semantics (deactivated doctors still resolve; unknown ids are dropped
+  // from `doctors` but stay in `doctorIds`; ids are deduplicated for the
+  // query).
+  describe('listLabworks — doctor resolution (attachDoctors)', () => {
+    it('resolves doctorIds into a doctors array with id, name and isActive for each returned labwork', async () => {
+      vi.mocked(prisma.labwork.findMany).mockResolvedValue([
+        makeSafeLabwork({ id: 'lw-1', doctorIds: ['doc-1'] }),
+      ] as never)
+      vi.mocked(prisma.doctor.findMany).mockResolvedValue([
+        { id: 'doc-1', firstName: 'Jane', lastName: 'Smith', isActive: true },
+      ] as never)
+
+      const { data } = await listLabworks('tenant-1', {})
+
+      expect(data[0].doctors).toEqual([
+        { id: 'doc-1', firstName: 'Jane', lastName: 'Smith', isActive: true },
+      ])
+    })
+
+    it('N+1 GUARD: calls prisma.doctor.findMany exactly once for a multi-labwork page, not once per row', async () => {
+      vi.mocked(prisma.labwork.findMany).mockResolvedValue([
+        makeSafeLabwork({ id: 'lw-1', doctorIds: ['doc-1'] }),
+        makeSafeLabwork({ id: 'lw-2', doctorIds: ['doc-2'] }),
+        makeSafeLabwork({ id: 'lw-3', doctorIds: ['doc-1', 'doc-2'] }),
+      ] as never)
+      vi.mocked(prisma.doctor.findMany).mockResolvedValue([
+        { id: 'doc-1', firstName: 'Jane', lastName: 'Smith', isActive: true },
+        { id: 'doc-2', firstName: 'Bob', lastName: 'Lee', isActive: true },
+      ] as never)
+
+      await listLabworks('tenant-1', {})
+
+      expect(prisma.doctor.findMany).toHaveBeenCalledTimes(1)
+    })
+
+    it('deduplicates doctor ids shared across labworks into a single `in` query', async () => {
+      vi.mocked(prisma.labwork.findMany).mockResolvedValue([
+        makeSafeLabwork({ id: 'lw-1', doctorIds: ['doc-1', 'doc-2'] }),
+        makeSafeLabwork({ id: 'lw-2', doctorIds: ['doc-1'] }),
+      ] as never)
+      vi.mocked(prisma.doctor.findMany).mockResolvedValue([])
+
+      await listLabworks('tenant-1', {})
+
+      const where = vi.mocked(prisma.doctor.findMany).mock.calls[0][0]!.where as Record<string, unknown>
+      expect(where).toEqual({ id: { in: ['doc-1', 'doc-2'] }, tenantId: 'tenant-1' })
+    })
+
+    it('does not call prisma.doctor.findMany when no returned labwork has any doctorIds', async () => {
+      vi.mocked(prisma.labwork.findMany).mockResolvedValue([
+        makeSafeLabwork({ id: 'lw-1', doctorIds: [] }),
+      ] as never)
+
+      await listLabworks('tenant-1', {})
+
+      expect(prisma.doctor.findMany).not.toHaveBeenCalled()
+    })
+
+    it('still resolves a deactivated doctor (isActive: false) instead of dropping it', async () => {
+      vi.mocked(prisma.labwork.findMany).mockResolvedValue([
+        makeSafeLabwork({ id: 'lw-1', doctorIds: ['doc-1'] }),
+      ] as never)
+      vi.mocked(prisma.doctor.findMany).mockResolvedValue([
+        { id: 'doc-1', firstName: 'Jane', lastName: 'Smith', isActive: false },
+      ] as never)
+
+      const { data } = await listLabworks('tenant-1', {})
+
+      expect(data[0].doctors).toEqual([
+        { id: 'doc-1', firstName: 'Jane', lastName: 'Smith', isActive: false },
+      ])
+    })
+
+    it('drops an id from `doctors` when it matches no doctor of this tenant, while keeping it in `doctorIds`', async () => {
+      vi.mocked(prisma.labwork.findMany).mockResolvedValue([
+        makeSafeLabwork({ id: 'lw-1', doctorIds: ['doc-1', 'unknown-doc'] }),
+      ] as never)
+      vi.mocked(prisma.doctor.findMany).mockResolvedValue([
+        { id: 'doc-1', firstName: 'Jane', lastName: 'Smith', isActive: true },
+      ] as never)
+
+      const { data } = await listLabworks('tenant-1', {})
+
+      expect(data[0].doctorIds).toEqual(['doc-1', 'unknown-doc'])
+      expect(data[0].doctors).toEqual([
+        { id: 'doc-1', firstName: 'Jane', lastName: 'Smith', isActive: true },
+      ])
     })
   })
 })

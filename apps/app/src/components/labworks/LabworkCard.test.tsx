@@ -53,6 +53,7 @@ function makeLabwork(overrides: Partial<Labwork> = {}): Labwork {
     isPaid: false,
     isDelivered: false,
     doctorIds: [],
+    doctors: [],
     isActive: true,
     deletedAt: null,
     createdAt: '2026-01-01T00:00:00Z',
@@ -231,5 +232,44 @@ describe('LabworkCard — price row and paid status badge (#240)', () => {
     // The isPaid toggle button renders "Pagado" on its own — the price row's
     // badge must not add a second occurrence.
     expect(screen.getAllByText('Pagado')).toHaveLength(1)
+  })
+})
+
+// Task #242: doctor name(s) row, rendered between the appointment-linked
+// info and the price row.
+describe('LabworkCard — assigned doctors (#242)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    canMock.mockReturnValue(true)
+  })
+
+  it('shows the "Sin doctor asignado" placeholder when no doctor is assigned', () => {
+    renderCard(makeLabwork({ doctors: [] }))
+
+    expect(screen.getByText('Sin doctor asignado')).toBeInTheDocument()
+  })
+
+  it('shows a single doctor name when one doctor is assigned', () => {
+    renderCard(
+      makeLabwork({
+        doctors: [{ id: 'doc-1', firstName: 'Jane', lastName: 'Smith', isActive: true }],
+      })
+    )
+
+    expect(screen.getByText('Jane Smith')).toBeInTheDocument()
+    expect(screen.queryByText('Sin doctor asignado')).not.toBeInTheDocument()
+  })
+
+  it('shows a comma-joined list of names when multiple doctors are assigned', () => {
+    renderCard(
+      makeLabwork({
+        doctors: [
+          { id: 'doc-1', firstName: 'Jane', lastName: 'Smith', isActive: true },
+          { id: 'doc-2', firstName: 'Bob', lastName: 'Lee', isActive: false },
+        ],
+      })
+    )
+
+    expect(screen.getByText('Jane Smith, Bob Lee')).toBeInTheDocument()
   })
 })

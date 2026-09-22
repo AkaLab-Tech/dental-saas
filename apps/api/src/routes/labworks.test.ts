@@ -1395,3 +1395,325 @@ describe('GET /api/labworks/export (CSV export)', () => {
     expect(body).toBe('Fecha,Laboratorio,Teléfono,Paciente,Doctor(es),Precio,Pagado,Entregado,Nota')
   })
 })
+
+describe('Doctor assignment on labworks (task #242)', () => {
+  let tenantId: string
+  let otherTenantId: string
+  let adminToken: string
+  let clinicAdminToken: string
+  let doctorToken: string
+  let doctorAId: string
+  let doctorBId: string
+  let doctorInactiveId: string
+  let otherDoctorId: string
+  const testSlug = `test-labworks-doctors-${Date.now()}`
+  const otherSlug = `test-labworks-doctors-other-${Date.now()}`
+
+  async function createTenant(slug: string, name: string) {
+    const tenant = await prisma.tenant.create({
+      data: { name, slug, currency: 'USD', timezone: 'America/New_York' },
+    })
+
+    let freePlan = await prisma.plan.findUnique({ where: { name: 'free' } })
+    if (!freePlan) {
+      freePlan = await prisma.plan.create({
+        data: {
+          name: 'free',
+          displayName: 'Free',
+          price: 0,
+          maxAdmins: 1,
+          maxDoctors: 3,
+          maxPatients: 50,
+        },
+      })
+    }
+
+    await prisma.subscription.create({
+      data: {
+        tenantId: tenant.id,
+        planId: freePlan.id,
+        status: 'ACTIVE',
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    })
+
+    return tenant
+  }
+
+  beforeAll(async () => {
+    const hashedPassword = await hashPassword('password123')
+
+    const tenant = await createTenant(testSlug, 'Test Clinic for Labwork Doctors')
+    tenantId = tenant.id
+
+    const adminUser = await prisma.user.create({
+      data: {
+        tenantId,
+        email: 'admin@labworks-doctors-test.com',
+        firstName: 'Admin',
+        lastName: 'User',
+        passwordHash: hashedPassword,
+        role: 'ADMIN',
+      },
+    })
+    adminToken = generateToken(adminUser.id, tenantId, 'ADMIN')
+
+    const clinicAdminUser = await prisma.user.create({
+      data: {
+        tenantId,
+        email: 'clinic-admin@labworks-doctors-test.com',
+        firstName: 'Clinic',
+        lastName: 'Admin',
+        passwordHash: hashedPassword,
+        role: 'CLINIC_ADMIN',
+      },
+    })
+    clinicAdminToken = generateToken(clinicAdminUser.id, tenantId, 'CLINIC_ADMIN')
+
+    const doctorUser = await prisma.user.create({
+      data: {
+        tenantId,
+        email: 'doctor@labworks-doctors-test.com',
+        firstName: 'Doctor',
+        lastName: 'User',
+        passwordHash: hashedPassword,
+        role: 'DOCTOR',
+      },
+    })
+    doctorToken = generateToken(doctorUser.id, tenantId, 'DOCTOR')
+
+    // Linked to doctorUser via userId, so getLinkedDoctorId() resolves it —
+    // this is what lets the DOCTOR-role caller pass requireOwnership at all.
+    const doctorA = await prisma.doctor.create({
+      data: { tenantId, firstName: 'Alice', lastName: 'Root', userId: doctorUser.id },
+    })
+    doctorAId = doctorA.id
+
+    const doctorB = await prisma.doctor.create({
+      data: { tenantId, firstName: 'Bob', lastName: 'Crown' },
+    })
+    doctorBId = doctorB.id
+
+    const doctorInactive = await prisma.doctor.create({
+      data: { tenantId, firstName: 'Carol', lastName: 'Bridge', isActive: false },
+    })
+    doctorInactiveId = doctorInactive.id
+
+    const otherTenant = await createTenant(otherSlug, 'Other Clinic for Labwork Doctors')
+    otherTenantId = otherTenant.id
+    const otherDoctor = await prisma.doctor.create({
+      data: { tenantId: otherTenantId, firstName: 'Zoe', lastName: 'Outside' },
+    })
+    otherDoctorId = otherDoctor.id
+  })
+
+  afterAll(async () => {
+    await prisma.labwork.deleteMany({ where: { tenantId: { in: [tenantId, otherTenantId] } } })
+    await prisma.doctor.deleteMany({ where: { tenantId: { in: [tenantId, otherTenantId] } } })
+    await prisma.user.deleteMany({ where: { tenantId: { in: [tenantId, otherTenantId] } } })
+    await prisma.subscription.deleteMany({ where: { tenantId: { in: [tenantId, otherTenantId] } } })
+    await prisma.tenant.deleteMany({ where: { id: { in: [tenantId, otherTenantId] } } })
+  })
+
+  describe('doctor resolution across CRUD', () => {
+    it('POST create resolves doctorIds into a doctors array (id, name, isActive), in doctorIds order', async () => {
+      const res = await api()
+        .post('/api/labworks')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ lab: 'Doctor Resolution Lab', date: '2026-04-01', price: 100, doctorIds: [doctorAId, doctorBId] })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.doctorIds).toEqual([doctorAId, doctorBId])
+      expect(res.body.data.doctors).toEqual([
+        { id: doctorAId, firstName: 'Alice', lastName: 'Root', isActive: true },
+        { id: doctorBId, firstName: 'Bob', lastName: 'Crown', isActive: true },
+      ])
+    })
+
+    it('a deactivated doctor still resolves in `doctors` (isActive: false), not dropped', async () => {
+      const res = await api()
+        .post('/api/labworks')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ lab: 'Inactive Doctor Lab', date: '2026-04-02', price: 50, doctorIds: [doctorInactiveId] })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.doctors).toEqual([
+        { id: doctorInactiveId, firstName: 'Carol', lastName: 'Bridge', isActive: false },
+      ])
+    })
+
+    it('GET /:id resolves the same doctors array as create', async () => {
+      const createRes = await api()
+        .post('/api/labworks')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ lab: 'Get By Id Lab', date: '2026-04-03', price: 60, doctorIds: [doctorAId] })
+      const id = createRes.body.data.id
+
+      const res = await api().get(`/api/labworks/${id}`).set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.doctors).toEqual([{ id: doctorAId, firstName: 'Alice', lastName: 'Root', isActive: true }])
+    })
+
+    it('GET / (list) resolves the doctors array for each item on the page', async () => {
+      const createRes = await api()
+        .post('/api/labworks')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ lab: 'List Doctor Lab', date: '2026-04-03', price: 60, doctorIds: [doctorAId] })
+      const id = createRes.body.data.id
+
+      const res = await api().get('/api/labworks?limit=100').set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(200)
+      const created = res.body.data.find((l: { id: string }) => l.id === id)
+      expect(created.doctors).toEqual([{ id: doctorAId, firstName: 'Alice', lastName: 'Root', isActive: true }])
+    })
+
+    it('PUT update re-resolves doctors after changing doctorIds', async () => {
+      const createRes = await api()
+        .post('/api/labworks')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ lab: 'Update Doctor Lab', date: '2026-04-04', price: 70, doctorIds: [doctorAId] })
+      const id = createRes.body.data.id
+
+      const res = await api()
+        .put(`/api/labworks/${id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ doctorIds: [doctorBId] })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.doctors).toEqual([{ id: doctorBId, firstName: 'Bob', lastName: 'Crown', isActive: true }])
+    })
+
+    it('DELETE (soft delete) response still resolves the assigned doctors', async () => {
+      const createRes = await api()
+        .post('/api/labworks')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ lab: 'Delete Doctor Lab', date: '2026-04-05', price: 80, doctorIds: [doctorAId] })
+      const id = createRes.body.data.id
+
+      const res = await api().delete(`/api/labworks/${id}`).set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.doctors).toEqual([{ id: doctorAId, firstName: 'Alice', lastName: 'Root', isActive: true }])
+    })
+
+    it('PUT /:id/restore response still resolves the assigned doctors', async () => {
+      const createRes = await api()
+        .post('/api/labworks')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ lab: 'Restore Doctor Lab', date: '2026-04-06', price: 90, doctorIds: [doctorAId] })
+      const id = createRes.body.data.id
+      await api().delete(`/api/labworks/${id}`).set('Authorization', `Bearer ${adminToken}`)
+
+      const res = await api().put(`/api/labworks/${id}/restore`).set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.doctors).toEqual([{ id: doctorAId, firstName: 'Alice', lastName: 'Root', isActive: true }])
+    })
+  })
+
+  describe('DOCTOR_NOT_FOUND validation (cross-tenant and nonexistent doctor ids)', () => {
+    it('rejects create with a doctor id belonging to a different tenant (400 DOCTOR_NOT_FOUND)', async () => {
+      const res = await api()
+        .post('/api/labworks')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ lab: 'Cross Tenant Lab', date: '2026-04-07', price: 40, doctorIds: [otherDoctorId] })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('One or more doctors do not belong to this clinic')
+    })
+
+    it('rejects update with a doctor id belonging to a different tenant (400 DOCTOR_NOT_FOUND)', async () => {
+      const createRes = await api()
+        .post('/api/labworks')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ lab: 'Cross Tenant Update Lab', date: '2026-04-08', price: 45 })
+      const id = createRes.body.data.id
+
+      const res = await api()
+        .put(`/api/labworks/${id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ doctorIds: [otherDoctorId] })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('One or more doctors do not belong to this clinic')
+    })
+
+    it('rejects create with a doctor id that does not exist at all (400 DOCTOR_NOT_FOUND)', async () => {
+      const res = await api()
+        .post('/api/labworks')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ lab: 'Nonexistent Doctor Lab', date: '2026-04-09', price: 35, doctorIds: ['nonexistent-doctor-id'] })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('One or more doctors do not belong to this clinic')
+    })
+  })
+
+  describe('DOCTOR role cannot reassign doctorIds via PUT (403); CLINIC_ADMIN+ can', () => {
+    it('denies a DOCTOR caller who sends a different doctorIds set (403)', async () => {
+      const createRes = await api()
+        .post('/api/labworks')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ lab: 'Doctor Guard Lab 1', date: '2026-04-10', price: 55, doctorIds: [doctorAId] })
+      const id = createRes.body.data.id
+
+      const res = await api()
+        .put(`/api/labworks/${id}`)
+        .set('Authorization', `Bearer ${doctorToken}`)
+        .send({ doctorIds: [doctorBId] })
+
+      expect(res.status).toBe(403)
+      expect(res.body.error).toBe('Only clinic admins can change the doctors assigned to a labwork')
+    })
+
+    it('allows a DOCTOR caller who resends the SAME doctorIds set alongside another field change', async () => {
+      const createRes = await api()
+        .post('/api/labworks')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ lab: 'Doctor Guard Lab 2', date: '2026-04-11', price: 65, doctorIds: [doctorAId] })
+      const id = createRes.body.data.id
+
+      const res = await api()
+        .put(`/api/labworks/${id}`)
+        .set('Authorization', `Bearer ${doctorToken}`)
+        .send({ doctorIds: [doctorAId], note: 'seen by the assigned doctor' })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.note).toBe('seen by the assigned doctor')
+    })
+
+    it('allows a DOCTOR caller who resends an EQUIVALENT set (reordered + duplicated)', async () => {
+      const createRes = await api()
+        .post('/api/labworks')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ lab: 'Doctor Guard Lab 3', date: '2026-04-12', price: 75, doctorIds: [doctorAId, doctorBId] })
+      const id = createRes.body.data.id
+
+      const res = await api()
+        .put(`/api/labworks/${id}`)
+        .set('Authorization', `Bearer ${doctorToken}`)
+        .send({ doctorIds: [doctorBId, doctorAId, doctorAId] })
+
+      expect(res.status).toBe(200)
+    })
+
+    it('allows CLINIC_ADMIN to reassign doctorIds to a different set (guard only restricts below CLINIC_ADMIN)', async () => {
+      const createRes = await api()
+        .post('/api/labworks')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ lab: 'Doctor Guard Lab 4', date: '2026-04-13', price: 85, doctorIds: [doctorAId] })
+      const id = createRes.body.data.id
+
+      const res = await api()
+        .put(`/api/labworks/${id}`)
+        .set('Authorization', `Bearer ${clinicAdminToken}`)
+        .send({ doctorIds: [doctorBId] })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.doctorIds).toEqual([doctorBId])
+    })
+  })
+})

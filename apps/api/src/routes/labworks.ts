@@ -1,7 +1,7 @@
 import { Router, type IRouter } from 'express'
 import React from 'react'
 import { z } from 'zod'
-import { requireMinRole } from '../middleware/auth.js'
+import { requireMinRole, hasMinRole } from '../middleware/auth.js'
 import { requireOwnership } from '../middleware/ownership.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { Permission } from '@dental/shared'
@@ -57,6 +57,7 @@ const errorStatusMap: Record<string, number> = {
   ALREADY_ACTIVE: 400,
   INVALID_PATIENT: 400,
   INVALID_APPOINTMENT: 400,
+  DOCTOR_NOT_FOUND: 400,
 }
 
 // Error code to message mapping
@@ -66,6 +67,7 @@ const errorMessageMap: Record<string, string> = {
   ALREADY_ACTIVE: 'Labwork is already active',
   INVALID_PATIENT: 'Patient not found or does not belong to this clinic',
   INVALID_APPOINTMENT: 'Appointment not found or does not belong to this patient',
+  DOCTOR_NOT_FOUND: 'One or more doctors do not belong to this clinic',
 }
 
 /**
@@ -282,6 +284,27 @@ labworksRouter.put('/:id', requireMinRole('DOCTOR'), requireOwnership('labwork')
         details: parsed.error.flatten().fieldErrors,
       })
       return
+    }
+
+    // Below CLINIC_ADMIN, requireOwnership already limited access to
+    // labworks the caller created or is assigned to; it must not also be
+    // able to redirect commission by reassigning doctorIds through this
+    // route. Compared as sets so re-sending the same ids (any order, with
+    // or without duplicates) is not blocked.
+    if (parsed.data.doctorIds !== undefined && !hasMinRole(req.user!.role, 'CLINIC_ADMIN')) {
+      const current = await getLabworkById(tenantId, id)
+      const currentIds = new Set(current.success ? current.data.doctorIds : [])
+      const requestedIds = new Set(parsed.data.doctorIds)
+      const unchanged =
+        currentIds.size === requestedIds.size && [...requestedIds].every((docId) => currentIds.has(docId))
+
+      if (!unchanged) {
+        res.status(403).json({
+          success: false,
+          error: 'Only clinic admins can change the doctors assigned to a labwork',
+        })
+        return
+      }
     }
 
     const result = await updateLabwork(tenantId, id, {

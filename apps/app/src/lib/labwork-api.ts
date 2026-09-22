@@ -18,6 +18,12 @@ export interface Labwork {
   isPaid: boolean
   isDelivered: boolean
   doctorIds: string[]
+  doctors: {
+    id: string
+    firstName: string
+    lastName: string
+    isActive: boolean
+  }[]
   isActive: boolean
   deletedAt: string | null
   createdAt: string
@@ -231,6 +237,17 @@ export function isLabworkOverdue(labwork: Labwork): boolean {
   const labworkDate = new Date(labwork.date)
   labworkDate.setHours(0, 0, 0, 0)
   return labworkDate.getTime() < today.getTime()
+}
+
+/**
+ * Comma-joined "First Last" of every doctor assigned to a labwork, or `null`
+ * when none is assigned — callers render the "no doctor" copy themselves.
+ */
+export function formatLabworkDoctors(labwork: Labwork): string | null {
+  if (labwork.doctors.length === 0) {
+    return null
+  }
+  return labwork.doctors.map((d) => `${d.firstName} ${d.lastName}`).join(', ')
 }
 
 export function getLabworkStatusBadge(labwork: Labwork): { label: string; variant: 'default' | 'success' | 'warning' | 'destructive' } {
