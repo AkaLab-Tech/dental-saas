@@ -14,7 +14,7 @@ import {
   getExpiryDate,
   cleanupOldRefreshTokens,
 } from '../services/auth.service.js'
-import { requireAuth, hasMinRole } from '../middleware/auth.js'
+import { requireAuth, canProvisionPin } from '../middleware/auth.js'
 import {
   createRateLimiter,
   hashLoginAccountKey,
@@ -918,6 +918,7 @@ authRouter.get('/profiles', requireAuth, async (req, res, next) => {
     const profiles = users.map(({ pinHash, ...u }) => ({
       ...u,
       hasPinSet: !!pinHash,
+      canSetupPin: canProvisionPin(req.user!, u),
     }))
 
     res.json(profiles)
@@ -1032,7 +1033,7 @@ authRouter.post('/setup-pin', requireAuth, async (req, res, next) => {
     // its own credentials. Accepted cost: no self-service first-PIN setup
     // while operating inside a profile session.
     const isSelf = userId === req.user!.userId
-    if (!isSelf && !hasMinRole(req.user!.role, 'ADMIN')) {
+    if (!canProvisionPin(req.user!, { id: userId })) {
       return res.status(403).json({
         success: false,
         error: { message: 'Insufficient permissions', code: 'FORBIDDEN' },

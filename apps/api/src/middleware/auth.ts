@@ -137,6 +137,22 @@ export function hasMinRole(userRole: string, minRole: keyof typeof ROLE_HIERARCH
 }
 
 /**
+ * Whether `caller` may provision a first PIN for `target`.
+ *
+ * `caller.role` is the effective role: a profile token overwrites it (see
+ * requireAuth), so a switched-in profile is evaluated with its own authority.
+ * `target.role` is not consulted yet; it is part of the signature so a role
+ * ceiling can be added without touching call sites. It is optional because
+ * the setup-pin gate runs before the target row is loaded.
+ */
+export function canProvisionPin(
+  caller: { userId: string; role: string },
+  target: { id: string; role?: string }
+): boolean {
+  return caller.userId === target.id || hasMinRole(caller.role, 'ADMIN')
+}
+
+/**
  * Middleware that requires minimum role level (uses hierarchy)
  */
 export function requireMinRole(minRole: keyof typeof ROLE_HIERARCHY) {

@@ -169,6 +169,9 @@ export interface ProfileUser {
   role: string
   avatar: string | null
   hasPinSet: boolean
+  // Reported by GET /auth/profiles. Optional so an API that predates the
+  // field degrades to the previous behaviour (attempt, then handle the 403).
+  canSetupPin?: boolean
 }
 
 export interface PinLoginPayload {

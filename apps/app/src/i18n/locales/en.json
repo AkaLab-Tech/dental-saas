@@ -1158,7 +1158,8 @@
     "mismatch": "PINs don't match. Try again.",
     "saveError": "Error saving PIN. Try again.",
     "startOver": "Start over",
-    "provisionedEnterToContinue": "PIN set. Enter it to continue."
+    "provisionedEnterToContinue": "PIN set. Enter it to continue.",
+    "provisionNotAllowed": "This profile does not have a PIN yet. Ask an administrator to set it up."
   },
   "users": {
     "title": "Users",

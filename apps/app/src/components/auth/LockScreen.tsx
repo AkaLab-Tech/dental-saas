@@ -23,7 +23,7 @@ const ROLE_LABELS: Record<string, string> = {
   STAFF: 'Staff',
 }
 
-type PinStep = 'enter' | 'setup-enter' | 'setup-confirm'
+type PinStep = 'enter' | 'setup-enter' | 'setup-confirm' | 'setup-unavailable'
 
 export function LockScreen() {
   const { t } = useTranslation()
@@ -44,12 +44,12 @@ export function LockScreen() {
   const [shake, setShake] = useState(false)
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
 
-  // Fetch profiles on mount if empty
+  // Always refetch on mount: any list prefetched earlier may have been
+  // computed under a profile token, while the base session is what will call
+  // setup-pin now that lock() has cleared that token.
   useEffect(() => {
-    if (profiles.length === 0) {
-      fetchProfiles()
-    }
-  }, [profiles.length, fetchProfiles])
+    fetchProfiles()
+  }, [fetchProfiles])
 
   useEffect(() => {
     if (selectedProfile) {
@@ -132,11 +132,17 @@ export function LockScreen() {
           setInfo(t('pin.provisionedEnterToContinue'))
           resetPinInput()
         }
-      } catch {
-        setError(t('pin.saveError'))
-        setStep('setup-enter')
+      } catch (e: unknown) {
+        const err = e as { response?: { status?: number; data?: { error?: { code?: string } } } }
         setSetupPinValue('')
-        resetPinInput()
+        if (err.response?.status === 403 && err.response?.data?.error?.code === 'FORBIDDEN') {
+          setStep('setup-unavailable')
+          setPin(['', '', '', ''])
+        } else {
+          setError(t('pin.saveError'))
+          setStep('setup-enter')
+          resetPinInput()
+        }
       } finally {
         setLoading(false)
       }
@@ -171,7 +177,15 @@ export function LockScreen() {
     setInfo('')
     setPin(['', '', '', ''])
     setSetupPinValue('')
-    setStep(profile.hasPinSet ? 'enter' : 'setup-enter')
+    // The server decides who may provision a PIN and reports it as
+    // canSetupPin; the client holds no role table of its own.
+    if (profile.hasPinSet) {
+      setStep('enter')
+    } else if (profile.canSetupPin !== false) {
+      setStep('setup-enter')
+    } else {
+      setStep('setup-unavailable')
+    }
   }
 
   const getStepLabel = () => {
@@ -182,6 +196,8 @@ export function LockScreen() {
         return t('pin.enterNew')
       case 'setup-confirm':
         return t('pin.confirmPin')
+      case 'setup-unavailable':
+        return ''
       default:
         return ''
     }
@@ -244,27 +260,33 @@ export function LockScreen() {
               <p className="text-xs text-amber-600 mt-3">{t('pin.setupDescription')}</p>
             )}
 
-            <p className="text-sm text-gray-500 mt-4 mb-4">{getStepLabel()}</p>
+            {step === 'setup-unavailable' ? (
+              <p className="text-sm text-amber-600 mt-4">{t('pin.provisionNotAllowed')}</p>
+            ) : (
+              <>
+                <p className="text-sm text-gray-500 mt-4 mb-4">{getStepLabel()}</p>
 
-            {/* PIN Inputs */}
-            <div
-              className={`flex justify-center gap-3 mb-4 ${shake ? 'animate-shake' : ''}`}
-            >
-              {pin.map((digit, i) => (
-                <input
-                  key={`${step}-${i}`}
-                  ref={(el) => { inputRefs.current[i] = el }}
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => handlePinChange(i, e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(i, e)}
-                  disabled={loading}
-                  className="w-14 h-14 text-center text-2xl font-bold border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all disabled:opacity-50"
-                />
-              ))}
-            </div>
+                {/* PIN Inputs */}
+                <div
+                  className={`flex justify-center gap-3 mb-4 ${shake ? 'animate-shake' : ''}`}
+                >
+                  {pin.map((digit, i) => (
+                    <input
+                      key={`${step}-${i}`}
+                      ref={(el) => { inputRefs.current[i] = el }}
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={digit}
+                      onChange={(e) => handlePinChange(i, e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(i, e)}
+                      disabled={loading}
+                      className="w-14 h-14 text-center text-2xl font-bold border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all disabled:opacity-50"
+                    />
+                  ))}
+                </div>
+              </>
+            )}
 
             {error && (
               <p className="text-sm text-red-600 mb-2">{error}</p>
