@@ -3305,4 +3305,294 @@ describe('Patient Payments Routes', () => {
       expect(newerAfter?.isPaid).toBe(true)
     })
   })
+
+  // ==========================================================================
+  // Task #453: GET /api/patients/:id/payment-movements
+  // ==========================================================================
+  describe('GET /api/patients/:id/payment-movements (#453)', () => {
+    async function createMovementsPatient(name: string): Promise<string> {
+      const patient = await prisma.patient.create({
+        data: { tenantId, firstName: name, lastName: 'Movements453' },
+      })
+      return patient.id
+    }
+
+    describe('the full ledger: receipt, cancellation conversion, restore, reversal', () => {
+      let movPatientId: string
+      let apptAId: string
+      let paymentAId: string
+      let paymentBId: string
+      let paymentCId: string
+      let from: Date
+      let to: Date
+
+      beforeAll(async () => {
+        movPatientId = await createMovementsPatient('Ledger')
+
+        // Everything real-time in this sequence lands inside [from, to];
+        // anything explicitly backdated below lands well before `from`.
+        from = new Date(Date.now() - 60 * 1000)
+        const outOfRange = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
+
+        // --- Appointment A: a receipt, then a cancellation conversion.
+        // Deliberately left cancelled (never restored) so the origin
+        // appointment is still isActive=false when the ledger is queried —
+        // the only way the appointmentDate assertion below actually proves
+        // the lookup ignores isActive rather than merely not needing to.
+        const apptA = await api()
+          .post('/api/appointments')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({
+            patientId: movPatientId,
+            doctorId,
+            startTime: new Date().toISOString(),
+            endTime: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+            cost: 80,
+            paidAmount: 80,
+          })
+        expect(apptA.status).toBe(201)
+        apptAId = apptA.body.data.id
+        paymentAId = apptA.body.data.recordedPaymentId
+
+        const cancelA = await api()
+          .delete(`/api/appointments/${apptAId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+        expect(cancelA.status).toBe(200)
+
+        // --- Appointment B: a receipt and its conversion, BOTH backdated
+        // out of range, then restored for real — only the restore should
+        // land in the ledger for this appointment.
+        const apptB = await api()
+          .post('/api/appointments')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({
+            patientId: movPatientId,
+            doctorId,
+            startTime: outOfRange.toISOString(),
+            endTime: new Date(outOfRange.getTime() + 30 * 60 * 1000).toISOString(),
+            cost: 50,
+            paidAmount: 50,
+          })
+        expect(apptB.status).toBe(201)
+        const apptBId = apptB.body.data.id
+        paymentBId = apptB.body.data.recordedPaymentId
+
+        const cancelB = await api()
+          .delete(`/api/appointments/${apptBId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+        expect(cancelB.status).toBe(200)
+        // Backdate only the conversion event — the restore below still fires
+        // for real, at the real current time.
+        await prisma.$executeRaw`UPDATE patient_payment_events SET "occurredAt" = ${outOfRange} WHERE "paymentId" = ${paymentBId} AND type = 'CONVERTED_TO_ADVANCE'`
+
+        const restoreB = await api()
+          .put(`/api/appointments/${apptBId}/restore`)
+          .set('Authorization', `Bearer ${adminToken}`)
+        expect(restoreB.status).toBe(200)
+
+        // --- Payment C: a freestanding advance, receipt backdated out of
+        // range, reversed for real inside the range.
+        const paymentC = await prisma.patientPayment.create({
+          data: { tenantId, patientId: movPatientId, amount: 30, date: outOfRange, kind: 'ADVANCE' },
+        })
+        paymentCId = paymentC.id
+        const reverseC = await api()
+          .delete(`/api/patients/${movPatientId}/payments/${paymentCId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ reason: 'Test reversal for #453 ledger' })
+        expect(reverseC.status).toBe(200)
+
+        to = new Date(Date.now() + 5 * 60 * 1000)
+      })
+
+      it('returns exactly the four in-range rows, newest first, with the right types', async () => {
+        const res = await api()
+          .get(`/api/patients/${movPatientId}/payment-movements`)
+          .query({ from: from.toISOString(), to: to.toISOString() })
+          .set('Authorization', `Bearer ${adminToken}`)
+
+        expect(res.status).toBe(200)
+        expect(res.body.data.map((m: { type: string }) => m.type)).toEqual([
+          'REVERSED',
+          'RESTORED_TO_APPOINTMENT',
+          'CONVERTED_TO_ADVANCE',
+          'RECEIVED',
+        ])
+        expect(res.body.data.map((m: { paymentId: string }) => m.paymentId)).toEqual([
+          paymentCId,
+          paymentBId,
+          paymentAId,
+          paymentAId,
+        ])
+      })
+
+      it("resolves the CONVERTED_TO_ADVANCE row's origin appointment date even though that appointment is soft-deleted", async () => {
+        const apptAInDb = await prisma.appointment.findUniqueOrThrow({ where: { id: apptAId } })
+        // The premise the assertion below depends on.
+        expect(apptAInDb.isActive).toBe(false)
+
+        const res = await api()
+          .get(`/api/patients/${movPatientId}/payment-movements`)
+          .query({ from: from.toISOString(), to: to.toISOString() })
+          .set('Authorization', `Bearer ${adminToken}`)
+
+        const conversionRow = res.body.data.find((m: { type: string }) => m.type === 'CONVERTED_TO_ADVANCE')
+        expect(conversionRow.appointmentId).toBe(apptAId)
+        expect(new Date(conversionRow.appointmentDate).toISOString()).toBe(apptAInDb.startTime.toISOString())
+      })
+
+      it('performs no writes: the PatientPaymentEvent count is unchanged after the GET', async () => {
+        const before = await prisma.patientPaymentEvent.count({ where: { tenantId } })
+
+        const res = await api()
+          .get(`/api/patients/${movPatientId}/payment-movements`)
+          .query({ from: from.toISOString(), to: to.toISOString() })
+          .set('Authorization', `Bearer ${adminToken}`)
+        expect(res.status).toBe(200)
+        // RECEIVED rows are synthesized from PatientPayment, never written as
+        // an event — this is the assertion that pins that down.
+        expect(await prisma.patientPaymentEvent.count({ where: { tenantId } })).toBe(before)
+      })
+    })
+
+    describe('boundary: a receipt before the range, converted inside it (#453)', () => {
+      it('returns the conversion and NOT the receipt, pinning both legs (payment.date vs event.occurredAt)', async () => {
+        const patientId = await createMovementsPatient('Boundary')
+        const receiptDate = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000)
+
+        const appt = await api()
+          .post('/api/appointments')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({
+            patientId,
+            doctorId,
+            startTime: receiptDate.toISOString(),
+            endTime: new Date(receiptDate.getTime() + 30 * 60 * 1000).toISOString(),
+            cost: 60,
+            paidAmount: 60,
+          })
+        expect(appt.status).toBe(201)
+        const apptId = appt.body.data.id
+        const paymentId = appt.body.data.recordedPaymentId
+
+        const from = new Date(Date.now() - 60 * 1000)
+
+        const cancel = await api()
+          .delete(`/api/appointments/${apptId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+        expect(cancel.status).toBe(200)
+
+        const to = new Date(Date.now() + 5 * 60 * 1000)
+
+        const res = await api()
+          .get(`/api/patients/${patientId}/payment-movements`)
+          .query({ from: from.toISOString(), to: to.toISOString() })
+          .set('Authorization', `Bearer ${adminToken}`)
+
+        expect(res.status).toBe(200)
+        expect(res.body.data).toHaveLength(1)
+        expect(res.body.data[0].type).toBe('CONVERTED_TO_ADVANCE')
+        expect(res.body.data[0].paymentId).toBe(paymentId)
+
+        // Pin both legs directly against the database, not just the response.
+        const paymentInDb = await prisma.patientPayment.findUniqueOrThrow({ where: { id: paymentId } })
+        const eventInDb = await prisma.patientPaymentEvent.findFirstOrThrow({
+          where: { paymentId, type: 'CONVERTED_TO_ADVANCE' },
+        })
+        expect(paymentInDb.date.getTime()).toBeLessThan(from.getTime())
+        expect(eventInDb.occurredAt.getTime()).toBeGreaterThanOrEqual(from.getTime())
+        expect(eventInDb.occurredAt.getTime()).toBeLessThanOrEqual(to.getTime())
+        expect(new Date(res.body.data[0].at).toISOString()).toBe(eventInDb.occurredAt.toISOString())
+      })
+    })
+
+    describe('no FIFO allocation', () => {
+      it('a row carries no allocation fields — the exact key set, nothing more', async () => {
+        const patientId = await createMovementsPatient('NoAllocation')
+
+        const appt = await api()
+          .post('/api/appointments')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({
+            patientId,
+            doctorId,
+            startTime: new Date().toISOString(),
+            endTime: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+            cost: 40,
+            paidAmount: 40,
+          })
+        expect(appt.status).toBe(201)
+
+        const res = await api()
+          .get(`/api/patients/${patientId}/payment-movements`)
+          .set('Authorization', `Bearer ${adminToken}`)
+
+        expect(res.status).toBe(200)
+        expect(res.body.data).toHaveLength(1)
+        expect(Object.keys(res.body.data[0]).sort()).toEqual(
+          ['type', 'at', 'amount', 'paymentId', 'appointmentId', 'appointmentDate', 'actor', 'reason'].sort()
+        )
+      })
+    })
+
+    describe('access', () => {
+      it('rejects a token whose role lacks PAYMENTS_VIEW with 403, same gate as the sibling payments routes', async () => {
+        expect(hasPermission(UserRole.SUPER_ADMIN, Permission.PAYMENTS_VIEW)).toBe(false)
+        const noPermissionToken = generateToken('super-admin-453', tenantId, 'SUPER_ADMIN')
+        const patientId = await createMovementsPatient('NoPermission')
+
+        const res = await api()
+          .get(`/api/patients/${patientId}/payment-movements`)
+          .set('Authorization', `Bearer ${noPermissionToken}`)
+
+        expect(res.status).toBe(403)
+        expect(res.body.required).toBe(Permission.PAYMENTS_VIEW)
+      })
+
+      it("never leaks another tenant's payment movements, even when queried with a real admin token for THIS tenant", async () => {
+        const otherTenant = await prisma.tenant.create({
+          data: { name: 'Other clinic 453', slug: `other-clinic-453-${Date.now()}` },
+        })
+        try {
+          const otherPatient = await prisma.patient.create({
+            data: { tenantId: otherTenant.id, firstName: 'Outsider', lastName: 'Patient453' },
+          })
+          const otherPayment = await prisma.patientPayment.create({
+            data: {
+              tenantId: otherTenant.id,
+              patientId: otherPatient.id,
+              amount: 999,
+              date: new Date(),
+              kind: 'ADVANCE',
+              isActive: false,
+            },
+          })
+          await prisma.patientPaymentEvent.create({
+            data: {
+              tenantId: otherTenant.id,
+              paymentId: otherPayment.id,
+              type: 'REVERSED',
+              actorUserId: 'someone-else',
+              reason: 'Belongs to another tenant',
+            },
+          })
+
+          // Same patientId, but the request carries THIS tenant's admin
+          // token — the service scopes every query by tenantId, so this must
+          // come back empty rather than 404ing into the other tenant's data.
+          const res = await api()
+            .get(`/api/patients/${otherPatient.id}/payment-movements`)
+            .set('Authorization', `Bearer ${adminToken}`)
+
+          expect(res.status).toBe(200)
+          expect(res.body.data).toEqual([])
+        } finally {
+          await prisma.patientPaymentEvent.deleteMany({ where: { tenantId: otherTenant.id } })
+          await prisma.patientPayment.deleteMany({ where: { tenantId: otherTenant.id } })
+          await prisma.patient.deleteMany({ where: { tenantId: otherTenant.id } })
+          await prisma.tenant.delete({ where: { id: otherTenant.id } }).catch(() => {})
+        }
+      })
+    })
+  })
 })

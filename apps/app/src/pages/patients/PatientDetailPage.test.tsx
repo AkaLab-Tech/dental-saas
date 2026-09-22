@@ -7,7 +7,9 @@ import PatientDetailPage from './PatientDetailPage'
 import { getPatientById, deleteToothData, updateToothData } from '@/lib/patient-api'
 import { downloadPatientHistoryPdf } from '@/lib/pdf-api'
 import { usePermissions } from '@/hooks/usePermissions'
+import { createAppointment } from '@/lib/appointment-api'
 import type { Patient } from '@/lib/patient-api'
+import type { Appointment } from '@/lib/appointment-api'
 
 // ============================================================================
 // Mocks
@@ -33,6 +35,18 @@ vi.mock('@/lib/pdf-api', () => ({
 
 vi.mock('@/hooks/usePermissions')
 
+// createAppointment/updateAppointment are the network seam AppointmentFormModal's
+// onSubmit hits — mocked so the refresh-wiring tests below can drive that path
+// without a real fetch. Everything else (formatting/status helpers) stays real.
+vi.mock('@/lib/appointment-api', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/appointment-api')>('@/lib/appointment-api')
+  return {
+    ...actual,
+    createAppointment: vi.fn(),
+    updateAppointment: vi.fn(),
+  }
+})
+
 // The odontogram is a heavy third-party SVG library unrelated to the tab
 // shell being tested here — stub it to a lightweight marker so tests can
 // assert on its presence/absence without rendering the real chart.
@@ -47,8 +61,24 @@ vi.mock('@/assets/odontogram.css', () => ({}))
 // panel is visible) rather than each section's internals (covered by their
 // own test files).
 vi.mock('./PatientAppointmentsSection', () => ({
-  PatientAppointmentsSection: ({ patientId }: { patientId: string }) => (
-    <div data-testid="appointments-section">appointments-section:{patientId}</div>
+  PatientAppointmentsSection: ({
+    patientId,
+    onPaymentsChange,
+    onNewAppointment,
+  }: {
+    patientId: string
+    onPaymentsChange: () => void
+    onNewAppointment: () => void
+  }) => (
+    <div data-testid="appointments-section">
+      appointments-section:{patientId}
+      <button type="button" onClick={onPaymentsChange}>
+        trigger-appointments-payments-change
+      </button>
+      <button type="button" onClick={onNewAppointment}>
+        trigger-new-appointment
+      </button>
+    </div>
   ),
 }))
 
@@ -65,8 +95,36 @@ vi.mock('@/components/budgets/BudgetsSection', () => ({
 }))
 
 vi.mock('@/components/payments/PaymentSection', () => ({
-  PaymentSection: ({ patientId }: { patientId: string }) => (
-    <div data-testid="payments-section">payments-section:{patientId}</div>
+  PaymentSection: ({
+    patientId,
+    onPaymentsChange,
+  }: {
+    patientId: string
+    onPaymentsChange: () => void
+  }) => (
+    <div data-testid="payments-section">
+      payments-section:{patientId}
+      <button type="button" onClick={onPaymentsChange}>
+        trigger-payments-change
+      </button>
+    </div>
+  ),
+}))
+
+// refreshKey is rendered alongside patientId (rather than asserted via a
+// separate spy) so the refresh-wiring tests below can pin the exact prop
+// value PatientDetailPage passes down after each mutation path fires.
+vi.mock('@/components/payments/PaymentMovementsSection', () => ({
+  PaymentMovementsSection: ({
+    patientId,
+    refreshKey,
+  }: {
+    patientId: string
+    refreshKey: number
+  }) => (
+    <div data-testid="movements-section">
+      movements-section:{patientId}:{refreshKey}
+    </div>
   ),
 }))
 
@@ -83,8 +141,20 @@ vi.mock('@/components/ui/ImageGallery', () => ({
 }))
 
 vi.mock('@/components/appointments/AppointmentFormModal', () => ({
-  AppointmentFormModal: ({ isOpen }: { isOpen: boolean }) =>
-    isOpen ? <div data-testid="appointment-form-modal" role="dialog" /> : null,
+  AppointmentFormModal: ({
+    isOpen,
+    onSubmit,
+  }: {
+    isOpen: boolean
+    onSubmit: (data: unknown) => void
+  }) =>
+    isOpen ? (
+      <div data-testid="appointment-form-modal" role="dialog">
+        <button type="button" onClick={() => onSubmit({})}>
+          submit-appointment-form
+        </button>
+      </div>
+    ) : null,
 }))
 
 // `t` must keep a stable identity across renders (the real react-i18next hook
@@ -184,7 +254,7 @@ describe('PatientDetailPage — tabs', () => {
   })
 
   describe('tab rendering (with PAYMENTS_VIEW)', () => {
-    it('renders all six tabs when the user has PAYMENTS_VIEW', async () => {
+    it('renders all seven tabs when the user has PAYMENTS_VIEW', async () => {
       await renderLoadedPage()
 
       const tabs = screen.getByRole('navigation', { name: 'Tabs' })
@@ -195,10 +265,11 @@ describe('PatientDetailPage — tabs', () => {
       expect(screen.getByRole('button', { name: /patients\.tabs\.budgets/ })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /patients\.tabs\.labworks/ })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /patients\.tabs\.payments/ })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /patients\.tabs\.movements/ })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /patients\.tabs\.images/ })).toBeInTheDocument()
     })
 
-    it('renders the tab buttons in order: Patient, Appointments, Budgets, Labworks, Payments, Images', async () => {
+    it('renders the tab buttons in order: Patient, Appointments, Budgets, Labworks, Payments, Movements, Images', async () => {
       await renderLoadedPage()
 
       const tabs = screen.getByRole('navigation', { name: 'Tabs' })
@@ -211,6 +282,7 @@ describe('PatientDetailPage — tabs', () => {
         'patients.tabs.budgets',
         'patients.tabs.labworks',
         'patients.tabs.payments',
+        'patients.tabs.movements',
         'patients.tabs.images',
       ])
     })
@@ -247,6 +319,7 @@ describe('PatientDetailPage — tabs', () => {
       expect(isHidden(screen.getByTestId('budgets-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('labworks-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('payments-section'))).toBe(true)
+      expect(isHidden(screen.getByTestId('movements-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('image-upload'))).toBe(true)
     })
 
@@ -261,6 +334,7 @@ describe('PatientDetailPage — tabs', () => {
       expect(isHidden(screen.getByTestId('appointments-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('labworks-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('payments-section'))).toBe(true)
+      expect(isHidden(screen.getByTestId('movements-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('image-upload'))).toBe(true)
     })
 
@@ -279,6 +353,7 @@ describe('PatientDetailPage — tabs', () => {
       expect(isHidden(screen.getByTestId('appointments-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('budgets-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('payments-section'))).toBe(true)
+      expect(isHidden(screen.getByTestId('movements-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('image-upload'))).toBe(true)
     })
 
@@ -293,6 +368,26 @@ describe('PatientDetailPage — tabs', () => {
       expect(isHidden(screen.getByTestId('appointments-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('budgets-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('labworks-section'))).toBe(true)
+      expect(isHidden(screen.getByTestId('movements-section'))).toBe(true)
+      expect(isHidden(screen.getByTestId('image-upload'))).toBe(true)
+    })
+
+    it('shows movements content and hides others when clicking the Movements tab', async () => {
+      await renderLoadedPage()
+
+      fireEvent.click(screen.getByRole('button', { name: /patients\.tabs\.movements/ }))
+
+      expect(screen.getByRole('button', { name: /patients\.tabs\.movements/ })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
+      expect(isHidden(screen.getByTestId('movements-section'))).toBe(false)
+      expect(screen.getByTestId('movements-section')).toHaveTextContent('movements-section:p1')
+      expect(isHidden(screen.getByTestId('odontogram-chart'))).toBe(true)
+      expect(isHidden(screen.getByTestId('appointments-section'))).toBe(true)
+      expect(isHidden(screen.getByTestId('budgets-section'))).toBe(true)
+      expect(isHidden(screen.getByTestId('labworks-section'))).toBe(true)
+      expect(isHidden(screen.getByTestId('payments-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('image-upload'))).toBe(true)
     })
 
@@ -310,6 +405,7 @@ describe('PatientDetailPage — tabs', () => {
       expect(isHidden(screen.getByTestId('budgets-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('labworks-section'))).toBe(true)
       expect(isHidden(screen.getByTestId('payments-section'))).toBe(true)
+      expect(isHidden(screen.getByTestId('movements-section'))).toBe(true)
     })
 
     it('keeps sections mounted (not removed from the DOM) when switching away from their tab', async () => {
@@ -367,13 +463,15 @@ describe('PatientDetailPage — tabs', () => {
     })
   })
 
-  describe('Payments tab permission gating', () => {
-    it('does not render the Payments tab button when the user lacks PAYMENTS_VIEW', async () => {
+  describe('Payments/Movements tab permission gating', () => {
+    it('does not render the Payments or Movements tab button (or section) when the user lacks PAYMENTS_VIEW', async () => {
       mockPermissions(false)
       await renderLoadedPage()
 
       expect(screen.queryByRole('button', { name: /patients\.tabs\.payments/ })).not.toBeInTheDocument()
       expect(screen.queryByTestId('payments-section')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /patients\.tabs\.movements/ })).not.toBeInTheDocument()
+      expect(screen.queryByTestId('movements-section')).not.toBeInTheDocument()
     })
 
     it('renders the Payments tab button when the user has PAYMENTS_VIEW', async () => {
@@ -383,7 +481,14 @@ describe('PatientDetailPage — tabs', () => {
       expect(screen.getByRole('button', { name: /patients\.tabs\.payments/ })).toBeInTheDocument()
     })
 
-    it('renders exactly five tab buttons when the Payments tab is gated out', async () => {
+    it('renders the Movements tab button when the user has PAYMENTS_VIEW (same gate as Payments)', async () => {
+      mockPermissions(true)
+      await renderLoadedPage()
+
+      expect(screen.getByRole('button', { name: /patients\.tabs\.movements/ })).toBeInTheDocument()
+    })
+
+    it('renders exactly five tab buttons when Payments/Movements are gated out', async () => {
       mockPermissions(false)
       await renderLoadedPage()
 
@@ -392,7 +497,7 @@ describe('PatientDetailPage — tabs', () => {
       expect(buttons).toHaveLength(5)
     })
 
-    it('still renders the Laboratorio tab button when Payments is gated out', async () => {
+    it('still renders the Laboratorio tab button when Payments/Movements are gated out', async () => {
       mockPermissions(false)
       await renderLoadedPage()
 
@@ -665,6 +770,60 @@ describe('PatientDetailPage — visual polish (task #218)', () => {
         expect(screen.getByText('boom')).toBeInTheDocument()
       })
       expect(pdfButton).not.toBeDisabled()
+    })
+  })
+})
+
+// ============================================================================
+// Task #453 follow-up — movementsRefreshKey wiring: every path that can add a
+// payment-movement row must bump the Movimientos tab's refreshKey so its data
+// is refetched even while the pane stays hidden (e2e caught this going stale).
+// ============================================================================
+
+describe('PatientDetailPage — movementsRefreshKey wiring (task #453 follow-up)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    ;(getPatientById as unknown as Mock).mockResolvedValue(makePatient())
+    ;(createAppointment as unknown as Mock).mockResolvedValue({ id: 'a1' } as Appointment)
+    mockPermissions(true)
+  })
+
+  it('starts the movements section at refreshKey 0', async () => {
+    await renderLoadedPage()
+
+    expect(screen.getByTestId('movements-section')).toHaveTextContent('movements-section:p1:0')
+  })
+
+  it('bumps the movements refreshKey when the appointments tab reports a payments change', async () => {
+    await renderLoadedPage()
+
+    fireEvent.click(screen.getByRole('button', { name: /patients\.tabs\.appointments/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'trigger-appointments-payments-change' }))
+
+    expect(screen.getByTestId('movements-section')).toHaveTextContent('movements-section:p1:1')
+  })
+
+  it('bumps the movements refreshKey when the Payments tab reports a payments change', async () => {
+    await renderLoadedPage()
+
+    fireEvent.click(screen.getByRole('button', { name: /patients\.tabs\.payments/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'trigger-payments-change' }))
+
+    expect(screen.getByTestId('movements-section')).toHaveTextContent('movements-section:p1:1')
+  })
+
+  it('bumps the movements refreshKey when the appointment form is submitted', async () => {
+    await renderLoadedPage()
+
+    fireEvent.click(screen.getByRole('button', { name: /patients\.tabs\.appointments/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'trigger-new-appointment' }))
+    fireEvent.click(screen.getByRole('button', { name: 'submit-appointment-form' }))
+
+    await waitFor(() => {
+      expect(createAppointment).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(screen.getByTestId('movements-section')).toHaveTextContent('movements-section:p1:1')
     })
   })
 })

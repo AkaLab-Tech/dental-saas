@@ -5,9 +5,11 @@ import {
   createPayment,
   deletePayment,
   getDebtors,
+  getPatientPaymentMovements,
   type Payment,
   type PatientBalance,
   type Debtor,
+  type PaymentMovement,
 } from './payment-api'
 import { apiClient } from './api'
 
@@ -175,6 +177,76 @@ describe('payment-api', () => {
         '/patients/patient-789/payments/payment-123',
         { data: { reason: 'Cobrado por error' } }
       )
+    })
+  })
+
+  describe('getPatientPaymentMovements', () => {
+    const mockMovement: PaymentMovement = {
+      type: 'RECEIVED',
+      at: '2026-05-05T10:00:00.000Z',
+      amount: 80,
+      paymentId: 'payment-453',
+      appointmentId: 'appt-453',
+      appointmentDate: '2026-05-05T10:00:00.000Z',
+      actor: { kind: 'user', name: 'Ana Pérez', active: true },
+      reason: null,
+    }
+
+    it('fetches movements with no params when none are passed', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [mockMovement] },
+      })
+
+      const result = await getPatientPaymentMovements('patient-789')
+
+      expect(apiClient.get).toHaveBeenCalledWith('/patients/patient-789/payment-movements')
+      expect(result).toEqual([mockMovement])
+    })
+
+    it('forwards only `from` on the query string when `to` is omitted', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({ data: { success: true, data: [] } })
+
+      await getPatientPaymentMovements('patient-789', { from: '2026-05-01' })
+
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/patients/patient-789/payment-movements?from=2026-05-01'
+      )
+    })
+
+    it('forwards only `to` on the query string when `from` is omitted', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({ data: { success: true, data: [] } })
+
+      await getPatientPaymentMovements('patient-789', { to: '2026-05-31' })
+
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/patients/patient-789/payment-movements?to=2026-05-31'
+      )
+    })
+
+    it('combines `from` and `to` on the query string when both are passed', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({ data: { success: true, data: [] } })
+
+      await getPatientPaymentMovements('patient-789', { from: '2026-05-01', to: '2026-05-31' })
+
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/patients/patient-789/payment-movements?from=2026-05-01&to=2026-05-31'
+      )
+    })
+
+    it('omits the query string entirely when both params are empty strings', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({ data: { success: true, data: [] } })
+
+      await getPatientPaymentMovements('patient-789', { from: '', to: '' })
+
+      expect(apiClient.get).toHaveBeenCalledWith('/patients/patient-789/payment-movements')
+    })
+
+    it('returns an empty array when there are no movements', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({ data: { success: true, data: [] } })
+
+      const result = await getPatientPaymentMovements('patient-789')
+
+      expect(result).toEqual([])
     })
   })
 

@@ -519,6 +519,7 @@
       "budgets": "الميزانيات",
       "labworks": "المختبر",
       "payments": "المدفوعات",
+      "movements": "الحركات",
       "images": "الصور"
     },
     "appointments": {
@@ -1121,6 +1122,20 @@
       "date": "التاريخ",
       "note": "ملاحظة (اختياري)",
       "notePlaceholder": "مثال: دفعة جزئية نقدية..."
+    },
+    "movements": {
+      "subtitle": "سجل زمني للمدفوعات وحركاتها",
+      "empty": "لا توجد حركات في النطاق المحدد",
+      "dateFrom": "من",
+      "dateTo": "إلى",
+      "types": {
+        "RECEIVED": "دفعة مستلمة",
+        "REVERSED": "دفعة تم التراجع عنها",
+        "CONVERTED_TO_ADVANCE": "تم تحويلها إلى دفعة",
+        "RESTORED_TO_APPOINTMENT": "تمت استعادتها كدفعة استشارة"
+      },
+      "originAppointmentCancelled": "موعد بتاريخ {{date}} (ملغى)",
+      "originAppointment": "موعد بتاريخ {{date}}"
     }
   },
   "attachments": {

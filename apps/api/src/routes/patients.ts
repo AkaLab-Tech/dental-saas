@@ -24,6 +24,7 @@ import { PatientHistoryPdf, sanitizeFilename } from '../pdfs/index.js'
 import {
   createPayment,
   listPayments,
+  listPaymentMovements,
   deletePayment,
   getPatientBalance,
   getPatientAccountStatement,
@@ -685,6 +686,11 @@ const listPaymentsQuerySchema = z.object({
     .transform((v) => v === 'true'),
 })
 
+const paymentMovementsQuerySchema = z.object({
+  from: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
+  to: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
+})
+
 /**
  * GET /api/patients/:id/balance
  * Get patient balance (total debt, total paid, outstanding)
@@ -771,6 +777,42 @@ patientsRouter.get('/:id/payments', requirePermission(Permission.PAYMENTS_VIEW),
     next(e)
   }
 })
+
+/**
+ * GET /api/patients/:id/payment-movements
+ * Task #453: chronological ledger of payments received plus every
+ * REVERSED / CONVERTED_TO_ADVANCE / RESTORED_TO_APPOINTMENT transition.
+ */
+patientsRouter.get(
+  '/:id/payment-movements',
+  requirePermission(Permission.PAYMENTS_VIEW),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.user!.tenantId!
+      const { id } = req.params
+
+      const parsedQuery = paymentMovementsQuerySchema.safeParse(req.query)
+      if (!parsedQuery.success) {
+        res.status(400).json({
+          success: false,
+          error: 'Validation error',
+          details: parsedQuery.error.flatten().fieldErrors,
+        })
+        return
+      }
+      const { from, to } = parsedQuery.data
+
+      const data = await listPaymentMovements(tenantId, id, {
+        from: from ? new Date(from) : undefined,
+        to: to ? new Date(to) : undefined,
+      })
+
+      res.json({ success: true, data })
+    } catch (e) {
+      next(e)
+    }
+  }
+)
 
 /**
  * POST /api/patients/:id/payments

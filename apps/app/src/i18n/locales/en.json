@@ -519,6 +519,7 @@
       "budgets": "Budgets",
       "labworks": "Laboratory",
       "payments": "Payments",
+      "movements": "Movements",
       "images": "Images"
     },
     "appointments": {
@@ -1112,6 +1113,20 @@
       "date": "Date",
       "note": "Note (optional)",
       "notePlaceholder": "E.g.: Partial cash payment..."
+    },
+    "movements": {
+      "subtitle": "Chronological history of payments and their movements",
+      "empty": "No movements in the selected range",
+      "dateFrom": "From",
+      "dateTo": "To",
+      "types": {
+        "RECEIVED": "Payment received",
+        "REVERSED": "Payment reversed",
+        "CONVERTED_TO_ADVANCE": "Converted to payment",
+        "RESTORED_TO_APPOINTMENT": "Restored to consultation payment"
+      },
+      "originAppointmentCancelled": "Appointment on {{date}} (cancelled)",
+      "originAppointment": "Appointment on {{date}}"
     }
   },
   "attachments": {
