@@ -61,6 +61,25 @@ export interface CreatePaymentData {
   note?: string
 }
 
+/** Task #453: one row of the patient's payment-movements ledger. */
+export type PaymentMovementType =
+  | 'RECEIVED'
+  | 'REVERSED'
+  | 'CONVERTED_TO_ADVANCE'
+  | 'RESTORED_TO_APPOINTMENT'
+
+export interface PaymentMovement {
+  type: PaymentMovementType
+  at: string
+  amount: number
+  paymentId: string
+  appointmentId: string | null
+  /** The origin appointment's date, present whenever appointmentId is. */
+  appointmentDate: string | null
+  actor: ActorView | null
+  reason: string | null
+}
+
 export interface Debtor {
   patientId: string
   name: string
@@ -97,6 +116,11 @@ interface PaymentResponse {
 interface DebtorsResponse {
   success: boolean
   data: Debtor[]
+}
+
+interface PaymentMovementsResponse {
+  success: boolean
+  data: PaymentMovement[]
 }
 
 // ============================================================================
@@ -165,5 +189,27 @@ export async function deletePayment(
 
 export async function getDebtors(): Promise<Debtor[]> {
   const response = await apiClient.get<DebtorsResponse>('/patients/debts')
+  return response.data.data
+}
+
+/**
+ * Task #453: the interleaved chronological ledger of payments received plus
+ * every REVERSED / CONVERTED_TO_ADVANCE / RESTORED_TO_APPOINTMENT transition,
+ * newest first. `from`/`to` are ISO datetime strings (the caller converts a
+ * bare date to local start/end-of-day before calling this) — a bare
+ * YYYY-MM-DD is still accepted by the API for direct callers.
+ */
+export async function getPatientPaymentMovements(
+  patientId: string,
+  params?: { from?: string; to?: string }
+): Promise<PaymentMovement[]> {
+  const queryParams = new URLSearchParams()
+  if (params?.from) queryParams.set('from', params.from)
+  if (params?.to) queryParams.set('to', params.to)
+
+  const queryString = queryParams.toString()
+  const url = `/patients/${patientId}/payment-movements${queryString ? `?${queryString}` : ''}`
+
+  const response = await apiClient.get<PaymentMovementsResponse>(url)
   return response.data.data
 }

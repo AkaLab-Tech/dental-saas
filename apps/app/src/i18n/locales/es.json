@@ -519,6 +519,7 @@
       "budgets": "Presupuestos",
       "labworks": "Laboratorio",
       "payments": "Entregas",
+      "movements": "Movimientos",
       "images": "Imágenes"
     },
     "appointments": {
@@ -1121,6 +1122,20 @@
       "date": "Fecha",
       "note": "Nota (opcional)",
       "notePlaceholder": "Ej: Pago parcial en efectivo..."
+    },
+    "movements": {
+      "subtitle": "Historial cronológico de entregas y sus movimientos",
+      "empty": "No hay movimientos en el rango seleccionado",
+      "dateFrom": "Desde",
+      "dateTo": "Hasta",
+      "types": {
+        "RECEIVED": "Entrega recibida",
+        "REVERSED": "Entrega revertida",
+        "CONVERTED_TO_ADVANCE": "Convertida a entrega",
+        "RESTORED_TO_APPOINTMENT": "Restaurada a pago de consulta"
+      },
+      "originAppointmentCancelled": "Cita del {{date}} (cancelada)",
+      "originAppointment": "Cita del {{date}}"
     }
   },
   "attachments": {

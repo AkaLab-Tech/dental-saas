@@ -763,6 +763,180 @@ export async function listPayments(
   return { data, total }
 }
 
+/** Task #453: one row of the patient's payment-movements ledger. */
+export type PaymentMovementType =
+  | 'RECEIVED'
+  | 'REVERSED'
+  | 'CONVERTED_TO_ADVANCE'
+  | 'RESTORED_TO_APPOINTMENT'
+
+export interface PaymentMovement {
+  type: PaymentMovementType
+  at: Date
+  amount: Prisma.Decimal
+  paymentId: string
+  /**
+   * The appointment the payment is or was linked to. Kept even after a
+   * cancellation converts the payment to ADVANCE (see
+   * convertAppointmentPaymentsToAdvance), so a conversion/restore row can
+   * still point back to its origin appointment.
+   */
+  appointmentId: string | null
+  /**
+   * The origin appointment's date, resolved without an `isActive` filter —
+   * the appointment a CONVERTED_TO_ADVANCE event points at is soft-deleted
+   * (cancelling is what triggers the conversion), and it must still resolve.
+   */
+  appointmentDate: Date | null
+  actor: ActorView | null
+  reason: string | null
+}
+
+export interface ListPaymentMovementsOptions {
+  from?: Date
+  to?: Date
+  // Set by the route when `to` arrived as a bare date: `to` is then the
+  // *next* day's midnight and the bound must exclude it (`lt`), not include
+  // it (`lte`).
+  toExclusive?: boolean
+}
+
+/**
+ * Task #453: an interleaved, chronological ledger of a patient's payments
+ * received plus every REVERSED / CONVERTED_TO_ADVANCE / RESTORED_TO_APPOINTMENT
+ * transition — the two latter of which #392 recorded but no surface showed.
+ *
+ * Deliberately NOT a FIFO/allocation view: it reads `PatientPayment.date` and
+ * `PatientPaymentEvent.occurredAt` only, never `computeFifoAllocation`.
+ *
+ * `from`/`to` bound `date` for a RECEIVED row and `occurredAt` for an event
+ * row — the two different "when" this ledger cares about. A payment received
+ * before the range but converted inside it therefore shows the conversion,
+ * not the receipt.
+ */
+export async function listPaymentMovements(
+  tenantId: string,
+  patientId: string,
+  options?: ListPaymentMovementsOptions
+): Promise<PaymentMovement[]> {
+  const range =
+    options?.from || options?.to
+      ? {
+          ...(options.from && { gte: options.from }),
+          ...(options.to && (options.toExclusive ? { lt: options.to } : { lte: options.to })),
+        }
+      : undefined
+
+  const [receivedPayments, events, legacyReversals] = await Promise.all([
+    prisma.patientPayment.findMany({
+      where: { tenantId, patientId, ...(range && { date: range }) },
+      select: { id: true, amount: true, date: true, createdBy: true, appointmentId: true },
+    }),
+    // The event has no patientId of its own (see the model comment on
+    // PatientPaymentEvent) — scoped to the patient through its payment.
+    prisma.patientPaymentEvent.findMany({
+      where: {
+        tenantId,
+        payment: { patientId },
+        type: { in: ['REVERSED', 'CONVERTED_TO_ADVANCE', 'RESTORED_TO_APPOINTMENT'] },
+        ...(range && { occurredAt: range }),
+      },
+      select: {
+        type: true,
+        occurredAt: true,
+        actorUserId: true,
+        reason: true,
+        paymentId: true,
+        payment: { select: { amount: true, appointmentId: true } },
+      },
+    }),
+    // Reversals from before #392 have no event (see getCashCollectedBetween's
+    // legacy leg above) — `updatedAt` is the closest thing the row carries to
+    // "when it was reversed". Rendered with no invented actor/reason, matching
+    // listPayments' fallback for the same rows.
+    prisma.patientPayment.findMany({
+      where: {
+        tenantId,
+        patientId,
+        isActive: false,
+        updatedAt: range,
+        events: { none: { type: 'REVERSED' } },
+      },
+      select: { id: true, amount: true, updatedAt: true, appointmentId: true },
+    }),
+  ])
+
+  const appointmentIds = [
+    ...new Set(
+      [
+        ...receivedPayments.map((p) => p.appointmentId),
+        ...events.map((e) => e.payment.appointmentId),
+        ...legacyReversals.map((p) => p.appointmentId),
+      ].filter((id): id is string => !!id)
+    ),
+  ]
+  // No `isActive` filter: the origin appointment of a CONVERTED_TO_ADVANCE
+  // event is soft-deleted by the same cancellation that created the event.
+  const appointments =
+    appointmentIds.length === 0
+      ? []
+      : await prisma.appointment.findMany({
+          where: { tenantId, id: { in: appointmentIds } },
+          select: { id: true, startTime: true },
+        })
+  const appointmentDateOf = new Map(appointments.map((a) => [a.id, a.startTime]))
+
+  // Task #461: one actor lookup for every row on the page.
+  const actorOf = await resolveActors(tenantId, [
+    ...receivedPayments.map((p) => p.createdBy),
+    ...events.map((e) => e.actorUserId),
+  ])
+
+  const movements: PaymentMovement[] = [
+    ...receivedPayments.map(
+      (p): PaymentMovement => ({
+        type: 'RECEIVED',
+        at: p.date,
+        amount: p.amount,
+        paymentId: p.id,
+        appointmentId: p.appointmentId,
+        appointmentDate: p.appointmentId ? appointmentDateOf.get(p.appointmentId) ?? null : null,
+        actor: actorOf(p.createdBy),
+        reason: null,
+      })
+    ),
+    ...events.map(
+      (e): PaymentMovement => ({
+        type: e.type,
+        at: e.occurredAt,
+        amount: e.payment.amount,
+        paymentId: e.paymentId,
+        appointmentId: e.payment.appointmentId,
+        appointmentDate: e.payment.appointmentId
+          ? appointmentDateOf.get(e.payment.appointmentId) ?? null
+          : null,
+        actor: actorOf(e.actorUserId),
+        reason: e.reason,
+      })
+    ),
+    ...legacyReversals.map(
+      (p): PaymentMovement => ({
+        type: 'REVERSED',
+        at: p.updatedAt,
+        amount: p.amount,
+        paymentId: p.id,
+        appointmentId: p.appointmentId,
+        appointmentDate: p.appointmentId ? appointmentDateOf.get(p.appointmentId) ?? null : null,
+        actor: null,
+        reason: null,
+      })
+    ),
+  ]
+
+  movements.sort((a, b) => b.at.getTime() - a.at.getTime())
+  return movements
+}
+
 /**
  * Task #395: cash collected in a period, on a CONTRA-ENTRY basis.
  *

@@ -11,6 +11,7 @@ import {
   Wallet,
   FlaskConical,
   DollarSign,
+  History,
   Image as ImageIcon,
   Edit2,
   AlertCircle,
@@ -38,6 +39,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { ImageUpload } from '@/components/ui/ImageUpload'
 import { ImageGallery } from '@/components/ui/ImageGallery'
 import { PaymentSection } from '@/components/payments/PaymentSection'
+import { PaymentMovementsSection } from '@/components/payments/PaymentMovementsSection'
 import { AppointmentFormModal } from '@/components/appointments/AppointmentFormModal'
 import {
   createAppointment,
@@ -52,7 +54,14 @@ import { PatientLabworksSection } from './PatientLabworksSection'
 import { BudgetsSection } from '@/components/budgets/BudgetsSection'
 import { remapPrimaryFdi } from './odontogram-utils'
 
-type PatientDetailTabId = 'patient' | 'appointments' | 'budgets' | 'labworks' | 'payments' | 'images'
+type PatientDetailTabId =
+  | 'patient'
+  | 'appointments'
+  | 'budgets'
+  | 'labworks'
+  | 'payments'
+  | 'movements'
+  | 'images'
 
 // ============================================================================
 // Types
@@ -299,6 +308,12 @@ export default function PatientDetailPage() {
   const [appointmentFormError, setAppointmentFormError] = useState<string | null>(null)
   const [appointmentsRefreshKey, setAppointmentsRefreshKey] = useState(0)
   const [paymentsRefreshKey, setPaymentsRefreshKey] = useState(0)
+  // Separate from paymentsRefreshKey so a Movements refresh never re-triggers
+  // PaymentSection's own fetch — it already refetches itself right after the
+  // mutation that led here. Bumped from every path that can add a movement
+  // row: Entregas (create/reverse), the appointments tab (cancel/reverse a
+  // consultation payment), and the appointment form (FIFO-created payments).
+  const [movementsRefreshKey, setMovementsRefreshKey] = useState(0)
 
   // Fetch patient data
   useEffect(() => {
@@ -537,7 +552,10 @@ export default function PatientDetailPage() {
     { id: 'budgets', label: t('patients.tabs.budgets'), icon: Wallet },
     { id: 'labworks', label: t('patients.tabs.labworks'), icon: FlaskConical },
     ...(canViewPayments
-      ? [{ id: 'payments' as const, label: t('patients.tabs.payments'), icon: DollarSign }]
+      ? [
+          { id: 'payments' as const, label: t('patients.tabs.payments'), icon: DollarSign },
+          { id: 'movements' as const, label: t('patients.tabs.movements'), icon: History },
+        ]
       : []),
     { id: 'images', label: t('patients.tabs.images'), icon: ImageIcon },
   ]
@@ -906,7 +924,10 @@ export default function PatientDetailPage() {
                 setIsAppointmentFormOpen(true)
               }}
               refreshKey={appointmentsRefreshKey}
-              onPaymentsChange={() => setPaymentsRefreshKey((k) => k + 1)}
+              onPaymentsChange={() => {
+                setPaymentsRefreshKey((k) => k + 1)
+                setMovementsRefreshKey((k) => k + 1)
+              }}
             />
           </div>
 
@@ -926,8 +947,20 @@ export default function PatientDetailPage() {
               <PaymentSection
                 patientId={patient.id}
                 refreshKey={paymentsRefreshKey}
-                onPaymentsChange={() => setAppointmentsRefreshKey((k) => k + 1)}
+                onPaymentsChange={() => {
+                  setAppointmentsRefreshKey((k) => k + 1)
+                  setMovementsRefreshKey((k) => k + 1)
+                }}
               />
+            </div>
+          )}
+
+          {/* Movements tab: gated exactly like Payments — same permission,
+              same underlying data — but keyed on its own refresh counter (see
+              movementsRefreshKey) rather than paymentsRefreshKey. */}
+          {canViewPayments && (
+            <div className={activeTab === 'movements' ? '' : 'hidden'}>
+              <PaymentMovementsSection patientId={patient.id} refreshKey={movementsRefreshKey} />
             </div>
           )}
 
@@ -975,9 +1008,10 @@ export default function PatientDetailPage() {
             setIsAppointmentFormOpen(false)
             setEditingAppointment(null)
             // FIFO may have created a payment and recalculated isPaid on
-            // multiple billable items, so refresh both sections.
+            // multiple billable items, so refresh every section it can affect.
             setAppointmentsRefreshKey(k => k + 1)
             setPaymentsRefreshKey(k => k + 1)
+            setMovementsRefreshKey(k => k + 1)
           } catch (e) {
             setAppointmentFormError(getAppointmentApiErrorMessage(e))
           } finally {
