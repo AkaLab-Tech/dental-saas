@@ -140,11 +140,13 @@ export const useAppointmentsStore = create<AppointmentsState & InternalState & A
   fetchCalendarAppointments: async (params: CalendarParams) => {
     set({ isLoading: true, error: null })
     try {
-      const { selectedDoctorId, selectedPatientId } = get()
+      const { selectedDoctorId, selectedPatientId, selectedStatus, showInactive } = get()
       const calendarAppointments = await getCalendarAppointments({
         ...params,
         doctorId: params.doctorId ?? selectedDoctorId ?? undefined,
         patientId: params.patientId ?? selectedPatientId ?? undefined,
+        status: params.status ?? selectedStatus ?? undefined,
+        includeInactive: params.includeInactive ?? showInactive,
       })
       set({ calendarAppointments, isLoading: false })
     } catch (error) {

@@ -204,6 +204,72 @@ describe('appointment-api', () => {
       )
       expect(result).toEqual([mockAppointment])
     })
+
+    it('should fetch calendar appointments with status filter (#474)', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [mockAppointment] },
+      })
+
+      const result = await getCalendarAppointments({
+        from: '2024-01-01',
+        to: '2024-01-31',
+        status: 'CONFIRMED',
+      })
+
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/appointments/calendar?from=2024-01-01&to=2024-01-31&status=CONFIRMED'
+      )
+      expect(result).toEqual([mockAppointment])
+    })
+
+    it('should fetch calendar appointments with includeInactive filter (#474)', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [mockAppointment] },
+      })
+
+      const result = await getCalendarAppointments({
+        from: '2024-01-01',
+        to: '2024-01-31',
+        includeInactive: true,
+      })
+
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/appointments/calendar?from=2024-01-01&to=2024-01-31&includeInactive=true'
+      )
+      expect(result).toEqual([mockAppointment])
+    })
+
+    it('should omit includeInactive from the query when false (#474)', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [mockAppointment] },
+      })
+
+      await getCalendarAppointments({
+        from: '2024-01-01',
+        to: '2024-01-31',
+        includeInactive: false,
+      })
+
+      expect(apiClient.get).toHaveBeenCalledWith('/appointments/calendar?from=2024-01-01&to=2024-01-31')
+    })
+
+    it('should fetch calendar appointments with status and includeInactive together (#474)', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [mockAppointment] },
+      })
+
+      await getCalendarAppointments({
+        from: '2024-01-01',
+        to: '2024-01-31',
+        doctorId: 'doctor-012',
+        status: 'COMPLETED',
+        includeInactive: true,
+      })
+
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/appointments/calendar?from=2024-01-01&to=2024-01-31&doctorId=doctor-012&status=COMPLETED&includeInactive=true'
+      )
+    })
   })
 
   describe('getAppointmentById', () => {

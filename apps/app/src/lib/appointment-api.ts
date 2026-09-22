@@ -150,6 +150,8 @@ export interface CalendarParams {
   to: string
   doctorId?: string
   patientId?: string
+  status?: AppointmentStatus
+  includeInactive?: boolean
 }
 
 export interface StatsParams {
@@ -199,6 +201,8 @@ export async function getCalendarAppointments(params: CalendarParams): Promise<A
   queryParams.set('to', params.to)
   if (params.doctorId) queryParams.set('doctorId', params.doctorId)
   if (params.patientId) queryParams.set('patientId', params.patientId)
+  if (params.status) queryParams.set('status', params.status)
+  if (params.includeInactive) queryParams.set('includeInactive', 'true')
 
   const url = `/appointments/calendar?${queryParams.toString()}`
   const response = await apiClient.get<ApiResponse<Appointment[]>>(url)
