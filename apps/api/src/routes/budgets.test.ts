@@ -2,12 +2,13 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
-import { generateToken } from '../test/tokens.js'
+import { generateToken, generateProfileToken } from '../test/tokens.js'
 
 
 describe('Budgets routes', () => {
   let tenantId: string
   let otherTenantId: string
+  let adminUserId: string
   let adminToken: string
   let doctorToken: string
   let staffToken: string
@@ -63,6 +64,7 @@ describe('Budgets routes', () => {
         role: 'ADMIN',
       },
     })
+    adminUserId = adminUser.id
     adminToken = generateToken(adminUser.id, tenantId, 'ADMIN')
 
     const doctorUser = await prisma.user.create({
@@ -253,6 +255,35 @@ describe('Budgets routes', () => {
 
       expect(res.status).toBe(201)
       expect(new Date(res.body.data.validUntil).toISOString().slice(0, 10)).toBe('2027-01-15')
+    })
+
+    // Task #468: createdById must record the real actor. It is not exposed
+    // on the API response (see safe-select shapes in budget.service.ts), so
+    // these read the row directly from Prisma.
+    describe('Task #468: the budget records the real actor', () => {
+      it('records createdById as the authenticated user, not null', async () => {
+        const res = await api()
+          .post(`/api/patients/${patientId}/budgets`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send(validBody)
+
+        expect(res.status).toBe(201)
+        const row = await prisma.budget.findUniqueOrThrow({ where: { id: res.body.data.id } })
+        expect(row.createdById).toBe(adminUserId)
+      })
+
+      it('records createdById as the active PIN profile, not the shared login', async () => {
+        const res = await api()
+          .post(`/api/patients/${patientId}/budgets`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .set('X-Profile-Token', generateProfileToken('profile-468-budget', tenantId, 'ADMIN'))
+          .send(validBody)
+
+        expect(res.status).toBe(201)
+        const row = await prisma.budget.findUniqueOrThrow({ where: { id: res.body.data.id } })
+        expect(row.createdById).toBe('profile-468-budget')
+        expect(row.createdById).not.toBe(adminUserId)
+      })
     })
   })
 

@@ -548,7 +548,8 @@ export async function createAppointment(
       data.patientId,
       effectivePaidAmount,
       data.startTime,
-      appointment.id
+      appointment.id,
+      data.createdBy ?? null
     )
     if (!transition.ok) {
       logger.warn(
@@ -586,7 +587,8 @@ async function applyPaidTransition(
   patientId: string,
   paidAmount: number,
   date: Date,
-  appointmentId: string
+  appointmentId: string,
+  actorUserId: string | null
 ): Promise<{ ok: true } | { ok: false; code: AppointmentErrorCode; message: string }> {
   const paymentResult = await createPayment(tenantId, patientId, {
     amount: paidAmount,
@@ -594,6 +596,7 @@ async function applyPaidTransition(
     note: 'Pago en consulta',
     kind: 'APPOINTMENT',
     appointmentId,
+    createdBy: actorUserId ?? undefined,
   })
 
   if (!paymentResult.success) {
@@ -646,7 +649,8 @@ function paymentErrorMessage(code: PaymentErrorCode): string {
 export async function updateAppointment(
   tenantId: string,
   id: string,
-  data: UpdateAppointmentInput
+  data: UpdateAppointmentInput,
+  actorUserId: string | null
 ): Promise<{ appointment?: SafeAppointment; error?: { code: AppointmentErrorCode; message: string } }> {
   // Get existing appointment
   const existing = await prisma.appointment.findUnique({
@@ -779,7 +783,8 @@ export async function updateAppointment(
       patientId,
       effectivePaidAmount,
       data.startTime ?? existing.startTime,
-      id
+      id,
+      actorUserId
     )
 
     if (!transition.ok) {

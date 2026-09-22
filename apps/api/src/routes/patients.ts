@@ -1004,7 +1004,7 @@ patientsRouter.post(
           notes: item.notes,
           order: item.order,
         })),
-        createdById: req.user!.userId,
+        createdById: req.user!.profileUserId || req.user!.userId,
       })
 
       if (!result.success) {

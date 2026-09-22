@@ -5,10 +5,11 @@ import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
 import { env } from '../config/env.js'
-import { generateToken } from '../test/tokens.js'
+import { generateToken, generateProfileToken } from '../test/tokens.js'
 
 describe('Attachments Routes', () => {
   let tenantId: string
+  let adminUserId: string
   let adminToken: string
   let staffToken: string
   let doctorToken: string
@@ -68,6 +69,7 @@ describe('Attachments Routes', () => {
         role: 'ADMIN',
       },
     })
+    adminUserId = adminUser.id
     adminToken = generateToken(adminUser.id, tenantId, 'ADMIN')
 
     const staffUser = await prisma.user.create({
@@ -202,6 +204,51 @@ describe('Attachments Routes', () => {
         })
 
       expect(res.status).toBe(401)
+    })
+
+    // Task #468: uploadedBy must record the real actor.
+    describe('Task #468: the attachment records the real actor', () => {
+      it('records uploadedBy as the authenticated user, not null', async () => {
+        const res = await api()
+          .post('/api/attachments/patients/patient-468-plain')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .attach('files', Buffer.from('fake-png'), {
+            filename: 'test-468-plain.png',
+            contentType: 'image/png',
+          })
+
+        expect(res.status).toBe(201)
+        createdFiles.push(
+          path.join(env.UPLOAD_DIR, tenantId, 'patients', res.body.data[0].storedName)
+        )
+
+        const row = await prisma.attachment.findFirstOrThrow({
+          where: { tenantId, entityId: 'patient-468-plain' },
+        })
+        expect(row.uploadedBy).toBe(adminUserId)
+      })
+
+      it('records uploadedBy as the active PIN profile, not the shared login', async () => {
+        const res = await api()
+          .post('/api/attachments/patients/patient-468-profile')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .set('X-Profile-Token', generateProfileToken('profile-468-attachment', tenantId, 'ADMIN'))
+          .attach('files', Buffer.from('fake-png'), {
+            filename: 'test-468-profile.png',
+            contentType: 'image/png',
+          })
+
+        expect(res.status).toBe(201)
+        createdFiles.push(
+          path.join(env.UPLOAD_DIR, tenantId, 'patients', res.body.data[0].storedName)
+        )
+
+        const row = await prisma.attachment.findFirstOrThrow({
+          where: { tenantId, entityId: 'patient-468-profile' },
+        })
+        expect(row.uploadedBy).toBe('profile-468-attachment')
+        expect(row.uploadedBy).not.toBe(adminUserId)
+      })
     })
   })
 

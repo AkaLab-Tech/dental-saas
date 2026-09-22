@@ -682,6 +682,55 @@ describe('Appointments API', () => {
       expect(response.body.data.hasRecordedPayment).toBe(false)
       expect(response.body.data.recordedPaymentId).toBeNull()
     })
+
+    // Task #468: the auto-payment created when an appointment is created
+    // already paid must record who actually did it, not fall back to null —
+    // applyPaidTransition's createdBy previously wasn't wired to any actor.
+    describe('Task #468: the auto-created payment records the real actor', () => {
+      it('records payments[0].createdBy as the authenticated user, not null', async () => {
+        const times = getFutureTime(11)
+        const response = await api()
+          .post('/api/appointments')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({
+            patientId,
+            doctorId,
+            ...times,
+            cost: 100,
+            isPaid: true,
+          })
+
+        expect(response.status).toBe(201)
+        const payments = await prisma.patientPayment.findMany({
+          where: { tenantId, patientId, appointmentId: response.body.data.id },
+        })
+        expect(payments).toHaveLength(1)
+        expect(payments[0].createdBy).toBe(adminUserId)
+      })
+
+      it('records payments[0].createdBy as the active PIN profile, not the shared login', async () => {
+        const times = getFutureTime(12)
+        const response = await api()
+          .post('/api/appointments')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .set('X-Profile-Token', generateProfileToken('profile-468-create', tenantId, 'ADMIN'))
+          .send({
+            patientId,
+            doctorId,
+            ...times,
+            cost: 100,
+            isPaid: true,
+          })
+
+        expect(response.status).toBe(201)
+        const payments = await prisma.patientPayment.findMany({
+          where: { tenantId, patientId, appointmentId: response.body.data.id },
+        })
+        expect(payments).toHaveLength(1)
+        expect(payments[0].createdBy).toBe('profile-468-create')
+        expect(payments[0].createdBy).not.toBe(adminUserId)
+      })
+    })
   })
 
   // ============================================================================
@@ -1817,6 +1866,41 @@ describe('Appointments API', () => {
       const after = await prisma.patientPayment.findMany({ where: { tenantId, patientId } })
       expect(after).toHaveLength(1)
       expect(after[0].id).toBe(before[0].id)
+    })
+
+    // Task #468: the update-path auto-payment (isPaid flipped false -> true
+    // via PUT) must also carry the real actor through updateAppointment's
+    // new actorUserId parameter, not just the create path.
+    describe('Task #468: the auto-created payment records the real actor', () => {
+      it('records payments[0].createdBy as the authenticated user, not null', async () => {
+        const response = await api()
+          .put(`/api/appointments/${appointmentId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ isPaid: true })
+
+        expect(response.status).toBe(200)
+        const payments = await prisma.patientPayment.findMany({
+          where: { tenantId, patientId, appointmentId },
+        })
+        expect(payments).toHaveLength(1)
+        expect(payments[0].createdBy).toBe(adminUserId)
+      })
+
+      it('records payments[0].createdBy as the active PIN profile, not the shared login', async () => {
+        const response = await api()
+          .put(`/api/appointments/${appointmentId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .set('X-Profile-Token', generateProfileToken('profile-468-update', tenantId, 'ADMIN'))
+          .send({ isPaid: true })
+
+        expect(response.status).toBe(200)
+        const payments = await prisma.patientPayment.findMany({
+          where: { tenantId, patientId, appointmentId },
+        })
+        expect(payments).toHaveLength(1)
+        expect(payments[0].createdBy).toBe('profile-468-update')
+        expect(payments[0].createdBy).not.toBe(adminUserId)
+      })
     })
   })
 
