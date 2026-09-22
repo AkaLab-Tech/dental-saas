@@ -444,7 +444,9 @@ appointmentsRouter.put('/:id', requireMinRole('DOCTOR'), requireOwnership('appoi
       })
     }
 
-    const result = await updateAppointment(tenantId, id, appointmentData)
+    const userId = req.user!.profileUserId || req.user!.userId
+
+    const result = await updateAppointment(tenantId, id, appointmentData, userId)
 
     if (result.error) {
       const status = mapErrorCodeToStatus(result.error.code)
@@ -453,8 +455,6 @@ appointmentsRouter.put('/:id', requireMinRole('DOCTOR'), requireOwnership('appoi
         error: result.error,
       })
     }
-
-    const userId = req.user!.profileUserId || req.user!.userId
 
     if (budgetItemIds !== undefined) {
       const linkResult = await setAppointmentBudgetItems(tenantId, id, budgetItemIds, userId)

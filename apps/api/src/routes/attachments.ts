@@ -144,7 +144,7 @@ attachmentsRouter.post(
   async (req, res, next) => {
     try {
       const tenantId = req.user!.tenantId
-      const userId = req.user!.userId
+      const userId = req.user!.profileUserId || req.user!.userId
       const { module, entityId } = req.params
 
       // Validate module
