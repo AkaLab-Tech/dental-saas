@@ -25,6 +25,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { useAuthStore } from '@/stores/auth.store'
 import { formatCurrency } from '@/lib/format'
 import { downloadLabworkPdf } from '@/lib/pdf-api'
+import { PaidStatusBadge } from '@/components/payments/PaidStatusBadge'
 import { ImageUpload } from '@/components/ui/ImageUpload'
 import { ImageGallery } from '@/components/ui/ImageGallery'
 
@@ -136,10 +137,12 @@ export function LabworkCard({
         <div className="flex items-center gap-2 mb-4 text-sm">
           <DollarSign className="h-4 w-4 text-gray-400" />
           <span className="font-medium text-gray-900">{formatCurrency(labwork.price, currency)}</span>
-          {labwork.priceIncludedInAppointment && (
+          {labwork.priceIncludedInAppointment ? (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
               {t('labworks.includedInAppointment')}
             </span>
+          ) : (
+            <PaidStatusBadge isPaid={labwork.isPaid} cost={labwork.price} />
           )}
         </div>
 

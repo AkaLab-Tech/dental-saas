@@ -32,6 +32,7 @@ import {
 import { AppointmentCompleteModal } from '@/components/appointments/AppointmentCompleteModal'
 import { downloadAppointmentPdf } from '@/lib/pdf-api'
 import { deletePayment } from '@/lib/payment-api'
+import { PaidStatusBadge } from '@/components/payments/PaidStatusBadge'
 import { formatCurrency } from '@/lib/format'
 import i18n from '@/i18n'
 import { formatActor } from '@/lib/format-actor'
@@ -255,30 +256,13 @@ function PatientAppointmentCard({
       {appointment.cost !== null && (() => {
         const cost = appointment.cost!
         const paidAmount = appointment.paidAmount ?? (appointment.isPaid ? cost : 0)
-        const isFullyPaid = appointment.isPaid
-        const isPartial = !isFullyPaid && paidAmount > 0
-        const colorMain = isFullyPaid
-          ? 'text-green-600'
-          : isPartial
-            ? 'text-blue-600'
-            : 'text-amber-600'
-        const colorTag = isFullyPaid
-          ? 'text-green-500'
-          : isPartial
-            ? 'text-blue-500'
-            : 'text-amber-500'
+        const isPartial = !appointment.isPaid && paidAmount > 0
 
         return (
           <div className="mt-2 text-xs">
-            <div className="flex items-center gap-1 flex-wrap">
-              <span className={colorMain}>{formatCurrency(cost, currency)}</span>
-              <span className={colorTag}>
-                {isFullyPaid
-                  ? `(${t('payment.paid')})`
-                  : isPartial
-                    ? `(${t('payment.partial')})`
-                    : `(${t('payment.pending')})`}
-              </span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-gray-700">{formatCurrency(cost, currency)}</span>
+              <PaidStatusBadge isPaid={appointment.isPaid} cost={cost} paidAmount={appointment.paidAmount} />
             </div>
             {isPartial && (
               <div className="mt-0.5 text-[11px] text-gray-500">

@@ -162,6 +162,70 @@ describe('PatientLabworksSection', () => {
   })
 
   // --------------------------------------------------------------------------
+  // Paid status badge / included-in-appointment chip (#240)
+  // --------------------------------------------------------------------------
+
+  describe('paid status badge (#240)', () => {
+    it('shows the "payment.paid" badge and no included-in-appointment chip for a paid, non-included labwork', async () => {
+      mockGetLabworks.mockResolvedValue({
+        success: true,
+        data: [makeLabwork({ isPaid: true, priceIncludedInAppointment: false })],
+        pagination: { total: 1, limit: 100, offset: 0 },
+      })
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('payment.paid')).toBeInTheDocument()
+      })
+      expect(screen.queryByText('labworks.includedInAppointment')).not.toBeInTheDocument()
+      expect(screen.queryByText('payment.pending')).not.toBeInTheDocument()
+    })
+
+    it('shows the "payment.pending" badge for an unpaid, non-included labwork', async () => {
+      mockGetLabworks.mockResolvedValue({
+        success: true,
+        data: [makeLabwork({ isPaid: false, priceIncludedInAppointment: false })],
+        pagination: { total: 1, limit: 100, offset: 0 },
+      })
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('payment.pending')).toBeInTheDocument()
+      })
+      expect(screen.queryByText('labworks.includedInAppointment')).not.toBeInTheDocument()
+    })
+
+    it('shows the included-in-appointment chip and NO paid status badge when priceIncludedInAppointment is true', async () => {
+      mockGetLabworks.mockResolvedValue({
+        success: true,
+        data: [makeLabwork({ isPaid: false, priceIncludedInAppointment: true })],
+        pagination: { total: 1, limit: 100, offset: 0 },
+      })
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('labworks.includedInAppointment')).toBeInTheDocument()
+      })
+      expect(screen.queryByText('payment.pending')).not.toBeInTheDocument()
+      expect(screen.queryByText('payment.paid')).not.toBeInTheDocument()
+    })
+
+    it('shows the included-in-appointment chip (not the paid badge) even when isPaid is true', async () => {
+      mockGetLabworks.mockResolvedValue({
+        success: true,
+        data: [makeLabwork({ isPaid: true, priceIncludedInAppointment: true })],
+        pagination: { total: 1, limit: 100, offset: 0 },
+      })
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('labworks.includedInAppointment')).toBeInTheDocument()
+      })
+      expect(screen.queryByText('payment.paid')).not.toBeInTheDocument()
+    })
+  })
+
+  // --------------------------------------------------------------------------
   // Empty state
   // --------------------------------------------------------------------------
 

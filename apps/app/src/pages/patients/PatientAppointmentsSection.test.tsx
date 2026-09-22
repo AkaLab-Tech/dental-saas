@@ -333,7 +333,70 @@ describe('PatientAppointmentsSection', () => {
 
       await waitFor(() => {
         expect(screen.getByText('$100')).toBeInTheDocument()
-        expect(screen.getByText('(payment.pending)')).toBeInTheDocument()
+        expect(screen.getByText('payment.pending')).toBeInTheDocument()
+      })
+    })
+
+    // Task #240: the badge is driven by getPaidStatus, which this section
+    // feeds a real paidAmount — so, unlike AppointmentCard/DoctorAppointmentsSection,
+    // it can show all three states.
+    describe('paid status badge (#240)', () => {
+      beforeEach(() => {
+        localStorage.setItem('patient-appointments-collapsed', 'false')
+      })
+
+      it('shows "payment.paid" when isPaid is true', async () => {
+        mockGetAppointmentsByPatient.mockResolvedValue([
+          { ...upcomingAppointment, isPaid: true, paidAmount: 100 },
+        ])
+        renderSection()
+
+        await waitFor(() => {
+          expect(screen.getByText('payment.paid')).toBeInTheDocument()
+        })
+        expect(screen.queryByText('payment.pending')).not.toBeInTheDocument()
+        expect(screen.queryByText('payment.partial')).not.toBeInTheDocument()
+      })
+
+      it('shows "payment.partial" and the applied-of sub-line when isPaid is false and paidAmount is between 0 and cost', async () => {
+        mockGetAppointmentsByPatient.mockResolvedValue([
+          { ...upcomingAppointment, isPaid: false, paidAmount: 40 },
+        ])
+        renderSection()
+
+        await waitFor(() => {
+          expect(screen.getByText('payment.partial')).toBeInTheDocument()
+        })
+        expect(screen.queryByText('payment.pending')).not.toBeInTheDocument()
+        // paidAmount 40, cost 100, formatCurrency mocked to `$${amount}`.
+        expect(
+          screen.getByText('payment.appliedOf:{"paid":"$40","total":"$100"}')
+        ).toBeInTheDocument()
+      })
+
+      it('shows "payment.pending" and no applied-of sub-line when isPaid is false and paidAmount is 0', async () => {
+        mockGetAppointmentsByPatient.mockResolvedValue([
+          { ...upcomingAppointment, isPaid: false, paidAmount: 0 },
+        ])
+        renderSection()
+
+        await waitFor(() => {
+          expect(screen.getByText('payment.pending')).toBeInTheDocument()
+        })
+        expect(screen.queryByText('payment.partial')).not.toBeInTheDocument()
+        expect(screen.queryByText(/payment\.appliedOf/)).not.toBeInTheDocument()
+      })
+
+      it('falls back to pending (never partial) when isPaid is false and paidAmount is undefined', async () => {
+        mockGetAppointmentsByPatient.mockResolvedValue([
+          { ...upcomingAppointment, isPaid: false, paidAmount: undefined },
+        ])
+        renderSection()
+
+        await waitFor(() => {
+          expect(screen.getByText('payment.pending')).toBeInTheDocument()
+        })
+        expect(screen.queryByText('payment.partial')).not.toBeInTheDocument()
       })
     })
 

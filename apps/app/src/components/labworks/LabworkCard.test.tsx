@@ -183,3 +183,53 @@ describe('LabworkCard — download order (PDF)', () => {
     expect(downloadLabworkPdf).toHaveBeenCalledTimes(1)
   })
 })
+
+// Task #240: the price row shows the shared PaidStatusBadge only when the
+// labwork is NOT covered by an appointment's price — otherwise it shows the
+// "included in appointment" chip instead, never both. Labworks have no
+// paidAmount field, so the badge is binary here (paid/pending only).
+describe('LabworkCard — price row and paid status badge (#240)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    canMock.mockReturnValue(true)
+  })
+
+  it('shows the "Pagado" badge next to the price when isPaid is true and priceIncludedInAppointment is false', () => {
+    renderCard(makeLabwork({ price: 100, isPaid: true, priceIncludedInAppointment: false }))
+
+    expect(screen.getByText('USD 100.00')).toBeInTheDocument()
+    // "Pagado" also appears on the isPaid toggle button below the price row,
+    // so assert there are exactly two occurrences (badge + toggle).
+    expect(screen.getAllByText('Pagado')).toHaveLength(2)
+  })
+
+  it('shows the "Pendiente" badge next to the price when isPaid is false and priceIncludedInAppointment is false', () => {
+    renderCard(makeLabwork({ price: 100, isPaid: false, priceIncludedInAppointment: false }))
+
+    expect(screen.getByText('USD 100.00')).toBeInTheDocument()
+    // "Pendiente" also appears on the isPaid toggle button below the price
+    // row, so assert there are exactly two occurrences (badge + toggle) and
+    // that neither is the paid label.
+    expect(screen.getAllByText('Pendiente')).toHaveLength(2)
+    expect(screen.queryByText('Pagado')).not.toBeInTheDocument()
+  })
+
+  it('shows the "included in appointment" chip and NOT the paid status badge when priceIncludedInAppointment is true', () => {
+    renderCard(makeLabwork({ price: 100, isPaid: false, priceIncludedInAppointment: true }))
+
+    expect(screen.getByText('Incluido en consulta')).toBeInTheDocument()
+    // The isPaid toggle button still renders "Pendiente" independently of the
+    // price row — assert the price-row badge specifically is absent by
+    // checking there is exactly one "Pendiente" occurrence (the toggle only).
+    expect(screen.getAllByText('Pendiente')).toHaveLength(1)
+  })
+
+  it('shows the "included in appointment" chip (not the paid badge) even when isPaid is true', () => {
+    renderCard(makeLabwork({ price: 100, isPaid: true, priceIncludedInAppointment: true }))
+
+    expect(screen.getByText('Incluido en consulta')).toBeInTheDocument()
+    // The isPaid toggle button renders "Pagado" on its own — the price row's
+    // badge must not add a second occurrence.
+    expect(screen.getAllByText('Pagado')).toHaveLength(1)
+  })
+})

@@ -27,6 +27,7 @@ import {
 } from '@/lib/appointment-api'
 import { AppointmentCompleteModal } from '@/components/appointments/AppointmentCompleteModal'
 import { downloadAppointmentPdf } from '@/lib/pdf-api'
+import { PaidStatusBadge } from '@/components/payments/PaidStatusBadge'
 import { formatCurrency } from '@/lib/format'
 import i18n from '@/i18n'
 
@@ -210,13 +211,9 @@ function DoctorAppointmentCard({
 
       {/* Cost */}
       {appointment.cost !== null && (
-        <div className="mt-2 text-xs">
-          <span className={appointment.isPaid ? 'text-green-600' : 'text-amber-600'}>
-            {formatCurrency(appointment.cost!, currency)}
-          </span>
-          <span className={`ml-1 ${appointment.isPaid ? 'text-green-500' : 'text-amber-500'}`}>
-            {appointment.isPaid ? `(${t('payment.paid')})` : `(${t('payment.pending')})`}
-          </span>
+        <div className="mt-2 flex items-center gap-1.5 text-xs">
+          <span className="text-gray-700">{formatCurrency(appointment.cost!, currency)}</span>
+          <PaidStatusBadge isPaid={appointment.isPaid} cost={appointment.cost!} />
         </div>
       )}
     </div>
