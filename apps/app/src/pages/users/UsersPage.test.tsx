@@ -264,25 +264,20 @@ describe('UsersPage — activate / deactivate', () => {
 })
 
 describe('UsersPage — create', () => {
-  // The form's <label>s are not associated with their inputs (no htmlFor, not
-  // nested), so getByLabelText cannot find them — which is also what a screen
-  // reader experiences. Fields are located structurally instead; the labelling
-  // defect is reported separately rather than fixed inside a coverage change.
   async function openCreate() {
     render(<UsersPage />)
     await screen.findByRole('row', { name: /Sara Staff/ })
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo Usuario' }))
-    return screen.getByRole('combobox').closest('form')!
+    return screen.getByLabelText('Rol').closest('form')!
   }
 
   function fields(form: HTMLFormElement) {
-    const [firstName, lastName, email] = within(form).getAllByRole('textbox')
     return {
-      firstName,
-      lastName,
-      email,
-      password: form.querySelector<HTMLInputElement>('input[type="password"]'),
-      role: within(form).getByRole('combobox'),
+      firstName: within(form).getByLabelText('Nombre'),
+      lastName: within(form).getByLabelText('Apellido'),
+      email: within(form).queryByLabelText('Correo electrónico'),
+      password: within(form).queryByLabelText('Contraseña'),
+      role: within(form).getByLabelText('Rol'),
     }
   }
 
@@ -298,7 +293,7 @@ describe('UsersPage — create', () => {
     api.createUser.mockResolvedValue(undefined)
     const form = await openCreate()
     const f = fields(form)
-    expect(f.email).toBeUndefined()
+    expect(f.email).toBeNull()
     expect(f.password).toBeNull()
 
     fireEvent.change(f.firstName, { target: { value: 'Nora' } })
@@ -321,7 +316,7 @@ describe('UsersPage — create', () => {
 
   it('in user mode requires email and password and does not call the API without them', async () => {
     const form = await openCreate()
-    fireEvent.click(within(form.parentElement!).getByRole('switch'))
+    fireEvent.click(screen.getByRole('switch', { name: 'Usuario' }))
     const f = fields(form)
     fireEvent.change(f.firstName, { target: { value: 'Ulises' } })
     fireEvent.change(f.lastName, { target: { value: 'Usuario' } })
@@ -336,7 +331,7 @@ describe('UsersPage — create', () => {
   it('in user mode sends email and password with the chosen role', async () => {
     api.createUser.mockResolvedValue(undefined)
     const form = await openCreate()
-    fireEvent.click(within(form.parentElement!).getByRole('switch'))
+    fireEvent.click(screen.getByRole('switch', { name: 'Usuario' }))
     const f = fields(form)
     fireEvent.change(f.firstName, { target: { value: 'Ulises' } })
     fireEvent.change(f.lastName, { target: { value: 'Usuario' } })
