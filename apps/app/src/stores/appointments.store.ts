@@ -71,11 +71,18 @@ export interface AppointmentsActions {
   reset: () => void
 }
 
+// Not part of the public AppointmentsState contract — it exists only so
+// refetchList() can replay the last list query after a payment mutates
+// FIFO allocations across the patient's appointments.
+interface InternalState {
+  lastListParams: ListAppointmentsParams | undefined
+}
+
 // ============================================================================
 // Initial State
 // ============================================================================
 
-const initialState: AppointmentsState = {
+const initialState: AppointmentsState & InternalState = {
   appointments: [],
   calendarAppointments: [],
   selectedAppointment: null,
@@ -89,21 +96,30 @@ const initialState: AppointmentsState = {
   showInactive: false,
   currentDate: new Date(),
   viewMode: 'month',
+  lastListParams: undefined,
 }
 
 // ============================================================================
 // Store
 // ============================================================================
 
-export const useAppointmentsStore = create<AppointmentsState & AppointmentsActions>()((set, get) => ({
-  ...initialState,
+export const useAppointmentsStore = create<AppointmentsState & InternalState & AppointmentsActions>()((set, get) => {
+  // Replays the last fetchAppointments query. Used after a payment mutation
+  // recalculates FIFO allocations across the patient's other appointments —
+  // a bare fetchAppointments() would fall back to the store's dateRange,
+  // which is never set outside tests, silently swapping the viewed month
+  // for the tenant's oldest 50 appointments.
+  const refetchList = () => get().fetchAppointments(get().lastListParams)
+
+  return {
+    ...initialState,
 
   // --------------------------------------------------------------------------
   // Fetch Actions
   // --------------------------------------------------------------------------
 
   fetchAppointments: async (params?: ListAppointmentsParams) => {
-    set({ isLoading: true, error: null })
+    set({ isLoading: true, error: null, lastListParams: params })
     try {
       const { selectedDoctorId, selectedPatientId, selectedStatus, dateRange, showInactive } = get()
       const appointments = await getAppointments({
@@ -175,7 +191,7 @@ export const useAppointmentsStore = create<AppointmentsState & AppointmentsActio
         // A payment triggers FIFO recalculation on all patient appointments;
         // refetch the full list so isPaid changes are reflected in the UI
         set({ isLoading: false })
-        await get().fetchAppointments()
+        await refetchList()
       } else {
         set((state) => ({
           appointments: [...state.appointments, newAppointment],
@@ -196,12 +212,24 @@ export const useAppointmentsStore = create<AppointmentsState & AppointmentsActio
     set({ isLoading: true, error: null })
     try {
       const updatedAppointment = await updateAppointment(id, data)
-      set((state) => ({
-        appointments: state.appointments.map((a) => (a.id === id ? updatedAppointment : a)),
-        calendarAppointments: state.calendarAppointments.map((a) => (a.id === id ? updatedAppointment : a)),
-        selectedAppointment: state.selectedAppointment?.id === id ? updatedAppointment : state.selectedAppointment,
-        isLoading: false,
-      }))
+      if (Number(data.paidAmount) > 0 || data.isPaid === true) {
+        // Same as addAppointment's payment branch: a payment triggers FIFO
+        // recalculation on all patient appointments, so the in-place swap
+        // below is not enough — refetch the list with its last query.
+        set((state) => ({
+          selectedAppointment: state.selectedAppointment?.id === id ? updatedAppointment : state.selectedAppointment,
+          calendarAppointments: state.calendarAppointments.map((a) => (a.id === id ? updatedAppointment : a)),
+          isLoading: false,
+        }))
+        await refetchList()
+      } else {
+        set((state) => ({
+          appointments: state.appointments.map((a) => (a.id === id ? updatedAppointment : a)),
+          calendarAppointments: state.calendarAppointments.map((a) => (a.id === id ? updatedAppointment : a)),
+          selectedAppointment: state.selectedAppointment?.id === id ? updatedAppointment : state.selectedAppointment,
+          isLoading: false,
+        }))
+      }
       get().fetchStats()
       return updatedAppointment
     } catch (error) {
@@ -311,4 +339,5 @@ export const useAppointmentsStore = create<AppointmentsState & AppointmentsActio
   reset: () => {
     set(initialState)
   },
-}))
+  }
+})

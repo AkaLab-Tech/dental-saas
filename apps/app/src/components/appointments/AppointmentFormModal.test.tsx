@@ -957,6 +957,49 @@ describe('AppointmentFormModal — paidAmount input (task #373)', () => {
     const payload = onSubmit.mock.calls[0][0] as { paidAmount?: number }
     expect(payload.paidAmount).toBeUndefined()
   })
+
+  // Task #380: pins `data.paidAmount ? parseFloat(data.paidAmount) : undefined`
+  // (AppointmentFormModal.tsx) — the store's paid-refetch branch is gated on
+  // `Number(data.paidAmount) > 0`, so a string leaking through here instead of
+  // a number would still coerce truthily but is not what the branch/API
+  // contract expects. Locks the exact numeric payload shape.
+  it('submits paidAmount as a number when creating a new appointment', async () => {
+    const { onSubmit } = renderModal()
+    await waitForOptionsLoaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+    await selectDoctor()
+
+    const input = getPaidAmountInput() as HTMLInputElement
+    fireEvent.change(input, { target: { value: '120' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const payload = onSubmit.mock.calls[0][0] as { paidAmount?: number }
+    expect(payload.paidAmount).toBe(120)
+    expect(typeof payload.paidAmount).toBe('number')
+  })
+
+  it('submits paidAmount as a number when editing an unpaid appointment', async () => {
+    const appointment = makeAppointment({
+      cost: 150,
+      isPaid: false,
+      hasRecordedPayment: false,
+      recordedPaidAmount: 0,
+    })
+    const { onSubmit } = renderModal({ appointment })
+    await waitForOptionsLoaded()
+
+    const input = getPaidAmountInput() as HTMLInputElement
+    fireEvent.change(input, { target: { value: '80' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /guardar cambios/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const payload = onSubmit.mock.calls[0][0] as { paidAmount?: number }
+    expect(payload.paidAmount).toBe(80)
+    expect(typeof payload.paidAmount).toBe('number')
+  })
 })
 
 // Coverage for task #233 (date/time picker UI migration) and task #347

@@ -2708,6 +2708,55 @@ describe('Appointments API', () => {
       expect(response.status).toBe(400)
       expect(response.body.error.code).toBe('INVALID_DATE_RANGE')
     })
+
+    // Task #380: getCalendarAppointments used to bare-cast the Prisma rows
+    // (same pre-fix symptom as the #373 reviewer finding on listAppointments,
+    // line ~813 above) — hasRecordedPayment/recordedPaidAmount were simply
+    // absent on this route, which feeds the calendar view. Now it runs
+    // attachRecordedPayments like every other read path.
+    it('exposes hasRecordedPayment/recordedPaidAmount for an appointment with an active linked payment (#380)', async () => {
+      await prisma.appointment.deleteMany({ where: { tenantId } })
+      await prisma.patientPayment.deleteMany({ where: { tenantId } })
+
+      const times = getFutureTime(1, 9)
+      const withPayment = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          duration: 30,
+          cost: 80,
+        },
+      })
+      await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId,
+          amount: 80,
+          date: new Date(times.startTime),
+          kind: 'APPOINTMENT',
+          appointmentId: withPayment.id,
+        },
+      })
+
+      const from = new Date(times.startTime)
+      from.setHours(0, 0, 0, 0)
+      const to = new Date(from)
+      to.setDate(to.getDate() + 2)
+
+      const response = await api()
+        .get(`/api/appointments/calendar?from=${from.toISOString()}&to=${to.toISOString()}`)
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(200)
+      const byId = new Map(
+        (response.body.data as Array<{ id: string }>).map((a) => [a.id, a])
+      )
+
+      expect(byId.get(withPayment.id)).toMatchObject({ hasRecordedPayment: true, recordedPaidAmount: 80 })
+    })
   })
 
   // ============================================================================
