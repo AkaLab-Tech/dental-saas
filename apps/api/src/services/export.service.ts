@@ -63,6 +63,7 @@ export interface ExportData {
     price: string
     isPaid: boolean
     isDelivered: boolean
+    status: string
     doctorIds: unknown
     createdAt: string
   }>
@@ -162,6 +163,7 @@ export const ExportService = {
           price: true,
           isPaid: true,
           isDelivered: true,
+          status: true,
           doctorIds: true,
           createdAt: true,
         },

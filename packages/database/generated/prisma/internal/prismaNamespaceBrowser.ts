@@ -290,6 +290,7 @@ export const LabworkScalarFieldEnum = {
   price: 'price',
   isPaid: 'isPaid',
   isDelivered: 'isDelivered',
+  status: 'status',
   doctorIds: 'doctorIds',
   createdBy: 'createdBy',
   isActive: 'isActive',

@@ -1717,3 +1717,340 @@ describe('Doctor assignment on labworks (task #242)', () => {
     })
   })
 })
+
+// Task #243: `status` lifecycle (schema + backend). Covers the
+// resolveLifecycle lockstep invariant (isDelivered === (status === 'RECEIVED'))
+// through the real create/update routes, the contradiction 400, and the
+// `status` query-param parsing on both GET / and GET /export.
+describe('Labwork status lifecycle (task #243)', () => {
+  let tenantId: string
+  let adminToken: string
+  const testSlug = `test-labworks-status-${Date.now()}`
+
+  beforeAll(async () => {
+    const tenant = await prisma.tenant.create({
+      data: { name: 'Test Clinic for Labwork Status', slug: testSlug, currency: 'USD', timezone: 'America/New_York' },
+    })
+    tenantId = tenant.id
+
+    let freePlan = await prisma.plan.findUnique({ where: { name: 'free' } })
+    if (!freePlan) {
+      freePlan = await prisma.plan.create({
+        data: { name: 'free', displayName: 'Free', price: 0, maxAdmins: 1, maxDoctors: 3, maxPatients: 50 },
+      })
+    }
+
+    await prisma.subscription.create({
+      data: {
+        tenantId,
+        planId: freePlan.id,
+        status: 'ACTIVE',
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    })
+
+    const hashedPassword = await hashPassword('password123')
+    const adminUser = await prisma.user.create({
+      data: {
+        tenantId,
+        email: 'admin@labworks-status-test.com',
+        firstName: 'Admin',
+        lastName: 'User',
+        passwordHash: hashedPassword,
+        role: 'ADMIN',
+      },
+    })
+    adminToken = generateToken(adminUser.id, tenantId, 'ADMIN')
+  })
+
+  afterAll(async () => {
+    await prisma.labwork.deleteMany({ where: { tenantId } })
+    await prisma.user.deleteMany({ where: { tenantId } })
+    await prisma.subscription.deleteMany({ where: { tenantId } })
+    await prisma.tenant.delete({ where: { id: tenantId } })
+  })
+
+  async function createLabwork(body: Record<string, unknown>) {
+    return api().post('/api/labworks').set('Authorization', `Bearer ${adminToken}`).send({
+      lab: 'Status Test Lab',
+      date: '2026-05-01',
+      price: 10,
+      ...body,
+    })
+  }
+
+  describe('createLabwork — lockstep invariant', () => {
+    it('form path: status given, no isDelivered -> isDelivered derived (status:SENT -> isDelivered:false)', async () => {
+      const res = await createLabwork({ status: 'SENT' })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.status).toBe('SENT')
+      expect(res.body.data.isDelivered).toBe(false)
+    })
+
+    it('form path: status:RECEIVED -> isDelivered derived true', async () => {
+      const res = await createLabwork({ status: 'RECEIVED' })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.status).toBe('RECEIVED')
+      expect(res.body.data.isDelivered).toBe(true)
+    })
+
+    it('card-toggle path: only isDelivered:true given -> status forced to RECEIVED', async () => {
+      const res = await createLabwork({ isDelivered: true })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.status).toBe('RECEIVED')
+      expect(res.body.data.isDelivered).toBe(true)
+    })
+
+    it('neither status nor isDelivered given -> defaults to PENDING/false', async () => {
+      const res = await createLabwork({})
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.status).toBe('PENDING')
+      expect(res.body.data.isDelivered).toBe(false)
+    })
+
+    it('every created labwork satisfies isDelivered === (status === RECEIVED)', async () => {
+      const res = await createLabwork({ status: 'IN_PROGRESS' })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.isDelivered).toBe(res.body.data.status === 'RECEIVED')
+    })
+  })
+
+  describe('createLabwork — contradiction -> 400', () => {
+    it('rejects status:SENT with isDelivered:true (400 INVALID_STATUS)', async () => {
+      const res = await createLabwork({ status: 'SENT', isDelivered: true })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('status and isDelivered are contradictory')
+    })
+
+    it('rejects status:RECEIVED with isDelivered:false (400 INVALID_STATUS)', async () => {
+      const res = await createLabwork({ status: 'RECEIVED', isDelivered: false })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('status and isDelivered are contradictory')
+    })
+  })
+
+  describe('updateLabwork — lockstep invariant', () => {
+    it('card-toggle path (isDelivered:false only): RECEIVED -> demotes to SENT, not left as RECEIVED', async () => {
+      const createRes = await createLabwork({ status: 'RECEIVED' })
+      const id = createRes.body.data.id
+      expect(createRes.body.data.status).toBe('RECEIVED')
+
+      const res = await api()
+        .put(`/api/labworks/${id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ isDelivered: false })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.status).toBe('SENT')
+      expect(res.body.data.isDelivered).toBe(false)
+    })
+
+    it('card-toggle path (isDelivered:false only): a non-RECEIVED current (SENT) is left unchanged', async () => {
+      const createRes = await createLabwork({ status: 'SENT' })
+      const id = createRes.body.data.id
+
+      const res = await api()
+        .put(`/api/labworks/${id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ isDelivered: false })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.status).toBe('SENT')
+      expect(res.body.data.isDelivered).toBe(false)
+    })
+
+    it('card-toggle path (isDelivered:true only): forces RECEIVED from any prior status', async () => {
+      const createRes = await createLabwork({ status: 'IN_PROGRESS' })
+      const id = createRes.body.data.id
+
+      const res = await api()
+        .put(`/api/labworks/${id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ isDelivered: true })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.status).toBe('RECEIVED')
+      expect(res.body.data.isDelivered).toBe(true)
+    })
+
+    it('form path: sends status + agreeing isDelivered together -> accepted, lockstep holds', async () => {
+      const createRes = await createLabwork({ status: 'PENDING' })
+      const id = createRes.body.data.id
+
+      const res = await api()
+        .put(`/api/labworks/${id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'RECEIVED', isDelivered: true })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.status).toBe('RECEIVED')
+      expect(res.body.data.isDelivered).toBe(true)
+    })
+
+    it('updating status alone (no isDelivered) still keeps isDelivered in lockstep', async () => {
+      const createRes = await createLabwork({ status: 'PENDING' })
+      const id = createRes.body.data.id
+
+      const res = await api()
+        .put(`/api/labworks/${id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'IN_PROGRESS' })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.status).toBe('IN_PROGRESS')
+      expect(res.body.data.isDelivered).toBe(false)
+    })
+  })
+
+  describe('updateLabwork — contradiction -> 400', () => {
+    it('rejects status:PENDING with isDelivered:true on an existing labwork (400 INVALID_STATUS)', async () => {
+      const createRes = await createLabwork({ status: 'PENDING' })
+      const id = createRes.body.data.id
+
+      const res = await api()
+        .put(`/api/labworks/${id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'PENDING', isDelivered: true })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('status and isDelivered are contradictory')
+
+      // The rejected write must not have touched the row.
+      const unchanged = await api()
+        .get(`/api/labworks/${id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+      expect(unchanged.body.data.status).toBe('PENDING')
+      expect(unchanged.body.data.isDelivered).toBe(false)
+    })
+  })
+
+  describe('updateLabwork — neither status nor isDelivered in the payload leaves both columns untouched', () => {
+    it('a PUT that only changes an unrelated field (note) does not touch status/isDelivered', async () => {
+      const createRes = await createLabwork({ status: 'IN_PROGRESS' })
+      const id = createRes.body.data.id
+
+      const res = await api()
+        .put(`/api/labworks/${id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ note: 'unrelated change' })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.note).toBe('unrelated change')
+      expect(res.body.data.status).toBe('IN_PROGRESS')
+      expect(res.body.data.isDelivered).toBe(false)
+    })
+
+    it('a PUT that only changes an unrelated field does not flip a RECEIVED/delivered row back to PENDING', async () => {
+      const createRes = await createLabwork({ status: 'RECEIVED' })
+      const id = createRes.body.data.id
+
+      const res = await api()
+        .put(`/api/labworks/${id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ price: 20 })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.price).toBe('20')
+      expect(res.body.data.status).toBe('RECEIVED')
+      expect(res.body.data.isDelivered).toBe(true)
+    })
+  })
+
+  describe('GET /api/labworks?status= (query-param parsing)', () => {
+    let sentId: string
+    let inProgressId: string
+    let receivedId: string
+
+    beforeAll(async () => {
+      sentId = (await createLabwork({ lab: 'Status Filter Sent', status: 'SENT' })).body.data.id
+      inProgressId = (await createLabwork({ lab: 'Status Filter InProgress', status: 'IN_PROGRESS' })).body.data.id
+      receivedId = (await createLabwork({ lab: 'Status Filter Received', status: 'RECEIVED' })).body.data.id
+    })
+
+    it('filters by a single status value', async () => {
+      const res = await api()
+        .get('/api/labworks?status=SENT')
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(200)
+      const ids = res.body.data.map((l: { id: string }) => l.id)
+      expect(ids).toContain(sentId)
+      expect(ids).not.toContain(inProgressId)
+      expect(ids).not.toContain(receivedId)
+    })
+
+    it('filters by a comma-separated list of statuses ({ in: [...] })', async () => {
+      const res = await api()
+        .get('/api/labworks?status=SENT,IN_PROGRESS')
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(200)
+      const ids = res.body.data.map((l: { id: string }) => l.id)
+      expect(ids).toContain(sentId)
+      expect(ids).toContain(inProgressId)
+      expect(ids).not.toContain(receivedId)
+    })
+
+    it('returns 400 for an invalid/unknown status value', async () => {
+      const res = await api()
+        .get('/api/labworks?status=NOT_A_REAL_STATUS')
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('Invalid status filter')
+    })
+
+    it('returns 400 when one value in a comma list is invalid', async () => {
+      const res = await api()
+        .get('/api/labworks?status=SENT,NOT_A_REAL_STATUS')
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('Invalid status filter')
+    })
+  })
+
+  describe('GET /api/labworks/export?status= (query-param parsing)', () => {
+    beforeAll(async () => {
+      await createLabwork({ lab: 'Export Status Filter Sent', status: 'SENT' })
+      await createLabwork({ lab: 'Export Status Filter Received', status: 'RECEIVED' })
+    })
+
+    it('filters the CSV export by a single status value', async () => {
+      const res = await api()
+        .get('/api/labworks/export?status=SENT')
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(200)
+      expect(res.text).toContain('Export Status Filter Sent')
+      expect(res.text).not.toContain('Export Status Filter Received')
+    })
+
+    it('filters the CSV export by a comma-separated list of statuses', async () => {
+      const res = await api()
+        .get('/api/labworks/export?status=SENT,RECEIVED')
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(200)
+      expect(res.text).toContain('Export Status Filter Sent')
+      expect(res.text).toContain('Export Status Filter Received')
+    })
+
+    it('returns 400 for an invalid status value on export', async () => {
+      const res = await api()
+        .get('/api/labworks/export?status=NOT_A_REAL_STATUS')
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('Invalid status filter')
+    })
+  })
+})

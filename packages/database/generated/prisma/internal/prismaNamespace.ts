@@ -2069,6 +2069,7 @@ export const LabworkScalarFieldEnum = {
   price: 'price',
   isPaid: 'isPaid',
   isDelivered: 'isDelivered',
+  status: 'status',
   doctorIds: 'doctorIds',
   createdBy: 'createdBy',
   isActive: 'isActive',
@@ -2434,6 +2435,20 @@ export type EnumAppointmentStatusFieldRefInput<$PrismaModel> = FieldRefInputType
  * Reference to a field of type 'AppointmentStatus[]'
  */
 export type ListEnumAppointmentStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AppointmentStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'LabworkStatus'
+ */
+export type EnumLabworkStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'LabworkStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'LabworkStatus[]'
+ */
+export type ListEnumLabworkStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'LabworkStatus[]'>
     
 
 

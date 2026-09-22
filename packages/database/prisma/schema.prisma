@@ -462,6 +462,12 @@ model Labwork {
   /// Whether the labwork has been delivered
   isDelivered Boolean @default(false)
 
+  /// Lifecycle status, kept in lockstep with isDelivered by the service layer
+  /// (isDelivered === (status === RECEIVED) on every write). status is the
+  /// source of truth; isDelivered stays so overdue/stats/dashboard/PDF/export
+  /// keep working unmodified.
+  status LabworkStatus @default(PENDING)
+
   /// IDs of doctors associated with this labwork (stored as JSON array)
   doctorIds Json @default("[]")
 
@@ -482,7 +488,15 @@ model Labwork {
   @@index([date])
   @@index([isPaid])
   @@index([isDelivered])
+  @@index([status])
   @@map("labworks")
+}
+
+enum LabworkStatus {
+  PENDING
+  SENT
+  IN_PROGRESS
+  RECEIVED
 }
 
 // ============================================================================

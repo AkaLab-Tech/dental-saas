@@ -15,6 +15,8 @@ vi.mock('@dental/database', () => ({
   Prisma: {
     JsonNull: { __brand: 'JsonNull' }, // referenced by doctor.service.ts at import time
   },
+  // Referenced at import time by labworks.ts (z.nativeEnum(LabworkStatus))
+  LabworkStatus: { PENDING: 'PENDING', SENT: 'SENT', IN_PROGRESS: 'IN_PROGRESS', RECEIVED: 'RECEIVED' },
 }))
 
 describe('GET /api/health (unit, mocked DB)', () => {

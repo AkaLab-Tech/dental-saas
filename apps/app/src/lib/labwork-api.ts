@@ -4,6 +4,8 @@ import { apiClient } from './api'
 // Types
 // ============================================================================
 
+export type LabworkStatus = 'PENDING' | 'SENT' | 'IN_PROGRESS' | 'RECEIVED'
+
 export interface Labwork {
   id: string
   tenantId: string
@@ -17,6 +19,7 @@ export interface Labwork {
   price: number
   isPaid: boolean
   isDelivered: boolean
+  status: LabworkStatus
   doctorIds: string[]
   doctors: {
     id: string
@@ -60,6 +63,7 @@ export interface CreateLabworkData {
   price?: number
   isPaid?: boolean
   isDelivered?: boolean
+  status?: LabworkStatus
   doctorIds?: string[]
 }
 
@@ -74,6 +78,7 @@ export interface UpdateLabworkData {
   price?: number
   isPaid?: boolean
   isDelivered?: boolean
+  status?: LabworkStatus
   doctorIds?: string[]
 }
 
@@ -84,6 +89,7 @@ export interface LabworkListParams {
   patientId?: string
   isPaid?: boolean
   isDelivered?: boolean
+  status?: LabworkStatus | LabworkStatus[]
   overdue?: boolean
   from?: string
   to?: string
@@ -128,6 +134,9 @@ export async function getLabworks(params?: LabworkListParams): Promise<LabworkLi
   if (params?.patientId) searchParams.set('patientId', params.patientId)
   if (params?.isPaid !== undefined) searchParams.set('isPaid', String(params.isPaid))
   if (params?.isDelivered !== undefined) searchParams.set('isDelivered', String(params.isDelivered))
+  if (params?.status !== undefined) {
+    searchParams.set('status', Array.isArray(params.status) ? params.status.join(',') : params.status)
+  }
   if (params?.overdue !== undefined) searchParams.set('overdue', String(params.overdue))
   if (params?.from) searchParams.set('from', params.from)
   if (params?.to) searchParams.set('to', params.to)
@@ -192,6 +201,9 @@ export async function exportLabworks(params?: LabworkListParams): Promise<void> 
   if (params?.patientId) searchParams.set('patientId', params.patientId)
   if (params?.isPaid !== undefined) searchParams.set('isPaid', String(params.isPaid))
   if (params?.isDelivered !== undefined) searchParams.set('isDelivered', String(params.isDelivered))
+  if (params?.status !== undefined) {
+    searchParams.set('status', Array.isArray(params.status) ? params.status.join(',') : params.status)
+  }
   if (params?.overdue !== undefined) searchParams.set('overdue', String(params.overdue))
   if (params?.from) searchParams.set('from', params.from)
   if (params?.to) searchParams.set('to', params.to)

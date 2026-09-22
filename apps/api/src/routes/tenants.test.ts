@@ -13,6 +13,8 @@ vi.mock('@dental/database', () => ({
   Prisma: {
     JsonNull: { __brand: 'JsonNull' }, // Mock JsonNull for doctor.service.ts
   },
+  // Referenced at import time by labworks.ts (z.nativeEnum(LabworkStatus))
+  LabworkStatus: { PENDING: 'PENDING', SENT: 'SENT', IN_PROGRESS: 'IN_PROGRESS', RECEIVED: 'RECEIVED' },
 }))
 
 // Helper to create mock tenant

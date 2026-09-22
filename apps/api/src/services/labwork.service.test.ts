@@ -13,6 +13,7 @@ vi.mock('@dental/database', () => ({
     },
   },
   Prisma: {},
+  LabworkStatus: { PENDING: 'PENDING', SENT: 'SENT', IN_PROGRESS: 'IN_PROGRESS', RECEIVED: 'RECEIVED' },
 }))
 
 // Mock logger
@@ -31,6 +32,7 @@ import {
   getLabworkStats,
   labworksToCsv,
   exportLabworksCsv,
+  resolveLifecycle,
   type SafeLabwork,
 } from './labwork.service.js'
 
@@ -55,6 +57,7 @@ function makeSafeLabwork(overrides: Partial<SafeLabwork> = {}): SafeLabwork {
     price: fakeDecimal('100'),
     isPaid: false,
     isDelivered: false,
+    status: 'PENDING',
     doctorIds: [],
     doctors: [],
     isActive: true,
@@ -73,6 +76,177 @@ describe('labwork.service', () => {
     vi.mocked(prisma.labwork.count).mockResolvedValue(0)
     vi.mocked(prisma.labwork.aggregate).mockResolvedValue({ _sum: { price: null } } as never)
     vi.mocked(prisma.doctor.findMany).mockResolvedValue([])
+  })
+
+  // Task #243: resolveLifecycle is the single place that keeps
+  // `isDelivered === (status === 'RECEIVED')` in lockstep on every write. It
+  // is a pure function (exported precisely so it can be unit-tested without
+  // a database) — every branch below is pinned independently: each test
+  // asserts a full { success, status, isDelivered } result, so a break in
+  // any other branch cannot accidentally satisfy it.
+  describe('resolveLifecycle', () => {
+    describe('branch 1: status given, no isDelivered — isDelivered derived from status', () => {
+      it('derives isDelivered:true when status is RECEIVED', () => {
+        expect(resolveLifecycle({ status: 'RECEIVED' })).toEqual({
+          success: true,
+          status: 'RECEIVED',
+          isDelivered: true,
+        })
+      })
+
+      it('derives isDelivered:false when status is a non-RECEIVED value (SENT)', () => {
+        expect(resolveLifecycle({ status: 'SENT' })).toEqual({
+          success: true,
+          status: 'SENT',
+          isDelivered: false,
+        })
+      })
+
+      it('derives isDelivered:false when status is PENDING', () => {
+        expect(resolveLifecycle({ status: 'PENDING' })).toEqual({
+          success: true,
+          status: 'PENDING',
+          isDelivered: false,
+        })
+      })
+
+      it('derives isDelivered:false when status is IN_PROGRESS', () => {
+        expect(resolveLifecycle({ status: 'IN_PROGRESS' })).toEqual({
+          success: true,
+          status: 'IN_PROGRESS',
+          isDelivered: false,
+        })
+      })
+    })
+
+    describe('branch 2: status + isDelivered given and agreeing — succeeds like branch 1', () => {
+      it('accepts status:RECEIVED with isDelivered:true (agreeing)', () => {
+        expect(resolveLifecycle({ status: 'RECEIVED', isDelivered: true })).toEqual({
+          success: true,
+          status: 'RECEIVED',
+          isDelivered: true,
+        })
+      })
+
+      it('accepts status:SENT with isDelivered:false (agreeing)', () => {
+        expect(resolveLifecycle({ status: 'SENT', isDelivered: false })).toEqual({
+          success: true,
+          status: 'SENT',
+          isDelivered: false,
+        })
+      })
+    })
+
+    describe('branch 3: status + isDelivered given and contradictory — INVALID_STATUS', () => {
+      it('rejects status:SENT with isDelivered:true', () => {
+        expect(resolveLifecycle({ status: 'SENT', isDelivered: true })).toEqual({
+          success: false,
+          code: 'INVALID_STATUS',
+        })
+      })
+
+      it('rejects status:RECEIVED with isDelivered:false', () => {
+        expect(resolveLifecycle({ status: 'RECEIVED', isDelivered: false })).toEqual({
+          success: false,
+          code: 'INVALID_STATUS',
+        })
+      })
+
+      it('rejects status:PENDING with isDelivered:true', () => {
+        expect(resolveLifecycle({ status: 'PENDING', isDelivered: true })).toEqual({
+          success: false,
+          code: 'INVALID_STATUS',
+        })
+      })
+    })
+
+    describe('branch 4: only isDelivered:true — forces RECEIVED regardless of current', () => {
+      it('resolves to RECEIVED/true with no current (create)', () => {
+        expect(resolveLifecycle({ isDelivered: true })).toEqual({
+          success: true,
+          status: 'RECEIVED',
+          isDelivered: true,
+        })
+      })
+
+      it('resolves to RECEIVED/true even when current is already PENDING', () => {
+        expect(resolveLifecycle({ isDelivered: true }, 'PENDING')).toEqual({
+          success: true,
+          status: 'RECEIVED',
+          isDelivered: true,
+        })
+      })
+    })
+
+    describe('branch 5: only isDelivered:false (or neither field) with current undefined — fresh-row default PENDING', () => {
+      it('resolves to PENDING/false when isDelivered:false and current is undefined (create)', () => {
+        expect(resolveLifecycle({ isDelivered: false })).toEqual({
+          success: true,
+          status: 'PENDING',
+          isDelivered: false,
+        })
+      })
+
+      it('resolves to PENDING/false when neither status nor isDelivered is given and current is undefined (create)', () => {
+        expect(resolveLifecycle({})).toEqual({
+          success: true,
+          status: 'PENDING',
+          isDelivered: false,
+        })
+      })
+    })
+
+    describe('branch 6: only isDelivered:false with current RECEIVED — demotes to SENT', () => {
+      it('resolves RECEIVED -> SENT/false (a naive "keep current" implementation would wrongly return RECEIVED here)', () => {
+        expect(resolveLifecycle({ isDelivered: false }, 'RECEIVED')).toEqual({
+          success: true,
+          status: 'SENT',
+          isDelivered: false,
+        })
+      })
+
+      it('resolves RECEIVED -> SENT/false the same way when neither field is given, current RECEIVED', () => {
+        expect(resolveLifecycle({}, 'RECEIVED')).toEqual({
+          success: true,
+          status: 'SENT',
+          isDelivered: false,
+        })
+      })
+    })
+
+    describe('branch 7: only isDelivered:false with a non-RECEIVED current — keeps current unchanged', () => {
+      it('keeps PENDING unchanged (a naive "always SENT" implementation would wrongly return SENT here)', () => {
+        expect(resolveLifecycle({ isDelivered: false }, 'PENDING')).toEqual({
+          success: true,
+          status: 'PENDING',
+          isDelivered: false,
+        })
+      })
+
+      it('keeps SENT unchanged', () => {
+        expect(resolveLifecycle({ isDelivered: false }, 'SENT')).toEqual({
+          success: true,
+          status: 'SENT',
+          isDelivered: false,
+        })
+      })
+
+      it('keeps IN_PROGRESS unchanged', () => {
+        expect(resolveLifecycle({ isDelivered: false }, 'IN_PROGRESS')).toEqual({
+          success: true,
+          status: 'IN_PROGRESS',
+          isDelivered: false,
+        })
+      })
+
+      it('keeps IN_PROGRESS unchanged when neither field is given (update with no lifecycle input)', () => {
+        expect(resolveLifecycle({}, 'IN_PROGRESS')).toEqual({
+          success: true,
+          status: 'IN_PROGRESS',
+          isDelivered: false,
+        })
+      })
+    })
   })
 
   describe('listLabworks — search', () => {

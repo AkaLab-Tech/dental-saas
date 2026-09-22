@@ -227,6 +227,11 @@ describe('Export Routes', () => {
 
       // Check labwork data
       expect(res.body.labworks[0].lab).toBe('Test Lab')
+      // Task #243: `status` is now part of the labwork lifecycle and must be
+      // present in the tenant export. The seeded labwork was created with no
+      // explicit status/isDelivered, so it defaults to PENDING.
+      expect(res.body.labworks[0]).toHaveProperty('status')
+      expect(res.body.labworks[0].status).toBe('PENDING')
 
       // Check expense data
       expect(res.body.expenses[0].issuer).toBe('Dental Supplies Inc')
@@ -306,6 +311,12 @@ describe('Export Routes', () => {
       expect(typeof data.appointments[0].cost).toBe('string')
       expect(typeof data.labworks[0].price).toBe('string')
       expect(typeof data.expenses[0].amount).toBe('string')
+    })
+
+    it('should include the labwork lifecycle `status` in the export (task #243)', async () => {
+      const data = await ExportService.exportTenantData(tenantId)
+
+      expect(data.labworks[0].status).toBe('PENDING')
     })
   })
 })

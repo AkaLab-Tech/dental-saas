@@ -195,6 +195,36 @@ describe('labwork-api', () => {
       expect(apiClient.get).toHaveBeenCalledWith('/labworks?isPaid=true')
     })
 
+    it('serializes a single `status` value as-is (task #243)', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [], pagination: mockPagination },
+      })
+
+      await getLabworks({ status: 'SENT' })
+
+      expect(apiClient.get).toHaveBeenCalledWith('/labworks?status=SENT')
+    })
+
+    it('serializes an array `status` value as a comma-joined list (task #243)', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [], pagination: mockPagination },
+      })
+
+      await getLabworks({ status: ['SENT', 'IN_PROGRESS'] })
+
+      expect(apiClient.get).toHaveBeenCalledWith('/labworks?status=SENT%2CIN_PROGRESS')
+    })
+
+    it('omits the `status` param when it is undefined', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [], pagination: mockPagination },
+      })
+
+      await getLabworks({ status: undefined, isPaid: true })
+
+      expect(apiClient.get).toHaveBeenCalledWith('/labworks?isPaid=true')
+    })
+
     it('should fetch labworks with boolean false values', async () => {
       vi.mocked(apiClient.get).mockResolvedValue({
         data: { success: true, data: [], pagination: mockPagination },
@@ -447,6 +477,27 @@ describe('labwork-api', () => {
       await exportLabworks({ search: '', isPaid: true })
 
       expect(apiClient.get).toHaveBeenCalledWith('/labworks/export?isPaid=true', { responseType: 'blob' })
+    })
+
+    it('serializes a single `status` value as-is (task #243)', async () => {
+      const mockBlob = new Blob(['Fecha,Laboratorio'], { type: 'text/csv' })
+      vi.mocked(apiClient.get).mockResolvedValue({ data: mockBlob })
+
+      await exportLabworks({ status: 'RECEIVED' })
+
+      expect(apiClient.get).toHaveBeenCalledWith('/labworks/export?status=RECEIVED', { responseType: 'blob' })
+    })
+
+    it('serializes an array `status` value as a comma-joined list (task #243)', async () => {
+      const mockBlob = new Blob(['Fecha,Laboratorio'], { type: 'text/csv' })
+      vi.mocked(apiClient.get).mockResolvedValue({ data: mockBlob })
+
+      await exportLabworks({ status: ['PENDING', 'SENT', 'IN_PROGRESS'] })
+
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/labworks/export?status=PENDING%2CSENT%2CIN_PROGRESS',
+        { responseType: 'blob' }
+      )
     })
 
     it('creates a download link, clicks it, and revokes the object URL', async () => {
