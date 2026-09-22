@@ -386,12 +386,13 @@ export function UsersPage() {
                   type="button"
                   role="switch"
                   aria-checked={!profileOnly}
+                  aria-labelledby="user-mode-user-label"
                   onClick={() => setProfileOnly(!profileOnly)}
                   className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${!profileOnly ? 'bg-blue-600' : 'bg-gray-300'}`}
                 >
                   <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition-transform ${!profileOnly ? 'translate-x-5' : 'translate-x-0'}`} />
                 </button>
-                <span className={`text-sm font-medium ${!profileOnly ? 'text-blue-700' : 'text-gray-500'}`}>
+                <span id="user-mode-user-label" className={`text-sm font-medium ${!profileOnly ? 'text-blue-700' : 'text-gray-500'}`}>
                   {t('users.modeUser')}
                 </span>
               </div>
@@ -409,8 +410,9 @@ export function UsersPage() {
               <form onSubmit={handleCreate} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('users.firstName')}</label>
+                    <label htmlFor="user-firstName" className="block text-sm font-medium text-gray-700 mb-1">{t('users.firstName')}</label>
                     <input
+                      id="user-firstName"
                       type="text"
                       value={form.firstName}
                       onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
@@ -419,8 +421,9 @@ export function UsersPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('users.lastName')}</label>
+                    <label htmlFor="user-lastName" className="block text-sm font-medium text-gray-700 mb-1">{t('users.lastName')}</label>
                     <input
+                      id="user-lastName"
                       type="text"
                       value={form.lastName}
                       onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
@@ -433,8 +436,9 @@ export function UsersPage() {
                 {!profileOnly && (
                   <>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('users.email')}</label>
+                      <label htmlFor="user-email" className="block text-sm font-medium text-gray-700 mb-1">{t('users.email')}</label>
                       <input
+                        id="user-email"
                         type="email"
                         value={form.email}
                         onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
@@ -444,8 +448,9 @@ export function UsersPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('users.password')}</label>
+                      <label htmlFor="user-password" className="block text-sm font-medium text-gray-700 mb-1">{t('users.password')}</label>
                       <input
+                        id="user-password"
                         type="password"
                         value={form.password}
                         onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
@@ -458,8 +463,9 @@ export function UsersPage() {
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('users.selectRole')}</label>
+                  <label htmlFor="user-role" className="block text-sm font-medium text-gray-700 mb-1">{t('users.selectRole')}</label>
                   <select
+                    id="user-role"
                     value={form.role}
                     onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as CreateUserData['role'] }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
