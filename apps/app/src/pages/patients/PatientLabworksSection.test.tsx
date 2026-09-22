@@ -63,6 +63,7 @@ function makeLabwork(overrides: Partial<Labwork> = {}): Labwork {
     isPaid: false,
     isDelivered: false,
     doctorIds: [],
+    doctors: [],
     isActive: true,
     deletedAt: null,
     createdAt: '2026-03-01T00:00:00.000Z',
@@ -222,6 +223,46 @@ describe('PatientLabworksSection', () => {
         expect(screen.getByText('labworks.includedInAppointment')).toBeInTheDocument()
       })
       expect(screen.queryByText('payment.paid')).not.toBeInTheDocument()
+    })
+  })
+
+  // --------------------------------------------------------------------------
+  // Assigned doctors (#242)
+  // --------------------------------------------------------------------------
+
+  describe('assigned doctors (#242)', () => {
+    it('shows the "labworks.noDoctor" placeholder under the date when no doctor is assigned', async () => {
+      mockGetLabworks.mockResolvedValue({
+        success: true,
+        data: [makeLabwork({ doctors: [] })],
+        pagination: { total: 1, limit: 100, offset: 0 },
+      })
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('labworks.noDoctor')).toBeInTheDocument()
+      })
+    })
+
+    it('shows the comma-joined doctor name(s) under the date when doctors are assigned', async () => {
+      mockGetLabworks.mockResolvedValue({
+        success: true,
+        data: [
+          makeLabwork({
+            doctors: [
+              { id: 'doc-1', firstName: 'Jane', lastName: 'Smith', isActive: true },
+              { id: 'doc-2', firstName: 'Bob', lastName: 'Lee', isActive: true },
+            ],
+          }),
+        ],
+        pagination: { total: 1, limit: 100, offset: 0 },
+      })
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Jane Smith, Bob Lee')).toBeInTheDocument()
+      })
+      expect(screen.queryByText('labworks.noDoctor')).not.toBeInTheDocument()
     })
   })
 

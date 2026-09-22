@@ -16,11 +16,12 @@ import {
   Phone,
   Download,
   Loader2,
+  Stethoscope,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Permission, AttachmentModule } from '@dental/shared'
 import type { Labwork } from '@/lib/labwork-api'
-import { getLabworkStatusBadge } from '@/lib/labwork-api'
+import { getLabworkStatusBadge, formatLabworkDoctors } from '@/lib/labwork-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAuthStore } from '@/stores/auth.store'
 import { formatCurrency } from '@/lib/format'
@@ -54,6 +55,7 @@ export function LabworkCard({
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
   const statusBadge = getLabworkStatusBadge(labwork)
   const isDeleted = !!labwork.deletedAt
+  const doctorNames = formatLabworkDoctors(labwork)
 
   const handleDownloadPdf = async () => {
     setIsDownloadingPdf(true)
@@ -132,6 +134,14 @@ export function LabworkCard({
             </span>
           </div>
         )}
+
+        {/* Doctor(s) */}
+        <div className="flex items-center gap-2 mb-3 text-sm text-gray-600">
+          <Stethoscope className="h-4 w-4 text-gray-400" />
+          <span className={doctorNames ? '' : 'text-gray-400'}>
+            {doctorNames || t('labworks.noDoctor')}
+          </span>
+        </div>
 
         {/* Price */}
         <div className="flex items-center gap-2 mb-4 text-sm">
