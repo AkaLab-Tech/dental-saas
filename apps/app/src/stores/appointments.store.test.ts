@@ -272,6 +272,52 @@ describe('appointments.store', () => {
         to: '2024-01-31',
         doctorId: 'doctor-101',
         patientId: undefined,
+        status: undefined,
+        includeInactive: false,
+      })
+    })
+
+    // Task #474: fetchCalendarAppointments now falls back to the store's
+    // selectedStatus/showInactive the same way it already did for
+    // selectedDoctorId/selectedPatientId, so the calendar view honors the
+    // same filters as the list view.
+    it('should use selectedStatus and showInactive from state (#474)', async () => {
+      useAppointmentsStore.setState({ selectedStatus: 'CONFIRMED', showInactive: true })
+      ;(getCalendarAppointments as Mock).mockResolvedValue([])
+
+      await useAppointmentsStore.getState().fetchCalendarAppointments({
+        from: '2024-01-01',
+        to: '2024-01-31',
+      })
+
+      expect(getCalendarAppointments).toHaveBeenCalledWith({
+        from: '2024-01-01',
+        to: '2024-01-31',
+        doctorId: undefined,
+        patientId: undefined,
+        status: 'CONFIRMED',
+        includeInactive: true,
+      })
+    })
+
+    it('should override state status/includeInactive with provided params (#474)', async () => {
+      useAppointmentsStore.setState({ selectedStatus: 'CONFIRMED', showInactive: true })
+      ;(getCalendarAppointments as Mock).mockResolvedValue([])
+
+      await useAppointmentsStore.getState().fetchCalendarAppointments({
+        from: '2024-01-01',
+        to: '2024-01-31',
+        status: 'COMPLETED',
+        includeInactive: false,
+      })
+
+      expect(getCalendarAppointments).toHaveBeenCalledWith({
+        from: '2024-01-01',
+        to: '2024-01-31',
+        doctorId: undefined,
+        patientId: undefined,
+        status: 'COMPLETED',
+        includeInactive: false,
       })
     })
   })

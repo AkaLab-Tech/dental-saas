@@ -165,6 +165,7 @@ export interface CalendarOptions {
   to: Date
   doctorId?: string
   patientId?: string
+  status?: AppointmentStatus
   includeInactive?: boolean
 }
 
@@ -293,13 +294,14 @@ export async function getCalendarAppointments(
   tenantId: string,
   options: CalendarOptions
 ): Promise<SafeAppointment[]> {
-  const { from, to, doctorId, patientId, includeInactive = false } = options
+  const { from, to, doctorId, patientId, status, includeInactive = false } = options
 
   const where: Prisma.AppointmentWhereInput = {
     tenantId,
     ...(includeInactive ? {} : { isActive: true }),
     ...(doctorId && { doctorId }),
     ...(patientId && { patientId }),
+    ...(status && { status }),
     // Get appointments that overlap with the date range
     AND: [{ startTime: { lt: to } }, { endTime: { gt: from } }],
   }

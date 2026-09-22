@@ -202,7 +202,7 @@ appointmentsRouter.get('/', requireMinRole('STAFF'), async (req, res, next) => {
 appointmentsRouter.get('/calendar', requireMinRole('STAFF'), async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId
-    const { from, to, doctorId, patientId } = req.query
+    const { from, to, doctorId, patientId, status, includeInactive } = req.query
 
     if (!from || !to) {
       return res.status(400).json({
@@ -211,11 +211,30 @@ appointmentsRouter.get('/calendar', requireMinRole('STAFF'), async (req, res, ne
       })
     }
 
+    const statusParse = appointmentStatusSchema.optional().safeParse(status ? String(status) : undefined)
+    if (!statusParse.success) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid status', code: 'INVALID_STATUS' },
+      })
+    }
+
+    const fromDate = new Date(String(from))
+    const toDate = new Date(String(to))
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid from/to date format', code: 'INVALID_DATE_RANGE' },
+      })
+    }
+
     const appointments = await getCalendarAppointments(tenantId, {
-      from: new Date(String(from)),
-      to: new Date(String(to)),
+      from: fromDate,
+      to: toDate,
       doctorId: doctorId ? String(doctorId) : undefined,
       patientId: patientId ? String(patientId) : undefined,
+      status: statusParse.data,
+      includeInactive: includeInactive === 'true',
     })
 
     res.json({ success: true, data: appointments })

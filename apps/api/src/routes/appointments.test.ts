@@ -2757,6 +2757,116 @@ describe('Appointments API', () => {
 
       expect(byId.get(withPayment.id)).toMatchObject({ hasRecordedPayment: true, recordedPaidAmount: 80 })
     })
+
+    // Task #474: the calendar endpoint used to ignore status/includeInactive
+    // entirely, forcing the calendar view out of sync with the list view's
+    // filters.
+    it('filters by status, returning only appointments in that status (#474)', async () => {
+      await prisma.appointment.deleteMany({ where: { tenantId } })
+
+      const confirmedTime = getFutureTime(1, 9)
+      const scheduledTime = getFutureTime(1, 11)
+
+      const confirmed = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(confirmedTime.startTime),
+          endTime: new Date(confirmedTime.endTime),
+          duration: 30,
+          status: 'CONFIRMED',
+        },
+      })
+      await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(scheduledTime.startTime),
+          endTime: new Date(scheduledTime.endTime),
+          duration: 30,
+          status: 'SCHEDULED',
+        },
+      })
+
+      const from = new Date(confirmedTime.startTime)
+      from.setHours(0, 0, 0, 0)
+      const to = new Date(from)
+      to.setDate(to.getDate() + 2)
+
+      const response = await api()
+        .get(`/api/appointments/calendar?from=${from.toISOString()}&to=${to.toISOString()}&status=CONFIRMED`)
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(200)
+      expect(response.body.data).toHaveLength(1)
+      expect(response.body.data[0].id).toBe(confirmed.id)
+      expect(response.body.data[0].status).toBe('CONFIRMED')
+    })
+
+    it('returns 400 INVALID_STATUS for an invalid status filter (#474)', async () => {
+      const from = new Date()
+      from.setHours(0, 0, 0, 0)
+      const to = new Date(from)
+      to.setDate(to.getDate() + 7)
+
+      const response = await api()
+        .get(`/api/appointments/calendar?from=${from.toISOString()}&to=${to.toISOString()}&status=BOGUS`)
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(400)
+      expect(response.body.error.code).toBe('INVALID_STATUS')
+    })
+
+    it('excludes soft-deleted appointments by default, includes them with includeInactive=true (#474)', async () => {
+      await prisma.appointment.deleteMany({ where: { tenantId } })
+
+      const times = getFutureTime(1, 9)
+      const inactive = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          duration: 30,
+          isActive: false,
+        },
+      })
+
+      const from = new Date(times.startTime)
+      from.setHours(0, 0, 0, 0)
+      const to = new Date(from)
+      to.setDate(to.getDate() + 2)
+
+      const withoutFlag = await api()
+        .get(`/api/appointments/calendar?from=${from.toISOString()}&to=${to.toISOString()}`)
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(withoutFlag.status).toBe(200)
+      expect(
+        (withoutFlag.body.data as Array<{ id: string }>).find((a) => a.id === inactive.id)
+      ).toBeUndefined()
+
+      const withFlag = await api()
+        .get(`/api/appointments/calendar?from=${from.toISOString()}&to=${to.toISOString()}&includeInactive=true`)
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(withFlag.status).toBe(200)
+      expect(
+        (withFlag.body.data as Array<{ id: string }>).find((a) => a.id === inactive.id)
+      ).toBeDefined()
+    })
+
+    it('returns 400 INVALID_DATE_RANGE for an unparseable from/to date (#474)', async () => {
+      const response = await api()
+        .get('/api/appointments/calendar?from=not-a-date&to=also-not-a-date')
+        .set('Authorization', `Bearer ${staffToken}`)
+
+      expect(response.status).toBe(400)
+      expect(response.body.error.code).toBe('INVALID_DATE_RANGE')
+    })
   })
 
   // ============================================================================
@@ -3189,6 +3299,38 @@ describe('Appointments API', () => {
         response.body.data as Array<{ id: string; hasRecordedPayment: boolean; recordedPaidAmount: number }>
       ).find((a) => a.id === mainApt.id)
       expect(found).toMatchObject({ hasRecordedPayment: false, recordedPaidAmount: 0 })
+    })
+
+    // Task #474: the calendar endpoint's new status/includeInactive filters
+    // are layered on the same tenant-scoped `where` — confirm the other
+    // tenant's appointment (created in this block's beforeAll, overlapping
+    // the same date range) never leaks through.
+    it('should not return appointments from other tenant in the calendar view', async () => {
+      const times = getFutureTime(1, 9)
+      const mainAppointment = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          duration: 30,
+        },
+      })
+
+      const from = new Date(times.startTime)
+      from.setHours(0, 0, 0, 0)
+      const to = new Date(from)
+      to.setDate(to.getDate() + 2)
+
+      const response = await api()
+        .get(`/api/appointments/calendar?from=${from.toISOString()}&to=${to.toISOString()}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+
+      expect(response.status).toBe(200)
+      const ids = (response.body.data as Array<{ id: string }>).map((a) => a.id)
+      expect(ids).toContain(mainAppointment.id)
+      expect(ids).not.toContain(otherAppointmentId)
     })
   })
 
