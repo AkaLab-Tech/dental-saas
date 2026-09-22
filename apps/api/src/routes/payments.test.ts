@@ -263,11 +263,26 @@ describe('Patient Payments Routes', () => {
       expect(row.createdBy).toBe(adminUserId)
     })
 
+    it('records createdBy as the active PIN profile, not the shared login', async () => {
+      // Creation records `profileUserId || userId`: with no profile token
+      // active this is the login id (asserted above); with one active it is
+      // the profile id, same expression the reversal route already used. #444.
+      const created = await api()
+        .post(`/api/patients/${patientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('X-Profile-Token', generateProfileToken('profile-444', tenantId, 'ADMIN'))
+        .send({ amount: 14, date: new Date().toISOString() })
+      expect(created.status).toBe(201)
+
+      const row = await prisma.patientPayment.findUniqueOrThrow({ where: { id: created.body.data.id } })
+      expect(row.createdBy).toBe('profile-444')
+      expect(row.createdBy).not.toBe(adminUserId)
+    })
+
     it('prefers the PIN profile over the shared login where the site asks for it', async () => {
-      // Payment CREATION deliberately still records the bare login — that is
-      // #444, filed separately and not fixed here. The REVERSAL does prefer
-      // the profile, so this asserts the claim reaches both paths correctly
-      // and documents which site chooses which.
+      // Creation and reversal both record `profileUserId || userId` — this
+      // asserts the claim reaches both paths correctly and documents that
+      // both sites choose the same actor.
       const created = await api()
         .post(`/api/patients/${patientId}/payments`)
         .set('Authorization', `Bearer ${adminToken}`)
