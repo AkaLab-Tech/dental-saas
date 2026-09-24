@@ -273,42 +273,47 @@ function renderModal(props: Partial<ComponentProps<typeof AppointmentFormModal>>
   return { onClose, onSubmit, ...utils }
 }
 
-// The doctor <select> is the modal's only <select> in create mode (the
-// patient combobox is stubbed above and the status <select> only exists when
-// editing, always rendered after this one — see AppointmentFormModal.tsx),
-// so `document.querySelector('select')` reaches the same element
-// `getAllByRole('combobox')[0]` used to, without the accessible-role scan.
+// Task #246: the doctor field moved from a native <select> to the
+// DoctorPicker combobox (a text <input role="combobox">, associated to its
+// <label> via htmlFor/id — see AppointmentFormModal.tsx).
 //
-// This query used to be `screen.getAllByRole('combobox')[0]`, sitting inside
-// this helper's `waitFor` retry loop, which polls every ~50ms — a query cost
-// approaching or exceeding that interval turns the loop CPU-bound instead of
-// interval-bound, and this helper runs at the top of nearly every test in
-// this file (task #398). Measured on this component: ~7.4ms/call for the
-// role query (role computation scans the whole mounted tree to find
-// candidates, not just the matches — same mechanism as `selectTime()` and
-// `selectCalendarDay()` below) vs ~0.05ms/call for the plain DOM query,
-// ~150x faster. `getDoctorSelect()` still waits for **enabled**, not just
-// present — the <select> is always mounted (only its `disabled` attribute
-// toggles), so presence alone would race the modal's form-reset effect
-// documented below.
-function getDoctorSelect() {
-  return document.querySelector('select') as HTMLSelectElement
+// A loose `getByLabelText(/doctor/i)` looked like the obvious replacement
+// for the old positional `getAllByRole('combobox')[0]` query, but it is
+// ambiguous in practice: once a doctor is selected, DoctorPicker's own clear
+// button carries `aria-label={t('doctorPicker.clear')}` = "Quitar doctor" —
+// which also matches /doctor/i and throws "Found multiple elements" (RTL
+// treats any element with a matching aria-label as a label-text candidate,
+// not just <label> elements — confirmed by reproducing this exact failure
+// while writing this suite). The exact label text ("Doctor *", from
+// `{t('appointments.form.doctor')} *`, fixed since the whole suite pins
+// i18n to 'es' in beforeAll) is unambiguous: no other element's accessible
+// name equals it verbatim.
+function getDoctorPickerInput() {
+  return screen.getByLabelText('Doctor *') as HTMLInputElement
 }
 
 async function waitForOptionsLoaded() {
   // The modal's form-reset effect re-runs whenever `loadingOptions` flips
   // (pre-existing behavior, unrelated to budget items), which re-applies the
   // default values and would clobber a patient selected while doctors are
-  // still loading. Waiting for the doctor <select> to become enabled ensures
-  // that settling has already happened before a test interacts with the form.
+  // still loading. Waiting for the doctor picker to become enabled
+  // (DoctorPicker's `loading` prop is wired straight to `loadingOptions`)
+  // ensures that settling has already happened before a test interacts with
+  // the form.
   await waitFor(() => {
-    expect(getDoctorSelect()).not.toBeDisabled()
+    expect(getDoctorPickerInput()).not.toBeDisabled()
   })
 }
 
-async function selectDoctor() {
+// Opens the DoctorPicker's list (focus shows the full list with nothing
+// typed) and clicks the option matching `name` by its rendered label
+// ("First Last" or "First Last (Specialty)" — see formatDoctorLabel in
+// DoctorPicker.tsx). Defaults to the fixture's only doctor in most tests.
+async function selectDoctor(name = 'Carlos Ruiz') {
   await waitForOptionsLoaded()
-  fireEvent.change(getDoctorSelect(), { target: { value: 'doc-1' } })
+  const input = getDoctorPickerInput()
+  fireEvent.focus(input)
+  fireEvent.click(screen.getByRole('option', { name }))
 }
 
 // The form lists one checkbox per budget item row, so budget item checkboxes
@@ -637,8 +642,8 @@ describe('AppointmentFormModal — budget items association', () => {
 
       renderModal()
 
-      // getDoctors() has not resolved yet: the doctor <select> is disabled.
-      expect(screen.getAllByRole('combobox')[0]).toBeDisabled()
+      // getDoctors() has not resolved yet: the doctor picker is disabled.
+      expect(getDoctorPickerInput()).toBeDisabled()
 
       // Interact with the form while that request is still pending: select a
       // patient (budget items load off a separate, fast-resolving mock) and
@@ -651,7 +656,7 @@ describe('AppointmentFormModal — budget items association', () => {
 
       // Now let the deferred getDoctors() call resolve.
       deferredDoctors.resolve([mockDoctor])
-      await waitFor(() => expect(screen.getAllByRole('combobox')[0]).not.toBeDisabled())
+      await waitFor(() => expect(getDoctorPickerInput()).not.toBeDisabled())
 
       // The pre-settle interactions must have survived — this is exactly
       // what the ref-gated reset (keyed on appointment?.id ?? 'new') fixes.
@@ -700,56 +705,161 @@ describe('AppointmentFormModal — budget items association', () => {
 
       await waitFor(() => expect(screen.getByDisplayValue('Second note')).toBeInTheDocument())
       expect(screen.queryByDisplayValue('First note')).not.toBeInTheDocument()
-      expect((screen.getAllByRole('combobox')[0] as HTMLSelectElement).value).toBe('doc-2')
+      // doc-2 (Diana Perez) is in the resolved doctors list, so this reflects
+      // the doctors-list branch, not fallback — the fallback branch is
+      // covered separately below.
+      expect(getDoctorPickerInput().value).toBe('Diana Perez')
     })
   })
 
-  // Regression coverage for a cold edit-mount race (now FIXED).
+  // Regression coverage for a cold edit-mount race (task #246 rewrite).
   //
-  // The identity-gated reset effect no longer waits for `!loadingOptions`, so
-  // on a cold mount in edit mode `reset({ doctorId: appointment.doctorId, ... })`
-  // runs on the first render — before getDoctors() has resolved and before the
-  // <option value="doc-1"> exists in the DOM. react-hook-form imperatively sets
-  // the <select>.value at that moment; with no matching <option> yet the browser
-  // drops the selection to ''. Without a fix nothing would re-apply it once the
-  // doctors list arrives, silently losing the required `doctorId`.
+  // History: with the old native <select>, react-hook-form's identity-gated
+  // reset effect ran `reset({ doctorId: appointment.doctorId, ... })` on the
+  // first render — before getDoctors() resolved and before
+  // <option value="doc-1"> existed in the DOM — so the browser dropped the
+  // selection to ''. That was fixed (PR history) with a dedicated
+  // re-apply-once-doctors-load effect.
   //
-  // FIX (AppointmentFormModal.tsx): a dedicated effect re-applies ONLY
-  // `doctorId` from `appointment.doctorId` once doctors finish loading, but only
-  // when the user hasn't manually changed it (`!dirtyFields.doctorId`). The test
-  // below asserts that fixed behavior — do NOT remove that effect.
-  describe('regression: doctor pre-selection on a cold edit-mode mount', () => {
-    it('should show the appointment\'s assigned doctor once getDoctors() resolves, even though reset() ran before it did', async () => {
+  // Task #246 removes that effect entirely: DoctorPicker is presentational
+  // and derives its displayed label from `value` + `doctors`/`fallback` on
+  // every render (an "adjust state during render" pattern, not a
+  // post-commit effect — see DoctorPicker.tsx), and AppointmentFormModal
+  // passes `fallback={appointment?.doctor}`. The implementer's claim is that
+  // this makes the cold mount work *before* getDoctors() even resolves,
+  // because `fallback` covers the gap. The two tests below check that claim
+  // directly instead of trusting it: the first asserts the label is already
+  // correct while getDoctors() is still pending (fallback-sourced), the
+  // second asserts it survives the switch to the doctors-sourced label once
+  // the request resolves.
+  describe('regression: doctor pre-selection on a cold edit-mode mount (task #246)', () => {
+    it("shows the appointment's assigned doctor via `fallback` before getDoctors() resolves", async () => {
       listBudgetsByPatientMock.mockResolvedValue({ data: [], total: 0 })
       getAppointmentBudgetItemsMock.mockResolvedValue([])
 
       const deferredDoctors = createDeferred<typeof mockDoctor[]>()
       getDoctorsMock.mockReturnValue(deferredDoctors.promise)
 
-      const appointment = makeAppointment({ id: 'apt-1', patientId: 'patient-1', doctorId: 'doc-1' })
+      const appointment = makeAppointment({
+        id: 'apt-1',
+        patientId: 'patient-1',
+        doctorId: 'doc-1',
+        doctor: { id: 'doc-1', firstName: 'Carlos', lastName: 'Ruiz', specialty: null, email: null },
+      })
+      renderModal({ appointment })
+
+      // getDoctors() has deliberately NOT been resolved yet: `doctors` is
+      // still `[]` in the modal's state, so the only possible source for
+      // this label is the `fallback` prop. A picker that ignores `fallback`
+      // (recreating the native-<select> drop behavior) would leave this
+      // blank instead.
+      await waitFor(() => expect(getDoctorPickerInput().value).toBe('Carlos Ruiz'))
+      // The field is still locked (loadingOptions still true) at this point —
+      // the label being visible doesn't imply the request has settled yet.
+      expect(getDoctorPickerInput()).toBeDisabled()
+    })
+
+    it("keeps showing the appointment's assigned doctor once getDoctors() resolves (now sourced from the doctors list instead of fallback)", async () => {
+      listBudgetsByPatientMock.mockResolvedValue({ data: [], total: 0 })
+      getAppointmentBudgetItemsMock.mockResolvedValue([])
+
+      const deferredDoctors = createDeferred<typeof mockDoctor[]>()
+      getDoctorsMock.mockReturnValue(deferredDoctors.promise)
+
+      const appointment = makeAppointment({
+        id: 'apt-1',
+        patientId: 'patient-1',
+        doctorId: 'doc-1',
+        doctor: { id: 'doc-1', firstName: 'Carlos', lastName: 'Ruiz', specialty: null, email: null },
+      })
       renderModal({ appointment })
 
       deferredDoctors.resolve([mockDoctor, mockDoctor2])
       await waitForOptionsLoaded()
 
-      // Expected: the previously-assigned doctor is shown pre-selected.
-      // Actual (current code): the select is left on '' ("Seleccionar
-      // doctor..."), forcing the user to manually re-pick the doctor before
-      // they can save the edit (doctorId is a required field).
-      //
-      // Waited for directly (not asserted synchronously right after
-      // waitForOptionsLoaded): the doctor <select>'s `disabled` attribute
-      // clears as soon as `loadingOptions` flips to false, but the dedicated
-      // effect that re-applies `doctorId` (AppointmentFormModal.tsx, keyed on
-      // that same `loadingOptions` flip) is a separate passive effect that
-      // commits in its own flush. Reading the value synchronously right after
-      // the select becomes enabled is a race against that effect landing;
-      // waiting for the value itself waits for the behavior this test
-      // actually guards, not a proxy for it.
-      await waitFor(() => {
-        expect((screen.getAllByRole('combobox')[0] as HTMLSelectElement).value).toBe('doc-1')
-      })
+      await waitFor(() => expect(getDoctorPickerInput().value).toBe('Carlos Ruiz'))
     })
+  })
+
+  // Companion regression: the doctor assigned to an appointment can be
+  // *inactive* (excluded from getDoctors(), which only lists active
+  // doctors) — this is the scenario `fallback` exists for specifically, as
+  // opposed to the merely-still-loading race covered above.
+  describe('regression: inactive doctor shown via fallback on edit (task #246)', () => {
+    it("keeps showing the appointment's doctor even though it never appears in getDoctors()'s (active-only) result", async () => {
+      listBudgetsByPatientMock.mockResolvedValue({ data: [], total: 0 })
+      getAppointmentBudgetItemsMock.mockResolvedValue([])
+      // The active doctors list never includes doc-1 at all — not even
+      // eventually — unlike the cold-mount race above.
+      getDoctorsMock.mockResolvedValue([mockDoctor2])
+
+      const appointment = makeAppointment({
+        id: 'apt-1',
+        patientId: 'patient-1',
+        doctorId: 'doc-1',
+        doctor: { id: 'doc-1', firstName: 'Carlos', lastName: 'Ruiz', specialty: null, email: null },
+      })
+      renderModal({ appointment })
+      await waitForOptionsLoaded()
+
+      expect(getDoctorPickerInput().value).toBe('Carlos Ruiz')
+    })
+  })
+})
+
+// Task #246: doctorId is a required field (appointmentFormSchemaInput), now
+// selected through DoctorPicker instead of a native <select>.
+describe('AppointmentFormModal — doctor selection requirement (task #246)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getDoctorsMock.mockResolvedValue([mockDoctor])
+    getPatientsMock.mockResolvedValue([mockPatientRecord])
+    listBudgetsByPatientMock.mockResolvedValue({ data: [], total: 0 })
+    getAppointmentBudgetItemsMock.mockResolvedValue([])
+  })
+
+  it('blocks create submit with a validation error when no doctor is chosen', async () => {
+    const { onSubmit } = renderModal()
+    await waitForOptionsLoaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+
+    fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
+
+    await waitFor(() => expect(screen.getByText('El doctor es requerido')).toBeInTheDocument())
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  // toStrictEqual (not toHaveBeenCalledWith/toEqual/toMatchObject) on the
+  // isolated field: those matchers can't tell a genuinely-present key from
+  // one that merely reads as `undefined`, which matters directly here since
+  // several other fields on this same payload (paidAmount, budgetItemIds)
+  // are legitimately sent as `undefined` in other flows — doctorId must
+  // actually be the string, not just "not strictly absent".
+  it('submits the exact chosen doctorId when creating an appointment', async () => {
+    const { onSubmit } = renderModal()
+    await waitForOptionsLoaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+    await selectDoctor('Carlos Ruiz')
+
+    fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const payload = onSubmit.mock.calls[0][0] as { doctorId?: string }
+    expect({ doctorId: payload.doctorId }).toStrictEqual({ doctorId: 'doc-1' })
+  })
+
+  it('submits the exact chosen doctorId when editing and changing the doctor', async () => {
+    getDoctorsMock.mockResolvedValue([mockDoctor, mockDoctor2])
+    const appointment = makeAppointment({ id: 'apt-1', patientId: 'patient-1', doctorId: 'doc-1' })
+    const { onSubmit } = renderModal({ appointment })
+    await waitForOptionsLoaded()
+
+    await selectDoctor('Diana Perez')
+    fireEvent.click(screen.getByRole('button', { name: /guardar cambios/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const payload = onSubmit.mock.calls[0][0] as { doctorId?: string }
+    expect({ doctorId: payload.doctorId }).toStrictEqual({ doctorId: 'doc-2' })
   })
 })
 
@@ -800,7 +910,7 @@ describe('AppointmentFormModal — paidAmount input (task #373)', () => {
     // Give any (incorrect) async prefill effect a chance to land before
     // asserting the negative — waitFor alone would pass instantly on an
     // already-empty value without ever having watched for a stray write.
-    await waitFor(() => expect(screen.getAllByRole('combobox')[0]).not.toBeDisabled())
+    await waitFor(() => expect(getDoctorPickerInput()).not.toBeDisabled())
     expect(input.value).toBe('')
     expect(input.value).not.toBe('150')
     expect(input).not.toBeDisabled()
@@ -895,7 +1005,7 @@ describe('AppointmentFormModal — paidAmount input (task #373)', () => {
     await waitForOptionsLoaded()
 
     const input = getPaidAmountInput() as HTMLInputElement
-    await waitFor(() => expect(screen.getAllByRole('combobox')[0]).not.toBeDisabled())
+    await waitFor(() => expect(getDoctorPickerInput()).not.toBeDisabled())
     expect(input.value).toBe('')
     expect(input.value).not.toBe('150')
     expect(input).toBeDisabled()
@@ -1038,7 +1148,7 @@ describe('AppointmentFormModal — date/time picker migration (task #233)', () =
   // directly — no other element in the modal shares it.
   //
   // This used to be `screen.getByRole('button', { name: 'Fecha' })`. Same
-  // mechanism as `selectDoctor()`'s doctor <select> query above, one step
+  // mechanism as `getDoctorPickerInput()`'s label-based query above, one step
   // worse: with the calendar grid open (as most tests using this helper have
   // it), a document-wide role+name match pays the per-candidate
   // `isInaccessible` walk over every button on screen (nav, close, submit,
@@ -1052,10 +1162,10 @@ describe('AppointmentFormModal — date/time picker migration (task #233)', () =
 
   // The TimePicker trigger <button> exposes role="combobox" (task #347: the
   // APG select-only-combobox pattern, sanctioned for a <button> in ARIA-in-HTML
-  // — see TimePicker.test.tsx). The doctor <select> also computes to role
-  // "combobox", but its accessible name is "Doctor"
-  // (t('appointments.form.doctor')), so these name-scoped queries for "Hora de
-  // inicio" / "Hora de fin" stay unambiguous.
+  // — see TimePicker.test.tsx). DoctorPicker's <input> also computes to role
+  // "combobox" (task #246), but its accessible name is "Doctor *"
+  // (t('appointments.form.doctor'), via its associated <label>), so these
+  // name-scoped queries for "Hora de inicio" / "Hora de fin" stay unambiguous.
   function getTimeTriggers() {
     return [
       screen.getByRole('combobox', { name: 'Hora de inicio' }),

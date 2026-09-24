@@ -688,6 +688,11 @@
       "commissionPercentage": "Commission: {{percentage}}%"
     }
   },
+  "doctorPicker": {
+    "placeholder": "Select doctor...",
+    "noResults": "No doctors found",
+    "clear": "Clear doctor"
+  },
   "labworks": {
     "title": "Lab Works",
     "subtitle": "Manage the works sent to the laboratory",
