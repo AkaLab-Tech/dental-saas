@@ -688,6 +688,11 @@
       "commissionPercentage": "العمولة: {{percentage}}%"
     }
   },
+  "doctorPicker": {
+    "placeholder": "اختر طبيبًا...",
+    "noResults": "لم يتم العثور على أطباء",
+    "clear": "إزالة الطبيب"
+  },
   "labworks": {
     "title": "أعمال المختبر",
     "subtitle": "إدارة الأعمال المُرسلة إلى المختبر",

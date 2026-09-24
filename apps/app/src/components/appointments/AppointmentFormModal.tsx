@@ -19,6 +19,7 @@ import { formatDateForInput, formatCurrency } from '../../lib/format'
 import { PatientSearchCombobox, type PatientOption } from '../ui/PatientSearchCombobox'
 import { DatePicker } from '../ui/DatePicker'
 import { TimePicker } from '../ui/TimePicker'
+import { DoctorPicker, type DoctorOption } from '../ui/DoctorPicker'
 import { useAuthStore } from '../../stores/auth.store'
 import { useSettingsStore } from '../../stores/settings.store'
 
@@ -75,13 +76,6 @@ const appointmentFormSchemaInput = z.object({
 
 type FormData = z.input<typeof appointmentFormSchemaInput>
 
-interface DoctorOption {
-  id: string
-  firstName: string
-  lastName: string
-  specialty: string | null
-}
-
 interface AppointmentFormModalProps {
   isOpen: boolean
   onClose: () => void
@@ -115,6 +109,7 @@ export function AppointmentFormModal({
   const paidAmountLocked = isAlreadyPaid || hasRecordedPaidAmount
   const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
   const typeListId = useId()
+  const doctorFieldId = useId()
 
   // Settings drive the per-type end-time auto-fill below. Loaded lazily since
   // SettingsPage is the only other caller of fetchSettings — if loading
@@ -265,19 +260,6 @@ export function AppointmentFormModal({
       })
     }
   }, [appointment, isOpen, defaultDate, defaultPatientId, reset, paidAmountLocked])
-
-  // Re-apply the doctor pre-selection once the doctors list finishes loading.
-  // On a cold edit-mount, the identity-gated reset() above can run before
-  // getDoctors() resolves, so RHF sets the <select>'s value imperatively
-  // against a DOM with no matching <option> yet and the browser drops it to
-  // ''. This only re-applies the doctorId (never other fields) and only
-  // while the user hasn't touched it themselves, so it can't clobber
-  // in-progress edits made elsewhere in the form while doctors were loading.
-  useEffect(() => {
-    if (!isOpen || loadingOptions || !appointment) return
-    if (dirtyFields.doctorId) return
-    setValue('doctorId', appointment.doctorId, { shouldDirty: false })
-  }, [isOpen, loadingOptions, appointment, dirtyFields.doctorId, setValue])
 
   // Suggest an end time from the entered type's configured duration (falling
   // back to the tenant default). In edit mode this only kicks in once the
@@ -500,25 +482,25 @@ export function AppointmentFormModal({
                 </div>
 
                 <div>
-                  <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor={doctorFieldId} className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1">
                     <Stethoscope className="h-4 w-4" />
                     {t('appointments.form.doctor')} *
                   </label>
-                  <select
-                    {...register('doctorId')}
-                    disabled={loadingOptions}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
-                  >
-                    <option value="">{t('appointments.form.selectDoctor')}</option>
-                    {doctors.map((doctor) => (
-                      <option key={doctor.id} value={doctor.id}>
-                        {doctor.firstName} {doctor.lastName} {doctor.specialty ? `(${doctor.specialty})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.doctorId && (
-                    <p className="mt-1 text-sm text-red-600">{errors.doctorId.message}</p>
-                  )}
+                  <Controller
+                    name="doctorId"
+                    control={control}
+                    render={({ field }) => (
+                      <DoctorPicker
+                        id={doctorFieldId}
+                        doctors={doctors}
+                        value={field.value ?? ''}
+                        onChange={field.onChange}
+                        fallback={appointment?.doctor}
+                        loading={loadingOptions}
+                        error={errors.doctorId?.message}
+                      />
+                    )}
+                  />
                 </div>
               </div>
 
