@@ -366,7 +366,7 @@ describe('LabworksPage', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
 
-      const pendingButton = screen.getByRole('button', { name: 'Pendiente' })
+      const pendingButton = screen.getByRole('button', { name: 'Pendiente de envío' })
       fireEvent.click(pendingButton)
 
       expect(mockSetFilters).toHaveBeenCalledTimes(1)

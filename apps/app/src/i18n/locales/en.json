@@ -701,7 +701,7 @@
     "noLabworks": "No lab works registered",
     "status": {
       "label": "Status",
-      "pending": "Pending",
+      "pending": "Pending shipment",
       "sent": "Sent",
       "inProgress": "In Progress",
       "received": "Received",
