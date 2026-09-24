@@ -21,7 +21,7 @@ import { LabworkFormModal } from '@/components/labworks/LabworkFormModal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Can } from '@/components/auth'
 import { exportLabworks } from '@/lib/labwork-api'
-import type { Labwork, CreateLabworkData, UpdateLabworkData } from '@/lib/labwork-api'
+import type { Labwork, CreateLabworkData, UpdateLabworkData, LabworkStatus } from '@/lib/labwork-api'
 
 export function LabworksPage() {
   const { t } = useTranslation()
@@ -114,9 +114,9 @@ export function LabworksPage() {
     }
   }
 
-  const handleToggleDelivered = async (labwork: Labwork) => {
+  const handleStatusChange = async (labwork: Labwork, status: LabworkStatus) => {
     try {
-      await updateLabwork(labwork.id, { isDelivered: !labwork.isDelivered })
+      await updateLabwork(labwork.id, { status })
     } catch {
       // Error is handled by store
     }
@@ -155,16 +155,16 @@ export function LabworksPage() {
     }
   }
 
-  const handleFilterChange = (key: 'isPaid' | 'isDelivered', value: boolean | undefined) => {
-    if (key === 'isDelivered') {
-      setFilters({ isDelivered: value, overdue: undefined })
-      return
-    }
+  const handleFilterChange = (key: 'isPaid', value: boolean | undefined) => {
     setFilters({ [key]: value })
   }
 
+  const handleStatusFilterChange = (value: LabworkStatus | undefined) => {
+    setFilters({ status: value, overdue: undefined })
+  }
+
   const handleOverdueFilterChange = (value: boolean | undefined) => {
-    setFilters({ overdue: value, isDelivered: undefined })
+    setFilters({ overdue: value, status: undefined })
   }
 
   const handleDateFilterChange = (key: 'from' | 'to', value: string) => {
@@ -184,7 +184,7 @@ export function LabworksPage() {
 
   const hasActiveFilters =
     filters.isPaid !== undefined ||
-    filters.isDelivered !== undefined ||
+    filters.status !== undefined ||
     filters.overdue !== undefined ||
     filters.from !== undefined ||
     filters.to !== undefined
@@ -373,11 +373,11 @@ export function LabworksPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">{t('labworks.deliveryStatus')}</label>
-            <div className="flex gap-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">{t('labworks.status.label')}</label>
+            <div className="flex flex-wrap gap-2">
               <button
-                onClick={() => handleFilterChange('isDelivered', undefined)}
-                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${filters.isDelivered === undefined && filters.overdue === undefined
+                onClick={() => handleStatusFilterChange(undefined)}
+                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${filters.status === undefined && filters.overdue === undefined
                     ? 'bg-blue-50 border-blue-200 text-blue-700'
                     : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                   }`}
@@ -385,22 +385,40 @@ export function LabworksPage() {
                 {t('common.all')}
               </button>
               <button
-                onClick={() => handleFilterChange('isDelivered', true)}
-                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${filters.isDelivered === true
-                    ? 'bg-green-50 border-green-200 text-green-700'
-                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                  }`}
-              >
-                {t('labworks.filterDelivered')}
-              </button>
-              <button
-                onClick={() => handleFilterChange('isDelivered', false)}
-                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${filters.isDelivered === false
+                onClick={() => handleStatusFilterChange('PENDING')}
+                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${filters.status === 'PENDING'
                     ? 'bg-amber-50 border-amber-200 text-amber-700'
                     : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                   }`}
               >
-                {t('labworks.pendingDelivery')}
+                {t('labworks.status.pending')}
+              </button>
+              <button
+                onClick={() => handleStatusFilterChange('SENT')}
+                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${filters.status === 'SENT'
+                    ? 'bg-amber-50 border-amber-200 text-amber-700'
+                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+              >
+                {t('labworks.status.sent')}
+              </button>
+              <button
+                onClick={() => handleStatusFilterChange('IN_PROGRESS')}
+                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${filters.status === 'IN_PROGRESS'
+                    ? 'bg-amber-50 border-amber-200 text-amber-700'
+                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+              >
+                {t('labworks.status.inProgress')}
+              </button>
+              <button
+                onClick={() => handleStatusFilterChange('RECEIVED')}
+                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${filters.status === 'RECEIVED'
+                    ? 'bg-green-50 border-green-200 text-green-700'
+                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+              >
+                {t('labworks.status.received')}
               </button>
               <button
                 onClick={() => handleOverdueFilterChange(filters.overdue ? undefined : true)}
@@ -504,7 +522,7 @@ export function LabworksPage() {
               onDelete={handleDelete}
               onRestore={handleRestore}
               onTogglePaid={handleTogglePaid}
-              onToggleDelivered={handleToggleDelivered}
+              onStatusChange={handleStatusChange}
             />
           ))}
         </div>

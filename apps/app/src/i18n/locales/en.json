@@ -695,10 +695,12 @@
     "editLabwork": "Edit Lab Work",
     "noLabworks": "No lab works registered",
     "status": {
+      "label": "Status",
       "pending": "Pending",
+      "sent": "Sent",
       "inProgress": "In Progress",
-      "completed": "Completed",
-      "delivered": "Delivered",
+      "received": "Received",
+      "deleted": "Deleted",
       "overdue": "Overdue"
     },
     "linkedAppointment": "Linked appointment",
@@ -725,6 +727,7 @@
     "filterDelivered": "Delivered",
     "pendingDelivery": "Pending Delivery",
     "notDelivered": "Pending delivery",
+    "noDoctorsAvailable": "No doctors assigned or available",
     "stats": {
       "total": "Total",
       "unpaid": "Unpaid",

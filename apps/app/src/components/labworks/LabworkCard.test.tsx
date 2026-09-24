@@ -52,6 +52,7 @@ function makeLabwork(overrides: Partial<Labwork> = {}): Labwork {
     price: 100,
     isPaid: false,
     isDelivered: false,
+    status: 'PENDING',
     doctorIds: [],
     doctors: [],
     isActive: true,
@@ -66,10 +67,11 @@ function makeLabwork(overrides: Partial<Labwork> = {}): Labwork {
 function renderCard(labwork: Labwork) {
   const onEdit = vi.fn()
   const onDelete = vi.fn()
+  const onStatusChange = vi.fn()
   const utils = render(
-    <LabworkCard labwork={labwork} onEdit={onEdit} onDelete={onDelete} />
+    <LabworkCard labwork={labwork} onEdit={onEdit} onDelete={onDelete} onStatusChange={onStatusChange} />
   )
-  return { onEdit, onDelete, ...utils }
+  return { onEdit, onDelete, onStatusChange, ...utils }
 }
 
 describe('LabworkCard — lab phone', () => {
@@ -204,6 +206,14 @@ describe('LabworkCard — price row and paid status badge (#240)', () => {
     expect(screen.getAllByText('Pagado')).toHaveLength(2)
   })
 
+  // Excludes the lifecycle status <select>'s "PENDING" <option> from the
+  // "Pendiente" text match: task #243-B added that select with all four
+  // status options always present in the DOM regardless of the selected
+  // value, which would otherwise inflate this count by one and mask what
+  // the #240 assertion is actually about (the payment badge/toggle pair).
+  const notOption = (content: string, element: Element | null) =>
+    content === 'Pendiente' && element?.tagName.toLowerCase() !== 'option'
+
   it('shows the "Pendiente" badge next to the price when isPaid is false and priceIncludedInAppointment is false', () => {
     renderCard(makeLabwork({ price: 100, isPaid: false, priceIncludedInAppointment: false }))
 
@@ -211,7 +221,7 @@ describe('LabworkCard — price row and paid status badge (#240)', () => {
     // "Pendiente" also appears on the isPaid toggle button below the price
     // row, so assert there are exactly two occurrences (badge + toggle) and
     // that neither is the paid label.
-    expect(screen.getAllByText('Pendiente')).toHaveLength(2)
+    expect(screen.getAllByText(notOption)).toHaveLength(2)
     expect(screen.queryByText('Pagado')).not.toBeInTheDocument()
   })
 
@@ -222,7 +232,7 @@ describe('LabworkCard — price row and paid status badge (#240)', () => {
     // The isPaid toggle button still renders "Pendiente" independently of the
     // price row — assert the price-row badge specifically is absent by
     // checking there is exactly one "Pendiente" occurrence (the toggle only).
-    expect(screen.getAllByText('Pendiente')).toHaveLength(1)
+    expect(screen.getAllByText(notOption)).toHaveLength(1)
   })
 
   it('shows the "included in appointment" chip (not the paid badge) even when isPaid is true', () => {
@@ -271,5 +281,54 @@ describe('LabworkCard — assigned doctors (#242)', () => {
     )
 
     expect(screen.getByText('Jane Smith, Bob Lee')).toBeInTheDocument()
+  })
+})
+
+// Task #243-B: the delivered-toggle button was replaced by a compact status
+// <select>, gated by the same can(LABWORKS_UPDATE) / isDeleted rule as the
+// rest of the card's mutating controls.
+describe('LabworkCard — lifecycle status select (#243-B)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    canMock.mockReturnValue(true)
+  })
+
+  it('renders the select pre-set to the labwork\'s current status', () => {
+    renderCard(makeLabwork({ status: 'SENT', deletedAt: null }))
+
+    expect(screen.getByRole('combobox')).toHaveValue('SENT')
+  })
+
+  it('calls onStatusChange with the labwork and the newly selected status', () => {
+    const { onStatusChange } = renderCard(makeLabwork({ id: 'labwork-9', status: 'PENDING' }))
+
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'RECEIVED' } })
+
+    expect(onStatusChange).toHaveBeenCalledTimes(1)
+    expect(onStatusChange).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'labwork-9' }),
+      'RECEIVED'
+    )
+  })
+
+  it('disables the select for a deleted (soft-deleted) record even when the user can update labworks', () => {
+    canMock.mockReturnValue(true)
+    renderCard(makeLabwork({ deletedAt: '2026-02-01T00:00:00Z' }))
+
+    expect(screen.getByRole('combobox')).toBeDisabled()
+  })
+
+  it('disables the select for a user without LABWORKS_UPDATE even on a non-deleted record', () => {
+    canMock.mockImplementation((perm: unknown) => perm !== Permission.LABWORKS_UPDATE)
+    renderCard(makeLabwork({ deletedAt: null }))
+
+    expect(screen.getByRole('combobox')).toBeDisabled()
+  })
+
+  it('enables the select for a non-deleted record when the user has LABWORKS_UPDATE', () => {
+    canMock.mockReturnValue(true)
+    renderCard(makeLabwork({ deletedAt: null }))
+
+    expect(screen.getByRole('combobox')).not.toBeDisabled()
   })
 })

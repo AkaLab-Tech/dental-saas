@@ -695,10 +695,12 @@
     "editLabwork": "تعديل عمل المختبر",
     "noLabworks": "لا توجد أعمال مختبر",
     "status": {
+      "label": "الحالة",
       "pending": "معلق",
+      "sent": "تم الإرسال",
       "inProgress": "قيد التنفيذ",
-      "completed": "مكتمل",
-      "delivered": "تم التسليم",
+      "received": "تم الاستلام",
+      "deleted": "محذوف",
       "overdue": "متأخر"
     },
     "linkedAppointment": "الموعد المرتبط",
@@ -725,6 +727,7 @@
     "filterDelivered": "تم التسليم",
     "pendingDelivery": "قيد التسليم",
     "notDelivered": "قيد التسليم",
+    "noDoctorsAvailable": "لا يوجد أطباء معينون أو متاحون",
     "stats": {
       "total": "الإجمالي",
       "unpaid": "غير مدفوع",

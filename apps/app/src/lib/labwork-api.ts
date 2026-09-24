@@ -262,21 +262,30 @@ export function formatLabworkDoctors(labwork: Labwork): string | null {
   return labwork.doctors.map((d) => `${d.firstName} ${d.lastName}`).join(', ')
 }
 
-export function getLabworkStatusBadge(labwork: Labwork): { label: string; variant: 'default' | 'success' | 'warning' | 'destructive' } {
+const LABWORK_STATUS_LABEL_KEYS: Record<LabworkStatus, string> = {
+  PENDING: 'labworks.status.pending',
+  SENT: 'labworks.status.sent',
+  IN_PROGRESS: 'labworks.status.inProgress',
+  RECEIVED: 'labworks.status.received',
+}
+
+const LABWORK_STATUS_VARIANTS: Record<LabworkStatus, 'default' | 'success' | 'warning'> = {
+  PENDING: 'default',
+  SENT: 'warning',
+  IN_PROGRESS: 'warning',
+  RECEIVED: 'success',
+}
+
+/**
+ * Lifecycle status pill, independent of payment (see #240/#487 — payment has
+ * its own `PaidStatusBadge`). Precedence: deleted > overdue > `status`.
+ */
+export function getLabworkStatusBadge(labwork: Labwork): { labelKey: string; variant: 'default' | 'success' | 'warning' | 'destructive' } {
   if (!labwork.isActive) {
-    return { label: 'Eliminado', variant: 'destructive' }
+    return { labelKey: 'labworks.status.deleted', variant: 'destructive' }
   }
   if (isLabworkOverdue(labwork)) {
-    return { label: 'Atrasado', variant: 'destructive' }
+    return { labelKey: 'labworks.status.overdue', variant: 'destructive' }
   }
-  if (labwork.isDelivered && labwork.isPaid) {
-    return { label: 'Completado', variant: 'success' }
-  }
-  if (labwork.isDelivered) {
-    return { label: 'Entregado', variant: 'default' }
-  }
-  if (labwork.isPaid) {
-    return { label: 'Pagado', variant: 'warning' }
-  }
-  return { label: 'Pendiente', variant: 'warning' }
+  return { labelKey: LABWORK_STATUS_LABEL_KEYS[labwork.status], variant: LABWORK_STATUS_VARIANTS[labwork.status] }
 }

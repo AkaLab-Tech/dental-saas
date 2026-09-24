@@ -547,75 +547,71 @@ describe('labwork-api', () => {
       })
     })
 
-    describe('getLabworkStatusBadge', () => {
-      it('should return destructive badge for inactive labwork', () => {
-        const inactiveLabwork = { ...mockLabwork, isActive: false }
+    describe('getLabworkStatusBadge (task #243-B)', () => {
+      // Precedence: deleted > overdue > `status`. Every case below pins a
+      // (labelKey, variant) pair — not a hard-coded label — since #243-B
+      // moved the actual translation into i18n.
+      it('returns the deleted badge (destructive) for an inactive labwork, regardless of status', () => {
+        const inactiveLabwork = { ...mockLabwork, isActive: false, status: 'RECEIVED' as const }
         const badge = getLabworkStatusBadge(inactiveLabwork)
 
-        expect(badge.label).toBe('Eliminado')
-        expect(badge.variant).toBe('destructive')
+        expect(badge).toEqual({ labelKey: 'labworks.status.deleted', variant: 'destructive' })
       })
 
-      it('should return success badge for completed labwork (delivered and paid)', () => {
-        const completedLabwork = { ...mockLabwork, isDelivered: true, isPaid: true }
-        const badge = getLabworkStatusBadge(completedLabwork)
-
-        expect(badge.label).toBe('Completado')
-        expect(badge.variant).toBe('success')
-      })
-
-      it('should return default badge for delivered but unpaid labwork', () => {
-        const deliveredLabwork = { ...mockLabwork, isDelivered: true, isPaid: false }
-        const badge = getLabworkStatusBadge(deliveredLabwork)
-
-        expect(badge.label).toBe('Entregado')
-        expect(badge.variant).toBe('default')
-      })
-
-      it('should return warning badge for paid but not delivered labwork', () => {
-        // date is overridden to a future (non-overdue) day: mockLabwork's
-        // fixed 2024-01-20 date is in the past relative to "now" and would
-        // otherwise be caught by the overdue check first (isActive: true,
-        // isDelivered: false, date < today), masking the branch under test.
-        const paidLabwork = { ...mockLabwork, isPaid: true, isDelivered: false, date: tomorrowStr }
-        const badge = getLabworkStatusBadge(paidLabwork)
-
-        expect(badge.label).toBe('Pagado')
-        expect(badge.variant).toBe('warning')
-      })
-
-      it('should return warning badge for pending labwork', () => {
-        // Same reasoning as above: force a non-overdue date so this exercises
-        // the "Pendiente" branch rather than the overdue branch.
-        const pendingLabwork = { ...mockLabwork, isPaid: false, isDelivered: false, date: tomorrowStr }
-        const badge = getLabworkStatusBadge(pendingLabwork)
-
-        expect(badge.label).toBe('Pendiente')
-        expect(badge.variant).toBe('warning')
-      })
-
-      it('should return destructive "Atrasado" badge for an active, undelivered, strictly-past labwork', () => {
-        const overdueLabwork = { ...mockLabwork, isActive: true, isDelivered: false, date: yesterdayStr }
+      it('returns the overdue badge (destructive) for an active, undelivered, strictly-past labwork', () => {
+        const overdueLabwork = {
+          ...mockLabwork,
+          isActive: true,
+          isDelivered: false,
+          date: yesterdayStr,
+          status: 'PENDING' as const,
+        }
         const badge = getLabworkStatusBadge(overdueLabwork)
 
-        expect(badge.label).toBe('Atrasado')
-        expect(badge.variant).toBe('destructive')
+        expect(badge).toEqual({ labelKey: 'labworks.status.overdue', variant: 'destructive' })
       })
 
-      it('should prioritize the overdue badge over the paid/pending badges when a labwork is both overdue and paid', () => {
-        const overduePaidLabwork = { ...mockLabwork, isActive: true, isPaid: true, isDelivered: false, date: yesterdayStr }
-        const badge = getLabworkStatusBadge(overduePaidLabwork)
-
-        expect(badge.label).toBe('Atrasado')
-        expect(badge.variant).toBe('destructive')
-      })
-
-      it('should prioritize the deleted badge over the overdue badge for an inactive, strictly-past labwork', () => {
+      it('prioritizes the deleted badge over the overdue badge for an inactive, strictly-past labwork', () => {
         const deletedPastLabwork = { ...mockLabwork, isActive: false, isDelivered: false, date: yesterdayStr }
         const badge = getLabworkStatusBadge(deletedPastLabwork)
 
-        expect(badge.label).toBe('Eliminado')
-        expect(badge.variant).toBe('destructive')
+        expect(badge).toEqual({ labelKey: 'labworks.status.deleted', variant: 'destructive' })
+      })
+
+      it('prioritizes the overdue badge over the status badge when a labwork is both overdue and PENDING', () => {
+        const overduePending = {
+          ...mockLabwork,
+          isActive: true,
+          isDelivered: false,
+          date: yesterdayStr,
+          status: 'PENDING' as const,
+        }
+        const badge = getLabworkStatusBadge(overduePending)
+
+        expect(badge).toEqual({ labelKey: 'labworks.status.overdue', variant: 'destructive' })
+      })
+
+      it.each([
+        ['PENDING', 'labworks.status.pending', 'default'],
+        ['SENT', 'labworks.status.sent', 'warning'],
+        ['IN_PROGRESS', 'labworks.status.inProgress', 'warning'],
+        ['RECEIVED', 'labworks.status.received', 'success'],
+      ] as const)('maps status %s to { labelKey: %s, variant: %s } when active and not overdue', (status, labelKey, variant) => {
+        // date is overridden to a future (non-overdue) day so the status
+        // branch is exercised rather than the overdue branch.
+        const labwork = { ...mockLabwork, isActive: true, isDelivered: false, date: tomorrowStr, status }
+        const badge = getLabworkStatusBadge(labwork)
+
+        expect(badge).toEqual({ labelKey, variant })
+      })
+
+      it('never encodes payment: a paid and an unpaid labwork with the same status produce an identical badge', () => {
+        const base = { ...mockLabwork, isActive: true, isDelivered: false, date: tomorrowStr, status: 'SENT' as const }
+        const paid = { ...base, isPaid: true }
+        const unpaid = { ...base, isPaid: false }
+
+        expect(getLabworkStatusBadge(paid)).toEqual(getLabworkStatusBadge(unpaid))
+        expect(getLabworkStatusBadge(paid)).toEqual({ labelKey: 'labworks.status.sent', variant: 'warning' })
       })
     })
 

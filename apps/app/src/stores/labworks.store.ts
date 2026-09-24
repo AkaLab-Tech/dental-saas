@@ -106,8 +106,8 @@ export const useLabworksStore = create<LabworksState>((set, get) => ({
         labworks: state.labworks.map((l) => (l.id === id ? updatedLabwork : l)),
         loading: false,
       }))
-      // Refresh stats if payment status changed
-      if (data.isPaid !== undefined || data.isDelivered !== undefined) {
+      // Refresh stats if payment or lifecycle status changed
+      if (data.isPaid !== undefined || data.isDelivered !== undefined || data.status !== undefined) {
         get().fetchStats()
       }
       return updatedLabwork

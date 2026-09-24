@@ -62,6 +62,7 @@ function makeLabwork(overrides: Partial<Labwork> = {}): Labwork {
     price: 1500,
     isPaid: false,
     isDelivered: false,
+    status: 'PENDING',
     doctorIds: [],
     doctors: [],
     isActive: true,
@@ -87,6 +88,7 @@ const labworkPending = makeLabwork({
   price: 1500,
   isPaid: false,
   isDelivered: false,
+  status: 'PENDING',
 })
 
 const labworkCompleted = makeLabwork({
@@ -96,6 +98,7 @@ const labworkCompleted = makeLabwork({
   price: 3200,
   isPaid: true,
   isDelivered: true,
+  status: 'RECEIVED',
 })
 
 // ============================================================================
@@ -147,9 +150,11 @@ describe('PatientLabworksSection', () => {
       expect(screen.getByText('USD 1,500.00')).toBeInTheDocument()
       expect(screen.getByText('USD 3,200.00')).toBeInTheDocument()
 
-      // Status badges from the real getLabworkStatusBadge
-      expect(screen.getByText('Pendiente')).toBeInTheDocument()
-      expect(screen.getByText('Completado')).toBeInTheDocument()
+      // Status badges from the real getLabworkStatusBadge. `t` is mocked to
+      // the identity function in this file, so the rendered text is the raw
+      // i18n labelKey rather than a translated label (task #243-B).
+      expect(screen.getByText('labworks.status.pending')).toBeInTheDocument()
+      expect(screen.getByText('labworks.status.received')).toBeInTheDocument()
     })
 
     it('shows the section title', async () => {
