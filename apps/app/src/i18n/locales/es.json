@@ -695,10 +695,12 @@
     "editLabwork": "Editar Trabajo",
     "noLabworks": "No hay trabajos de laboratorio",
     "status": {
+      "label": "Estado",
       "pending": "Pendiente",
+      "sent": "Enviado",
       "inProgress": "En Progreso",
-      "completed": "Completado",
-      "delivered": "Entregado",
+      "received": "Recibido",
+      "deleted": "Eliminado",
       "overdue": "Atrasado"
     },
     "linkedAppointment": "Consulta vinculada",
@@ -725,6 +727,7 @@
     "filterDelivered": "Entregados",
     "pendingDelivery": "Por Entregar",
     "notDelivered": "Por entregar",
+    "noDoctorsAvailable": "No hay doctores asignados ni disponibles",
     "stats": {
       "total": "Total",
       "unpaid": "Por Pagar",

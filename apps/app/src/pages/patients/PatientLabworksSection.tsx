@@ -45,7 +45,7 @@ function PatientLabworkRow({ labwork, currency }: { labwork: Labwork; currency: 
           <span
             className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${BADGE_STYLES[statusBadge.variant]}`}
           >
-            {statusBadge.label}
+            {t(statusBadge.labelKey)}
           </span>
           <span className="text-sm font-medium text-gray-900">
             {formatCurrency(labwork.price, currency)}

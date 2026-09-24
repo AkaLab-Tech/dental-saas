@@ -69,9 +69,11 @@ test.describe('Labworks — overdue indicator & filter', () => {
     await expect(page.getByText('Lab Atrasado E2E')).toBeVisible()
     await page.screenshot({ path: 'test-results/screenshots/labworks-overdue-filter-active.png', fullPage: true })
 
-    // Mutually exclusive with the "delivered" filter: selecting overdue
-    // must not leave "Entregados" active.
-    const deliveredButton = page.getByRole('button', { name: 'Entregados', exact: true })
-    await expect(deliveredButton).not.toHaveClass(/bg-green-50/)
+    // Mutually exclusive with the status filter (task #243-B replaced the
+    // old "Estado de Entrega" delivery row — with its "Entregados" toggle —
+    // with a 4-state lifecycle row): selecting overdue must not leave
+    // "Recibido" (the closest analog to the old delivered state) active.
+    const receivedButton = page.getByRole('button', { name: 'Recibido', exact: true })
+    await expect(receivedButton).not.toHaveClass(/bg-green-50/)
   })
 })

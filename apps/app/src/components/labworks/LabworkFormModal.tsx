@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { X, Loader2, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { Labwork, CreateLabworkData } from '@/lib/labwork-api'
+import type { Labwork, CreateLabworkData, LabworkStatus } from '@/lib/labwork-api'
 import { getLabNames } from '@/lib/labwork-api'
 import type { Appointment } from '@/lib/appointment-api'
 import { getAppointmentsByPatient } from '@/lib/appointment-api'
@@ -27,7 +27,7 @@ const labworkFormSchema = z.object({
   date: z.string().min(1, 'La fecha es requerida'),
   price: z.coerce.number().min(0, 'El precio debe ser 0 o mayor'),
   isPaid: z.boolean().optional(),
-  isDelivered: z.boolean().optional(),
+  status: z.enum(['PENDING', 'SENT', 'IN_PROGRESS', 'RECEIVED']).optional(),
   doctorIds: z.array(z.string()).optional(),
   notes: z.string().max(2000, 'Las notas no pueden exceder 2000 caracteres').optional(),
 })
@@ -80,7 +80,7 @@ export function LabworkFormModal({
       date: formatDateForInput(new Date()),
       price: 0,
       isPaid: false,
-      isDelivered: false,
+      status: 'PENDING',
       doctorIds: [],
       notes: '',
     },
@@ -118,7 +118,7 @@ export function LabworkFormModal({
           date: labwork.date.split('T')[0],
           price: labwork.price,
           isPaid: labwork.isPaid,
-          isDelivered: labwork.isDelivered,
+          status: labwork.status,
           doctorIds: labwork.doctorIds,
           notes: labwork.note || '',
         })
@@ -140,7 +140,7 @@ export function LabworkFormModal({
           date: formatDateForInput(new Date()),
           price: 0,
           isPaid: false,
-          isDelivered: false,
+          status: 'PENDING',
           doctorIds: [],
           notes: '',
         })
@@ -218,7 +218,7 @@ export function LabworkFormModal({
       date: data.date,
       price: data.price,
       isPaid: data.isPaid ?? false,
-      isDelivered: data.isDelivered ?? false,
+      status: (data.status ?? 'PENDING') as LabworkStatus,
       doctorIds: data.doctorIds ?? [],
       ...(data.notes && { notes: data.notes }),
       ...(data.appointmentId && { appointmentId: data.appointmentId }),
@@ -436,7 +436,7 @@ export function LabworkFormModal({
                 </div>
               </div>
 
-              {/* Status checkboxes */}
+              {/* Paid checkbox */}
               <div className="flex gap-6">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -446,15 +446,23 @@ export function LabworkFormModal({
                   />
                   <span className="text-sm text-gray-700">{t('payment.paid')}</span>
                 </label>
+              </div>
 
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    {...register('isDelivered')}
-                    type="checkbox"
-                    className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-gray-700">{t('labworks.status.delivered')}</span>
+              {/* Lifecycle status */}
+              <div>
+                <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('labworks.status.label')}
                 </label>
+                <select
+                  {...register('status')}
+                  id="status"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="PENDING">{t('labworks.status.pending')}</option>
+                  <option value="SENT">{t('labworks.status.sent')}</option>
+                  <option value="IN_PROGRESS">{t('labworks.status.inProgress')}</option>
+                  <option value="RECEIVED">{t('labworks.status.received')}</option>
+                </select>
               </div>
 
               {/* Assigned doctors */}
@@ -478,7 +486,7 @@ export function LabworkFormModal({
                     </label>
                   ))}
                   {doctorCheckboxOptions.length === 0 && (
-                    <p className="text-xs text-gray-400">{t('labworks.selectDoctors')}</p>
+                    <p className="text-xs text-gray-400">{t('labworks.noDoctorsAvailable')}</p>
                   )}
                 </div>
               </div>

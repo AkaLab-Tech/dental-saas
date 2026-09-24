@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { Permission } from '@dental/shared'
 import i18n from 'i18next'
 import '@/i18n'
-import type { Labwork, LabworksStats } from '@/lib/labwork-api'
+import type { Labwork, LabworkStats, LabworkStatus } from '@/lib/labwork-api'
 
 // LabworksPage now renders every user-facing string through t(). Initialize
 // the real i18n instance (Spanish, the app default) so assertions exercise
@@ -27,13 +27,13 @@ const mockClearError = vi.fn()
 // Mutable state
 const mockLabworksState = {
   labworks: [] as Labwork[],
-  stats: null as LabworksStats | null,
+  stats: null as LabworkStats | null,
   total: 0,
   loading: false,
   error: null as string | null,
   filters: {
     isPaid: undefined as boolean | undefined,
-    isDelivered: undefined as boolean | undefined,
+    status: undefined as LabworkStatus | undefined,
     overdue: undefined as boolean | undefined,
     from: undefined as string | undefined,
     to: undefined as string | undefined,
@@ -76,7 +76,7 @@ vi.mock('@/hooks/usePermissions', () => ({
 
 // Mock LabworkCard component
 vi.mock('@/components/labworks/LabworkCard', () => ({
-  LabworkCard: ({ labwork, onEdit, onDelete, onRestore, onTogglePaid, onToggleDelivered }: any) => (
+  LabworkCard: ({ labwork, onEdit, onDelete, onRestore, onTogglePaid, onStatusChange }: any) => (
     <div data-testid={`labwork-card-${labwork.id}`}>
       <span>{labwork.lab}</span>
       <button onClick={() => onEdit(labwork)}>Editar</button>
@@ -85,7 +85,7 @@ vi.mock('@/components/labworks/LabworkCard', () => ({
         <button onClick={() => onRestore(labwork)}>Restaurar</button>
       )}
       <button onClick={() => onTogglePaid(labwork)}>Toggle Paid</button>
-      <button onClick={() => onToggleDelivered(labwork)}>Toggle Delivered</button>
+      <button onClick={() => onStatusChange(labwork, 'SENT')}>Change Status</button>
     </div>
   ),
 }))
@@ -221,7 +221,7 @@ describe('LabworksPage', () => {
     mockLabworksState.error = null
     mockLabworksState.filters = {
       isPaid: undefined,
-      isDelivered: undefined,
+      status: undefined,
       overdue: undefined,
       from: undefined,
       to: undefined,
@@ -318,7 +318,10 @@ describe('LabworksPage', () => {
       fireEvent.click(filterButton)
 
       expect(screen.getByText(/estado de pago/i)).toBeInTheDocument()
-      expect(screen.getByText(/estado de entrega/i)).toBeInTheDocument()
+      // Task #243: the delivery-status row was replaced by a 4-state
+      // lifecycle status row, labeled with the bare "Estado" key
+      // (labworks.status.label) rather than the old "Estado de Entrega".
+      expect(screen.getByText('Estado')).toBeInTheDocument()
     })
 
     it('should filter by paid status', () => {
@@ -332,21 +335,29 @@ describe('LabworksPage', () => {
       expect(mockSetFilters).toHaveBeenCalledWith({ isPaid: true })
     })
 
-    it('should filter by delivery status', () => {
+    it('filters by lifecycle status (task #243)', () => {
       renderLabworksPage()
 
       fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
 
-      const deliveredButton = screen.getByRole('button', { name: /^entregados$/i })
-      fireEvent.click(deliveredButton)
+      const receivedButton = screen.getByRole('button', { name: 'Recibido' })
+      fireEvent.click(receivedButton)
 
-      expect(mockSetFilters).toHaveBeenCalledWith({ isDelivered: true })
+      // toStrictEqual (not toHaveBeenCalledWith/toEqual): the latter treats
+      // an `undefined`-valued key as equivalent to an absent key, which would
+      // let a broken mutual-exclusion clause (that omits `overdue` entirely)
+      // pass this assertion trivially.
+      expect(mockSetFilters).toHaveBeenCalledTimes(1)
+      expect(mockSetFilters.mock.calls[0][0]).toStrictEqual({ status: 'RECEIVED', overdue: undefined })
     })
 
-    it('should clear the overdue filter when the delivery status filter is changed (mutually exclusive)', () => {
+    // Mutual exclusion is bidirectional: picking a status clears `overdue`,
+    // and activating `overdue` clears `status`. Asserting only one direction
+    // would let a break that merely clears everything pass trivially.
+    it('clears the overdue filter when a lifecycle status filter is selected (mutually exclusive)', () => {
       mockLabworksState.filters = {
         isPaid: undefined,
-        isDelivered: undefined,
+        status: undefined,
         overdue: true,
         from: undefined,
         to: undefined,
@@ -355,16 +366,17 @@ describe('LabworksPage', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
 
-      const deliveredButton = screen.getByRole('button', { name: /^entregados$/i })
-      fireEvent.click(deliveredButton)
+      const pendingButton = screen.getByRole('button', { name: 'Pendiente' })
+      fireEvent.click(pendingButton)
 
-      expect(mockSetFilters).toHaveBeenCalledWith({ isDelivered: true, overdue: undefined })
+      expect(mockSetFilters).toHaveBeenCalledTimes(1)
+      expect(mockSetFilters.mock.calls[0][0]).toStrictEqual({ status: 'PENDING', overdue: undefined })
     })
 
-    it('should activate the overdue filter and clear the delivery status filter when "Atrasados" is clicked', () => {
+    it('should activate the overdue filter and clear the status filter when "Atrasados" is clicked', () => {
       mockLabworksState.filters = {
         isPaid: undefined,
-        isDelivered: true,
+        status: 'SENT',
         overdue: undefined,
         from: undefined,
         to: undefined,
@@ -376,13 +388,14 @@ describe('LabworksPage', () => {
       const overdueButton = screen.getByRole('button', { name: 'Atrasado' })
       fireEvent.click(overdueButton)
 
-      expect(mockSetFilters).toHaveBeenCalledWith({ overdue: true, isDelivered: undefined })
+      expect(mockSetFilters).toHaveBeenCalledTimes(1)
+      expect(mockSetFilters.mock.calls[0][0]).toStrictEqual({ overdue: true, status: undefined })
     })
 
     it('should toggle the overdue filter off when "Atrasados" is clicked while already active', () => {
       mockLabworksState.filters = {
         isPaid: undefined,
-        isDelivered: undefined,
+        status: undefined,
         overdue: true,
         from: undefined,
         to: undefined,
@@ -394,14 +407,31 @@ describe('LabworksPage', () => {
       const overdueButton = screen.getByRole('button', { name: 'Atrasado' })
       fireEvent.click(overdueButton)
 
-      expect(mockSetFilters).toHaveBeenCalledWith({ overdue: undefined, isDelivered: undefined })
+      expect(mockSetFilters).toHaveBeenCalledTimes(1)
+      expect(mockSetFilters.mock.calls[0][0]).toStrictEqual({ overdue: undefined, status: undefined })
     })
 
     it('should highlight the "Filtros" button and count as an active filter when only overdue is set', () => {
       mockLabworksState.filters = {
         isPaid: undefined,
-        isDelivered: undefined,
+        status: undefined,
         overdue: true,
+        from: undefined,
+        to: undefined,
+      }
+      mockLabworksState.labworks = []
+      renderLabworksPage()
+
+      const filterButton = screen.getByRole('button', { name: /filtros/i })
+      expect(filterButton.className).toMatch(/bg-blue-50/)
+      expect(screen.getByText(/no se encontraron trabajos con los filtros aplicados/i)).toBeInTheDocument()
+    })
+
+    it('should highlight the "Filtros" button and count as an active filter when only a lifecycle status is set (task #243)', () => {
+      mockLabworksState.filters = {
+        isPaid: undefined,
+        status: 'SENT',
+        overdue: undefined,
         from: undefined,
         to: undefined,
       }
@@ -457,7 +487,7 @@ describe('LabworksPage', () => {
     })
 
     it('should clear the "from" date filter when the input is emptied', () => {
-      mockLabworksState.filters = { isPaid: undefined, isDelivered: undefined, overdue: undefined, from: '2024-01-01', to: undefined }
+      mockLabworksState.filters = { isPaid: undefined, status: undefined, overdue: undefined, from: '2024-01-01', to: undefined }
       renderLabworksPage()
 
       fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
@@ -470,7 +500,7 @@ describe('LabworksPage', () => {
     })
 
     it('should clear the "to" date filter when the input is emptied', () => {
-      mockLabworksState.filters = { isPaid: undefined, isDelivered: undefined, overdue: undefined, from: undefined, to: '2024-01-31' }
+      mockLabworksState.filters = { isPaid: undefined, status: undefined, overdue: undefined, from: undefined, to: '2024-01-31' }
       renderLabworksPage()
 
       fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
@@ -482,8 +512,8 @@ describe('LabworksPage', () => {
       expect(mockSetFilters).toHaveBeenCalledWith({ to: undefined })
     })
 
-    it('should combine date range filter with existing isPaid/isDelivered filters without clobbering them', () => {
-      mockLabworksState.filters = { isPaid: true, isDelivered: false, overdue: undefined, from: undefined, to: undefined }
+    it('should combine date range filter with existing isPaid/status filters without clobbering them', () => {
+      mockLabworksState.filters = { isPaid: true, status: 'PENDING', overdue: undefined, from: undefined, to: undefined }
       renderLabworksPage()
 
       fireEvent.click(screen.getByRole('button', { name: /filtros/i }))
@@ -492,19 +522,19 @@ describe('LabworksPage', () => {
       fireEvent.change(fromInput, { target: { value: '2024-01-01' } })
 
       // setFilters is called with only the changed key; the store itself
-      // is responsible for merging it with the pre-existing isPaid/isDelivered
+      // is responsible for merging it with the pre-existing isPaid/status
       // state (mirrored by mockSetFilters below since we mock the store).
       expect(mockSetFilters).toHaveBeenCalledWith({ from: '2024-01-01' })
       expect(mockSetFilters).not.toHaveBeenCalledWith(
         expect.objectContaining({ isPaid: expect.anything() })
       )
       expect(mockSetFilters).not.toHaveBeenCalledWith(
-        expect.objectContaining({ isDelivered: expect.anything() })
+        expect.objectContaining({ status: expect.anything() })
       )
     })
 
     it('should highlight the "Filtros" button and show filtered empty-state copy when only a date range is active', () => {
-      mockLabworksState.filters = { isPaid: undefined, isDelivered: undefined, overdue: undefined, from: '2024-01-01', to: undefined }
+      mockLabworksState.filters = { isPaid: undefined, status: undefined, overdue: undefined, from: '2024-01-01', to: undefined }
       mockLabworksState.labworks = []
       renderLabworksPage()
 
@@ -564,7 +594,7 @@ describe('LabworksPage', () => {
 
     it('calls exportLabworks with the current filters and search query when clicked', async () => {
       vi.useRealTimers()
-      mockLabworksState.filters = { isPaid: true, isDelivered: undefined, overdue: undefined, from: '2024-01-01', to: undefined }
+      mockLabworksState.filters = { isPaid: true, status: undefined, overdue: undefined, from: '2024-01-01', to: undefined }
       mockExportLabworks.mockResolvedValue(undefined)
       renderLabworksPage()
 
@@ -579,7 +609,7 @@ describe('LabworksPage', () => {
 
       expect(mockExportLabworks).toHaveBeenCalledWith({
         isPaid: true,
-        isDelivered: undefined,
+        status: undefined,
         overdue: undefined,
         from: '2024-01-01',
         to: undefined,
@@ -753,20 +783,20 @@ describe('LabworksPage', () => {
     })
   })
 
-  describe('toggle delivered', () => {
-    it('should call updateLabwork with isDelivered toggle', async () => {
+  describe('status change (task #243)', () => {
+    it('should call updateLabwork with the new lifecycle status', async () => {
       vi.useRealTimers()
       mockLabworksState.labworks = [mockLabwork1]
       mockUpdateLabwork.mockResolvedValue(undefined)
       renderLabworksPage()
 
-      const toggleButton = screen.getByRole('button', { name: /toggle delivered/i })
+      const changeStatusButton = screen.getByRole('button', { name: /change status/i })
       await act(async () => {
-        fireEvent.click(toggleButton)
+        fireEvent.click(changeStatusButton)
         await new Promise(resolve => setTimeout(resolve, 50))
       })
 
-      expect(mockUpdateLabwork).toHaveBeenCalledWith('1', { isDelivered: true })
+      expect(mockUpdateLabwork).toHaveBeenCalledWith('1', { status: 'SENT' })
 
       vi.useFakeTimers()
     })

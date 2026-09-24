@@ -259,7 +259,7 @@ describe('labworks.store', () => {
       expect(getLabworkStats).toHaveBeenCalled()
     })
 
-    it('should not refresh stats when isPaid/isDelivered are not changed', async () => {
+    it('should not refresh stats when isPaid/isDelivered/status are not changed', async () => {
       useLabworksStore.setState({ labworks: [mockLabwork] })
       ;(apiUpdateLabwork as Mock).mockResolvedValue({
         data: { ...mockLabwork, price: 350 },
@@ -268,6 +268,20 @@ describe('labworks.store', () => {
       await useLabworksStore.getState().updateLabwork('labwork-123', { price: 350 })
 
       expect(getLabworkStats).not.toHaveBeenCalled()
+    })
+
+    // Task #243-B: the lifecycle `status` field is a third trigger for the
+    // stats refresh, alongside the pre-existing isPaid/isDelivered triggers.
+    it('should refresh stats when status changes', async () => {
+      useLabworksStore.setState({ labworks: [mockLabwork] })
+      ;(apiUpdateLabwork as Mock).mockResolvedValue({
+        data: { ...mockLabwork, status: 'RECEIVED' },
+      })
+      ;(getLabworkStats as Mock).mockResolvedValue({ data: mockStats })
+
+      await useLabworksStore.getState().updateLabwork('labwork-123', { status: 'RECEIVED' })
+
+      expect(getLabworkStats).toHaveBeenCalled()
     })
   })
 

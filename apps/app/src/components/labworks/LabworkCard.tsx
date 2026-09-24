@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Permission, AttachmentModule } from '@dental/shared'
-import type { Labwork } from '@/lib/labwork-api'
+import type { Labwork, LabworkStatus } from '@/lib/labwork-api'
 import { getLabworkStatusBadge, formatLabworkDoctors } from '@/lib/labwork-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAuthStore } from '@/stores/auth.store'
@@ -36,7 +36,7 @@ interface LabworkCardProps {
   onDelete: (labwork: Labwork) => void
   onRestore?: (labwork: Labwork) => void
   onTogglePaid?: (labwork: Labwork) => void
-  onToggleDelivered?: (labwork: Labwork) => void
+  onStatusChange?: (labwork: Labwork, status: LabworkStatus) => void
 }
 
 export function LabworkCard({
@@ -45,7 +45,7 @@ export function LabworkCard({
   onDelete,
   onRestore,
   onTogglePaid,
-  onToggleDelivered,
+  onStatusChange,
 }: LabworkCardProps) {
   const { t } = useTranslation()
   const { can } = usePermissions()
@@ -121,7 +121,7 @@ export function LabworkCard({
                     : 'bg-gray-100 text-gray-800'
               }`}
           >
-            {statusBadge.label}
+            {t(statusBadge.labelKey)}
           </span>
         </div>
 
@@ -174,17 +174,20 @@ export function LabworkCard({
             {labwork.isPaid ? t('payment.paid') : t('payment.pending')}
           </button>
 
-          <button
-            onClick={() => onToggleDelivered?.(labwork)}
-            disabled={isDeleted || !can(Permission.LABWORKS_UPDATE)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${labwork.isDelivered
-                ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              } ${isDeleted || !can(Permission.LABWORKS_UPDATE) ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
+          <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-600">
             <Package className="h-4 w-4" />
-            {labwork.isDelivered ? t('labworks.status.delivered') : t('labworks.notDelivered')}
-          </button>
+            <select
+              value={labwork.status}
+              onChange={(e) => onStatusChange?.(labwork, e.target.value as LabworkStatus)}
+              disabled={isDeleted || !can(Permission.LABWORKS_UPDATE)}
+              className="bg-transparent text-sm font-medium text-gray-700 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="PENDING">{t('labworks.status.pending')}</option>
+              <option value="SENT">{t('labworks.status.sent')}</option>
+              <option value="IN_PROGRESS">{t('labworks.status.inProgress')}</option>
+              <option value="RECEIVED">{t('labworks.status.received')}</option>
+            </select>
+          </label>
         </div>
 
         {/* Notes */}

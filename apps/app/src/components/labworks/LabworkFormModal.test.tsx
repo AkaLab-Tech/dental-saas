@@ -117,6 +117,7 @@ function makeLabwork(overrides: Partial<Labwork> = {}): Labwork {
     price: 100,
     isPaid: false,
     isDelivered: false,
+    status: 'PENDING',
     doctorIds: [],
     doctors: [],
     isActive: true,
@@ -132,6 +133,10 @@ function makeLabwork(overrides: Partial<Labwork> = {}): Labwork {
     },
     ...overrides,
   }
+}
+
+function getStatusSelect() {
+  return document.getElementById('status') as HTMLSelectElement
 }
 
 async function fillRequiredFieldsAndSubmit(labValue: string, { onSubmit }: { onSubmit: ReturnType<typeof vi.fn> }) {
@@ -433,5 +438,58 @@ describe('LabworkFormModal — doctor assignment (#242)', () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalled())
     expect(onSubmit.mock.calls[0][0].doctorIds).toEqual(expect.arrayContaining(['doc-1', 'doc-2']))
     expect(onSubmit.mock.calls[0][0].doctorIds).toHaveLength(2)
+  })
+})
+
+describe('LabworkFormModal — lifecycle status (task #243-B)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getLabNamesMock.mockResolvedValue({ success: true, data: [] })
+    getAppointmentsByPatientMock.mockResolvedValue([])
+    getDoctorsMock.mockResolvedValue([])
+  })
+
+  it('defaults the status select to PENDING when creating a new labwork', async () => {
+    renderModal()
+    await waitFor(() => expect(getLabNamesMock).toHaveBeenCalledTimes(1))
+
+    expect(getStatusSelect().value).toBe('PENDING')
+  })
+
+  it('sends status: "PENDING" (not isDelivered) in the create payload when the status field is left untouched', async () => {
+    const { onSubmit } = renderModal()
+
+    await fillRequiredFieldsAndSubmit('Lab Dental Central', { onSubmit })
+
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ status: 'PENDING' })
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('isDelivered')
+  })
+
+  it('pre-selects the labwork\'s current status when editing', async () => {
+    renderModal({ labwork: makeLabwork({ status: 'IN_PROGRESS' }) })
+
+    await waitFor(() => expect(getStatusSelect().value).toBe('IN_PROGRESS'))
+  })
+
+  it('sends the newly selected status (and not isDelivered) when the user changes the status select and saves', async () => {
+    const { onSubmit } = renderModal({ labwork: makeLabwork({ status: 'PENDING' }) })
+
+    await waitFor(() => expect(getStatusSelect().value).toBe('PENDING'))
+    fireEvent.change(getStatusSelect(), { target: { value: 'RECEIVED' } })
+
+    fireEvent.change(screen.getByLabelText(/Precio/), { target: { value: '100' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar Cambios' }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ status: 'RECEIVED' })
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('isDelivered')
+  })
+
+  it('offers exactly the four lifecycle statuses as options', async () => {
+    renderModal()
+    await waitFor(() => expect(getLabNamesMock).toHaveBeenCalledTimes(1))
+
+    const values = Array.from(getStatusSelect().options).map((o) => o.value)
+    expect(values).toEqual(['PENDING', 'SENT', 'IN_PROGRESS', 'RECEIVED'])
   })
 })
