@@ -701,7 +701,7 @@
     "noLabworks": "No hay trabajos de laboratorio",
     "status": {
       "label": "Estado",
-      "pending": "Pendiente",
+      "pending": "Pendiente de envío",
       "sent": "Enviado",
       "inProgress": "En Progreso",
       "received": "Recibido",
