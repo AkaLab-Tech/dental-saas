@@ -64,6 +64,16 @@ export const UserRole = {
 export type UserRole = (typeof UserRole)[keyof typeof UserRole]
 
 
+export const LabworkStatus = {
+  PENDING: 'PENDING',
+  SENT: 'SENT',
+  IN_PROGRESS: 'IN_PROGRESS',
+  RECEIVED: 'RECEIVED'
+} as const
+
+export type LabworkStatus = (typeof LabworkStatus)[keyof typeof LabworkStatus]
+
+
 export const PatientPaymentKind = {
   APPOINTMENT: 'APPOINTMENT',
   ADVANCE: 'ADVANCE'

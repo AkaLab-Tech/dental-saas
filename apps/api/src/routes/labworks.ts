@@ -5,6 +5,7 @@ import { requireMinRole, hasMinRole } from '../middleware/auth.js'
 import { requireOwnership } from '../middleware/ownership.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { Permission } from '@dental/shared'
+import { LabworkStatus } from '@dental/database'
 import {
   createLabwork,
   getLabworkById,
@@ -33,6 +34,7 @@ const createLabworkSchema = z.object({
   price: z.number().min(0).optional(),
   isPaid: z.boolean().optional(),
   isDelivered: z.boolean().optional(),
+  status: z.nativeEnum(LabworkStatus).optional(),
   doctorIds: z.array(z.string()).optional(),
 })
 
@@ -47,6 +49,7 @@ const updateLabworkSchema = z.object({
   price: z.number().min(0).optional(),
   isPaid: z.boolean().optional(),
   isDelivered: z.boolean().optional(),
+  status: z.nativeEnum(LabworkStatus).optional(),
   doctorIds: z.array(z.string()).optional(),
 })
 
@@ -58,6 +61,7 @@ const errorStatusMap: Record<string, number> = {
   INVALID_PATIENT: 400,
   INVALID_APPOINTMENT: 400,
   DOCTOR_NOT_FOUND: 400,
+  INVALID_STATUS: 400,
 }
 
 // Error code to message mapping
@@ -68,6 +72,27 @@ const errorMessageMap: Record<string, string> = {
   INVALID_PATIENT: 'Patient not found or does not belong to this clinic',
   INVALID_APPOINTMENT: 'Appointment not found or does not belong to this patient',
   DOCTOR_NOT_FOUND: 'One or more doctors do not belong to this clinic',
+  INVALID_STATUS: 'status and isDelivered are contradictory',
+}
+
+/**
+ * Parse a comma-separated `status` query param into one or more
+ * LabworkStatus values. Returns `undefined` when the param is absent, and
+ * `null` when present but containing an unknown value (caller responds 400).
+ */
+function parseStatusParam(raw: unknown): LabworkStatus | LabworkStatus[] | null | undefined {
+  if (raw === undefined) {
+    return undefined
+  }
+
+  const values = String(raw).split(',').map((v) => v.trim()).filter(Boolean)
+  const validValues = Object.values(LabworkStatus) as string[]
+  if (values.length === 0 || !values.every((v) => validValues.includes(v))) {
+    return null
+  }
+
+  const statuses = values as LabworkStatus[]
+  return statuses.length === 1 ? statuses[0] : statuses
 }
 
 /**
@@ -77,7 +102,13 @@ const errorMessageMap: Record<string, string> = {
 labworksRouter.get('/', requireMinRole('STAFF'), async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId!
-    const { limit, offset, patientId, isPaid, isDelivered, overdue, from, to, includeInactive, search } = req.query
+    const { limit, offset, patientId, isPaid, isDelivered, status, overdue, from, to, includeInactive, search } = req.query
+
+    const parsedStatus = parseStatusParam(status)
+    if (parsedStatus === null) {
+      res.status(400).json({ success: false, error: 'Invalid status filter' })
+      return
+    }
 
     const result = await listLabworks(tenantId, {
       limit: limit ? Math.min(parseInt(String(limit), 10), 100) : undefined,
@@ -85,6 +116,7 @@ labworksRouter.get('/', requireMinRole('STAFF'), async (req, res, next) => {
       patientId: patientId ? String(patientId) : undefined,
       isPaid: isPaid !== undefined ? isPaid === 'true' : undefined,
       isDelivered: isDelivered !== undefined ? isDelivered === 'true' : undefined,
+      status: parsedStatus,
       overdue: overdue !== undefined ? overdue === 'true' : undefined,
       from: from ? new Date(String(from)) : undefined,
       to: to ? new Date(String(to)) : undefined,
@@ -150,12 +182,19 @@ labworksRouter.get('/labs', requireMinRole('STAFF'), async (req, res, next) => {
 labworksRouter.get('/export', requirePermission(Permission.DATA_EXPORT), async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId!
-    const { patientId, isPaid, isDelivered, overdue, from, to, search } = req.query
+    const { patientId, isPaid, isDelivered, status, overdue, from, to, search } = req.query
+
+    const parsedStatus = parseStatusParam(status)
+    if (parsedStatus === null) {
+      res.status(400).json({ success: false, error: 'Invalid status filter' })
+      return
+    }
 
     const csv = await exportLabworksCsv(tenantId, {
       patientId: patientId ? String(patientId) : undefined,
       isPaid: isPaid !== undefined ? isPaid === 'true' : undefined,
       isDelivered: isDelivered !== undefined ? isDelivered === 'true' : undefined,
+      status: parsedStatus,
       overdue: overdue !== undefined ? overdue === 'true' : undefined,
       from: from ? new Date(String(from)) : undefined,
       to: to ? new Date(String(to)) : undefined,

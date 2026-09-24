@@ -47,6 +47,7 @@ export type LabworkMinAggregateOutputType = {
   price: runtime.Decimal | null
   isPaid: boolean | null
   isDelivered: boolean | null
+  status: $Enums.LabworkStatus | null
   createdBy: string | null
   isActive: boolean | null
   createdAt: Date | null
@@ -66,6 +67,7 @@ export type LabworkMaxAggregateOutputType = {
   price: runtime.Decimal | null
   isPaid: boolean | null
   isDelivered: boolean | null
+  status: $Enums.LabworkStatus | null
   createdBy: string | null
   isActive: boolean | null
   createdAt: Date | null
@@ -85,6 +87,7 @@ export type LabworkCountAggregateOutputType = {
   price: number
   isPaid: number
   isDelivered: number
+  status: number
   doctorIds: number
   createdBy: number
   isActive: number
@@ -115,6 +118,7 @@ export type LabworkMinAggregateInputType = {
   price?: true
   isPaid?: true
   isDelivered?: true
+  status?: true
   createdBy?: true
   isActive?: true
   createdAt?: true
@@ -134,6 +138,7 @@ export type LabworkMaxAggregateInputType = {
   price?: true
   isPaid?: true
   isDelivered?: true
+  status?: true
   createdBy?: true
   isActive?: true
   createdAt?: true
@@ -153,6 +158,7 @@ export type LabworkCountAggregateInputType = {
   price?: true
   isPaid?: true
   isDelivered?: true
+  status?: true
   doctorIds?: true
   createdBy?: true
   isActive?: true
@@ -260,6 +266,7 @@ export type LabworkGroupByOutputType = {
   price: runtime.Decimal
   isPaid: boolean
   isDelivered: boolean
+  status: $Enums.LabworkStatus
   doctorIds: runtime.JsonValue
   createdBy: string | null
   isActive: boolean
@@ -303,6 +310,7 @@ export type LabworkWhereInput = {
   price?: Prisma.DecimalFilter<"Labwork"> | runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: Prisma.BoolFilter<"Labwork"> | boolean
   isDelivered?: Prisma.BoolFilter<"Labwork"> | boolean
+  status?: Prisma.EnumLabworkStatusFilter<"Labwork"> | $Enums.LabworkStatus
   doctorIds?: Prisma.JsonFilter<"Labwork">
   createdBy?: Prisma.StringNullableFilter<"Labwork"> | string | null
   isActive?: Prisma.BoolFilter<"Labwork"> | boolean
@@ -326,6 +334,7 @@ export type LabworkOrderByWithRelationInput = {
   price?: Prisma.SortOrder
   isPaid?: Prisma.SortOrder
   isDelivered?: Prisma.SortOrder
+  status?: Prisma.SortOrder
   doctorIds?: Prisma.SortOrder
   createdBy?: Prisma.SortOrderInput | Prisma.SortOrder
   isActive?: Prisma.SortOrder
@@ -352,6 +361,7 @@ export type LabworkWhereUniqueInput = Prisma.AtLeast<{
   price?: Prisma.DecimalFilter<"Labwork"> | runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: Prisma.BoolFilter<"Labwork"> | boolean
   isDelivered?: Prisma.BoolFilter<"Labwork"> | boolean
+  status?: Prisma.EnumLabworkStatusFilter<"Labwork"> | $Enums.LabworkStatus
   doctorIds?: Prisma.JsonFilter<"Labwork">
   createdBy?: Prisma.StringNullableFilter<"Labwork"> | string | null
   isActive?: Prisma.BoolFilter<"Labwork"> | boolean
@@ -375,6 +385,7 @@ export type LabworkOrderByWithAggregationInput = {
   price?: Prisma.SortOrder
   isPaid?: Prisma.SortOrder
   isDelivered?: Prisma.SortOrder
+  status?: Prisma.SortOrder
   doctorIds?: Prisma.SortOrder
   createdBy?: Prisma.SortOrderInput | Prisma.SortOrder
   isActive?: Prisma.SortOrder
@@ -403,6 +414,7 @@ export type LabworkScalarWhereWithAggregatesInput = {
   price?: Prisma.DecimalWithAggregatesFilter<"Labwork"> | runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: Prisma.BoolWithAggregatesFilter<"Labwork"> | boolean
   isDelivered?: Prisma.BoolWithAggregatesFilter<"Labwork"> | boolean
+  status?: Prisma.EnumLabworkStatusWithAggregatesFilter<"Labwork"> | $Enums.LabworkStatus
   doctorIds?: Prisma.JsonWithAggregatesFilter<"Labwork">
   createdBy?: Prisma.StringNullableWithAggregatesFilter<"Labwork"> | string | null
   isActive?: Prisma.BoolWithAggregatesFilter<"Labwork"> | boolean
@@ -420,6 +432,7 @@ export type LabworkCreateInput = {
   price?: runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: boolean
   isDelivered?: boolean
+  status?: $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: string | null
   isActive?: boolean
@@ -443,6 +456,7 @@ export type LabworkUncheckedCreateInput = {
   price?: runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: boolean
   isDelivered?: boolean
+  status?: $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: string | null
   isActive?: boolean
@@ -460,6 +474,7 @@ export type LabworkUpdateInput = {
   price?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  status?: Prisma.EnumLabworkStatusFieldUpdateOperationsInput | $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -483,6 +498,7 @@ export type LabworkUncheckedUpdateInput = {
   price?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  status?: Prisma.EnumLabworkStatusFieldUpdateOperationsInput | $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -503,6 +519,7 @@ export type LabworkCreateManyInput = {
   price?: runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: boolean
   isDelivered?: boolean
+  status?: $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: string | null
   isActive?: boolean
@@ -520,6 +537,7 @@ export type LabworkUpdateManyMutationInput = {
   price?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  status?: Prisma.EnumLabworkStatusFieldUpdateOperationsInput | $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -540,6 +558,7 @@ export type LabworkUncheckedUpdateManyInput = {
   price?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  status?: Prisma.EnumLabworkStatusFieldUpdateOperationsInput | $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -570,6 +589,7 @@ export type LabworkCountOrderByAggregateInput = {
   price?: Prisma.SortOrder
   isPaid?: Prisma.SortOrder
   isDelivered?: Prisma.SortOrder
+  status?: Prisma.SortOrder
   doctorIds?: Prisma.SortOrder
   createdBy?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
@@ -594,6 +614,7 @@ export type LabworkMaxOrderByAggregateInput = {
   price?: Prisma.SortOrder
   isPaid?: Prisma.SortOrder
   isDelivered?: Prisma.SortOrder
+  status?: Prisma.SortOrder
   createdBy?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -613,6 +634,7 @@ export type LabworkMinOrderByAggregateInput = {
   price?: Prisma.SortOrder
   isPaid?: Prisma.SortOrder
   isDelivered?: Prisma.SortOrder
+  status?: Prisma.SortOrder
   createdBy?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -749,6 +771,10 @@ export type LabworkUncheckedUpdateManyWithoutAppointmentNestedInput = {
   deleteMany?: Prisma.LabworkScalarWhereInput | Prisma.LabworkScalarWhereInput[]
 }
 
+export type EnumLabworkStatusFieldUpdateOperationsInput = {
+  set?: $Enums.LabworkStatus
+}
+
 export type LabworkCreateWithoutTenantInput = {
   id?: string
   priceIncludedInAppointment?: boolean
@@ -759,6 +785,7 @@ export type LabworkCreateWithoutTenantInput = {
   price?: runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: boolean
   isDelivered?: boolean
+  status?: $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: string | null
   isActive?: boolean
@@ -780,6 +807,7 @@ export type LabworkUncheckedCreateWithoutTenantInput = {
   price?: runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: boolean
   isDelivered?: boolean
+  status?: $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: string | null
   isActive?: boolean
@@ -829,6 +857,7 @@ export type LabworkScalarWhereInput = {
   price?: Prisma.DecimalFilter<"Labwork"> | runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: Prisma.BoolFilter<"Labwork"> | boolean
   isDelivered?: Prisma.BoolFilter<"Labwork"> | boolean
+  status?: Prisma.EnumLabworkStatusFilter<"Labwork"> | $Enums.LabworkStatus
   doctorIds?: Prisma.JsonFilter<"Labwork">
   createdBy?: Prisma.StringNullableFilter<"Labwork"> | string | null
   isActive?: Prisma.BoolFilter<"Labwork"> | boolean
@@ -846,6 +875,7 @@ export type LabworkCreateWithoutPatientInput = {
   price?: runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: boolean
   isDelivered?: boolean
+  status?: $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: string | null
   isActive?: boolean
@@ -867,6 +897,7 @@ export type LabworkUncheckedCreateWithoutPatientInput = {
   price?: runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: boolean
   isDelivered?: boolean
+  status?: $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: string | null
   isActive?: boolean
@@ -910,6 +941,7 @@ export type LabworkCreateWithoutAppointmentInput = {
   price?: runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: boolean
   isDelivered?: boolean
+  status?: $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: string | null
   isActive?: boolean
@@ -931,6 +963,7 @@ export type LabworkUncheckedCreateWithoutAppointmentInput = {
   price?: runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: boolean
   isDelivered?: boolean
+  status?: $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: string | null
   isActive?: boolean
@@ -976,6 +1009,7 @@ export type LabworkCreateManyTenantInput = {
   price?: runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: boolean
   isDelivered?: boolean
+  status?: $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: string | null
   isActive?: boolean
@@ -993,6 +1027,7 @@ export type LabworkUpdateWithoutTenantInput = {
   price?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  status?: Prisma.EnumLabworkStatusFieldUpdateOperationsInput | $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1014,6 +1049,7 @@ export type LabworkUncheckedUpdateWithoutTenantInput = {
   price?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  status?: Prisma.EnumLabworkStatusFieldUpdateOperationsInput | $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1033,6 +1069,7 @@ export type LabworkUncheckedUpdateManyWithoutTenantInput = {
   price?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  status?: Prisma.EnumLabworkStatusFieldUpdateOperationsInput | $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1052,6 +1089,7 @@ export type LabworkCreateManyPatientInput = {
   price?: runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: boolean
   isDelivered?: boolean
+  status?: $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: string | null
   isActive?: boolean
@@ -1069,6 +1107,7 @@ export type LabworkUpdateWithoutPatientInput = {
   price?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  status?: Prisma.EnumLabworkStatusFieldUpdateOperationsInput | $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1090,6 +1129,7 @@ export type LabworkUncheckedUpdateWithoutPatientInput = {
   price?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  status?: Prisma.EnumLabworkStatusFieldUpdateOperationsInput | $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1109,6 +1149,7 @@ export type LabworkUncheckedUpdateManyWithoutPatientInput = {
   price?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  status?: Prisma.EnumLabworkStatusFieldUpdateOperationsInput | $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1128,6 +1169,7 @@ export type LabworkCreateManyAppointmentInput = {
   price?: runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: boolean
   isDelivered?: boolean
+  status?: $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: string | null
   isActive?: boolean
@@ -1145,6 +1187,7 @@ export type LabworkUpdateWithoutAppointmentInput = {
   price?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  status?: Prisma.EnumLabworkStatusFieldUpdateOperationsInput | $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1166,6 +1209,7 @@ export type LabworkUncheckedUpdateWithoutAppointmentInput = {
   price?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  status?: Prisma.EnumLabworkStatusFieldUpdateOperationsInput | $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1185,6 +1229,7 @@ export type LabworkUncheckedUpdateManyWithoutAppointmentInput = {
   price?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isDelivered?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  status?: Prisma.EnumLabworkStatusFieldUpdateOperationsInput | $Enums.LabworkStatus
   doctorIds?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1207,6 +1252,7 @@ export type LabworkSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   price?: boolean
   isPaid?: boolean
   isDelivered?: boolean
+  status?: boolean
   doctorIds?: boolean
   createdBy?: boolean
   isActive?: boolean
@@ -1230,6 +1276,7 @@ export type LabworkSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   price?: boolean
   isPaid?: boolean
   isDelivered?: boolean
+  status?: boolean
   doctorIds?: boolean
   createdBy?: boolean
   isActive?: boolean
@@ -1253,6 +1300,7 @@ export type LabworkSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   price?: boolean
   isPaid?: boolean
   isDelivered?: boolean
+  status?: boolean
   doctorIds?: boolean
   createdBy?: boolean
   isActive?: boolean
@@ -1276,6 +1324,7 @@ export type LabworkSelectScalar = {
   price?: boolean
   isPaid?: boolean
   isDelivered?: boolean
+  status?: boolean
   doctorIds?: boolean
   createdBy?: boolean
   isActive?: boolean
@@ -1283,7 +1332,7 @@ export type LabworkSelectScalar = {
   updatedAt?: boolean
 }
 
-export type LabworkOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "patientId" | "appointmentId" | "priceIncludedInAppointment" | "lab" | "phoneNumber" | "date" | "note" | "price" | "isPaid" | "isDelivered" | "doctorIds" | "createdBy" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["labwork"]>
+export type LabworkOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "patientId" | "appointmentId" | "priceIncludedInAppointment" | "lab" | "phoneNumber" | "date" | "note" | "price" | "isPaid" | "isDelivered" | "status" | "doctorIds" | "createdBy" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["labwork"]>
 export type LabworkInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.Labwork$patientArgs<ExtArgs>
@@ -1350,6 +1399,13 @@ export type $LabworkPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
      * Whether the labwork has been delivered
      */
     isDelivered: boolean
+    /**
+     * Lifecycle status, kept in lockstep with isDelivered by the service layer
+     * (isDelivered === (status === RECEIVED) on every write). status is the
+     * source of truth; isDelivered stays so overdue/stats/dashboard/PDF/export
+     * keep working unmodified.
+     */
+    status: $Enums.LabworkStatus
     /**
      * IDs of doctors associated with this labwork (stored as JSON array)
      */
@@ -1799,6 +1855,7 @@ export interface LabworkFieldRefs {
   readonly price: Prisma.FieldRef<"Labwork", 'Decimal'>
   readonly isPaid: Prisma.FieldRef<"Labwork", 'Boolean'>
   readonly isDelivered: Prisma.FieldRef<"Labwork", 'Boolean'>
+  readonly status: Prisma.FieldRef<"Labwork", 'LabworkStatus'>
   readonly doctorIds: Prisma.FieldRef<"Labwork", 'Json'>
   readonly createdBy: Prisma.FieldRef<"Labwork", 'String'>
   readonly isActive: Prisma.FieldRef<"Labwork", 'Boolean'>

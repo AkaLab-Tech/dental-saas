@@ -443,6 +443,23 @@ export type EnumAppointmentStatusWithAggregatesFilter<$PrismaModel = never> = {
   _max?: Prisma.NestedEnumAppointmentStatusFilter<$PrismaModel>
 }
 
+export type EnumLabworkStatusFilter<$PrismaModel = never> = {
+  equals?: $Enums.LabworkStatus | Prisma.EnumLabworkStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.LabworkStatus[] | Prisma.ListEnumLabworkStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.LabworkStatus[] | Prisma.ListEnumLabworkStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumLabworkStatusFilter<$PrismaModel> | $Enums.LabworkStatus
+}
+
+export type EnumLabworkStatusWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.LabworkStatus | Prisma.EnumLabworkStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.LabworkStatus[] | Prisma.ListEnumLabworkStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.LabworkStatus[] | Prisma.ListEnumLabworkStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumLabworkStatusWithAggregatesFilter<$PrismaModel> | $Enums.LabworkStatus
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumLabworkStatusFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumLabworkStatusFilter<$PrismaModel>
+}
+
 export type EnumPatientPaymentKindFilter<$PrismaModel = never> = {
   equals?: $Enums.PatientPaymentKind | Prisma.EnumPatientPaymentKindFieldRefInput<$PrismaModel>
   in?: $Enums.PatientPaymentKind[] | Prisma.ListEnumPatientPaymentKindFieldRefInput<$PrismaModel>
@@ -931,6 +948,23 @@ export type NestedEnumAppointmentStatusWithAggregatesFilter<$PrismaModel = never
   _count?: Prisma.NestedIntFilter<$PrismaModel>
   _min?: Prisma.NestedEnumAppointmentStatusFilter<$PrismaModel>
   _max?: Prisma.NestedEnumAppointmentStatusFilter<$PrismaModel>
+}
+
+export type NestedEnumLabworkStatusFilter<$PrismaModel = never> = {
+  equals?: $Enums.LabworkStatus | Prisma.EnumLabworkStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.LabworkStatus[] | Prisma.ListEnumLabworkStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.LabworkStatus[] | Prisma.ListEnumLabworkStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumLabworkStatusFilter<$PrismaModel> | $Enums.LabworkStatus
+}
+
+export type NestedEnumLabworkStatusWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.LabworkStatus | Prisma.EnumLabworkStatusFieldRefInput<$PrismaModel>
+  in?: $Enums.LabworkStatus[] | Prisma.ListEnumLabworkStatusFieldRefInput<$PrismaModel>
+  notIn?: $Enums.LabworkStatus[] | Prisma.ListEnumLabworkStatusFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumLabworkStatusWithAggregatesFilter<$PrismaModel> | $Enums.LabworkStatus
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumLabworkStatusFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumLabworkStatusFilter<$PrismaModel>
 }
 
 export type NestedEnumPatientPaymentKindFilter<$PrismaModel = never> = {

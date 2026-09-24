@@ -1,4 +1,4 @@
-import { prisma, Prisma } from '@dental/database'
+import { prisma, Prisma, LabworkStatus } from '@dental/database'
 import { logger } from '../utils/logger.js'
 
 // Fields to include in labwork responses
@@ -15,6 +15,7 @@ const LABWORK_SELECT = {
   price: true,
   isPaid: true,
   isDelivered: true,
+  status: true,
   doctorIds: true,
   isActive: true,
   createdBy: true,
@@ -57,6 +58,7 @@ export type SafeLabwork = {
   price: Prisma.Decimal
   isPaid: boolean
   isDelivered: boolean
+  status: LabworkStatus
   doctorIds: string[]
   doctors: DoctorSummary[]
   isActive: boolean
@@ -79,6 +81,7 @@ export type LabworkErrorCode =
   | 'INVALID_PATIENT'
   | 'INVALID_APPOINTMENT'
   | 'DOCTOR_NOT_FOUND'
+  | 'INVALID_STATUS'
 
 export interface CreateLabworkInput {
   patientId?: string
@@ -91,6 +94,7 @@ export interface CreateLabworkInput {
   price?: number
   isPaid?: boolean
   isDelivered?: boolean
+  status?: LabworkStatus
   doctorIds?: string[]
   createdBy?: string
 }
@@ -106,6 +110,7 @@ export interface UpdateLabworkInput {
   price?: number
   isPaid?: boolean
   isDelivered?: boolean
+  status?: LabworkStatus
   doctorIds?: string[]
 }
 
@@ -116,10 +121,59 @@ export interface ListLabworksOptions {
   patientId?: string
   isPaid?: boolean
   isDelivered?: boolean
+  status?: LabworkStatus | LabworkStatus[]
   overdue?: boolean
   from?: Date
   to?: Date
   search?: string
+}
+
+/**
+ * Result of resolving the lifecycle `status` + `isDelivered` pair for a
+ * write. Kept in lockstep: isDelivered === (status === 'RECEIVED').
+ */
+export type ResolveLifecycleResult =
+  | { success: true; status: LabworkStatus; isDelivered: boolean }
+  | { success: false; code: 'INVALID_STATUS' }
+
+/**
+ * Resolve the `status` + `isDelivered` pair to persist, keeping
+ * isDelivered === (status === 'RECEIVED') on every write (task #243).
+ *
+ * - `status` given: isDelivered is derived from it. If `isDelivered` was
+ *   also given and disagrees with that derivation, the pair is
+ *   contradictory -> INVALID_STATUS.
+ * - only `isDelivered` given: `true` -> RECEIVED. `false` -> keep `current`
+ *   unless `current` is RECEIVED (-> SENT) or there is no `current` at all,
+ *   i.e. a fresh row (-> PENDING, the schema default for new rows).
+ * - neither given: same outcome as `isDelivered: false` (fresh-row default,
+ *   or "leave it alone" when `current` already holds a non-RECEIVED status).
+ */
+export function resolveLifecycle(
+  input: { status?: LabworkStatus; isDelivered?: boolean },
+  current?: LabworkStatus
+): ResolveLifecycleResult {
+  if (input.status !== undefined) {
+    const impliedIsDelivered = input.status === LabworkStatus.RECEIVED
+    if (input.isDelivered !== undefined && input.isDelivered !== impliedIsDelivered) {
+      return { success: false, code: 'INVALID_STATUS' }
+    }
+    return { success: true, status: input.status, isDelivered: impliedIsDelivered }
+  }
+
+  if (input.isDelivered) {
+    return { success: true, status: LabworkStatus.RECEIVED, isDelivered: true }
+  }
+
+  if (current === undefined) {
+    return { success: true, status: LabworkStatus.PENDING, isDelivered: false }
+  }
+
+  return {
+    success: true,
+    status: current === LabworkStatus.RECEIVED ? LabworkStatus.SENT : current,
+    isDelivered: false,
+  }
 }
 
 /**
@@ -148,6 +202,7 @@ function transformLabwork(labwork: {
   price: Prisma.Decimal
   isPaid: boolean
   isDelivered: boolean
+  status: LabworkStatus
   doctorIds: Prisma.JsonValue
   isActive: boolean
   createdBy: string | null
@@ -314,6 +369,11 @@ export async function createLabwork(
   // priceIncludedInAppointment requires appointmentId
   const priceIncluded = input.appointmentId ? (input.priceIncludedInAppointment || false) : false
 
+  const lifecycle = resolveLifecycle({ status: input.status, isDelivered: input.isDelivered })
+  if (!lifecycle.success) {
+    return lifecycle
+  }
+
   const labwork = await prisma.labwork.create({
     data: {
       tenantId,
@@ -326,7 +386,8 @@ export async function createLabwork(
       note: input.note || null,
       price: input.price || 0,
       isPaid: priceIncluded ? true : (input.isPaid || false),
-      isDelivered: input.isDelivered || false,
+      isDelivered: lifecycle.isDelivered,
+      status: lifecycle.status,
       doctorIds: input.doctorIds || [],
       createdBy: input.createdBy,
     },
@@ -389,6 +450,9 @@ function buildLabworksWhere(
     ...(options?.isDelivered !== undefined
       ? { isDelivered: options.isDelivered }
       : options?.overdue && { isDelivered: false }),
+    ...(options?.status !== undefined && {
+      status: Array.isArray(options.status) ? { in: options.status } : options.status,
+    }),
     ...(dateFilter && { date: dateFilter }),
     ...(options?.search && {
       OR: [
@@ -513,7 +577,7 @@ export async function updateLabwork(
   // Check labwork exists
   const existing = await prisma.labwork.findFirst({
     where: { id: labworkId, tenantId },
-    select: { id: true, patientId: true, appointmentId: true },
+    select: { id: true, patientId: true, appointmentId: true, status: true },
   })
 
   if (!existing) {
@@ -551,6 +615,15 @@ export async function updateLabwork(
     ? (input.priceIncludedInAppointment ?? false)
     : false
 
+  let lifecycle: { status: LabworkStatus; isDelivered: boolean } | undefined
+  if (input.status !== undefined || input.isDelivered !== undefined) {
+    const resolved = resolveLifecycle({ status: input.status, isDelivered: input.isDelivered }, existing.status)
+    if (!resolved.success) {
+      return resolved
+    }
+    lifecycle = { status: resolved.status, isDelivered: resolved.isDelivered }
+  }
+
   const labwork = await prisma.labwork.update({
     where: { id: labworkId },
     data: {
@@ -565,7 +638,7 @@ export async function updateLabwork(
       ...(input.note !== undefined && { note: input.note }),
       ...(input.price !== undefined && { price: input.price }),
       ...(input.isPaid !== undefined && { isPaid: input.isPaid }),
-      ...(input.isDelivered !== undefined && { isDelivered: input.isDelivered }),
+      ...(lifecycle && { isDelivered: lifecycle.isDelivered, status: lifecycle.status }),
       ...(input.doctorIds && { doctorIds: input.doctorIds }),
     },
     select: {

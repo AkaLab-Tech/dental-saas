@@ -1218,6 +1218,87 @@ describe('Patient Payments Routes', () => {
     })
   })
 
+  // Task #243: `status` and `isPaid` are independent axes. FIFO payment
+  // recalculation (recalculatePaidStatus) only ever writes `isPaid` — it must
+  // never touch `status`. Conversely, changing `status` through the labwork
+  // routes must never touch `isPaid` (that column is owned by the payment
+  // FIFO machinery / the explicit isPaid field on create/update, not by
+  // resolveLifecycle).
+  describe('FIFO payment recalculation never changes labwork status; changing status never changes isPaid (#243)', () => {
+    it('recalculatePaidStatus flips isPaid via FIFO allocation but leaves an unrelated `status` value untouched', async () => {
+      const p = await prisma.patient.create({
+        data: { tenantId, firstName: 'LockstepFifo', lastName: 'Test' },
+      })
+
+      const createRes = await api()
+        .post('/api/labworks')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          patientId: p.id,
+          lab: 'Lockstep FIFO Lab',
+          date: '2025-08-01',
+          price: 100,
+          status: 'IN_PROGRESS',
+        })
+      const labworkId = createRes.body.data.id
+      expect(createRes.body.data.status).toBe('IN_PROGRESS')
+      expect(createRes.body.data.isPaid).toBe(false)
+
+      // Payment that fully covers the labwork's price triggers FIFO
+      // recalculation (createPayment -> recalculatePaidStatus) inside the
+      // payments route.
+      await api()
+        .post(`/api/patients/${p.id}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 100, date: '2025-08-15' })
+
+      const afterPayment = await prisma.labwork.findUnique({ where: { id: labworkId } })
+      expect(afterPayment?.isPaid).toBe(true)
+      // The FIFO write path (prisma.labwork.update({ data: { isPaid } })) does
+      // not include `status` in its data object — this is the guard.
+      expect(afterPayment?.status).toBe('IN_PROGRESS')
+    })
+
+    it('changing `status` via PUT never changes `isPaid`', async () => {
+      const p = await prisma.patient.create({
+        data: { tenantId, firstName: 'LockstepStatus', lastName: 'Test' },
+      })
+
+      const createRes = await api()
+        .post('/api/labworks')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          patientId: p.id,
+          lab: 'Lockstep Status Lab',
+          date: '2025-08-01',
+          price: 40,
+          isPaid: false,
+          status: 'PENDING',
+        })
+      const labworkId = createRes.body.data.id
+      expect(createRes.body.data.isPaid).toBe(false)
+
+      // Walk status through SENT and RECEIVED (isDelivered flips to true on
+      // RECEIVED) — isPaid must stay false throughout, since no payment was
+      // ever recorded.
+      const sentRes = await api()
+        .put(`/api/labworks/${labworkId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'SENT' })
+      expect(sentRes.status).toBe(200)
+      expect(sentRes.body.data.isPaid).toBe(false)
+
+      const receivedRes = await api()
+        .put(`/api/labworks/${labworkId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'RECEIVED' })
+      expect(receivedRes.status).toBe(200)
+      expect(receivedRes.body.data.status).toBe('RECEIVED')
+      expect(receivedRes.body.data.isDelivered).toBe(true)
+      expect(receivedRes.body.data.isPaid).toBe(false)
+    })
+  })
+
   describe('Advance payments (credit balance)', () => {
     let creditPatientId: string
 
