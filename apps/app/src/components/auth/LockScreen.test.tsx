@@ -298,5 +298,111 @@ describe('LockScreen (task #431)', () => {
       expect(screen.queryByText('Cached Person')).not.toBeInTheDocument()
       expect(useLockStore.getState().profiles).toEqual([blockedProfile])
     })
+
+    // Task #484 — the mount refetch above is unconditional by design, so
+    // every lock event re-runs a request that can fail. It used to wipe the
+    // list into an empty <div>: no message, no retry, and `profiles` is not
+    // persisted, so a page reload did not bring it back either.
+    it('keeps every retained profile card on screen and offers an enabled retry when the mount refetch fails', async () => {
+      useLockStore.setState({ profiles: [enrolledProfile, allowedProfile] })
+      vi.mocked(authApi.getProfiles).mockRejectedValue(new Error('Network Error'))
+
+      render(
+        <MemoryRouter>
+          <LockScreen />
+        </MemoryRouter>
+      )
+
+      await screen.findByText('lock.profilesError')
+      // Every card, not just the first one.
+      expect(screen.getByText('Enrolled Person')).toBeInTheDocument()
+      expect(screen.getByText('Allowed Person')).toBeInTheDocument()
+      const retry = screen.getByRole('button', { name: 'lock.retry' })
+      expect(retry).toBeEnabled()
+      expect(useLockStore.getState().profiles).toEqual([enrolledProfile, allowedProfile])
+    })
+
+    it('shows the notice and a retry control instead of a blank grid when the store was empty', async () => {
+      vi.mocked(authApi.getProfiles).mockRejectedValue(new Error('Network Error'))
+
+      render(
+        <MemoryRouter>
+          <LockScreen />
+        </MemoryRouter>
+      )
+
+      await screen.findByText('lock.profilesError')
+      expect(screen.getByRole('button', { name: 'lock.retry' })).toBeEnabled()
+      // The old behaviour: nothing at all to act on but "full logout".
+      expect(screen.queryByText('Enrolled Person')).not.toBeInTheDocument()
+      expect(screen.queryByText('common.loading')).not.toBeInTheDocument()
+    })
+
+    it('re-requests the profiles when the retry control is clicked, and clears the notice on success', async () => {
+      vi.mocked(authApi.getProfiles)
+        .mockRejectedValueOnce(new Error('Network Error'))
+        .mockResolvedValue([enrolledProfile])
+
+      render(
+        <MemoryRouter>
+          <LockScreen />
+        </MemoryRouter>
+      )
+
+      await screen.findByText('lock.profilesError')
+      expect(vi.mocked(authApi.getProfiles)).toHaveBeenCalledTimes(1)
+
+      // Driven through the UI, not by calling the store.
+      fireEvent.click(screen.getByRole('button', { name: 'lock.retry' }))
+
+      await waitFor(() => expect(vi.mocked(authApi.getProfiles)).toHaveBeenCalledTimes(2))
+      await waitFor(() =>
+        expect(screen.queryByText('lock.profilesError')).not.toBeInTheDocument()
+      )
+      expect(screen.getByText('Enrolled Person')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'lock.retry' })).not.toBeInTheDocument()
+      expect(useLockStore.getState().profilesError).toBe(false)
+    })
+
+    // The approved variant shows the retained rows but forbids acting on
+    // them: a retained row can carry `canSetupPin`/`hasPinSet` computed under
+    // a different session, and a click would route the operator on that stale
+    // authority. This asserts the click is INERT — not merely that the
+    // attribute is present, which a CSS-only fake would satisfy.
+    it('does not let a retained profile be selected while the refetch is failing, and restores selection after a successful retry', async () => {
+      useLockStore.setState({ profiles: [enrolledProfile] })
+      vi.mocked(authApi.getProfiles)
+        .mockRejectedValueOnce(new Error('Network Error'))
+        .mockResolvedValue([enrolledProfile])
+
+      render(
+        <MemoryRouter>
+          <LockScreen />
+        </MemoryRouter>
+      )
+
+      await screen.findByText('lock.profilesError')
+
+      selectProfile(enrolledProfile)
+
+      // enrolledProfile.hasPinSet === true, so a click that got through
+      // would have swapped the grid for the 4-box PIN keypad.
+      expect(pinInputs()).toHaveLength(0)
+      expect(screen.queryByText('lock.enterPin')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'common.back' })).not.toBeInTheDocument()
+      // Still on the grid, still explaining why.
+      expect(screen.getByText('lock.profilesError')).toBeInTheDocument()
+      expect(screen.getByText('Enrolled Person')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'lock.retry' }))
+      await waitFor(() =>
+        expect(screen.queryByText('lock.profilesError')).not.toBeInTheDocument()
+      )
+
+      // Same row, same profile, now actionable.
+      selectProfile(enrolledProfile)
+      expect(screen.getByText('lock.enterPin')).toBeInTheDocument()
+      expect(pinInputs()).toHaveLength(4)
+    })
   })
 })

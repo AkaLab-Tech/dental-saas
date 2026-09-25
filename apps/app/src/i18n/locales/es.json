@@ -1168,7 +1168,9 @@
     "wrongPin": "PIN incorrecto. Intenta de nuevo.",
     "pinNotConfigured": "PIN no configurado. Contacta a un administrador.",
     "noPinShort": "Sin PIN",
-    "fullLogout": "Cerrar sesión completa"
+    "fullLogout": "Cerrar sesión completa",
+    "profilesError": "No se pudieron actualizar los perfiles. La lista que ves puede estar desactualizada y no se puede seleccionar. Reintenta para continuar.",
+    "retry": "Reintentar"
   },
   "pin": {
     "setupTitle": "Configura tu PIN",

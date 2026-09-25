@@ -242,4 +242,133 @@ describe('lock.store', () => {
       expect(state.activeUser).toBeNull()
     })
   })
+
+  // Task #484 — a failed refetch used to collapse into `profiles: []`, which
+  // was indistinguishable from "this tenant has no profiles" and destroyed
+  // the list the kiosk was still rendering. The failure is now reported
+  // through `profilesError` and the previous list is left byte-identical.
+  describe('fetchProfiles', () => {
+    it('replaces the list and leaves both flags false on success', async () => {
+      vi.mocked(authApi.getProfiles).mockResolvedValue([staffProfile, ownerProfile])
+
+      await useLockStore.getState().fetchProfiles()
+
+      const state = useLockStore.getState()
+      expect(state.profiles).toStrictEqual([staffProfile, ownerProfile])
+      expect(state.profilesLoading).toBe(false)
+      expect(state.profilesError).toBe(false)
+    })
+
+    it('leaves an already-loaded list byte-identical when the request rejects', async () => {
+      // A non-empty prior list is the whole point: a `length !== 0` check
+      // could not tell a preserved list from a replaced one, and replacement
+      // is the named failure mode.
+      const cached: ProfileUser[] = [staffProfile, ownerProfile]
+      useLockStore.setState({ profiles: cached })
+      vi.mocked(authApi.getProfiles).mockRejectedValue(new Error('Network Error'))
+
+      await useLockStore.getState().fetchProfiles()
+
+      const state = useLockStore.getState()
+      expect(state.profiles).toStrictEqual([staffProfile, ownerProfile])
+      expect(state.profiles).toBe(cached)
+    })
+
+    it('does not reject to its fire-and-forget callers, and reports the failure through profilesError', async () => {
+      vi.mocked(authApi.getProfiles).mockRejectedValue(new Error('Network Error'))
+
+      await expect(useLockStore.getState().fetchProfiles()).resolves.toBeUndefined()
+
+      const state = useLockStore.getState()
+      expect(state.profilesError).toBe(true)
+      expect(state.profilesLoading).toBe(false)
+    })
+
+    it('distinguishes a genuinely empty tenant from a failure', async () => {
+      useLockStore.setState({ profiles: [staffProfile] })
+      vi.mocked(authApi.getProfiles).mockResolvedValue([])
+
+      await useLockStore.getState().fetchProfiles()
+
+      const state = useLockStore.getState()
+      expect(state.profiles).toStrictEqual([])
+      expect(state.profilesError).toBe(false)
+    })
+
+    it('clears profilesError and swaps in the fresh list on a successful call after a failure', async () => {
+      useLockStore.setState({ profiles: [staffProfile] })
+      vi.mocked(authApi.getProfiles).mockRejectedValueOnce(new Error('Network Error'))
+      await useLockStore.getState().fetchProfiles()
+      expect(useLockStore.getState().profilesError).toBe(true)
+
+      vi.mocked(authApi.getProfiles).mockResolvedValue([ownerProfile])
+      await useLockStore.getState().fetchProfiles()
+
+      const state = useLockStore.getState()
+      expect(state.profiles).toStrictEqual([ownerProfile])
+      expect(state.profilesError).toBe(false)
+      expect(state.profilesLoading).toBe(false)
+    })
+
+    // Cross-surface guard. UsersPage (4 call sites) and AppLayout share this
+    // action and render neither flag, so a failure over there must not leave
+    // `profilesError: true` waiting to be displayed on the NEXT lock event.
+    // Clearing the flag only on success would do exactly that.
+    it('clears profilesError at the START of a fetch, not only on success', async () => {
+      vi.mocked(authApi.getProfiles).mockRejectedValueOnce(new Error('Network Error'))
+      await useLockStore.getState().fetchProfiles()
+      expect(useLockStore.getState().profilesError).toBe(true)
+
+      let resolveFetch: (profiles: ProfileUser[]) => void = () => {}
+      vi.mocked(authApi.getProfiles).mockImplementation(
+        () => new Promise<ProfileUser[]>((resolve) => { resolveFetch = resolve })
+      )
+
+      const inFlight = useLockStore.getState().fetchProfiles()
+
+      // Observed while the request is still open.
+      expect(useLockStore.getState().profilesError).toBe(false)
+      expect(useLockStore.getState().profilesLoading).toBe(true)
+
+      resolveFetch([ownerProfile])
+      await inFlight
+      expect(useLockStore.getState().profilesError).toBe(false)
+      expect(useLockStore.getState().profilesLoading).toBe(false)
+    })
+
+    it('starts with both flags false and clears profilesError on reset()', async () => {
+      expect(useLockStore.getState().profilesError).toBe(false)
+      expect(useLockStore.getState().profilesLoading).toBe(false)
+
+      vi.mocked(authApi.getProfiles).mockRejectedValue(new Error('Network Error'))
+      await useLockStore.getState().fetchProfiles()
+      expect(useLockStore.getState().profilesError).toBe(true)
+
+      useLockStore.getState().reset()
+
+      expect(useLockStore.getState().profilesError).toBe(false)
+      expect(useLockStore.getState().profilesLoading).toBe(false)
+      expect(useLockStore.getState().profiles).toStrictEqual([])
+    })
+
+    it('persists neither profiles nor the two new flags to sessionStorage', async () => {
+      vi.mocked(authApi.getProfiles).mockRejectedValue(new Error('Network Error'))
+      useLockStore.setState({ profiles: [staffProfile], isLocked: true })
+
+      await useLockStore.getState().fetchProfiles()
+      expect(useLockStore.getState().profilesError).toBe(true)
+
+      const raw = sessionStorage.getItem(STORAGE_KEY)
+      expect(raw, 'the persist middleware wrote nothing at all').not.toBeNull()
+      const parsed = JSON.parse(raw as string) as { state: Record<string, unknown> }
+      // The exact key set, not a regenerated snapshot: profilesError must
+      // never be able to outlive the tab that hit the failure.
+      expect(Object.keys(parsed.state).sort()).toStrictEqual([
+        'activeUser',
+        'autoLockMinutes',
+        'isLocked',
+        'profileToken',
+      ])
+    })
+  })
 })

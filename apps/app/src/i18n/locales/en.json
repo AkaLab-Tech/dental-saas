@@ -1159,7 +1159,9 @@
     "wrongPin": "Wrong PIN. Try again.",
     "pinNotConfigured": "PIN not configured. Contact an administrator.",
     "noPinShort": "No PIN",
-    "fullLogout": "Full logout"
+    "fullLogout": "Full logout",
+    "profilesError": "Could not refresh the profiles. The list shown may be out of date and cannot be selected. Retry to continue.",
+    "retry": "Retry"
   },
   "pin": {
     "setupTitle": "Set up your PIN",
