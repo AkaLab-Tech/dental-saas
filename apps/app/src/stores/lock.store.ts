@@ -7,6 +7,8 @@ export interface LockState {
   isLocked: boolean
   autoLockMinutes: number
   profiles: ProfileUser[]
+  profilesLoading: boolean
+  profilesError: boolean
   profileToken: string | null
   activeUser: ProfileUser | null
 }
@@ -26,6 +28,8 @@ const initialState: LockState = {
   isLocked: false,
   autoLockMinutes: 5,
   profiles: [],
+  profilesLoading: false,
+  profilesError: false,
   profileToken: null,
   activeUser: null,
 }
@@ -41,12 +45,18 @@ export const useLockStore = create<LockState & LockActions>()(
 
       setAutoLockMinutes: (minutes) => set({ autoLockMinutes: minutes }),
 
+      // The rejection stays swallowed: every caller fires this
+      // fire-and-forget, so rejecting would surface as unhandled rejections.
+      // The failure is reported through profilesError instead. On failure the
+      // already-loaded profiles are deliberately left in place — wiping them
+      // is what left the lock screen empty with no way back.
       fetchProfiles: async () => {
+        set({ profilesLoading: true, profilesError: false })
         try {
           const profiles = await authApi.getProfiles()
-          set({ profiles })
+          set({ profiles, profilesLoading: false, profilesError: false })
         } catch {
-          set({ profiles: [] })
+          set({ profilesLoading: false, profilesError: true })
         }
       },
 

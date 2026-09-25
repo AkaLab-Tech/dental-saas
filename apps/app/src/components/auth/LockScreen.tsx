@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { LogOut, ArrowLeft, Lock } from 'lucide-react'
+import { LogOut, ArrowLeft, Lock, RefreshCw } from 'lucide-react'
 import { useLockStore } from '@/stores/lock.store'
 import { useAuthStore } from '@/stores/auth.store'
 import { authApi } from '@/lib/api'
@@ -29,6 +29,8 @@ export function LockScreen() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const profiles = useLockStore((s) => s.profiles) || []
+  const profilesLoading = useLockStore((s) => s.profilesLoading)
+  const profilesError = useLockStore((s) => s.profilesError)
   const pinLogin = useLockStore((s) => s.pinLogin)
   const setupPinAction = useLockStore((s) => s.setupPin)
   const fetchProfiles = useLockStore((s) => s.fetchProfiles)
@@ -318,12 +320,38 @@ export function LockScreen() {
       ) : (
         /* Profile Grid */
         <div className="w-full max-w-4xl">
+          {profilesError && (
+            <div className="mb-6 mx-auto max-w-lg rounded-xl bg-amber-50 border border-amber-200 p-4 text-center">
+              <p className="text-sm text-amber-700">{t('lock.profilesError')}</p>
+              <button
+                onClick={() => fetchProfiles()}
+                disabled={profilesLoading}
+                className="mt-3 inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className="h-4 w-4" />
+                {t('lock.retry')}
+              </button>
+            </div>
+          )}
+
+          {profiles.length === 0 && profilesLoading && !profilesError && (
+            <p className="text-center text-sm text-gray-500">{t('common.loading')}</p>
+          )}
+
           <div className="flex flex-wrap justify-center gap-4">
             {profiles.map((profile) => (
               <button
                 key={profile.id}
                 onClick={() => handleSelectProfile(profile)}
-                className="bg-white rounded-2xl shadow-md hover:shadow-lg transition-shadow p-6 text-center group w-36"
+                // A retained row may carry canSetupPin computed under a
+                // different session, so it must not be actionable until a
+                // refetch succeeds.
+                disabled={profilesError}
+                className={`bg-white rounded-2xl shadow-md p-6 text-center w-36 ${
+                  profilesError
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'group hover:shadow-lg transition-shadow'
+                }`}
               >
                 {/* Avatar */}
                 {profile.avatar ? (
