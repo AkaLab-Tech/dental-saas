@@ -6,6 +6,8 @@ import { AppointmentCard } from '@/components/appointments/AppointmentCard'
 import { AppointmentFormModal } from '@/components/appointments/AppointmentFormModal'
 import { AppointmentCompleteModal } from '@/components/appointments/AppointmentCompleteModal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { Can } from '@/components/auth/Can'
+import { Permission } from '@dental/shared'
 import type { Appointment, CreateAppointmentData, UpdateAppointmentData, AppointmentStatus } from '@/lib/appointment-api'
 import { getStatusLabel } from '@/lib/appointment-api'
 
@@ -243,13 +245,15 @@ export function AppointmentsPage() {
           </p>
         </div>
 
-        <button
-          onClick={handleOpenCreate}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="h-5 w-5" />
-          {t('appointments.newAppointment')}
-        </button>
+        <Can permission={Permission.APPOINTMENTS_CREATE}>
+          <button
+            onClick={handleOpenCreate}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="h-5 w-5" />
+            {t('appointments.newAppointment')}
+          </button>
+        </Can>
       </div>
 
       {/* Success message */}
@@ -393,13 +397,15 @@ export function AppointmentsPage() {
           <p className="text-gray-600 mt-1">
             {t('appointments.noAppointmentsInMonth', { month: formatMonthYear(currentDate) })}
           </p>
-          <button
-            onClick={handleOpenCreate}
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="h-5 w-5" />
-            {t('appointments.addAppointment')}
-          </button>
+          <Can permission={Permission.APPOINTMENTS_CREATE}>
+            <button
+              onClick={handleOpenCreate}
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="h-5 w-5" />
+              {t('appointments.addAppointment')}
+            </button>
+          </Can>
         </div>
       )}
 
