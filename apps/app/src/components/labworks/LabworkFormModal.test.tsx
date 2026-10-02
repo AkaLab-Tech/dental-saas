@@ -493,3 +493,175 @@ describe('LabworkFormModal — lifecycle status (task #243-B)', () => {
     expect(values).toEqual(['PENDING', 'SENT', 'IN_PROGRESS', 'RECEIVED'])
   })
 })
+
+// Task #470: FIFO payment allocation owns `isPaid` for patient-linked billable
+// labworks, so the form hides the "Pagado" checkbox AND omits `isPaid` from the
+// payload there (the server rejects it with 400 otherwise). The REAL predicate
+// runs (labwork-api is mocked only for getLabNames, via an importActual spread),
+// driven by the live patient / price / appointment fields.
+describe('LabworkFormModal — paid checkbox owned by payments (#470)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getLabNamesMock.mockResolvedValue({ success: true, data: [] })
+    getAppointmentsByPatientMock.mockResolvedValue([])
+    getDoctorsMock.mockResolvedValue([])
+  })
+
+  const getPaidCheckbox = () => screen.queryByRole('checkbox', { name: 'Pagado' })
+  const setPrice = (value: string) =>
+    fireEvent.change(screen.getByLabelText(/Precio/), { target: { value } })
+  const selectPatient = () => fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+
+  async function submitCreate(onSubmit: ReturnType<typeof vi.fn>) {
+    fireEvent.change(getLabInput(), { target: { value: 'Lab Dental Central' } })
+    fireEvent.change(screen.getByLabelText(/Fecha/), { target: { value: '2026-01-15' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Crear Trabajo' }))
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+  }
+
+  it('patient not yet chosen + priced: the checkbox is visible (patient input flipped)', async () => {
+    renderModal()
+    await waitFor(() => expect(getLabNamesMock).toHaveBeenCalledTimes(1))
+
+    setPrice('100')
+
+    expect(getPaidCheckbox()).toBeInTheDocument()
+  })
+
+  it('selecting a patient on a priced labwork hides the checkbox live (same price, patient flipped)', async () => {
+    renderModal()
+    await waitFor(() => expect(getLabNamesMock).toHaveBeenCalledTimes(1))
+    setPrice('100')
+    expect(getPaidCheckbox()).toBeInTheDocument()
+
+    selectPatient()
+
+    await waitFor(() => expect(getPaidCheckbox()).not.toBeInTheDocument())
+  })
+
+  it('linked + priced: omits isPaid from the create payload entirely', async () => {
+    const { onSubmit } = renderModal()
+    await waitFor(() => expect(getLabNamesMock).toHaveBeenCalledTimes(1))
+    selectPatient()
+    setPrice('100')
+    expect(getPaidCheckbox()).not.toBeInTheDocument()
+
+    await submitCreate(onSubmit)
+
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ patientId: 'patient-1', price: 100 })
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('isPaid')
+  })
+
+  it('linked + zero price: the checkbox is visible and a ticked value is submitted as isPaid: true', async () => {
+    const { onSubmit } = renderModal()
+    await waitFor(() => expect(getLabNamesMock).toHaveBeenCalledTimes(1))
+    selectPatient()
+    setPrice('0')
+
+    const checkbox = getPaidCheckbox()
+    expect(checkbox).toBeInTheDocument()
+    fireEvent.click(checkbox!)
+    await submitCreate(onSubmit)
+
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ price: 0, isPaid: true })
+  })
+
+  it('linked + zero price + untouched checkbox: submits isPaid: false (behaves as before)', async () => {
+    const { onSubmit } = renderModal()
+    await waitFor(() => expect(getLabNamesMock).toHaveBeenCalledTimes(1))
+    selectPatient()
+    setPrice('0')
+
+    await submitCreate(onSubmit)
+
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ price: 0, isPaid: false })
+  })
+
+  it('raising the price from 0 to positive hides a ticked checkbox and drops isPaid from the payload (price flipped, live)', async () => {
+    const { onSubmit } = renderModal()
+    await waitFor(() => expect(getLabNamesMock).toHaveBeenCalledTimes(1))
+    selectPatient()
+    setPrice('0')
+    fireEvent.click(getPaidCheckbox()!)
+
+    setPrice('50')
+
+    await waitFor(() => expect(getPaidCheckbox()).not.toBeInTheDocument())
+    await submitCreate(onSubmit)
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ price: 50 })
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('isPaid')
+  })
+
+  describe('priceIncludedInAppointment (flag flipped, price stays 0)', () => {
+    const appointment = {
+      id: 'appt-1',
+      startTime: '2026-01-10T10:00:00Z',
+      type: null,
+      cost: 300,
+      doctor: { firstName: 'Dr', lastName: 'Who' },
+    }
+
+    async function selectAppointment() {
+      getAppointmentsByPatientMock.mockResolvedValue([appointment])
+      selectPatient()
+      await waitFor(() => expect(screen.getByRole('option', { name: /Dr Who/ })).toBeInTheDocument())
+      fireEvent.change(document.getElementById('appointmentId') as HTMLSelectElement, {
+        target: { value: 'appt-1' },
+      })
+    }
+
+    it('appointment chosen but price NOT included: checkbox stays visible', async () => {
+      renderModal()
+      await waitFor(() => expect(getLabNamesMock).toHaveBeenCalledTimes(1))
+      setPrice('0')
+      await selectAppointment()
+
+      await waitFor(() => expect(document.getElementById('priceIncludedInAppointment')).not.toBeNull())
+      expect(getPaidCheckbox()).toBeInTheDocument()
+    })
+
+    it('appointment chosen AND price included: checkbox hidden and isPaid omitted despite price 0', async () => {
+      const { onSubmit } = renderModal()
+      await waitFor(() => expect(getLabNamesMock).toHaveBeenCalledTimes(1))
+      setPrice('0')
+      await selectAppointment()
+      await waitFor(() => expect(document.getElementById('priceIncludedInAppointment')).not.toBeNull())
+
+      fireEvent.click(document.getElementById('priceIncludedInAppointment') as HTMLInputElement)
+
+      await waitFor(() => expect(getPaidCheckbox()).not.toBeInTheDocument())
+      await submitCreate(onSubmit)
+      expect(onSubmit.mock.calls[0][0]).toMatchObject({
+        appointmentId: 'appt-1',
+        priceIncludedInAppointment: true,
+        price: 0,
+      })
+      expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('isPaid')
+    })
+  })
+
+  describe('editing a saved labwork', () => {
+    it('managed (linked + priced): checkbox hidden and the update payload omits isPaid', async () => {
+      const { onSubmit } = renderModal({ labwork: makeLabwork({ patientId: 'patient-1', price: 100, isPaid: true }) })
+      await waitFor(() => expect(screen.getByText('Ana Gomez')).toBeInTheDocument())
+
+      expect(getPaidCheckbox()).not.toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar Cambios' }))
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+      expect(onSubmit.mock.calls[0][0]).toMatchObject({ patientId: 'patient-1', price: 100 })
+      expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('isPaid')
+    })
+
+    it('not managed (linked + zero price): checkbox shows the stored value and the payload carries isPaid', async () => {
+      const { onSubmit } = renderModal({ labwork: makeLabwork({ patientId: 'patient-1', price: 0, isPaid: true }) })
+      await waitFor(() => expect(screen.getByText('Ana Gomez')).toBeInTheDocument())
+
+      expect(getPaidCheckbox()).toBeChecked()
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar Cambios' }))
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+      expect(onSubmit.mock.calls[0][0]).toMatchObject({ price: 0, isPaid: true })
+    })
+  })
+})

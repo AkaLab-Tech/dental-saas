@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import i18n from 'i18next'
 import '@/i18n'
 import { LabworkCard } from './LabworkCard'
@@ -69,7 +70,9 @@ function renderCard(labwork: Labwork) {
   const onDelete = vi.fn()
   const onStatusChange = vi.fn()
   const utils = render(
-    <LabworkCard labwork={labwork} onEdit={onEdit} onDelete={onDelete} onStatusChange={onStatusChange} />
+    <MemoryRouter>
+      <LabworkCard labwork={labwork} onEdit={onEdit} onDelete={onDelete} onStatusChange={onStatusChange} />
+    </MemoryRouter>
   )
   return { onEdit, onDelete, onStatusChange, ...utils }
 }
@@ -88,7 +91,10 @@ describe('LabworkCard — lab phone', () => {
   })
 
   it('does not render a tel: link when phoneNumber is null', () => {
-    renderCard(makeLabwork({ phoneNumber: null }))
+    // Unlinked fixture: a patient-linked priced labwork now renders a
+    // "view payments" <Link> (#470), which this "no links at all" assertion
+    // would otherwise trip over. The assertion itself is unchanged.
+    renderCard(makeLabwork({ phoneNumber: null, patientId: null }))
 
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
   })
@@ -97,13 +103,15 @@ describe('LabworkCard — lab phone', () => {
     const parentClick = vi.fn()
     render(
       // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
-      <div onClick={parentClick}>
-        <LabworkCard
-          labwork={makeLabwork({ phoneNumber: '+598 99 123 456' })}
-          onEdit={vi.fn()}
-          onDelete={vi.fn()}
-        />
-      </div>
+      <MemoryRouter>
+        <div onClick={parentClick}>
+          <LabworkCard
+            labwork={makeLabwork({ phoneNumber: '+598 99 123 456' })}
+            onEdit={vi.fn()}
+            onDelete={vi.fn()}
+          />
+        </div>
+      </MemoryRouter>
     )
 
     fireEvent.click(screen.getByRole('link', { name: '+598 99 123 456' }))
@@ -201,9 +209,10 @@ describe('LabworkCard — price row and paid status badge (#240)', () => {
     renderCard(makeLabwork({ price: 100, isPaid: true, priceIncludedInAppointment: false }))
 
     expect(screen.getByText('USD 100.00')).toBeInTheDocument()
-    // "Pagado" also appears on the isPaid toggle button below the price row,
-    // so assert there are exactly two occurrences (badge + toggle).
-    expect(screen.getAllByText('Pagado')).toHaveLength(2)
+    // The default fixture is patient-linked and priced, so FIFO payment
+    // allocation owns isPaid (#470) and no paid toggle renders. The count is
+    // therefore the price-row badge alone.
+    expect(screen.getAllByText('Pagado')).toHaveLength(1)
   })
 
   // Excludes the lifecycle status <select>'s "PENDING" <option> from the
@@ -218,10 +227,9 @@ describe('LabworkCard — price row and paid status badge (#240)', () => {
     renderCard(makeLabwork({ price: 100, isPaid: false, priceIncludedInAppointment: false }))
 
     expect(screen.getByText('USD 100.00')).toBeInTheDocument()
-    // "Pendiente" also appears on the isPaid toggle button below the price
-    // row, so assert there are exactly two occurrences (badge + toggle) and
-    // that neither is the paid label.
-    expect(screen.getAllByText(notOption)).toHaveLength(2)
+    // FIFO-managed card (#470): no paid toggle renders, so the single
+    // "Pendiente" occurrence is the price-row badge, and it is not the paid label.
+    expect(screen.getAllByText(notOption)).toHaveLength(1)
     expect(screen.queryByText('Pagado')).not.toBeInTheDocument()
   })
 
@@ -229,19 +237,32 @@ describe('LabworkCard — price row and paid status badge (#240)', () => {
     renderCard(makeLabwork({ price: 100, isPaid: false, priceIncludedInAppointment: true }))
 
     expect(screen.getByText('Incluido en consulta')).toBeInTheDocument()
-    // The isPaid toggle button still renders "Pendiente" independently of the
-    // price row — assert the price-row badge specifically is absent by
-    // checking there is exactly one "Pendiente" occurrence (the toggle only).
-    expect(screen.getAllByText(notOption)).toHaveLength(1)
+    // FIFO-managed card (#470): no paid toggle renders, so with the badge
+    // replaced by the chip there must be exactly zero "Pendiente" occurrences.
+    expect(screen.queryAllByText(notOption)).toHaveLength(0)
   })
 
   it('shows the "included in appointment" chip (not the paid badge) even when isPaid is true', () => {
     renderCard(makeLabwork({ price: 100, isPaid: true, priceIncludedInAppointment: true }))
 
     expect(screen.getByText('Incluido en consulta')).toBeInTheDocument()
-    // The isPaid toggle button renders "Pagado" on its own — the price row's
-    // badge must not add a second occurrence.
-    expect(screen.getAllByText('Pagado')).toHaveLength(1)
+    // FIFO-managed card (#470): no paid toggle renders, so the price-row badge
+    // being absent means exactly zero "Pagado" occurrences.
+    expect(screen.queryAllByText('Pagado')).toHaveLength(0)
+  })
+
+  // Unlinked labwork: not FIFO-managed, so the manual paid toggle renders
+  // alongside the price-row badge and each label appears twice.
+  it('keeps badge and manual toggle together on an unlinked labwork ("Pagado" x2)', () => {
+    renderCard(makeLabwork({ patientId: null, price: 100, isPaid: true, priceIncludedInAppointment: false }))
+
+    expect(screen.getAllByText('Pagado')).toHaveLength(2)
+  })
+
+  it('keeps badge and manual toggle together on an unlinked labwork ("Pendiente" x2)', () => {
+    renderCard(makeLabwork({ patientId: null, price: 100, isPaid: false, priceIncludedInAppointment: false }))
+
+    expect(screen.getAllByText(notOption)).toHaveLength(2)
   })
 })
 
@@ -330,5 +351,120 @@ describe('LabworkCard — lifecycle status select (#243-B)', () => {
     renderCard(makeLabwork({ deletedAt: null }))
 
     expect(screen.getByRole('combobox')).not.toBeDisabled()
+  })
+})
+
+// Task #470: FIFO payment allocation owns `isPaid` for patient-linked billable
+// labworks, so the manual paid toggle is replaced by a pointer to the patient's
+// payments. The REAL predicate runs here (@/lib/labwork-api is not mocked); each
+// predicate input is flipped on its own so a predicate that ignores any one of
+// them fails at least one case below.
+describe('LabworkCard — paid control owned by payments (#470)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    canMock.mockReturnValue(true)
+  })
+
+  const helperText = /pagos del paciente/i
+  const queryToggle = () => screen.queryByRole('button', { name: /^(Pagado|Pendiente)$/ })
+
+  it('linked + priced: no paid toggle, helper text and a link to the patient page are shown', () => {
+    renderCard(makeLabwork({ patientId: 'patient-7', price: 100 }))
+
+    expect(queryToggle()).not.toBeInTheDocument()
+    expect(screen.getByText(i18n.t('labworks.paidManagedByPayments'), { exact: false })).toBeInTheDocument()
+    const link = screen.getByRole('link', { name: i18n.t('labworks.viewPatientPayments') })
+    expect(link).toHaveAttribute('href', '/patients/patient-7')
+  })
+
+  it('unlinked + priced (patientId flipped): the toggle stays, no helper, no link', () => {
+    renderCard(makeLabwork({ patientId: null, price: 100 }))
+
+    expect(queryToggle()).toBeInTheDocument()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.queryByText(i18n.t('labworks.paidManagedByPayments'), { exact: false })).not.toBeInTheDocument()
+  })
+
+  it('linked + zero price (price flipped): the toggle stays, no helper, no link', () => {
+    renderCard(makeLabwork({ patientId: 'patient-1', price: 0 }))
+
+    expect(queryToggle()).toBeInTheDocument()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.queryByText(i18n.t('labworks.paidManagedByPayments'), { exact: false })).not.toBeInTheDocument()
+  })
+
+  it('linked + zero price + priceIncludedInAppointment (flag flipped): managed, no toggle, link shown', () => {
+    renderCard(
+      makeLabwork({ patientId: 'patient-1', price: 0, appointmentId: 'appt-1', priceIncludedInAppointment: true })
+    )
+
+    expect(queryToggle()).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: i18n.t('labworks.viewPatientPayments') })).toHaveAttribute(
+      'href',
+      '/patients/patient-1'
+    )
+  })
+
+  it('helper copy resolves to real text in es (not the raw key)', () => {
+    expect(i18n.t('labworks.paidManagedByPayments')).not.toBe('labworks.paidManagedByPayments')
+    expect(i18n.t('labworks.viewPatientPayments')).not.toBe('labworks.viewPatientPayments')
+    expect(i18n.t('labworks.paidManagedByPayments')).toMatch(helperText)
+  })
+
+  describe('unlinked fixture: the toggle behaves exactly as before', () => {
+    function renderUnlinked(overrides: Partial<Labwork> = {}) {
+      const onTogglePaid = vi.fn()
+      const labwork = makeLabwork({ patientId: null, price: 100, ...overrides })
+      render(
+        <MemoryRouter>
+          <LabworkCard labwork={labwork} onEdit={vi.fn()} onDelete={vi.fn()} onTogglePaid={onTogglePaid} />
+        </MemoryRouter>
+      )
+      return { onTogglePaid, labwork }
+    }
+
+    it('calls onTogglePaid with the labwork when clicked', () => {
+      const { onTogglePaid, labwork } = renderUnlinked()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Pendiente' }))
+
+      expect(onTogglePaid).toHaveBeenCalledTimes(1)
+      expect(onTogglePaid).toHaveBeenCalledWith(labwork)
+    })
+
+    it('is green and labelled "Pagado" when isPaid is true', () => {
+      renderUnlinked({ isPaid: true })
+
+      const button = screen.getByRole('button', { name: 'Pagado' })
+      expect(button.className).toContain('bg-green-100')
+      expect(button.className).toContain('text-green-700')
+    })
+
+    it('is gray and labelled "Pendiente" when isPaid is false', () => {
+      renderUnlinked({ isPaid: false })
+
+      const button = screen.getByRole('button', { name: 'Pendiente' })
+      expect(button.className).toContain('bg-gray-100')
+      expect(button.className).toContain('text-gray-600')
+    })
+
+    it('is disabled for a user without LABWORKS_UPDATE', () => {
+      canMock.mockImplementation((perm: unknown) => perm !== Permission.LABWORKS_UPDATE)
+      renderUnlinked()
+
+      expect(screen.getByRole('button', { name: 'Pendiente' })).toBeDisabled()
+    })
+
+    it('is disabled for a soft-deleted labwork even when the user can update', () => {
+      renderUnlinked({ deletedAt: '2026-02-01T00:00:00Z' })
+
+      expect(screen.getByRole('button', { name: 'Pendiente' })).toBeDisabled()
+    })
+
+    it('is enabled for a live labwork when the user has LABWORKS_UPDATE', () => {
+      renderUnlinked()
+
+      expect(screen.getByRole('button', { name: 'Pendiente' })).toBeEnabled()
+    })
   })
 })

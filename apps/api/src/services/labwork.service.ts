@@ -82,6 +82,21 @@ export type LabworkErrorCode =
   | 'INVALID_APPOINTMENT'
   | 'DOCTOR_NOT_FOUND'
   | 'INVALID_STATUS'
+  | 'PAID_MANAGED_BY_PAYMENTS'
+
+/**
+ * FIFO payment allocation owns `isPaid` for patient-linked billable labworks
+ * (see payment.service.ts), so a manual write would be silently reverted.
+ * Keep in sync with `isPaidManagedByPayments` in apps/app/src/lib/labwork-api.ts.
+ */
+function isPaidManagedByPayments(labwork: {
+  patientId: string | null
+  priceIncludedInAppointment: boolean
+  price: Prisma.Decimal | number | string | null | undefined
+}): boolean {
+  if (!labwork.patientId) return false
+  return labwork.priceIncludedInAppointment || Number(labwork.price ?? 0) > 0
+}
 
 export interface CreateLabworkInput {
   patientId?: string
@@ -369,6 +384,26 @@ export async function createLabwork(
   // priceIncludedInAppointment requires appointmentId
   const priceIncluded = input.appointmentId ? (input.priceIncludedInAppointment || false) : false
 
+  // Reject rather than drop: a silent drop reproduces #470 (client thinks the write landed).
+  // Create is deliberately more lenient than update: the stored value here is
+  // `priceIncluded || input.isPaid || false`, so `isPaid: false` on a priced,
+  // non-included labwork is stored exactly as asked (a provable no-op). Stale
+  // clients always send `isPaid: false`; rejecting that would block creation.
+  // Update compares against the stored row, where `false` IS reverted by FIFO,
+  // so do not "tidy" the two guards into symmetry.
+  const isProvableNoOp = input.isPaid === false && !priceIncluded
+  if (
+    input.isPaid !== undefined &&
+    !isProvableNoOp &&
+    isPaidManagedByPayments({
+      patientId: input.patientId || null,
+      priceIncludedInAppointment: priceIncluded,
+      price: input.price,
+    })
+  ) {
+    return { success: false, code: 'PAID_MANAGED_BY_PAYMENTS' }
+  }
+
   const lifecycle = resolveLifecycle({ status: input.status, isDelivered: input.isDelivered })
   if (!lifecycle.success) {
     return lifecycle
@@ -577,7 +612,14 @@ export async function updateLabwork(
   // Check labwork exists
   const existing = await prisma.labwork.findFirst({
     where: { id: labworkId, tenantId },
-    select: { id: true, patientId: true, appointmentId: true, status: true },
+    select: {
+      id: true,
+      patientId: true,
+      appointmentId: true,
+      status: true,
+      price: true,
+      priceIncludedInAppointment: true,
+    },
   })
 
   if (!existing) {
@@ -614,6 +656,24 @@ export async function updateLabwork(
   const priceIncluded = effectiveAppointmentId
     ? (input.priceIncludedInAppointment ?? false)
     : false
+
+  // Evaluate against the effective post-update shape: an incoming value wins,
+  // otherwise the stored one. priceIncluded mirrors the write below, which only
+  // touches the column when priceIncludedInAppointment or appointmentId is sent.
+  // Only reject when isPaid is present, so an unrelated edit from a stale tab still works.
+  if (
+    input.isPaid !== undefined &&
+    isPaidManagedByPayments({
+      patientId: effectivePatientId,
+      priceIncludedInAppointment:
+        input.priceIncludedInAppointment !== undefined || input.appointmentId !== undefined
+          ? priceIncluded
+          : existing.priceIncludedInAppointment,
+      price: input.price !== undefined ? input.price : existing.price,
+    })
+  ) {
+    return { success: false, code: 'PAID_MANAGED_BY_PAYMENTS' }
+  }
 
   let lifecycle: { status: LabworkStatus; isDelivered: boolean } | undefined
   if (input.status !== undefined || input.isDelivered !== undefined) {

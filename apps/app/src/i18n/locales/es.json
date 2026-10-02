@@ -720,6 +720,8 @@
     "priceIncludedInAppointment": "Precio incluido en la consulta",
     "priceIncludedHint": "El precio de este trabajo no se sumará a la deuda del paciente",
     "includedInAppointment": "Incluido en consulta",
+    "paidManagedByPayments": "El estado de pago se calcula a partir de los pagos del paciente.",
+    "viewPatientPayments": "Ver pagos del paciente",
     "dateRange": "Rango de Fechas",
     "dateFrom": "Desde",
     "dateTo": "Hasta",

@@ -18,10 +18,11 @@ import {
   Loader2,
   Stethoscope,
 } from 'lucide-react'
+import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Permission, AttachmentModule } from '@dental/shared'
 import type { Labwork, LabworkStatus } from '@/lib/labwork-api'
-import { getLabworkStatusBadge, formatLabworkDoctors } from '@/lib/labwork-api'
+import { getLabworkStatusBadge, formatLabworkDoctors, isPaidManagedByPayments } from '@/lib/labwork-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAuthStore } from '@/stores/auth.store'
 import { formatCurrency } from '@/lib/format'
@@ -156,23 +157,35 @@ export function LabworkCard({
           )}
         </div>
 
+        {isPaidManagedByPayments(labwork) && (
+          <p className="mb-4 text-xs text-gray-500">
+            {t('labworks.paidManagedByPayments')}{' '}
+            {/* Payments is a tab inside the patient page, not a route; retarget here if that changes. */}
+            <Link to={`/patients/${labwork.patientId}`} className="text-blue-600 hover:underline">
+              {t('labworks.viewPatientPayments')}
+            </Link>
+          </p>
+        )}
+
         {/* Status toggles */}
         <div className="flex flex-wrap gap-3 mb-4">
-          <button
-            onClick={() => onTogglePaid?.(labwork)}
-            disabled={isDeleted || !can(Permission.LABWORKS_UPDATE)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${labwork.isPaid
-                ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              } ${isDeleted || !can(Permission.LABWORKS_UPDATE) ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            {labwork.isPaid ? (
-              <CheckCircle2 className="h-4 w-4" />
-            ) : (
-              <Clock className="h-4 w-4" />
-            )}
-            {labwork.isPaid ? t('payment.paid') : t('payment.pending')}
-          </button>
+          {!isPaidManagedByPayments(labwork) && (
+            <button
+              onClick={() => onTogglePaid?.(labwork)}
+              disabled={isDeleted || !can(Permission.LABWORKS_UPDATE)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${labwork.isPaid
+                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                } ${isDeleted || !can(Permission.LABWORKS_UPDATE) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {labwork.isPaid ? (
+                <CheckCircle2 className="h-4 w-4" />
+              ) : (
+                <Clock className="h-4 w-4" />
+              )}
+              {labwork.isPaid ? t('payment.paid') : t('payment.pending')}
+            </button>
+          )}
 
           <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-600">
             <Package className="h-4 w-4" />
