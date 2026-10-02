@@ -170,6 +170,23 @@ vi.mock('@/components/appointments/AppointmentCompleteModal', () => ({
   },
 }))
 
+// Permission gating (task #477): the real usePermissions + hasPermission run
+// against these mocked stores, so the lock-store activeUser override
+// (activeUser?.role || user?.role) is exercised for real. Defaults to an
+// allowed role (reset in beforeEach) so pre-existing tests keep their meaning.
+let mockAuthRole: string | null = 'CLINIC_ADMIN'
+let mockActiveUserRole: string | null = null
+
+vi.mock('@/stores/auth.store', () => ({
+  useAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ user: mockAuthRole ? { role: mockAuthRole } : null }),
+}))
+
+vi.mock('@/stores/lock.store', () => ({
+  useLockStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ activeUser: mockActiveUserRole ? { role: mockActiveUserRole } : null }),
+}))
+
 // Import after mocks
 import { AppointmentsPage } from './AppointmentsPage'
 
@@ -302,6 +319,8 @@ describe('AppointmentsPage', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2024-01-15'))
     mockI18nState.language = 'es'
+    mockAuthRole = 'CLINIC_ADMIN'
+    mockActiveUserRole = null
     mockAppointmentsState.appointments = []
     mockAppointmentsState.stats = null
     mockAppointmentsState.isLoading = false
@@ -881,6 +900,75 @@ describe('AppointmentsPage', () => {
 
       const h2 = screen.getByRole('heading', { level: 2 })
       expect(h2.textContent).not.toMatch(/enero/i)
+    })
+  })
+
+  describe('create-appointment permission gating (task #477)', () => {
+    const headerButton = () => screen.queryByRole('button', { name: /nueva cita/i })
+    const emptyStateButton = () => screen.queryByRole('button', { name: /agregar cita/i })
+
+    describe.each(['CLINIC_ADMIN', 'ADMIN', 'OWNER'])('allowed role %s', (role) => {
+      beforeEach(() => {
+        mockAuthRole = role
+      })
+
+      it('shows the header button and it opens the create modal', () => {
+        mockAppointmentsState.appointments = [mockAppointment1]
+        renderAppointmentsPage()
+
+        fireEvent.click(screen.getByRole('button', { name: /nueva cita/i }))
+        expect(screen.getByTestId('appointment-form-modal')).toBeInTheDocument()
+      })
+
+      it('shows the empty-state button and it opens the create modal', () => {
+        mockAppointmentsState.appointments = []
+        renderAppointmentsPage()
+
+        fireEvent.click(screen.getByRole('button', { name: /agregar cita/i }))
+        expect(screen.getByTestId('appointment-form-modal')).toBeInTheDocument()
+      })
+    })
+
+    describe.each([
+      ['STAFF role', () => { mockAuthRole = 'STAFF' }],
+      ['DOCTOR role', () => { mockAuthRole = 'DOCTOR' }],
+      ['OWNER auth role overridden by DOCTOR PIN profile', () => { mockAuthRole = 'OWNER'; mockActiveUserRole = 'DOCTOR' }],
+      ['OWNER auth role overridden by STAFF PIN profile', () => { mockAuthRole = 'OWNER'; mockActiveUserRole = 'STAFF' }],
+    ])('denied: %s', (_label, setup) => {
+      beforeEach(() => {
+        setup()
+      })
+
+      it('does not render the header button', () => {
+        mockAppointmentsState.appointments = [mockAppointment1]
+        renderAppointmentsPage()
+
+        expect(headerButton()).toBeNull()
+      })
+
+      it('does not render the empty-state button', () => {
+        mockAppointmentsState.appointments = []
+        renderAppointmentsPage()
+
+        expect(emptyStateButton()).toBeNull()
+      })
+
+      it('still renders the empty-state heading and copy', () => {
+        mockAppointmentsState.appointments = []
+        renderAppointmentsPage()
+
+        expect(screen.getByRole('heading', { name: /no hay citas/i })).toBeInTheDocument()
+        expect(screen.getByText(/no hay citas en este mes/i)).toBeInTheDocument()
+      })
+    })
+
+    it('grants access when a CLINIC_ADMIN PIN profile overrides a STAFF auth role', () => {
+      mockAuthRole = 'STAFF'
+      mockActiveUserRole = 'CLINIC_ADMIN'
+      mockAppointmentsState.appointments = [mockAppointment1]
+      renderAppointmentsPage()
+
+      expect(headerButton()).toBeInTheDocument()
     })
   })
 })
