@@ -163,6 +163,14 @@ export interface StatsParams {
 interface ApiResponse<T> {
   success: boolean
   data: T
+  meta?: { total: number; limit: number; offset: number }
+}
+
+export interface AppointmentsListResult {
+  appointments: Appointment[]
+  total: number
+  limit: number
+  offset: number
 }
 
 // ============================================================================
@@ -172,7 +180,7 @@ interface ApiResponse<T> {
 /**
  * Get list of appointments for the current tenant
  */
-export async function getAppointments(params?: ListAppointmentsParams): Promise<Appointment[]> {
+export async function getAppointments(params?: ListAppointmentsParams): Promise<AppointmentsListResult> {
   const queryParams = new URLSearchParams()
 
   if (params?.limit) queryParams.set('limit', String(params.limit))
@@ -188,7 +196,15 @@ export async function getAppointments(params?: ListAppointmentsParams): Promise<
   const url = `/appointments${queryString ? `?${queryString}` : ''}`
 
   const response = await apiClient.get<ApiResponse<Appointment[]>>(url)
-  return response.data.data
+  const appointments = response.data.data ?? []
+  const meta = response.data.meta
+  // meta is absent on a stale API deploy; fall back to the pre-meta behaviour
+  return {
+    appointments,
+    total: meta?.total ?? appointments.length,
+    limit: meta?.limit ?? params?.limit ?? 50,
+    offset: meta?.offset ?? params?.offset ?? 0,
+  }
 }
 
 /**

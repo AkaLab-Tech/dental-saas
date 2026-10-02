@@ -398,6 +398,7 @@
     "previousMonth": "Previous month",
     "nextMonth": "Next month",
     "noAppointmentsInMonth": "No appointments found in {{month}}",
+    "truncatedNotice": "Showing {{shown}} of {{total}} appointments this month. Use the filters to narrow your search.",
     "moreOptions": "More options",
     "status": {
       "scheduled": "Scheduled",

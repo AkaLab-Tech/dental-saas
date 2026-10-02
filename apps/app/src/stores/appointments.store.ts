@@ -26,6 +26,8 @@ import {
 
 export interface AppointmentsState {
   appointments: Appointment[]
+  // Total rows the server matched for the last list query; may exceed appointments.length when capped
+  listTotal: number | null
   calendarAppointments: Appointment[]
   selectedAppointment: Appointment | null
   stats: AppointmentStats | null
@@ -84,6 +86,7 @@ interface InternalState {
 
 const initialState: AppointmentsState & InternalState = {
   appointments: [],
+  listTotal: null,
   calendarAppointments: [],
   selectedAppointment: null,
   stats: null,
@@ -102,6 +105,19 @@ const initialState: AppointmentsState & InternalState = {
 // ============================================================================
 // Store
 // ============================================================================
+
+// The list is not refetched when a row is added or removed locally, so the
+// server total must follow the observed change in rows; a stale total would
+// render a false (or hide a true) "showing N of M" truncation notice. Derived
+// from the length delta so branches that map in place (delta 0) stay correct.
+// A null total (no list fetch yet) is never invented.
+function adjustListTotal(
+  state: { listTotal: number | null; appointments: unknown[] },
+  next: unknown[],
+): number | null {
+  if (state.listTotal === null) return null
+  return Math.max(0, state.listTotal + next.length - state.appointments.length)
+}
 
 export const useAppointmentsStore = create<AppointmentsState & InternalState & AppointmentsActions>()((set, get) => {
   // Replays the last fetchAppointments query. Used after a payment mutation
@@ -122,7 +138,7 @@ export const useAppointmentsStore = create<AppointmentsState & InternalState & A
     set({ isLoading: true, error: null, lastListParams: params })
     try {
       const { selectedDoctorId, selectedPatientId, selectedStatus, dateRange, showInactive } = get()
-      const appointments = await getAppointments({
+      const { appointments, total } = await getAppointments({
         ...params,
         doctorId: params?.doctorId ?? selectedDoctorId ?? undefined,
         patientId: params?.patientId ?? selectedPatientId ?? undefined,
@@ -131,7 +147,7 @@ export const useAppointmentsStore = create<AppointmentsState & InternalState & A
         to: params?.to ?? dateRange?.to,
         includeInactive: params?.includeInactive ?? showInactive,
       })
-      set({ appointments, isLoading: false })
+      set({ appointments, listTotal: total, isLoading: false })
     } catch (error) {
       set({ error: getAppointmentApiErrorMessage(error), isLoading: false })
     }
@@ -195,11 +211,15 @@ export const useAppointmentsStore = create<AppointmentsState & InternalState & A
         set({ isLoading: false })
         await refetchList()
       } else {
-        set((state) => ({
-          appointments: [...state.appointments, newAppointment],
-          calendarAppointments: [...state.calendarAppointments, newAppointment],
-          isLoading: false,
-        }))
+        set((state) => {
+          const appointments = [...state.appointments, newAppointment]
+          return {
+            appointments,
+            listTotal: adjustListTotal(state, appointments),
+            calendarAppointments: [...state.calendarAppointments, newAppointment],
+            isLoading: false,
+          }
+        })
       }
       get().fetchStats()
       return newAppointment
@@ -245,14 +265,18 @@ export const useAppointmentsStore = create<AppointmentsState & InternalState & A
     set({ isLoading: true, error: null })
     try {
       await deleteAppointment(id)
-      set((state) => ({
-        appointments: state.showInactive
+      set((state) => {
+        const appointments = state.showInactive
           ? state.appointments.map((a) => (a.id === id ? { ...a, isActive: false, status: 'CANCELLED' as AppointmentStatus } : a))
-          : state.appointments.filter((a) => a.id !== id),
-        calendarAppointments: state.calendarAppointments.filter((a) => a.id !== id),
-        selectedAppointment: state.selectedAppointment?.id === id ? null : state.selectedAppointment,
-        isLoading: false,
-      }))
+          : state.appointments.filter((a) => a.id !== id)
+        return {
+          appointments,
+          listTotal: adjustListTotal(state, appointments),
+          calendarAppointments: state.calendarAppointments.filter((a) => a.id !== id),
+          selectedAppointment: state.selectedAppointment?.id === id ? null : state.selectedAppointment,
+          isLoading: false,
+        }
+      })
       get().fetchStats()
     } catch (error) {
       const message = getAppointmentApiErrorMessage(error)

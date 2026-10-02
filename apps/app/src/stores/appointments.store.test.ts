@@ -98,6 +98,14 @@ const mockStats: AppointmentStats = {
 
 const defaultDate = new Date('2024-01-15T00:00:00Z')
 
+// getAppointments resolves to the list envelope (#476); `total` defaults to the rows returned
+const listResult = (appointments: Appointment[], total: number = appointments.length) => ({
+  appointments,
+  total,
+  limit: 50,
+  offset: 0,
+})
+
 // Task #373 (reviewer fix, cycle 4): a paid create/edit runs pooled FIFO on
 // the server, which can flip `isPaid`/`recordedPaidAmount` on *other*,
 // already-cached appointments (e.g. an older unpaid visit the pool paid off
@@ -150,6 +158,10 @@ describe('appointments.store', () => {
       expect(state.appointments).toEqual([])
     })
 
+    it('should have a null listTotal', () => {
+      expect(useAppointmentsStore.getState().listTotal).toBeNull()
+    })
+
     it('should have empty calendarAppointments array', () => {
       const state = useAppointmentsStore.getState()
       expect(state.calendarAppointments).toEqual([])
@@ -181,7 +193,7 @@ describe('appointments.store', () => {
 
   describe('fetchAppointments', () => {
     it('should fetch appointments successfully', async () => {
-      ;(getAppointments as Mock).mockResolvedValue([mockAppointment, mockAppointment2])
+      ;(getAppointments as Mock).mockResolvedValue(listResult([mockAppointment, mockAppointment2]))
 
       await useAppointmentsStore.getState().fetchAppointments()
 
@@ -189,6 +201,43 @@ describe('appointments.store', () => {
       expect(state.appointments).toEqual([mockAppointment, mockAppointment2])
       expect(state.isLoading).toBe(false)
       expect(state.error).toBeNull()
+    })
+
+    it('sets listTotal from the envelope, which may exceed the rows returned (#476)', async () => {
+      ;(getAppointments as Mock).mockResolvedValue(listResult([mockAppointment, mockAppointment2], 732))
+
+      await useAppointmentsStore.getState().fetchAppointments({ from: '2024-01-01', to: '2024-01-31', limit: 500 })
+
+      const state = useAppointmentsStore.getState()
+      expect(state.appointments).toEqual([mockAppointment, mockAppointment2])
+      expect(state.listTotal).toBe(732)
+    })
+
+    it('sets listTotal to the row count when everything fits (#476)', async () => {
+      ;(getAppointments as Mock).mockResolvedValue(listResult([mockAppointment, mockAppointment2]))
+
+      await useAppointmentsStore.getState().fetchAppointments()
+
+      expect(useAppointmentsStore.getState().listTotal).toBe(2)
+    })
+
+    it('does not replace listTotal when a refetch fails (keeps the last good value)', async () => {
+      ;(getAppointments as Mock).mockResolvedValueOnce(listResult([mockAppointment], 9))
+      await useAppointmentsStore.getState().fetchAppointments()
+      ;(getAppointments as Mock).mockRejectedValueOnce(new Error('Network error'))
+
+      await useAppointmentsStore.getState().fetchAppointments()
+
+      expect(useAppointmentsStore.getState().listTotal).toBe(9)
+    })
+
+    it('does not inject a default limit of its own: the caller owns the limit (#476)', async () => {
+      ;(getAppointments as Mock).mockResolvedValue(listResult([]))
+
+      await useAppointmentsStore.getState().fetchAppointments({ from: '2024-01-01', to: '2024-01-31' })
+
+      const sent = (getAppointments as Mock).mock.calls[0][0]
+      expect(sent.limit).toBeUndefined()
     })
 
     it('should use filters from state when no params provided', async () => {
@@ -199,7 +248,7 @@ describe('appointments.store', () => {
         dateRange: { from: '2024-01-01', to: '2024-01-31' },
         showInactive: true,
       })
-      ;(getAppointments as Mock).mockResolvedValue([mockAppointment])
+      ;(getAppointments as Mock).mockResolvedValue(listResult([mockAppointment]))
 
       await useAppointmentsStore.getState().fetchAppointments()
 
@@ -218,7 +267,7 @@ describe('appointments.store', () => {
         selectedDoctorId: 'doctor-101',
         selectedStatus: 'SCHEDULED',
       })
-      ;(getAppointments as Mock).mockResolvedValue([])
+      ;(getAppointments as Mock).mockResolvedValue(listResult([]))
 
       await useAppointmentsStore.getState().fetchAppointments({
         doctorId: 'doctor-999',
@@ -423,7 +472,7 @@ describe('appointments.store', () => {
         calendarAppointments: [staleOlderAppointment],
       })
       ;(createAppointment as Mock).mockResolvedValue(newlyCreatedAppointment)
-      ;(getAppointments as Mock).mockResolvedValue([flippedOlderAppointment, newlyCreatedAppointment])
+      ;(getAppointments as Mock).mockResolvedValue(listResult([flippedOlderAppointment, newlyCreatedAppointment]))
       ;(getAppointmentStats as Mock).mockResolvedValue(mockStats)
 
       const result = await useAppointmentsStore.getState().addAppointment({
@@ -544,7 +593,7 @@ describe('appointments.store', () => {
         selectedAppointment: mockAppointment,
       })
       ;(updateAppointment as Mock).mockResolvedValue(editedAppointmentPaid)
-      ;(getAppointments as Mock).mockResolvedValue([flippedOlderAppointment, editedAppointmentPaid])
+      ;(getAppointments as Mock).mockResolvedValue(listResult([flippedOlderAppointment, editedAppointmentPaid]))
       ;(getAppointmentStats as Mock).mockResolvedValue(mockStats)
 
       const result = await useAppointmentsStore
@@ -569,7 +618,7 @@ describe('appointments.store', () => {
         calendarAppointments: [staleOlderAppointment, mockAppointment],
       })
       ;(updateAppointment as Mock).mockResolvedValue(editedAppointmentIsPaid)
-      ;(getAppointments as Mock).mockResolvedValue([flippedOlderAppointment, editedAppointmentIsPaid])
+      ;(getAppointments as Mock).mockResolvedValue(listResult([flippedOlderAppointment, editedAppointmentIsPaid]))
       ;(getAppointmentStats as Mock).mockResolvedValue(mockStats)
 
       await useAppointmentsStore.getState().editAppointment('appointment-123', { isPaid: true })
@@ -630,12 +679,12 @@ describe('appointments.store', () => {
     const viewedRange = { from: '2024-03-01', to: '2024-03-31' }
 
     it('a paid create replays the last fetchAppointments params', async () => {
-      ;(getAppointments as Mock).mockResolvedValueOnce([mockAppointment2])
+      ;(getAppointments as Mock).mockResolvedValueOnce(listResult([mockAppointment2]))
       await useAppointmentsStore.getState().fetchAppointments(viewedRange)
       expect(getAppointments).toHaveBeenCalledTimes(1)
 
       ;(createAppointment as Mock).mockResolvedValue(newlyCreatedAppointment)
-      ;(getAppointments as Mock).mockResolvedValueOnce([mockAppointment2, newlyCreatedAppointment])
+      ;(getAppointments as Mock).mockResolvedValueOnce(listResult([mockAppointment2, newlyCreatedAppointment]))
       ;(getAppointmentStats as Mock).mockResolvedValue(mockStats)
 
       await useAppointmentsStore.getState().addAppointment({
@@ -652,14 +701,39 @@ describe('appointments.store', () => {
       )
     })
 
+    it('a paid create replays the same explicit limit, never falling back to the default 50 (#476)', async () => {
+      const viewedWindow = { ...viewedRange, limit: 500 }
+      ;(getAppointments as Mock).mockResolvedValueOnce(listResult([mockAppointment2], 120))
+      await useAppointmentsStore.getState().fetchAppointments(viewedWindow)
+
+      ;(createAppointment as Mock).mockResolvedValue(newlyCreatedAppointment)
+      ;(getAppointments as Mock).mockResolvedValueOnce(listResult([mockAppointment2, newlyCreatedAppointment], 121))
+      ;(getAppointmentStats as Mock).mockResolvedValue(mockStats)
+
+      await useAppointmentsStore.getState().addAppointment({
+        patientId: 'patient-789',
+        doctorId: 'doctor-101',
+        startTime: '2024-03-15T10:00:00Z',
+        endTime: '2024-03-15T11:00:00Z',
+        paidAmount: 100,
+      })
+
+      expect(getAppointments).toHaveBeenCalledTimes(2)
+      expect(getAppointments).toHaveBeenLastCalledWith(
+        expect.objectContaining({ from: '2024-03-01', to: '2024-03-31', limit: 500 })
+      )
+      // the replay also refreshes the total
+      expect(useAppointmentsStore.getState().listTotal).toBe(121)
+    })
+
     it('a paid edit replays the last fetchAppointments params', async () => {
-      ;(getAppointments as Mock).mockResolvedValueOnce([mockAppointment])
+      ;(getAppointments as Mock).mockResolvedValueOnce(listResult([mockAppointment]))
       await useAppointmentsStore.getState().fetchAppointments(viewedRange)
       expect(getAppointments).toHaveBeenCalledTimes(1)
 
       const editedAppointment = { ...mockAppointment, isPaid: true, recordedPaidAmount: 100 }
       ;(updateAppointment as Mock).mockResolvedValue(editedAppointment)
-      ;(getAppointments as Mock).mockResolvedValueOnce([editedAppointment])
+      ;(getAppointments as Mock).mockResolvedValueOnce(listResult([editedAppointment]))
       ;(getAppointmentStats as Mock).mockResolvedValue(mockStats)
 
       await useAppointmentsStore.getState().editAppointment('appointment-123', { paidAmount: 100 })
@@ -842,6 +916,7 @@ describe('appointments.store', () => {
     it('should reset to initial state', () => {
       useAppointmentsStore.setState({
         appointments: [mockAppointment],
+        listTotal: 732,
         calendarAppointments: [mockAppointment],
         selectedAppointment: mockAppointment,
         stats: mockStats,
@@ -859,6 +934,7 @@ describe('appointments.store', () => {
 
       const state = useAppointmentsStore.getState()
       expect(state.appointments).toEqual([])
+      expect(state.listTotal).toBeNull()
       expect(state.calendarAppointments).toEqual([])
       expect(state.selectedAppointment).toBeNull()
       expect(state.stats).toBeNull()
@@ -870,6 +946,124 @@ describe('appointments.store', () => {
       expect(state.dateRange).toBeNull()
       expect(state.showInactive).toBe(false)
       expect(state.viewMode).toBe('month')
+    })
+  })
+
+  // #476: listTotal must follow local add/remove, driven through the real store
+  // (fetchAppointments populates it from the envelope, then a mutation runs).
+  describe('listTotal across local mutations (#476)', () => {
+    const rows = (n: number): Appointment[] =>
+      Array.from({ length: n }, (_, i) => ({ ...mockAppointment, id: `row-${i}` }))
+    const noticeShown = () => {
+      const { listTotal, appointments } = useAppointmentsStore.getState()
+      return listTotal !== null && listTotal > appointments.length
+    }
+    const seed = async (n: number, total: number) => {
+      ;(getAppointments as Mock).mockResolvedValueOnce(listResult(rows(n), total))
+      await useAppointmentsStore.getState().fetchAppointments({ from: '2024-01-01', to: '2024-01-31', limit: 500 })
+    }
+    const newAppt = { patientId: 'patient-789', doctorId: 'doctor-101', startTime: '2024-01-15T10:00:00Z', endTime: '2024-01-15T11:00:00Z' }
+
+    beforeEach(() => {
+      useAppointmentsStore.setState({ listTotal: null, lastListParams: undefined })
+      ;(deleteAppointment as Mock).mockResolvedValue(undefined)
+      ;(getAppointmentStats as Mock).mockResolvedValue(mockStats)
+    })
+
+    it('delete decrements listTotal so a complete month shows no notice', async () => {
+      await seed(12, 12)
+      await useAppointmentsStore.getState().removeAppointment('row-3')
+
+      const state = useAppointmentsStore.getState()
+      expect(state.appointments).toHaveLength(11)
+      expect(state.listTotal).toBe(11)
+      expect(noticeShown()).toBe(false)
+    })
+
+    it('delete with showInactive maps in place, so listTotal is unchanged', async () => {
+      useAppointmentsStore.setState({ showInactive: true })
+      await seed(12, 12)
+      await useAppointmentsStore.getState().removeAppointment('row-3')
+
+      const state = useAppointmentsStore.getState()
+      expect(state.appointments).toHaveLength(12)
+      expect(state.appointments[3].isActive).toBe(false)
+      expect(state.listTotal).toBe(12)
+      expect(noticeShown()).toBe(false)
+    })
+
+    it('a truncated month stays truncated after a delete', async () => {
+      await seed(500, 640)
+      await useAppointmentsStore.getState().removeAppointment('row-0')
+
+      const state = useAppointmentsStore.getState()
+      expect(state.appointments).toHaveLength(499)
+      expect(state.listTotal).toBe(639)
+      expect(noticeShown()).toBe(true)
+    })
+
+    it('a non-payment add increments listTotal and keeps the notice visible', async () => {
+      await seed(500, 501)
+      ;(createAppointment as Mock).mockResolvedValue(newlyCreatedAppointment)
+      await useAppointmentsStore.getState().addAppointment(newAppt)
+
+      const state = useAppointmentsStore.getState()
+      expect(state.appointments).toHaveLength(501)
+      expect(state.listTotal).toBe(502)
+      expect(noticeShown()).toBe(true)
+    })
+
+    it('a payment add takes listTotal from the refetched envelope, not total + 1', async () => {
+      await seed(3, 3)
+      ;(createAppointment as Mock).mockResolvedValue(newlyCreatedAppointment)
+      ;(getAppointments as Mock).mockResolvedValueOnce(listResult([...rows(3), newlyCreatedAppointment], 4))
+      await useAppointmentsStore.getState().addAppointment({ ...newAppt, paidAmount: 100 })
+
+      const state = useAppointmentsStore.getState()
+      expect(state.appointments).toHaveLength(4)
+      expect(state.listTotal).toBe(4)
+    })
+
+    it('listTotal stays null across an add and a remove when no list was fetched', async () => {
+      useAppointmentsStore.setState({ appointments: rows(2) })
+      ;(createAppointment as Mock).mockResolvedValue(newlyCreatedAppointment)
+      await useAppointmentsStore.getState().addAppointment(newAppt)
+      expect(useAppointmentsStore.getState().listTotal).toBeNull()
+
+      await useAppointmentsStore.getState().removeAppointment('row-0')
+      const state = useAppointmentsStore.getState()
+      expect(state.appointments).toHaveLength(2)
+      expect(state.listTotal).toBeNull()
+    })
+
+    it('listTotal never goes below 0', async () => {
+      await seed(2, 1)
+      await useAppointmentsStore.getState().removeAppointment('row-0')
+      expect(useAppointmentsStore.getState().listTotal).toBe(0)
+      await useAppointmentsStore.getState().removeAppointment('row-1')
+      const state = useAppointmentsStore.getState()
+      expect(state.appointments).toHaveLength(0)
+      expect(state.listTotal).toBe(0)
+    })
+
+    it('editAppointment leaves listTotal untouched', async () => {
+      await seed(3, 7)
+      ;(updateAppointment as Mock).mockResolvedValue({ ...mockAppointment, id: 'row-1', notes: 'edited' })
+      await useAppointmentsStore.getState().editAppointment('row-1', { notes: 'edited' })
+
+      const state = useAppointmentsStore.getState()
+      expect(state.appointments).toHaveLength(3)
+      expect(state.listTotal).toBe(7)
+    })
+
+    it('restoreDeletedAppointment leaves listTotal untouched', async () => {
+      await seed(3, 7)
+      ;(restoreAppointment as Mock).mockResolvedValue({ ...mockAppointment, id: 'row-1', isActive: true })
+      await useAppointmentsStore.getState().restoreDeletedAppointment('row-1')
+
+      const state = useAppointmentsStore.getState()
+      expect(state.appointments).toHaveLength(3)
+      expect(state.listTotal).toBe(7)
     })
   })
 })

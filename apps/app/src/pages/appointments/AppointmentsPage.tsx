@@ -11,6 +11,9 @@ import { Permission } from '@dental/shared'
 import type { Appointment, CreateAppointmentData, UpdateAppointmentData, AppointmentStatus } from '@/lib/appointment-api'
 import { getStatusLabel } from '@/lib/appointment-api'
 
+// Matches the server's MAX_APPOINTMENTS_PAGE_SIZE: request the whole month up to the cap
+const APPOINTMENTS_PAGE_LIMIT = 500
+
 const STATUS_OPTIONS: AppointmentStatus[] = [
   'SCHEDULED',
   'CONFIRMED',
@@ -25,6 +28,7 @@ export function AppointmentsPage() {
   const { t, i18n } = useTranslation()
   const {
     appointments,
+    listTotal,
     stats,
     isLoading,
     error,
@@ -78,6 +82,7 @@ export function AppointmentsPage() {
     fetchAppointments({
       from: dateRange.from,
       to: dateRange.to,
+      limit: APPOINTMENTS_PAGE_LIMIT,
     })
     fetchStats({
       from: dateRange.from,
@@ -406,6 +411,16 @@ export function AppointmentsPage() {
               {t('appointments.addAppointment')}
             </button>
           </Can>
+        </div>
+      )}
+
+      {/* Truncation notice: visible to every role, so deliberately outside <Can> */}
+      {listTotal !== null && listTotal > appointments.length && (
+        <div
+          role="status"
+          className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm"
+        >
+          {t('appointments.truncatedNotice', { shown: appointments.length, total: listTotal })}
         </div>
       )}
 

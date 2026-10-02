@@ -10,7 +10,10 @@ const mockI18nState = { language: 'es' }
 // Mock i18n
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => {
+    t: (key: string, opts?: { shown?: number; total?: number }) => {
+      if (key === 'appointments.truncatedNotice') {
+        return `Mostrando ${opts?.shown} de ${opts?.total} citas de este mes`
+      }
       const translations: Record<string, string> = {
         'appointments.title': 'Citas',
         'appointments.subtitle': 'Gestiona las citas de tu clínica',
@@ -63,6 +66,7 @@ const mockClearError = vi.fn()
 // Mutable state for mocks
 const mockAppointmentsState = {
   appointments: [] as Appointment[],
+  listTotal: null as number | null,
   stats: null as AppointmentsStats | null,
   isLoading: false,
   error: null as string | null,
@@ -76,6 +80,7 @@ const mockAppointmentsState = {
 vi.mock('@/stores/appointments.store', () => ({
   useAppointmentsStore: () => ({
     appointments: mockAppointmentsState.appointments,
+    listTotal: mockAppointmentsState.listTotal,
     stats: mockAppointmentsState.stats,
     isLoading: mockAppointmentsState.isLoading,
     error: mockAppointmentsState.error,
@@ -322,6 +327,7 @@ describe('AppointmentsPage', () => {
     mockAuthRole = 'CLINIC_ADMIN'
     mockActiveUserRole = null
     mockAppointmentsState.appointments = []
+    mockAppointmentsState.listTotal = null
     mockAppointmentsState.stats = null
     mockAppointmentsState.isLoading = false
     mockAppointmentsState.error = null
@@ -385,11 +391,82 @@ describe('AppointmentsPage', () => {
       expect(mockFetchAppointments).toHaveBeenCalledWith({
         from: expect.any(String),
         to: expect.any(String),
+        limit: 500,
       })
       expect(mockFetchStats).toHaveBeenCalledWith({
         from: expect.any(String),
         to: expect.any(String),
       })
+    })
+  })
+
+  // Task #476: the month list is requested with an explicit limit (the server
+  // used to silently cut a month at 50) and a notice says so when the server
+  // cap still bites. Pagination was rejected: there are no page controls.
+  describe('month list cap (task #476)', () => {
+    it('requests the month with an explicit limit of 500, and the stats call carries no limit', () => {
+      renderAppointmentsPage()
+
+      const listArgs = mockFetchAppointments.mock.calls[0][0]
+      expect(listArgs.limit).toBe(500)
+      const statsArgs = mockFetchStats.mock.calls[0][0]
+      expect(statsArgs.limit).toBeUndefined()
+    })
+
+    it('re-requests with the same explicit limit after navigating to another month', () => {
+      renderAppointmentsPage()
+      mockFetchAppointments.mockClear()
+      mockAppointmentsState.currentDate = new Date('2024-02-15')
+
+      renderAppointmentsPage()
+
+      expect(mockFetchAppointments).toHaveBeenCalledWith(expect.objectContaining({ limit: 500 }))
+    })
+
+    it('shows the truncation notice with shown and total when total exceeds the rows returned', () => {
+      mockAppointmentsState.appointments = [mockAppointment1, mockAppointment2]
+      mockAppointmentsState.listTotal = 732
+      renderAppointmentsPage()
+
+      const notice = screen.getByRole('status')
+      expect(notice).toHaveTextContent('Mostrando 2 de 732 citas de este mes')
+    })
+
+    it('shows the notice to every role, including read-only STAFF (it is not behind <Can>)', () => {
+      mockAuthRole = 'STAFF'
+      mockAppointmentsState.appointments = [mockAppointment1]
+      mockAppointmentsState.listTotal = 501
+      renderAppointmentsPage()
+
+      expect(screen.getByRole('status')).toHaveTextContent('Mostrando 1 de 501 citas de este mes')
+    })
+
+    it('shows NO notice when the total equals the rows returned (everything fits)', () => {
+      mockAppointmentsState.appointments = [mockAppointment1, mockAppointment2]
+      mockAppointmentsState.listTotal = 2
+      renderAppointmentsPage()
+
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+      expect(screen.queryByText(/Mostrando/)).not.toBeInTheDocument()
+      // the list itself still renders
+      expect(screen.getByTestId('appointment-card-1')).toBeInTheDocument()
+      expect(screen.getByTestId('appointment-card-2')).toBeInTheDocument()
+    })
+
+    it('shows NO notice before the first list response (listTotal still null)', () => {
+      mockAppointmentsState.appointments = [mockAppointment1]
+      mockAppointmentsState.listTotal = null
+      renderAppointmentsPage()
+
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    })
+
+    it('shows NO notice when the total is below the rows shown (stale total after a local removal)', () => {
+      mockAppointmentsState.appointments = [mockAppointment1, mockAppointment2]
+      mockAppointmentsState.listTotal = 1
+      renderAppointmentsPage()
+
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
     })
   })
 

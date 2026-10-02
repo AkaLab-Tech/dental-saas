@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import { api } from '../test/http.js'
-import { prisma } from '@dental/database'
+import { prisma, Prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
 import { getPatientBalance } from '../services/payment.service.js'
 import { generateProfileToken, generateToken } from '../test/tokens.js'
+import { MAX_APPOINTMENTS_PAGE_SIZE } from './appointments.js'
 
 describe('Appointments API', () => {
   let tenantId: string
@@ -863,6 +864,238 @@ describe('Appointments API', () => {
       // Pins the pre-fix symptom: this route never computes the FIFO merge,
       // so paidAmount stays absent even for the appointment with a payment.
       expect(byId.get(withPayment.id)?.paidAmount).toBeUndefined()
+    })
+  })
+
+  // ============================================================================
+  // LIST WINDOW: whole month up to a documented cap (#476)
+  // ============================================================================
+
+  describe('GET /api/appointments - month window past the old 50 cap (#476)', () => {
+    // A fixed far-future month so the seed never collides with the other tests'
+    // relative dates. The list filters on startTime within [from, to]; the
+    // calendar's range-overlap semantics are a separate, deferred matter (see #498).
+    const WINDOW_FROM = '2031-03-01T00:00:00.000Z'
+    const WINDOW_TO = '2031-03-31T23:59:59.999Z'
+    const windowQuery = `from=${encodeURIComponent(WINDOW_FROM)}&to=${encodeURIComponent(WINDOW_TO)}`
+
+    function seedRows(
+      count: number,
+      opts: {
+        month: number // 1-based month of 2031
+        status: 'SCHEDULED' | 'CANCELLED' | 'COMPLETED'
+        isActive: boolean
+        docId: string
+        patId: string
+      }
+    ): Prisma.AppointmentCreateManyInput[] {
+      return Array.from({ length: count }, (_, i) => {
+        const start = new Date(Date.UTC(2031, opts.month - 1, 1 + (i % 28), 8 + Math.floor(i / 28), 0, 0))
+        return {
+          tenantId,
+          patientId: opts.patId,
+          doctorId: opts.docId,
+          startTime: start,
+          endTime: new Date(start.getTime() + 30 * 60 * 1000),
+          duration: 30,
+          status: opts.status,
+          isActive: opts.isActive,
+        }
+      })
+    }
+
+    async function seed(rows: Prisma.AppointmentCreateManyInput[]) {
+      await prisma.appointment.createMany({ data: rows })
+    }
+
+    async function list(query: string) {
+      return api().get(`/api/appointments?${query}`).set('Authorization', `Bearer ${staffToken}`)
+    }
+
+    it('returns EVERY appointment of a 120-row month when asked for the cap (old clamp stopped at 100, old default at 50)', async () => {
+      await seed(seedRows(120, { month: 3, status: 'SCHEDULED', isActive: true, docId: doctorId, patId: patientId }))
+
+      const response = await list(`${windowQuery}&limit=${MAX_APPOINTMENTS_PAGE_SIZE}`)
+
+      expect(response.status).toBe(200)
+      expect(response.body.data.length).toBe(120)
+      expect(new Set(response.body.data.map((a: { id: string }) => a.id)).size).toBe(120)
+      expect(response.body.meta).toEqual({ total: 120, limit: MAX_APPOINTMENTS_PAGE_SIZE, offset: 0 })
+    })
+
+    it('with no limit the route reports the effective default of 50 in meta and still returns 50 rows', async () => {
+      await seed(seedRows(60, { month: 3, status: 'SCHEDULED', isActive: true, docId: doctorId, patId: patientId }))
+
+      const response = await list(windowQuery)
+
+      expect(response.status).toBe(200)
+      expect(response.body.data.length).toBe(50)
+      expect(response.body.meta).toEqual({ total: 60, limit: 50, offset: 0 })
+    })
+
+    it('keeps the legacy data shape and adds meta only on GET / (calendar and by-doctor stay bare)', async () => {
+      await seed(seedRows(3, { month: 3, status: 'SCHEDULED', isActive: true, docId: doctorId, patId: patientId }))
+
+      const listRes = await list(windowQuery)
+      expect(Object.keys(listRes.body).sort()).toEqual(['data', 'meta', 'success'])
+
+      const calendarRes = await api()
+        .get(`/api/appointments/calendar?${windowQuery}`)
+        .set('Authorization', `Bearer ${staffToken}`)
+      expect(calendarRes.status).toBe(200)
+      expect(Object.keys(calendarRes.body).sort()).toEqual(['data', 'success'])
+
+      const byDoctorRes = await api()
+        .get(`/api/appointments/by-doctor/${doctorId}`)
+        .set('Authorization', `Bearer ${staffToken}`)
+      expect(byDoctorRes.status).toBe(200)
+      expect(Object.keys(byDoctorRes.body).sort()).toEqual(['data', 'success'])
+    })
+
+    it('honours offset and reports it in meta, with total unaffected by the offset', async () => {
+      await seed(seedRows(10, { month: 3, status: 'SCHEDULED', isActive: true, docId: doctorId, patId: patientId }))
+
+      const response = await list(`${windowQuery}&limit=4&offset=8`)
+
+      expect(response.status).toBe(200)
+      expect(response.body.data.length).toBe(2)
+      expect(response.body.meta).toEqual({ total: 10, limit: 4, offset: 8 })
+    })
+
+    describe('meta.total counts the same rows as the filtered list', () => {
+      // Dataset where every filter changes the count:
+      //  60 SCHEDULED active   doctor1/patient1  in March
+      //  20 CANCELLED active   doctor2/patient2  in March
+      //   7 CANCELLED inactive doctor1/patient1  in March
+      //   5 SCHEDULED active   doctor1/patient1  in April (outside the window)
+      beforeEach(async () => {
+        await seed([
+          ...seedRows(60, { month: 3, status: 'SCHEDULED', isActive: true, docId: doctorId, patId: patientId }),
+          ...seedRows(20, { month: 3, status: 'CANCELLED', isActive: true, docId: doctor2Id, patId: patient2Id }),
+          ...seedRows(7, { month: 3, status: 'CANCELLED', isActive: false, docId: doctorId, patId: patientId }),
+          ...seedRows(5, { month: 4, status: 'SCHEDULED', isActive: true, docId: doctorId, patId: patientId }),
+        ])
+      })
+
+      it('window only: default-active total is 80 (not 85 unbounded, not 87 with inactive)', async () => {
+        const response = await list(`${windowQuery}&limit=${MAX_APPOINTMENTS_PAGE_SIZE}`)
+        expect(response.body.meta.total).toBe(80)
+        expect(response.body.data.length).toBe(80)
+      })
+
+      it('window + status=SCHEDULED: total is 60, not the 80 an unfiltered-by-status count gives', async () => {
+        const response = await list(`${windowQuery}&status=SCHEDULED&limit=${MAX_APPOINTMENTS_PAGE_SIZE}`)
+        expect(response.body.data.length).toBe(60)
+        expect(response.body.meta.total).toBe(60)
+      })
+
+      it('window + status=SCHEDULED with a small page: total stays 60 while data is 25', async () => {
+        const response = await list(`${windowQuery}&status=SCHEDULED&limit=25`)
+        expect(response.body.data.length).toBe(25)
+        expect(response.body.meta).toEqual({ total: 60, limit: 25, offset: 0 })
+      })
+
+      it('window + includeInactive=true: total is 87, not the default-active 80', async () => {
+        const response = await list(`${windowQuery}&includeInactive=true&limit=${MAX_APPOINTMENTS_PAGE_SIZE}`)
+        expect(response.body.data.length).toBe(87)
+        expect(response.body.meta.total).toBe(87)
+      })
+
+      it('window + status=CANCELLED: total is 20 active, 27 with includeInactive', async () => {
+        const active = await list(`${windowQuery}&status=CANCELLED`)
+        expect(active.body.meta.total).toBe(20)
+        expect(active.body.data.length).toBe(20)
+
+        const all = await list(`${windowQuery}&status=CANCELLED&includeInactive=true`)
+        expect(all.body.meta.total).toBe(27)
+        expect(all.body.data.length).toBe(27)
+      })
+
+      it('window + doctorId: doctor1 has 60 active, doctor2 has 20', async () => {
+        const d1 = await list(`${windowQuery}&doctorId=${doctorId}&limit=${MAX_APPOINTMENTS_PAGE_SIZE}`)
+        expect(d1.body.meta.total).toBe(60)
+        expect(d1.body.data.length).toBe(60)
+
+        const d2 = await list(`${windowQuery}&doctorId=${doctor2Id}`)
+        expect(d2.body.meta.total).toBe(20)
+        expect(d2.body.data.length).toBe(20)
+      })
+
+      it('window + patientId: patient2 has 20 active', async () => {
+        const response = await list(`${windowQuery}&patientId=${patient2Id}`)
+        expect(response.body.meta.total).toBe(20)
+        expect(response.body.data.length).toBe(20)
+      })
+
+      it('no window: the April rows count too (85 active)', async () => {
+        const response = await list(`limit=${MAX_APPOINTMENTS_PAGE_SIZE}`)
+        expect(response.body.meta.total).toBe(85)
+        expect(response.body.data.length).toBe(85)
+      })
+
+      it('from only / to only: each bound narrows the total independently', async () => {
+        const fromApril = await list(`from=${encodeURIComponent('2031-04-01T00:00:00.000Z')}`)
+        expect(fromApril.body.meta.total).toBe(5)
+
+        const toMarch = await list(`to=${encodeURIComponent(WINDOW_TO)}`)
+        expect(toMarch.body.meta.total).toBe(80)
+      })
+
+      it('combined filters: doctor1 + SCHEDULED + window + inactive included is 60', async () => {
+        const response = await list(
+          `${windowQuery}&doctorId=${doctorId}&status=SCHEDULED&includeInactive=true&limit=${MAX_APPOINTMENTS_PAGE_SIZE}`
+        )
+        expect(response.body.meta.total).toBe(60)
+        expect(response.body.data.length).toBe(60)
+      })
+    })
+
+    it('does not count another tenant\'s appointments in meta.total', async () => {
+      const other = await prisma.tenant.create({ data: { name: 'Other 476', slug: `other-476-${Date.now()}` } })
+      try {
+        const otherPatient = await prisma.patient.create({ data: { tenantId: other.id, firstName: 'O', lastName: 'P' } })
+        const otherDoctor = await prisma.doctor.create({
+          data: { tenantId: other.id, firstName: 'O', lastName: 'D', email: `o476-${Date.now()}@test.com` },
+        })
+        await prisma.appointment.createMany({
+          data: seedRows(9, { month: 3, status: 'SCHEDULED', isActive: true, docId: otherDoctor.id, patId: otherPatient.id }).map(
+            (r) => ({ ...r, tenantId: other.id })
+          ),
+        })
+        await seed(seedRows(4, { month: 3, status: 'SCHEDULED', isActive: true, docId: doctorId, patId: patientId }))
+
+        const response = await list(windowQuery)
+        expect(response.body.meta.total).toBe(4)
+        expect(response.body.data.length).toBe(4)
+      } finally {
+        await prisma.appointment.deleteMany({ where: { tenantId: other.id } })
+        await prisma.patient.deleteMany({ where: { tenantId: other.id } })
+        await prisma.doctor.deleteMany({ where: { tenantId: other.id } })
+        await prisma.tenant.delete({ where: { id: other.id } }).catch(() => {})
+      }
+    })
+
+    describe('the cap', () => {
+      it('limit=100000 is clamped to MAX_APPOINTMENTS_PAGE_SIZE: 200 OK, never a 4xx, meta.limit reports the clamp', async () => {
+        const total = MAX_APPOINTMENTS_PAGE_SIZE + 20
+        await seed(seedRows(total, { month: 3, status: 'SCHEDULED', isActive: true, docId: doctorId, patId: patientId }))
+
+        const response = await list(`${windowQuery}&limit=100000`)
+
+        expect(response.status).toBe(200)
+        expect(response.body.success).toBe(true)
+        expect(response.body.data.length).toBe(MAX_APPOINTMENTS_PAGE_SIZE)
+        expect(response.body.meta).toEqual({ total, limit: MAX_APPOINTMENTS_PAGE_SIZE, offset: 0 })
+      })
+
+      it('a month that fits under the cap is returned whole with total === data.length', async () => {
+        await seed(seedRows(MAX_APPOINTMENTS_PAGE_SIZE, { month: 3, status: 'SCHEDULED', isActive: true, docId: doctorId, patId: patientId }))
+
+        const response = await list(`${windowQuery}&limit=${MAX_APPOINTMENTS_PAGE_SIZE}`)
+
+        expect(response.body.data.length).toBe(MAX_APPOINTMENTS_PAGE_SIZE)
+        expect(response.body.meta.total).toBe(MAX_APPOINTMENTS_PAGE_SIZE)
+      })
     })
   })
 
