@@ -8,6 +8,7 @@ import { hasPermission, Permission } from '../middleware/permissions.js'
 import type { UserRole } from '@dental/shared'
 import {
   listAppointments,
+  countAppointments,
   getAppointmentById,
   createAppointment,
   updateAppointment,
@@ -146,6 +147,11 @@ function sendBudgetItemsError(
   res.status(status).json({ success: false, error: { code, message: code } })
 }
 
+/** Hard cap on rows per list request; larger client limits are clamped, not rejected. */
+export const MAX_APPOINTMENTS_PAGE_SIZE = 500
+/** Mirrors listAppointments' own default page size. */
+const DEFAULT_APPOINTMENTS_PAGE_SIZE = 50
+
 // ============================================================================
 // Routes
 // ============================================================================
@@ -177,18 +183,29 @@ appointmentsRouter.get('/', requireMinRole('STAFF'), async (req, res, next) => {
       return
     }
 
-    const appointments = await listAppointments(tenantId, {
-      limit: limit ? Math.min(parseInt(String(limit), 10), 100) : undefined,
-      offset: offset ? parseInt(String(offset), 10) : undefined,
+    const filters = {
       doctorId: doctorId ? String(doctorId) : undefined,
       patientId: patientId ? String(patientId) : undefined,
       status: status ? (String(status) as AppointmentStatus) : undefined,
       from: from ? new Date(String(from)) : undefined,
       to: to ? new Date(String(to)) : undefined,
       includeInactive: includeInactive === 'true',
-    })
+    }
+    const effectiveLimit = limit
+      ? Math.min(parseInt(String(limit), 10), MAX_APPOINTMENTS_PAGE_SIZE)
+      : DEFAULT_APPOINTMENTS_PAGE_SIZE
+    const effectiveOffset = offset ? parseInt(String(offset), 10) : 0
 
-    res.json({ success: true, data: appointments })
+    const [appointments, total] = await Promise.all([
+      listAppointments(tenantId, { ...filters, limit: effectiveLimit, offset: effectiveOffset }),
+      countAppointments(tenantId, filters),
+    ])
+
+    res.json({
+      success: true,
+      data: appointments,
+      meta: { total, limit: effectiveLimit, offset: effectiveOffset },
+    })
   } catch (e) {
     next(e)
   }

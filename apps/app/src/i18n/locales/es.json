@@ -398,6 +398,7 @@
     "previousMonth": "Mes anterior",
     "nextMonth": "Mes siguiente",
     "noAppointmentsInMonth": "No se encontraron citas en {{month}}",
+    "truncatedNotice": "Mostrando {{shown}} de {{total}} citas de este mes. Usa los filtros para acotar la búsqueda.",
     "moreOptions": "Más opciones",
     "status": {
       "scheduled": "Programada",

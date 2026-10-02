@@ -398,6 +398,7 @@
     "previousMonth": "الشهر السابق",
     "nextMonth": "الشهر التالي",
     "noAppointmentsInMonth": "لا توجد مواعيد في {{month}}",
+    "truncatedNotice": "يتم عرض {{shown}} من أصل {{total}} موعدًا هذا الشهر. استخدم عوامل التصفية لتضييق نطاق البحث.",
     "moreOptions": "خيارات إضافية",
     "status": {
       "scheduled": "مجدول",

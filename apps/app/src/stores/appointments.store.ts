@@ -26,6 +26,8 @@ import {
 
 export interface AppointmentsState {
   appointments: Appointment[]
+  // Total rows the server matched for the last list query; may exceed appointments.length when capped
+  listTotal: number | null
   calendarAppointments: Appointment[]
   selectedAppointment: Appointment | null
   stats: AppointmentStats | null
@@ -84,6 +86,7 @@ interface InternalState {
 
 const initialState: AppointmentsState & InternalState = {
   appointments: [],
+  listTotal: null,
   calendarAppointments: [],
   selectedAppointment: null,
   stats: null,
@@ -122,7 +125,7 @@ export const useAppointmentsStore = create<AppointmentsState & InternalState & A
     set({ isLoading: true, error: null, lastListParams: params })
     try {
       const { selectedDoctorId, selectedPatientId, selectedStatus, dateRange, showInactive } = get()
-      const appointments = await getAppointments({
+      const { appointments, total } = await getAppointments({
         ...params,
         doctorId: params?.doctorId ?? selectedDoctorId ?? undefined,
         patientId: params?.patientId ?? selectedPatientId ?? undefined,
@@ -131,7 +134,7 @@ export const useAppointmentsStore = create<AppointmentsState & InternalState & A
         to: params?.to ?? dateRange?.to,
         includeInactive: params?.includeInactive ?? showInactive,
       })
-      set({ appointments, isLoading: false })
+      set({ appointments, listTotal: total, isLoading: false })
     } catch (error) {
       set({ error: getAppointmentApiErrorMessage(error), isLoading: false })
     }

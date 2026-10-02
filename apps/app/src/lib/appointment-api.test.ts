@@ -106,7 +106,7 @@ describe('appointment-api', () => {
       const result = await getAppointments()
 
       expect(apiClient.get).toHaveBeenCalledWith('/appointments')
-      expect(result).toEqual([mockAppointment])
+      expect(result).toEqual({ appointments: [mockAppointment], total: 1, limit: 50, offset: 0 })
     })
 
     it('should fetch appointments with all params', async () => {
@@ -128,7 +128,7 @@ describe('appointment-api', () => {
       expect(apiClient.get).toHaveBeenCalledWith(
         '/appointments?limit=10&offset=5&includeInactive=true&doctorId=doctor-012&patientId=patient-789&status=SCHEDULED&from=2024-01-01&to=2024-01-31'
       )
-      expect(result).toEqual([mockAppointment])
+      expect(result).toEqual({ appointments: [mockAppointment], total: 1, limit: 10, offset: 5 })
     })
 
     it('should fetch appointments with partial params', async () => {
@@ -139,7 +139,7 @@ describe('appointment-api', () => {
       const result = await getAppointments({ status: 'COMPLETED', limit: 20 })
 
       expect(apiClient.get).toHaveBeenCalledWith('/appointments?limit=20&status=COMPLETED')
-      expect(result).toEqual([mockAppointment])
+      expect(result).toEqual({ appointments: [mockAppointment], total: 1, limit: 20, offset: 0 })
     })
 
     it('should handle empty params', async () => {
@@ -150,7 +150,62 @@ describe('appointment-api', () => {
       const result = await getAppointments({})
 
       expect(apiClient.get).toHaveBeenCalledWith('/appointments')
-      expect(result).toEqual([])
+      expect(result).toEqual({ appointments: [], total: 0, limit: 50, offset: 0 })
+    })
+
+    it('passes the server meta through when present (total can exceed the rows returned)', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: {
+          success: true,
+          data: [mockAppointment],
+          meta: { total: 732, limit: 500, offset: 0 },
+        },
+      })
+
+      const result = await getAppointments({ limit: 500, from: '2024-01-01', to: '2024-01-31' })
+
+      expect(apiClient.get).toHaveBeenCalledWith('/appointments?limit=500&from=2024-01-01&to=2024-01-31')
+      expect(result).toEqual({
+        appointments: [mockAppointment],
+        total: 732,
+        limit: 500,
+        offset: 0,
+      })
+    })
+
+    it('prefers the server-effective meta over the requested params (server clamped the limit)', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [], meta: { total: 3, limit: 500, offset: 20 } },
+      })
+
+      const result = await getAppointments({ limit: 100000, offset: 20 })
+
+      expect(result.limit).toBe(500)
+      expect(result.offset).toBe(20)
+      expect(result.total).toBe(3)
+    })
+
+    it('degrades to total === appointments.length when meta is absent (stale API deploy)', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { success: true, data: [mockAppointment, { ...mockAppointment, id: 'appt-2' }] },
+      })
+
+      const result = await getAppointments({ limit: 500 })
+
+      expect(result).toEqual({
+        appointments: [mockAppointment, { ...mockAppointment, id: 'appt-2' }],
+        total: 2,
+        limit: 500,
+        offset: 0,
+      })
+    })
+
+    it('degrades to an empty list rather than crashing when data is missing and meta is absent', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({ data: { success: true } })
+
+      const result = await getAppointments()
+
+      expect(result).toEqual({ appointments: [], total: 0, limit: 50, offset: 0 })
     })
   })
 

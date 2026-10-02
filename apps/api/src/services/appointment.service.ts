@@ -170,21 +170,40 @@ export interface CalendarOptions {
 }
 
 /**
- * Count appointments for a tenant
+ * Build the filter shared by listAppointments and countAppointments, so the
+ * count can never drift from the rows the list returns.
+ */
+function buildListAppointmentsWhere(
+  tenantId: string,
+  options?: Omit<ListAppointmentsOptions, 'limit' | 'offset'>
+): Prisma.AppointmentWhereInput {
+  const { includeInactive = false, doctorId, patientId, status, from, to } = options || {}
+
+  return {
+    tenantId,
+    ...(includeInactive ? {} : { isActive: true }),
+    ...(doctorId && { doctorId }),
+    ...(patientId && { patientId }),
+    ...(status && { status }),
+    ...(from || to
+      ? {
+          startTime: {
+            ...(from && { gte: from }),
+            ...(to && { lte: to }),
+          },
+        }
+      : {}),
+  }
+}
+
+/**
+ * Count appointments matching the same filters as listAppointments
  */
 export async function countAppointments(
   tenantId: string,
-  options?: { from?: Date; to?: Date; status?: AppointmentStatus }
+  options?: Omit<ListAppointmentsOptions, 'limit' | 'offset'>
 ): Promise<number> {
-  const where: Prisma.AppointmentWhereInput = {
-    tenantId,
-    isActive: true,
-    ...(options?.status && { status: options.status }),
-    ...(options?.from && { startTime: { gte: options.from } }),
-    ...(options?.to && { startTime: { lte: options.to } }),
-  }
-
-  return prisma.appointment.count({ where })
+  return prisma.appointment.count({ where: buildListAppointmentsWhere(tenantId, options) })
 }
 
 /**
@@ -254,23 +273,9 @@ export async function listAppointments(
   tenantId: string,
   options?: ListAppointmentsOptions
 ): Promise<SafeAppointment[]> {
-  const { limit = 50, offset = 0, includeInactive = false, doctorId, patientId, status, from, to } = options || {}
+  const { limit = 50, offset = 0, ...filters } = options || {}
 
-  const where: Prisma.AppointmentWhereInput = {
-    tenantId,
-    ...(includeInactive ? {} : { isActive: true }),
-    ...(doctorId && { doctorId }),
-    ...(patientId && { patientId }),
-    ...(status && { status }),
-    ...(from || to
-      ? {
-          startTime: {
-            ...(from && { gte: from }),
-            ...(to && { lte: to }),
-          },
-        }
-      : {}),
-  }
+  const where = buildListAppointmentsWhere(tenantId, filters)
 
   const appointments = await prisma.appointment.findMany({
     where,
