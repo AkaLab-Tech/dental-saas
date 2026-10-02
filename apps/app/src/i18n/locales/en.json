@@ -720,6 +720,8 @@
     "priceIncludedInAppointment": "Price included in appointment",
     "priceIncludedHint": "The price of this work will not be added to the patient's debt",
     "includedInAppointment": "Included in appointment",
+    "paidManagedByPayments": "Payment status is calculated from the patient's payments.",
+    "viewPatientPayments": "View patient payments",
     "dateRange": "Date Range",
     "dateFrom": "From",
     "dateTo": "To",

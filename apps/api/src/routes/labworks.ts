@@ -62,6 +62,7 @@ const errorStatusMap: Record<string, number> = {
   INVALID_APPOINTMENT: 400,
   DOCTOR_NOT_FOUND: 400,
   INVALID_STATUS: 400,
+  PAID_MANAGED_BY_PAYMENTS: 400,
 }
 
 // Error code to message mapping
@@ -73,6 +74,8 @@ const errorMessageMap: Record<string, string> = {
   INVALID_APPOINTMENT: 'Appointment not found or does not belong to this patient',
   DOCTOR_NOT_FOUND: 'One or more doctors do not belong to this clinic',
   INVALID_STATUS: 'status and isDelivered are contradictory',
+  PAID_MANAGED_BY_PAYMENTS:
+    "isPaid is derived from the patient's payments for this labwork and cannot be set manually",
 }
 
 /**

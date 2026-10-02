@@ -277,6 +277,22 @@ const LABWORK_STATUS_VARIANTS: Record<LabworkStatus, 'default' | 'success' | 'wa
 }
 
 /**
+ * FIFO payment allocation owns `isPaid` for patient-linked billable labworks
+ * (`price > 0`) and force-marks `priceIncludedInAppointment` ones as paid, so a
+ * manual toggle is silently reverted (#470). Mirrors the server rule in
+ * apps/api/src/services/labwork.service.ts. Accepts a saved labwork or live
+ * form values (price may arrive as a string).
+ */
+export function isPaidManagedByPayments(labwork: {
+  patientId?: string | null
+  priceIncludedInAppointment?: boolean | null
+  price?: number | string | null
+}): boolean {
+  if (!labwork.patientId) return false
+  return Boolean(labwork.priceIncludedInAppointment) || Number(labwork.price ?? 0) > 0
+}
+
+/**
  * Lifecycle status pill, independent of payment (see #240/#487 — payment has
  * its own `PaidStatusBadge`). Precedence: deleted > overdue > `status`.
  */

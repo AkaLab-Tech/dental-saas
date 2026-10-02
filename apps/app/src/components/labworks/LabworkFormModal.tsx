@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { X, Loader2, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Labwork, CreateLabworkData, LabworkStatus } from '@/lib/labwork-api'
-import { getLabNames } from '@/lib/labwork-api'
+import { getLabNames, isPaidManagedByPayments } from '@/lib/labwork-api'
 import type { Appointment } from '@/lib/appointment-api'
 import { getAppointmentsByPatient } from '@/lib/appointment-api'
 import type { Doctor } from '@/lib/doctor-api'
@@ -87,6 +87,11 @@ export function LabworkFormModal({
   })
 
   const watchedAppointmentId = watch('appointmentId')
+  const paidManagedByPayments = isPaidManagedByPayments({
+    patientId: watch('patientId'),
+    priceIncludedInAppointment: !!watchedAppointmentId && watch('priceIncludedInAppointment'),
+    price: watch('price'),
+  })
   const watchedDoctorIds = watch('doctorIds') || []
 
   const toggleDoctor = (doctorId: string) => {
@@ -217,7 +222,7 @@ export function LabworkFormModal({
         : data.phoneNumber && { phoneNumber: data.phoneNumber }),
       date: data.date,
       price: data.price,
-      isPaid: data.isPaid ?? false,
+      ...(!paidManagedByPayments && { isPaid: data.isPaid ?? false }),
       status: (data.status ?? 'PENDING') as LabworkStatus,
       doctorIds: data.doctorIds ?? [],
       ...(data.notes && { notes: data.notes }),
@@ -437,16 +442,18 @@ export function LabworkFormModal({
               </div>
 
               {/* Paid checkbox */}
-              <div className="flex gap-6">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    {...register('isPaid')}
-                    type="checkbox"
-                    className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-gray-700">{t('payment.paid')}</span>
-                </label>
-              </div>
+              {!paidManagedByPayments && (
+                <div className="flex gap-6">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      {...register('isPaid')}
+                      type="checkbox"
+                      className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">{t('payment.paid')}</span>
+                  </label>
+                </div>
+              )}
 
               {/* Lifecycle status */}
               <div>

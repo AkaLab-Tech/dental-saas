@@ -11,6 +11,7 @@ import {
   formatLabworkDate,
   getLabworkStatusBadge,
   isLabworkOverdue,
+  isPaidManagedByPayments,
   type Labwork,
   type LabworkStats,
 } from './labwork-api'
@@ -646,5 +647,40 @@ describe('labwork-api', () => {
         expect(isLabworkOverdue(labwork)).toBe(false)
       })
     })
+  })
+})
+
+// Task #470: pure predicate for "FIFO owns isPaid". Each case flips ONE input
+// against a managed baseline so a predicate ignoring that input fails.
+describe('isPaidManagedByPayments', () => {
+  const managed = { patientId: 'p1', priceIncludedInAppointment: false, price: 100 }
+
+  it('is true for a linked, priced labwork', () => {
+    expect(isPaidManagedByPayments(managed)).toBe(true)
+  })
+
+  it.each([null, undefined, ''])('is false when patientId is %j (patient input flipped)', (patientId) => {
+    expect(isPaidManagedByPayments({ ...managed, patientId })).toBe(false)
+  })
+
+  it('is false for unlinked even when priceIncludedInAppointment is true', () => {
+    expect(isPaidManagedByPayments({ ...managed, patientId: null, priceIncludedInAppointment: true })).toBe(false)
+  })
+
+  it.each([0, '0', '0.00', null, undefined])('is false for linked + price %j with no inclusion (price input flipped)', (price) => {
+    expect(isPaidManagedByPayments({ patientId: 'p1', priceIncludedInAppointment: false, price })).toBe(false)
+  })
+
+  it.each([0, null, undefined])('is true for linked + price %j + priceIncludedInAppointment (flag input flipped)', (price) => {
+    expect(isPaidManagedByPayments({ patientId: 'p1', priceIncludedInAppointment: true, price })).toBe(true)
+  })
+
+  it('treats a numeric string price as a number (form values arrive as strings)', () => {
+    expect(isPaidManagedByPayments({ ...managed, price: '25.50' })).toBe(true)
+  })
+
+  it('treats priceIncludedInAppointment null/undefined as false', () => {
+    expect(isPaidManagedByPayments({ patientId: 'p1', priceIncludedInAppointment: null, price: 0 })).toBe(false)
+    expect(isPaidManagedByPayments({ patientId: 'p1', price: 0 })).toBe(false)
   })
 })

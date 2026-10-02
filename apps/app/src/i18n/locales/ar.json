@@ -720,6 +720,8 @@
     "priceIncludedInAppointment": "السعر مشمول في الموعد",
     "priceIncludedHint": "لن يُضاف سعر هذا العمل إلى ديون المريض",
     "includedInAppointment": "مشمول في الموعد",
+    "paidManagedByPayments": "تُحتسب حالة الدفع من مدفوعات المريض.",
+    "viewPatientPayments": "عرض مدفوعات المريض",
     "dateRange": "النطاق الزمني",
     "dateFrom": "من",
     "dateTo": "إلى",
