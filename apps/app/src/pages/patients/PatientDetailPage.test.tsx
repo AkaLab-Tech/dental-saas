@@ -8,6 +8,7 @@ import { getPatientById, deleteToothData, updateToothData } from '@/lib/patient-
 import { downloadPatientHistoryPdf } from '@/lib/pdf-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { createAppointment } from '@/lib/appointment-api'
+import { getAccountStatement, type AccountStatement } from '@/lib/payment-api'
 import type { Patient } from '@/lib/patient-api'
 import type { Appointment } from '@/lib/appointment-api'
 
@@ -34,6 +35,18 @@ vi.mock('@/lib/pdf-api', () => ({
 }))
 
 vi.mock('@/hooks/usePermissions')
+
+// The network seam for the account statement the page now owns (task #526).
+// Mocked at the module boundary so PatientDetailPage does its own fetch,
+// state and render; the default (set in the top-level beforeEach) is a
+// settled, zeroed statement so unrelated suites never hit a real request.
+vi.mock('@/lib/payment-api', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/payment-api')>('@/lib/payment-api')
+  return {
+    ...actual,
+    getAccountStatement: vi.fn(),
+  }
+})
 
 // createAppointment/updateAppointment are the network seam AppointmentFormModal's
 // onSubmit hits — mocked so the refresh-wiring tests below can drive that path
@@ -97,12 +110,14 @@ vi.mock('@/components/budgets/BudgetsSection', () => ({
 vi.mock('@/components/payments/PaymentSection', () => ({
   PaymentSection: ({
     patientId,
+    statement,
     onPaymentsChange,
   }: {
     patientId: string
+    statement: { advancesCredit: number } | null
     onPaymentsChange: () => void
   }) => (
-    <div data-testid="payments-section">
+    <div data-testid="payments-section" data-statement-credit={statement ? statement.advancesCredit : 'null'}>
       payments-section:{patientId}
       <button type="button" onClick={onPaymentsChange}>
         trigger-payments-change
@@ -245,6 +260,25 @@ function isHidden(element: Element): boolean {
 // ============================================================================
 // Tests
 // ============================================================================
+
+function makeStatement(overrides: Partial<AccountStatement> = {}): AccountStatement {
+  return {
+    appointmentsDebt: 0,
+    advancesCredit: 0,
+    remainingBudgetProjection: 0,
+    totalBilled: 0,
+    totalPaid: 0,
+    advancesTotal: 0,
+    ...overrides,
+  }
+}
+
+// Every suite in this file renders the page, which now fetches the statement
+// on mount; give each a resolved default (a bare vi.fn() returns undefined and
+// the page would call .then on it).
+beforeEach(() => {
+  ;(getAccountStatement as unknown as Mock).mockResolvedValue(makeStatement())
+})
 
 describe('PatientDetailPage — tabs', () => {
   beforeEach(() => {
@@ -917,5 +951,217 @@ describe('PatientDetailPage — i18n migrated error/status/gender text (task #32
     await renderLoadedPage()
 
     expect(screen.getByText(expectedKey)).toBeInTheDocument()
+  })
+})
+
+// ============================================================================
+// Task #526 — debt and credit in the patient record header
+//
+// The clinic found a patient holding UYU 500 of credit that nobody knew about:
+// the figures were right but lived inside the Entregas tab. The page now owns
+// the statement fetch and shows both figures under the name. These tests mock
+// only the getAccountStatement network seam; PatientDetailPage does its own
+// fetch, state and rendering.
+// ============================================================================
+
+describe('PatientDetailPage — debt and credit in the record header (task #526)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    ;(getPatientById as unknown as Mock).mockResolvedValue(makePatient())
+    mockPermissions(true)
+  })
+
+  // Three distinct amounts so a header fed the wrong field (e.g. the budget
+  // projection instead of the credit) cannot pass by coincidence.
+  const DEBT = 6000
+  const CREDIT = 500
+  const PROJECTION = 1234
+
+  function balanceRow(): HTMLElement {
+    return screen.getByTestId('patient-balance')
+  }
+
+  // Returns { value, className } of the figure whose label is `label`. The row
+  // holds one outer <span> per figure: "<label>: <inner span with the value>".
+  function figure(label: string): { value: string; className: string } {
+    const outer = Array.from(balanceRow().children).find((c) =>
+      c.textContent?.startsWith(`${label}:`)
+    )
+    if (!outer) throw new Error(`no figure labelled ${label} in the balance row`)
+    const inner = outer.querySelector('span') as HTMLElement
+    return { value: inner.textContent ?? '', className: inner.className }
+  }
+
+  const DEBT_LABEL = 'payments.statement.appointmentsDebt'
+  const CREDIT_LABEL = 'payments.credit'
+
+  it('acceptance 1: shows the credit on opening the record (0 debt, 500 credit), without opening any tab', async () => {
+    ;(getAccountStatement as unknown as Mock).mockResolvedValue(
+      makeStatement({ appointmentsDebt: 0, advancesCredit: CREDIT, remainingBudgetProjection: PROJECTION })
+    )
+    await renderLoadedPage()
+
+    await waitFor(() => {
+      expect(figure(CREDIT_LABEL).value).toMatch(/^USD\s*500\.00$/)
+    })
+    expect(figure(DEBT_LABEL).value).toMatch(/^USD\s*0\.00$/)
+    // Still on the default Patient tab, and the figures are not inside a
+    // hidden tab panel.
+    expect(screen.getByRole('button', { name: /patients\.tabs\.patient/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    expect(isHidden(balanceRow())).toBe(false)
+    expect(getAccountStatement).toHaveBeenCalledWith('p1')
+  })
+
+  it('acceptance 2: shows the debt on opening the record (6.000 debt, no credit)', async () => {
+    ;(getAccountStatement as unknown as Mock).mockResolvedValue(
+      makeStatement({ appointmentsDebt: DEBT, advancesCredit: 0, remainingBudgetProjection: PROJECTION })
+    )
+    await renderLoadedPage()
+
+    await waitFor(() => {
+      expect(figure(DEBT_LABEL).value).toMatch(/^USD\s*6,000\.00$/)
+    })
+    expect(figure(CREDIT_LABEL).value).toMatch(/^USD\s*0\.00$/)
+  })
+
+  it('acceptance 3: a patient with neither shows both labelled figures as zero, not a blank gap', async () => {
+    ;(getAccountStatement as unknown as Mock).mockResolvedValue(makeStatement())
+    await renderLoadedPage()
+
+    await waitFor(() => {
+      expect(figure(CREDIT_LABEL).value).toMatch(/^USD\s*0\.00$/)
+    })
+    expect(figure(DEBT_LABEL).value).toMatch(/^USD\s*0\.00$/)
+    // Neutral, not highlighted.
+    expect(figure(CREDIT_LABEL).className).toContain('text-gray-700')
+    expect(figure(CREDIT_LABEL).className).not.toContain('text-green-600')
+    expect(figure(DEBT_LABEL).className).toContain('text-gray-700')
+    expect(figure(DEBT_LABEL).className).not.toContain('text-amber-600')
+  })
+
+  it('shows debt and credit together, each from its own field, and never the budget projection', async () => {
+    ;(getAccountStatement as unknown as Mock).mockResolvedValue(
+      makeStatement({
+        appointmentsDebt: DEBT,
+        advancesCredit: CREDIT,
+        remainingBudgetProjection: PROJECTION,
+      })
+    )
+    await renderLoadedPage()
+
+    await waitFor(() => {
+      expect(figure(CREDIT_LABEL).value).toMatch(/^USD\s*500\.00$/)
+    })
+    expect(figure(DEBT_LABEL).value).toMatch(/^USD\s*6,000\.00$/)
+    // The projection is not money the patient has or owes; it stays in the tab.
+    expect(balanceRow().textContent).not.toMatch(/1,234/)
+    // Highlighting: amber for debt, green for credit.
+    expect(figure(DEBT_LABEL).className).toContain('text-amber-600')
+    expect(figure(CREDIT_LABEL).className).toContain('text-green-600')
+  })
+
+  it('renders an em dash for both figures while the statement is loading, then the values', async () => {
+    let resolveStatement: (value: AccountStatement) => void = () => {}
+    ;(getAccountStatement as unknown as Mock).mockImplementation(
+      () =>
+        new Promise<AccountStatement>((resolve) => {
+          resolveStatement = resolve
+        })
+    )
+    await renderLoadedPage()
+
+    expect(figure(DEBT_LABEL).value).toBe('—')
+    expect(figure(CREDIT_LABEL).value).toBe('—')
+
+    resolveStatement(makeStatement({ advancesCredit: CREDIT }))
+
+    await waitFor(() => {
+      expect(figure(CREDIT_LABEL).value).toMatch(/^USD\s*500\.00$/)
+    })
+  })
+
+  it('keeps the record usable and shows placeholders when the statement fetch fails', async () => {
+    ;(getAccountStatement as unknown as Mock).mockRejectedValue(new Error('network fail'))
+    await renderLoadedPage()
+
+    await waitFor(() => {
+      expect(getAccountStatement).toHaveBeenCalled()
+    })
+    expect(figure(DEBT_LABEL).value).toBe('—')
+    expect(figure(CREDIT_LABEL).value).toBe('—')
+    expect(screen.getByRole('heading', { name: 'Juan Pérez' })).toBeInTheDocument()
+  })
+
+  it('shows no balance row and never requests the statement without PAYMENTS_VIEW', async () => {
+    mockPermissions(false)
+    await renderLoadedPage()
+
+    expect(screen.queryByTestId('patient-balance')).not.toBeInTheDocument()
+    expect(getAccountStatement).not.toHaveBeenCalled()
+  })
+
+  it('passes the same statement object to the Payments tab', async () => {
+    ;(getAccountStatement as unknown as Mock).mockResolvedValue(
+      makeStatement({ advancesCredit: CREDIT })
+    )
+    await renderLoadedPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('payments-section')).toHaveAttribute('data-statement-credit', '500')
+    })
+  })
+
+  // Relocated from PaymentSection.test.tsx: the statement re-fetch after a
+  // payment is created/reversed now lives on the page, so header and tab
+  // update together.
+  it('re-fetches the statement and updates the header when the Payments tab reports a payments change', async () => {
+    ;(getAccountStatement as unknown as Mock).mockResolvedValueOnce(
+      makeStatement({ advancesCredit: 0 })
+    )
+    await renderLoadedPage()
+    await waitFor(() => expect(getAccountStatement).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(figure(CREDIT_LABEL).value).toMatch(/^USD\s*0\.00$/))
+
+    ;(getAccountStatement as unknown as Mock).mockResolvedValue(
+      makeStatement({ advancesCredit: CREDIT })
+    )
+    fireEvent.click(screen.getByRole('button', { name: /patients\.tabs\.payments/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'trigger-payments-change' }))
+
+    await waitFor(() => expect(getAccountStatement).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(figure(CREDIT_LABEL).value).toMatch(/^USD\s*500\.00$/))
+    expect(screen.getByTestId('payments-section')).toHaveAttribute('data-statement-credit', '500')
+  })
+
+  it('re-fetches the statement when the appointments tab reports a payments change', async () => {
+    await renderLoadedPage()
+    await waitFor(() => expect(getAccountStatement).toHaveBeenCalledTimes(1))
+
+    ;(getAccountStatement as unknown as Mock).mockResolvedValue(
+      makeStatement({ appointmentsDebt: DEBT })
+    )
+    fireEvent.click(screen.getByRole('button', { name: /patients\.tabs\.appointments/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'trigger-appointments-payments-change' }))
+
+    await waitFor(() => expect(getAccountStatement).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(figure(DEBT_LABEL).value).toMatch(/^USD\s*6,000\.00$/))
+  })
+
+  it('keeps the last known figures when a refresh fails', async () => {
+    ;(getAccountStatement as unknown as Mock).mockResolvedValueOnce(
+      makeStatement({ advancesCredit: CREDIT })
+    )
+    await renderLoadedPage()
+    await waitFor(() => expect(figure(CREDIT_LABEL).value).toMatch(/^USD\s*500\.00$/))
+
+    ;(getAccountStatement as unknown as Mock).mockRejectedValue(new Error('network fail'))
+    fireEvent.click(screen.getByRole('button', { name: /patients\.tabs\.payments/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'trigger-payments-change' }))
+
+    await waitFor(() => expect(getAccountStatement).toHaveBeenCalledTimes(2))
+    expect(figure(CREDIT_LABEL).value).toMatch(/^USD\s*500\.00$/)
   })
 })

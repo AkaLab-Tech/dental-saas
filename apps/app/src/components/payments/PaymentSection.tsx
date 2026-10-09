@@ -6,7 +6,6 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { useAuthStore } from '@/stores/auth.store'
 import { formatCurrency } from '@/lib/format'
 import {
-  getAccountStatement,
   getPatientPayments,
   createPayment,
   deletePayment,
@@ -25,6 +24,9 @@ import { formatActor } from '@/lib/format-actor'
 interface PaymentSectionProps {
   patientId: string
   onCollapse?: () => void
+  // Owned and fetched by the parent so the record header and this tab render
+  // the same object. Null while it loads or if it failed to load.
+  statement: AccountStatementData | null
   // Bumped by the parent when an external action (e.g. saving an appointment
   // with isPaid=true) may have created or recalculated payments via FIFO.
   refreshKey?: number
@@ -35,6 +37,7 @@ interface PaymentSectionProps {
 
 export function PaymentSection({
   patientId,
+  statement,
   onCollapse,
   refreshKey = 0,
   onPaymentsChange,
@@ -43,7 +46,6 @@ export function PaymentSection({
   const { can } = usePermissions()
   const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
 
-  const [statement, setStatement] = useState<AccountStatementData | null>(null)
   const [payments, setPayments] = useState<Payment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -59,11 +61,11 @@ export function PaymentSection({
   const fetchData = useCallback(async () => {
     setError(null)
     try {
-      const [statementData, paymentsData] = await Promise.all([
-        getAccountStatement(patientId),
-        getPatientPayments(patientId, { limit: 50, kind: 'ADVANCE', includeReversed: true }),
-      ])
-      setStatement(statementData)
+      const paymentsData = await getPatientPayments(patientId, {
+        limit: 50,
+        kind: 'ADVANCE',
+        includeReversed: true,
+      })
       setPayments(paymentsData.data)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error loading payments')

@@ -34,6 +34,9 @@ import {
   getPatientInitials,
 } from '@/lib/patient-api'
 import { downloadPatientHistoryPdf } from '@/lib/pdf-api'
+import { getAccountStatement, type AccountStatement } from '@/lib/payment-api'
+import { formatCurrency } from '@/lib/format'
+import { useAuthStore } from '@/stores/auth.store'
 import { AttachmentModule, Permission, ToothStatus, type ToothData } from '@dental/shared'
 import { usePermissions } from '@/hooks/usePermissions'
 import { ImageUpload } from '@/components/ui/ImageUpload'
@@ -286,6 +289,7 @@ export default function PatientDetailPage() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { can } = usePermissions()
+  const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
   const [activeTab, setActiveTab] = useState<PatientDetailTabId>('patient')
   const [patient, setPatient] = useState<Patient | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -308,12 +312,33 @@ export default function PatientDetailPage() {
   const [appointmentFormError, setAppointmentFormError] = useState<string | null>(null)
   const [appointmentsRefreshKey, setAppointmentsRefreshKey] = useState(0)
   const [paymentsRefreshKey, setPaymentsRefreshKey] = useState(0)
+  // Single source of the account statement: rendered in the record header and
+  // passed down to PaymentSection. Bumped by PaymentSection after it creates or
+  // reverses a payment (paymentsRefreshKey already covers external changes).
+  const [statement, setStatement] = useState<AccountStatement | null>(null)
+  const [statementRefreshKey, setStatementRefreshKey] = useState(0)
+  const canViewStatement = can(Permission.PAYMENTS_VIEW)
   // Separate from paymentsRefreshKey so a Movements refresh never re-triggers
   // PaymentSection's own fetch — it already refetches itself right after the
   // mutation that led here. Bumped from every path that can add a movement
   // row: Entregas (create/reverse), the appointments tab (cancel/reverse a
   // consultation payment), and the appointment form (FIFO-created payments).
   const [movementsRefreshKey, setMovementsRefreshKey] = useState(0)
+
+  useEffect(() => {
+    if (!id || !canViewStatement) return
+    let cancelled = false
+    getAccountStatement(id)
+      .then((data) => {
+        if (!cancelled) setStatement(data)
+      })
+      .catch(() => {
+        // Keep the last known figures; the header falls back to placeholders.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [id, canViewStatement, paymentsRefreshKey, statementRefreshKey])
 
   // Fetch patient data
   useEffect(() => {
@@ -609,6 +634,30 @@ export default function PatientDetailPage() {
                   <span className="text-gray-500 text-sm">{age} años</span>
                 )}
               </div>
+              {canViewStatement && (
+                <div className="flex items-center gap-4 mt-2 text-sm" data-testid="patient-balance">
+                  <span className="text-gray-500">
+                    {t('payments.statement.appointmentsDebt')}:{' '}
+                    <span
+                      className={`font-semibold ${
+                        statement && statement.appointmentsDebt > 0 ? 'text-amber-600' : 'text-gray-700'
+                      }`}
+                    >
+                      {statement ? formatCurrency(statement.appointmentsDebt, currency) : '—'}
+                    </span>
+                  </span>
+                  <span className="text-gray-500">
+                    {t('payments.credit')}:{' '}
+                    <span
+                      className={`font-semibold ${
+                        statement && statement.advancesCredit > 0 ? 'text-green-600' : 'text-gray-700'
+                      }`}
+                    >
+                      {statement ? formatCurrency(statement.advancesCredit, currency) : '—'}
+                    </span>
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -947,7 +996,9 @@ export default function PatientDetailPage() {
               <PaymentSection
                 patientId={patient.id}
                 refreshKey={paymentsRefreshKey}
+                statement={statement}
                 onPaymentsChange={() => {
+                  setStatementRefreshKey((k) => k + 1)
                   setAppointmentsRefreshKey((k) => k + 1)
                   setMovementsRefreshKey((k) => k + 1)
                 }}
