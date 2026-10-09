@@ -664,6 +664,26 @@ export function AppointmentFormModal({
                 </div>
               </div>
 
+              {isEditing && appointment?.budgetItems && (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+                  <p className="text-gray-700">
+                    {t('appointments.budgetItems.executedCharge', {
+                      count: appointment.budgetItems.count,
+                      total: formatCurrency(appointment.budgetItems.cost, currency),
+                    })}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {t('appointments.budgetItems.executedChargeStatus', {
+                      paid: formatCurrency(appointment.budgetItems.paidAmount, currency),
+                      outstanding: formatCurrency(appointment.budgetItems.outstanding, currency),
+                    })}
+                  </p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {t('appointments.budgetItems.executedChargeHint')}
+                  </p>
+                </div>
+              )}
+
               {/* Budget items */}
               {watchedPatientId && (
                 <div>

@@ -72,6 +72,16 @@ export type SafeAppointment = {
   // (getAppointmentsByPatient, getAppointmentById). undefined elsewhere.
   paidAmount?: number
   outstanding?: number
+  /**
+   * Task #544: the executed budget items charged to this appointment, summed
+   * for DISPLAY ONLY. Each item is still its own charge in the ledger (the
+   * budget identity is what lets an advance be reserved to a budget); this is
+   * an aggregate, never a merge, and it is kept apart from `cost`/`paidAmount`/
+   * `outstanding` so the operator can see a typed cost and executed items
+   * side by side and spot a genuine duplicate. Absent when the appointment
+   * carries no executed budget item.
+   */
+  budgetItems?: { count: number; cost: number; paidAmount: number; outstanding: number }
   // Actual linked-payment state. paidAmount now agrees with this for the
   // earmarked case (a consultation payment claims its own appointment
   // first); recordedPaidAmount stays a separate field because it is what
@@ -357,20 +367,38 @@ export async function getAppointmentById(
 async function buildPatientAllocationMap(
   tenantId: string,
   patientId: string
-): Promise<Map<string, { paidAmount: number; outstanding: number; isPaid: boolean }>> {
+): Promise<AllocationMaps> {
   const [items, totalPaid, earmarks] = await Promise.all([
     listBillableItems(tenantId, patientId),
     getTotalPaid(tenantId, patientId),
     getAppointmentEarmarks(tenantId, patientId),
   ])
   const allocations = computeFifoAllocation(items, totalPaid, earmarks)
-  const map = new Map<string, { paidAmount: number; outstanding: number; isPaid: boolean }>()
+  const appointments: AllocationMaps['appointments'] = new Map()
+  const budgetItems: AllocationMaps['budgetItems'] = new Map()
   for (const a of allocations) {
     if (a.type === 'appointment') {
-      map.set(a.id, { paidAmount: a.paidAmount, outstanding: a.outstanding, isPaid: a.isPaid })
+      appointments.set(a.id, { paidAmount: a.paidAmount, outstanding: a.outstanding, isPaid: a.isPaid })
+    } else if (a.type === 'budgetItem' && a.appointmentId) {
+      // BUDGET_ITEMS_DISPLAY_AGGREGATE: sum, in cents, the allocations of the
+      // budget items attributed to this appointment. Display only — the
+      // allocations themselves stay one per item.
+      const sum = budgetItems.get(a.appointmentId) ?? { count: 0, cost: 0, paidAmount: 0, outstanding: 0 }
+      budgetItems.set(a.appointmentId, {
+        count: sum.count + 1,
+        cost: (Math.round(sum.cost * 100) + Math.round(a.cost * 100)) / 100,
+        paidAmount: (Math.round(sum.paidAmount * 100) + Math.round(a.paidAmount * 100)) / 100,
+        outstanding: (Math.round(sum.outstanding * 100) + Math.round(a.outstanding * 100)) / 100,
+      })
     }
+    // labwork allocations are intentionally not surfaced per appointment.
   }
-  return map
+  return { appointments, budgetItems }
+}
+
+type AllocationMaps = {
+  appointments: Map<string, { paidAmount: number; outstanding: number; isPaid: boolean }>
+  budgetItems: Map<string, { count: number; cost: number; paidAmount: number; outstanding: number }>
 }
 
 /**
@@ -382,16 +410,15 @@ async function buildPatientAllocationMap(
  * Appointments not present in the map (cost null/0) get paidAmount=0 and
  * the persisted isPaid is preserved.
  */
-function mergeAllocation(
-  appointment: SafeAppointment,
-  map: Map<string, { paidAmount: number; outstanding: number; isPaid: boolean }>
-): SafeAppointment {
-  const split = map.get(appointment.id)
+function mergeAllocation(appointment: SafeAppointment, maps: AllocationMaps): SafeAppointment {
+  const budgetItems = maps.budgetItems.get(appointment.id)
+  const withBudgetItems = budgetItems ? { ...appointment, budgetItems } : appointment
+  const split = maps.appointments.get(appointment.id)
   if (!split) {
-    return { ...appointment, paidAmount: 0, outstanding: 0 }
+    return { ...withBudgetItems, paidAmount: 0, outstanding: 0 }
   }
   return {
-    ...appointment,
+    ...withBudgetItems,
     paidAmount: split.paidAmount,
     outstanding: split.outstanding,
     isPaid: split.isPaid,

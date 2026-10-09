@@ -91,14 +91,27 @@ const toCents = (dollars: number) => Math.round(dollars * 100)
 const fromCents = (cents: number) => cents / 100
 
 /**
- * Billable item (appointment or labwork) used for FIFO allocation
+ * The three sources of a charge. Declared once and shared by BillableItem and
+ * FifoAllocation: the union used to be written out in both interfaces, so
+ * widening one silently left the other narrow.
+ */
+export type BillableItemType = 'appointment' | 'labwork' | 'budgetItem'
+
+/**
+ * Billable item (appointment, labwork or executed budget item) used for FIFO
+ * allocation
  */
 export interface BillableItem {
   id: string
-  type: 'appointment' | 'labwork'
+  type: BillableItemType
   cost: number
   date: Date
   isPaid: boolean
+  /**
+   * budgetItem only: the appointment the charge is attributed to (the one that
+   * supplies `date`). Display aggregation reads this; the allocation ignores it.
+   */
+  appointmentId?: string
 }
 
 /**
@@ -108,7 +121,8 @@ export interface BillableItem {
  */
 export interface FifoAllocation {
   id: string
-  type: 'appointment' | 'labwork'
+  type: BillableItemType
+  appointmentId?: string
   cost: number
   paidAmount: number
   outstanding: number
@@ -164,6 +178,7 @@ export function computeFifoAllocation(
     result.push({
       id: item.id,
       type: item.type,
+      appointmentId: item.appointmentId,
       cost: item.cost,
       paidAmount: paidAmountCents / 100,
       outstanding: Math.max(0, costCents[i] - paidAmountCents) / 100,
@@ -227,7 +242,7 @@ export async function getAppointmentEarmarks(
  * Get all billable items for a patient, ordered by date ASC (for FIFO)
  */
 async function getBillableItems(tenantId: string, patientId: string): Promise<BillableItem[]> {
-  const [appointments, labworks] = await Promise.all([
+  const [appointments, labworks, executedLinks] = await Promise.all([
     prisma.appointment.findMany({
       where: { tenantId, patientId, isActive: true, cost: { not: null } },
       select: { id: true, cost: true, startTime: true, isPaid: true },
@@ -238,7 +253,59 @@ async function getBillableItems(tenantId: string, patientId: string): Promise<Bi
       select: { id: true, price: true, date: true, isPaid: true },
       orderBy: { date: 'asc' },
     }),
+    // BUDGET_ITEM_BILLABLE_AUTHORITY: an item is billable because it holds a
+    // BudgetItemAppointment link with role EXECUTED. Neither BudgetItem.status
+    // nor the mere presence of a link is read: status says what the item is
+    // doing, the EXECUTED role says the doctor confirmed it on a dated,
+    // active appointment. An item with status EXECUTED but only a SCHEDULED
+    // link is not billed; an item with an EXECUTED link but a different
+    // status is.
+    prisma.budgetItemAppointment.findMany({
+      where: {
+        role: 'EXECUTED',
+        appointment: { isActive: true },
+        budgetItem: { budget: { tenantId, patientId, isActive: true } },
+      },
+      select: {
+        appointmentId: true,
+        appointment: { select: { startTime: true } },
+        budgetItem: { select: { id: true, totalPrice: true, isPaid: true } },
+      },
+    }),
   ])
+
+  // BUDGET_ITEM_ONCE_PER_ITEM: bill once per ITEM, never once per link (the
+  // unique key is [item, appointment, role], so an item can hold several
+  // EXECUTED links). The charge date and the attributed appointment come from
+  // the item's EARLIEST EXECUTED link (ties broken by appointment id so the
+  // choice is deterministic).
+  //
+  // BUDGET_ITEM_DATELESS: an item with no EXECUTED link on an active
+  // appointment has no date to FIFO-order by, so it is NOT billed. It never
+  // appears in executedLinks (the query is link-driven), which is the explicit
+  // exclusion rather than an accident of a join.
+  const budgetCharges = new Map<
+    string,
+    { cost: number; isPaid: boolean; date: Date; appointmentId: string }
+  >()
+  for (const link of executedLinks) {
+    const cost = link.budgetItem.totalPrice.toNumber()
+    if (cost <= 0) continue
+    const date = link.appointment.startTime
+    const current = budgetCharges.get(link.budgetItem.id)
+    const earlier =
+      !current ||
+      date.getTime() < current.date.getTime() ||
+      (date.getTime() === current.date.getTime() && link.appointmentId < current.appointmentId)
+    if (earlier) {
+      budgetCharges.set(link.budgetItem.id, {
+        cost,
+        isPaid: link.budgetItem.isPaid,
+        date,
+        appointmentId: link.appointmentId,
+      })
+    }
+  }
 
   const items: BillableItem[] = [
     ...appointments
@@ -257,6 +324,14 @@ async function getBillableItems(tenantId: string, patientId: string): Promise<Bi
       date: l.date,
       isPaid: l.isPaid,
     })),
+    ...[...budgetCharges].map(([id, charge]) => ({
+      id,
+      type: 'budgetItem' as const,
+      cost: charge.cost,
+      date: charge.date,
+      isPaid: charge.isPaid,
+      appointmentId: charge.appointmentId,
+    })),
   ]
 
   // Sort by date ASC for FIFO
@@ -268,6 +343,7 @@ async function getBillableItems(tenantId: string, patientId: string): Promise<Bi
 export interface RecalculatePaidStatusResult {
   appointmentChanges: number
   labworkChanges: number
+  budgetItemChanges: number
 }
 
 /**
@@ -299,6 +375,7 @@ export async function recalculatePaidStatus(
 
   const appointmentUpdates: { id: string; isPaid: boolean }[] = []
   const labworkUpdates: { id: string; isPaid: boolean }[] = []
+  const budgetItemUpdates: { id: string; isPaid: boolean }[] = []
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
@@ -308,8 +385,10 @@ export async function recalculatePaidStatus(
     if (item.isPaid !== shouldBePaid) {
       if (item.type === 'appointment') {
         appointmentUpdates.push({ id: item.id, isPaid: shouldBePaid })
-      } else {
+      } else if (item.type === 'labwork') {
         labworkUpdates.push({ id: item.id, isPaid: shouldBePaid })
+      } else {
+        budgetItemUpdates.push({ id: item.id, isPaid: shouldBePaid })
       }
     }
   }
@@ -323,6 +402,7 @@ export async function recalculatePaidStatus(
   const result: RecalculatePaidStatusResult = {
     appointmentChanges: appointmentUpdates.length,
     labworkChanges: labworkUpdates.length + includedLabworks.length,
+    budgetItemChanges: budgetItemUpdates.length,
   }
 
   if (dryRun) {
@@ -336,6 +416,9 @@ export async function recalculatePaidStatus(
   }
   for (const u of labworkUpdates) {
     updates.push(prisma.labwork.update({ where: { id: u.id }, data: { isPaid: u.isPaid } }))
+  }
+  for (const u of budgetItemUpdates) {
+    updates.push(prisma.budgetItem.update({ where: { id: u.id }, data: { isPaid: u.isPaid } }))
   }
   for (const l of includedLabworks) {
     updates.push(prisma.labwork.update({ where: { id: l.id }, data: { isPaid: true } }))
@@ -382,7 +465,7 @@ export async function getPatientBalance(
     return { success: false, code: 'PATIENT_NOT_FOUND' }
   }
 
-  const [appointmentsAgg, labworksAgg, paymentsAgg] = await Promise.all([
+  const [appointmentsAgg, labworksAgg, paymentsAgg, executedBudgetItems] = await Promise.all([
     prisma.appointment.aggregate({
       where: { tenantId, patientId, isActive: true, cost: { not: null, gt: 0 } },
       _sum: { cost: true },
@@ -395,6 +478,16 @@ export async function getPatientBalance(
       where: { tenantId, patientId, isActive: true },
       _sum: { amount: true },
     }),
+    // Same rule as getBillableItems (BUDGET_ITEM_* there): one row per item
+    // holding an EXECUTED link on an active appointment.
+    prisma.budgetItem.findMany({
+      where: {
+        totalPrice: { gt: 0 },
+        budget: { tenantId, patientId, isActive: true },
+        appointments: { some: { role: 'EXECUTED', appointment: { isActive: true } } },
+      },
+      select: { totalPrice: true },
+    }),
   ])
 
   // Sum and diff in integer cents (see toCents at module scope, #403): the
@@ -402,7 +495,8 @@ export async function getPatientBalance(
   // totalDebt/outstanding/credit (e.g. 12.350000000000023).
   const debtCents =
     toCents(appointmentsAgg._sum.cost?.toNumber() || 0) +
-    toCents(labworksAgg._sum.price?.toNumber() || 0)
+    toCents(labworksAgg._sum.price?.toNumber() || 0) +
+    executedBudgetItems.reduce((sum, item) => sum + toCents(item.totalPrice.toNumber()), 0)
   const paidCents = toCents(paymentsAgg._sum.amount?.toNumber() || 0)
 
   return {
@@ -530,12 +624,15 @@ export interface PatientOutstanding {
 /**
  * Outstanding balance per patient for the whole tenant, keyed by patientId.
  *
- * No per-patient N+1: the whole tenant is covered by exactly three grouped
- * aggregates (appointments, labworks, payments) — there is no query inside
- * any loop here, and callers must not add one.
+ * No per-patient N+1: the whole tenant is covered by exactly four tenant-wide
+ * queries (appointments, labworks and payments as grouped aggregates, plus one
+ * flat read of the executed budget items) — there is no query inside any
+ * loop here, and callers must not add one.
  *
- * Uses the same filters as getPatientBalance/getBillableItems, so the debt
- * figures stay consistent with the per-patient balance view. The payments
+ * Applies the same charge rules as getBillableItems (appointment cost,
+ * labwork price, and executed budget items — see BUDGET_ITEM_* there), so the
+ * debt figures stay consistent with the per-patient balance view. If one
+ * changes, the other must change with it. The payments
  * aggregate deliberately carries no `kind` filter: an ADVANCE is the
  * patient's money just as much as an APPOINTMENT payment is, and that is
  * what keeps the metric stable across the cancel/restore ADVANCE conversion
@@ -554,7 +651,7 @@ export interface PatientOutstanding {
 export async function computeOutstandingByPatient(
   tenantId: string
 ): Promise<Map<string, PatientOutstanding>> {
-  const [appointments, labworks, payments] = await Promise.all([
+  const [appointments, labworks, payments, executedBudgetItems] = await Promise.all([
     prisma.appointment.groupBy({
       by: ['patientId'],
       where: { tenantId, isActive: true, cost: { not: null, gt: 0 } },
@@ -570,6 +667,18 @@ export async function computeOutstandingByPatient(
       where: { tenantId, isActive: true },
       _sum: { amount: true },
     }),
+    // One row per ITEM (the `some` filter, not a join on links), so an item
+    // with several EXECUTED links is counted once — same rule as
+    // getBillableItems. Items with no EXECUTED link on an active appointment
+    // are dateless and excluded there, so they are excluded here.
+    prisma.budgetItem.findMany({
+      where: {
+        totalPrice: { gt: 0 },
+        budget: { tenantId, isActive: true },
+        appointments: { some: { role: 'EXECUTED', appointment: { isActive: true } } },
+      },
+      select: { totalPrice: true, budget: { select: { patientId: true } } },
+    }),
   ])
 
   const debtCentsByPatient = new Map<string, number>()
@@ -578,6 +687,10 @@ export async function computeOutstandingByPatient(
   )
   labworks.forEach((r) =>
     addToMap(debtCentsByPatient, r.patientId, toCents(r._sum.price?.toNumber() || 0))
+  )
+
+  executedBudgetItems.forEach((item) =>
+    addToMap(debtCentsByPatient, item.budget.patientId, toCents(item.totalPrice.toNumber()))
   )
 
   const paidCentsByPatient = new Map<string, number>()
