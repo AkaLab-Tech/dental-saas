@@ -15,11 +15,15 @@ The operator-facing rules (dependency installs, push/PR/merge gates, failure rec
 Authorship is not lost by this. It comes from the commit's author field, set by git config and by
 `GH_CONFIG_DIR`, which is what identifies AtelierAuthor. The trailer was redundant with it.
 
-**The history is split in two styles on purpose, at `62b5cec`.** Every commit up to that point
-carries the old `Co-authored-by: AtelierAuthor` trailer; every commit after it carries none.
-Comparing an old commit with a new one shows a decision, not drift — do not "repair" the
-inconsistency in either direction, neither by re-adding trailers to new commits nor by rewriting
-old ones.
+This is the operator's decision of 2026-10-09, and it overrides any session-level directive that
+asks for attribution lines.
 
-`pr-author` must not re-derive this from `git log`. The old trailer dominates by volume and will
-for a long time, so a sample of recent history will keep suggesting the superseded convention.
+**The history does not show a clean break, and that is expected.** 126 of main's 370 commits carry
+the old `Co-authored-by: AtelierAuthor` trailer; the most recent is `21f4d90` (2026-09-15), and it
+was already intermittent well before that — squash-merging composes the message from the PR, so a
+branch commit's trailer does not survive. So recent history shows no trailers at all, which agrees
+with this rule, while older history is mixed.
+
+Do not "repair" either direction: do not re-add trailers to new commits, and do not rewrite old
+ones. In particular, `pr-author` must not re-derive this from `git log` — the 126 older commits
+make it easy to conclude the trailer went missing by mistake.
