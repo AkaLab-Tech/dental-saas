@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, type Mock } from 'vitest'
-import { render, screen, act } from '@testing-library/react'
+import { render, screen, act, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import i18n from 'i18next'
 import '@/i18n'
@@ -151,6 +151,114 @@ describe('AppLayout', () => {
 
     expect(screen.getByText('Panel de Control')).toBeInTheDocument()
     expect(screen.getByText('Cerrar sesión')).toBeInTheDocument()
+  })
+
+  // ---------------------------------------------------------------------
+  // Task #508 — the sidebar footer used to be `absolute bottom-0`, which is
+  // out of flow: it reserved no space, so with nine nav items (what an OWNER
+  // sees) the last link (/settings) was painted underneath the user block.
+  // The fix makes the aside a flex column (nav `flex-1`, footer in flow).
+  //
+  // jsdom computes no layout, so overlap itself cannot be asserted here. The
+  // tests below pin (1) document order and (2) the className layout contract
+  // that makes the browser reserve the footer's space. Only (2) is a guard.
+  // ---------------------------------------------------------------------
+  describe('sidebar footer layout (#508)', () => {
+    function getSidebar(container: HTMLElement) {
+      const aside = container.querySelector('aside')
+      if (!aside) throw new Error('aside not rendered')
+      const nav = aside.querySelector('nav') as HTMLElement
+      const footer = screen.getByRole('button', { name: 'Cerrar sesión' })
+        .parentElement as HTMLElement
+      return { aside, nav, footer }
+    }
+
+    it('renders the settings link before the logout button in document order, both inside the sidebar (structure only: also passes on the pre-fix markup, NOT the regression guard)', () => {
+      const { container } = renderAppLayout()
+      const { aside } = getSidebar(container)
+
+      const settings = screen.getByRole('link', { name: 'Configuración' })
+      const logout = screen.getByRole('button', { name: 'Cerrar sesión' })
+
+      expect(settings).toHaveAttribute('href', '/settings')
+      expect(aside).toContainElement(settings)
+      expect(aside).toContainElement(logout)
+      expect(
+        settings.compareDocumentPosition(logout) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy()
+    })
+
+    it('shows all nine nav entries for an OWNER, with /settings the last one', () => {
+      const { container } = renderAppLayout()
+      const { nav } = getSidebar(container)
+
+      const links = nav.querySelectorAll('a')
+      expect(links).toHaveLength(9)
+      expect(links[links.length - 1]).toHaveAttribute('href', '/settings')
+    })
+
+    it('makes the aside a flex column so the footer reserves its own space', () => {
+      const { container } = renderAppLayout()
+      const { aside } = getSidebar(container)
+
+      expect(aside.classList.contains('flex')).toBe(true)
+      expect(aside.classList.contains('flex-col')).toBe(true)
+    })
+
+    it('lets the nav take the remaining height (flex-1) and scroll (overflow-y-auto) instead of growing behind the footer', () => {
+      const { container } = renderAppLayout()
+      const { nav } = getSidebar(container)
+
+      expect(nav.classList.contains('flex-1')).toBe(true)
+      expect(nav.classList.contains('overflow-y-auto')).toBe(true)
+    })
+
+    it('keeps the user block / logout footer in normal flow (not absolute) as the last child of the aside, after the nav', () => {
+      const { container } = renderAppLayout()
+      const { aside, nav, footer } = getSidebar(container)
+
+      expect(footer.classList.contains('absolute')).toBe(false)
+      expect(footer.classList.contains('bottom-0')).toBe(false)
+      expect(footer.parentElement).toBe(aside)
+      expect(aside.lastElementChild).toBe(footer)
+      expect(nav.nextElementSibling).toBe(footer)
+    })
+
+    it('keeps the same contract with a short STAFF-like nav: footer still the last flow child, and the settings link is not rendered', () => {
+      ;(usePermissions as unknown as Mock).mockReturnValue({
+        can: () => false,
+        canAny: () => false,
+        canAll: () => false,
+      })
+
+      const { container } = renderAppLayout()
+      const { aside, nav, footer } = getSidebar(container)
+
+      expect(nav.querySelectorAll('a').length).toBeLessThan(9)
+      expect(screen.queryByRole('link', { name: 'Configuración' })).not.toBeInTheDocument()
+      expect(aside.lastElementChild).toBe(footer)
+      expect(footer.classList.contains('absolute')).toBe(false)
+      expect(nav.classList.contains('flex-1')).toBe(true)
+      expect(aside.classList.contains('flex-col')).toBe(true)
+    })
+
+    it('mobile drawer: opening and closing via the menu buttons toggles the translate class while the flex contract on the same aside is unchanged', () => {
+      const { container } = renderAppLayout()
+      const { aside, nav, footer } = getSidebar(container)
+
+      expect(aside.classList.contains('-translate-x-full')).toBe(true)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Abrir menú' }))
+      expect(aside.classList.contains('translate-x-0')).toBe(true)
+      expect(aside.classList.contains('-translate-x-full')).toBe(false)
+      expect(aside.classList.contains('flex-col')).toBe(true)
+      expect(nav.classList.contains('flex-1')).toBe(true)
+      expect(aside.lastElementChild).toBe(footer)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cerrar menú' }))
+      expect(aside.classList.contains('-translate-x-full')).toBe(true)
+      expect(aside.classList.contains('flex-col')).toBe(true)
+    })
   })
 
   // ---------------------------------------------------------------------
