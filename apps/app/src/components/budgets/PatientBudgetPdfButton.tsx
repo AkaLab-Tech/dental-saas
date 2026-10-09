@@ -46,8 +46,11 @@ export function PatientBudgetPdfButton({ patientId, onError }: PatientBudgetPdfB
 
   // The store is global: until the fetch for this patient lands, `budgets`
   // may still hold the previous patient's list.
+  // A failed fetch leaves that stale list in place with loading=false, so the
+  // store bookkeeping alone is not enough: filter on each budget's owner.
   const listIsForThisPatient = currentPatientId === patientId && !loading
-  if (!listIsForThisPatient || budgets.length === 0) return null
+  const ownBudgets = budgets.filter((b) => b.patientId === patientId)
+  if (!listIsForThisPatient || ownBudgets.length === 0) return null
 
   const download = async (budgetId: string) => {
     setMenuOpen(false)
@@ -55,13 +58,14 @@ export function PatientBudgetPdfButton({ patientId, onError }: PatientBudgetPdfB
     try {
       await downloadBudgetPdf(budgetId)
     } catch (e) {
-      onError(e instanceof Error ? e.message : t('budgets.exportPdfError'))
+      console.error(e)
+      onError(t('budgets.exportPdfError'))
     } finally {
       setDownloading(false)
     }
   }
 
-  const hasChoice = budgets.length > 1
+  const hasChoice = ownBudgets.length > 1
   const buttonClass =
     'inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50'
 
@@ -70,7 +74,7 @@ export function PatientBudgetPdfButton({ patientId, onError }: PatientBudgetPdfB
       <div className="relative" ref={menuRef}>
         <button
           type="button"
-          onClick={() => (hasChoice ? setMenuOpen((v) => !v) : void download(budgets[0].id))}
+          onClick={() => (hasChoice ? setMenuOpen((v) => !v) : void download(ownBudgets[0].id))}
           disabled={downloading}
           aria-haspopup={hasChoice ? 'menu' : undefined}
           aria-expanded={hasChoice ? menuOpen : undefined}
@@ -93,7 +97,7 @@ export function PatientBudgetPdfButton({ patientId, onError }: PatientBudgetPdfB
             <p className="px-3 py-2 text-xs text-gray-500 border-b border-gray-100">
               {t('budgets.exportPdfChoose')}
             </p>
-            {budgets.map((budget) => (
+            {ownBudgets.map((budget) => (
               <button
                 key={budget.id}
                 type="button"

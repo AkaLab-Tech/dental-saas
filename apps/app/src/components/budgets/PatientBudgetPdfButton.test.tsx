@@ -183,17 +183,42 @@ describe('PatientBudgetPdfButton', () => {
     expect(downloadBudgetPdfMock).not.toHaveBeenCalled()
   })
 
+  it("does not export the previous patient's budget after the new patient's fetch failed", () => {
+    // Post-catch state of fetchBudgetsByPatient: currentPatientId already
+    // advanced to B, loading=false, but budgets still holds patient A's list.
+    const stale = makeBudget({ id: 'budget-stale-A', patientId: 'patient-A' })
+    useBudgetsStore.setState({
+      budgets: [stale],
+      currentPatientId: 'patient-B',
+      loading: false,
+      error: 'Error al cargar los presupuestos',
+    })
+    renderButton('patient-B')
+    // Behaviour first: clicking whatever is offered must not export anything.
+    for (const button of screen.queryAllByRole('button')) {
+      try {
+        fireEvent.click(button)
+      } catch {
+        // a control with nothing to export may throw; the assertions below still apply
+      }
+    }
+    expect(downloadBudgetPdfMock).not.toHaveBeenCalled()
+    expect(downloadBudgetPdfMock).not.toHaveBeenCalledWith('budget-stale-A')
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
+
   it('renders nothing while the list for this patient is still loading', () => {
     seed([newest], 'patient-A', true)
     renderButton('patient-A')
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
-  it('reports a failed download through onError with the error message', async () => {
+  it('reports a failed download through onError with the translated message', async () => {
     downloadBudgetPdfMock.mockRejectedValue(new Error('boom'))
     seed([middle])
     const onError = renderButton()
     fireEvent.click(screen.getByRole('button', { name: /Exportar presupuesto/ }))
-    await waitFor(() => expect(onError).toHaveBeenCalledWith('boom'))
+    await waitFor(() => expect(onError).toHaveBeenCalledWith('Error al descargar el presupuesto'))
   })
 })
