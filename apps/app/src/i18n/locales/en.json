@@ -419,7 +419,7 @@
       "notes": "Notes",
       "cost": "Cost",
       "paidAmount": "Amount paid",
-      "paidAmountHint": "Recorded as this appointment's payment, kept separate from advance payments, and applied to the patient's oldest outstanding balance.",
+      "paidAmountHint": "Charged on this appointment and applied to its cost first; only what exceeds that cost goes to the patient's remaining balance.",
       "alreadyPaidHint": "To reverse the payment, delete the corresponding entry from the payments section.",
       "coveredByBalanceHint": "This appointment is covered by the patient's balance. No consultation payment is recorded, so the amount is still editable.",
       "partialPaymentRecordedHint": "A payment is already recorded for this appointment. To change it, edit it from the payments section.",

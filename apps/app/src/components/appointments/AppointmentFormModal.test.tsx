@@ -914,7 +914,7 @@ describe('AppointmentFormModal — paidAmount input (task #373)', () => {
     expect(input.value).toBe('')
     expect(input.value).not.toBe('150')
     expect(input).not.toBeDisabled()
-    expect(screen.getByText('Se registra como pago de esta cita, separado de las entregas, y se aplica a la deuda más antigua del paciente.')).toBeInTheDocument()
+    expect(screen.getByText('Se cobra en esta cita y cubre primero su costo; solo lo que exceda ese costo pasa al saldo restante del paciente.')).toBeInTheDocument()
   })
 
   // Core regression test for the design change: with the old `cost` prefill,
