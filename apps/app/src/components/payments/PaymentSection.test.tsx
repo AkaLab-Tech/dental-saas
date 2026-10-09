@@ -14,7 +14,6 @@ beforeAll(async () => {
 // Mocks
 // ============================================================================
 
-const getAccountStatementMock = vi.fn()
 const getPatientPaymentsMock = vi.fn()
 const createPaymentMock = vi.fn()
 const deletePaymentMock = vi.fn()
@@ -23,7 +22,6 @@ vi.mock('@/lib/payment-api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/payment-api')>('@/lib/payment-api')
   return {
     ...actual,
-    getAccountStatement: (...args: unknown[]) => getAccountStatementMock(...args),
     getPatientPayments: (...args: unknown[]) => getPatientPaymentsMock(...args),
     createPayment: (...args: unknown[]) => createPaymentMock(...args),
     deletePayment: (...args: unknown[]) => deletePaymentMock(...args),
@@ -84,7 +82,9 @@ const emptyPayments: { data: Payment[]; pagination: { total: number; limit: numb
 }
 
 function renderSection(props: Partial<Parameters<typeof PaymentSection>[0]> = {}) {
-  return render(<PaymentSection patientId="patient-1" {...props} />)
+  // The statement is owned and fetched by PatientDetailPage (task #526) and
+  // arrives as a prop; the default is a settled, zeroed statement.
+  return render(<PaymentSection patientId="patient-1" statement={makeStatement()} {...props} />)
 }
 
 // Locates the value <p> for a statement figure (the label's own card always
@@ -102,17 +102,14 @@ describe('PaymentSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     canMock.mockReturnValue(true)
-    getAccountStatementMock.mockResolvedValue(makeStatement())
     getPatientPaymentsMock.mockResolvedValue(emptyPayments)
   })
 
   describe('"Nueva Entrega" button', () => {
     it('renders when the patient has zero outstanding debt (fully settled)', async () => {
-      getAccountStatementMock.mockResolvedValue(
-        makeStatement({ appointmentsDebt: 0, advancesCredit: 0, remainingBudgetProjection: 0 })
-      )
-
-      renderSection()
+      renderSection({
+        statement: makeStatement({ appointmentsDebt: 0, advancesCredit: 0, remainingBudgetProjection: 0 }),
+      })
 
       await waitFor(() => {
         expect(screen.getByText('Nueva Entrega')).toBeInTheDocument()
@@ -120,11 +117,9 @@ describe('PaymentSection', () => {
     })
 
     it('renders when the patient already has a credit balance (no outstanding debt at all)', async () => {
-      getAccountStatementMock.mockResolvedValue(
-        makeStatement({ appointmentsDebt: 0, advancesCredit: 50, remainingBudgetProjection: 0 })
-      )
-
-      renderSection()
+      renderSection({
+        statement: makeStatement({ appointmentsDebt: 0, advancesCredit: 50, remainingBudgetProjection: 0 }),
+      })
 
       await waitFor(() => {
         expect(screen.getByText('Nueva Entrega')).toBeInTheDocument()
@@ -132,11 +127,9 @@ describe('PaymentSection', () => {
     })
 
     it('still renders when the patient owes money (appointmentsDebt > 0)', async () => {
-      getAccountStatementMock.mockResolvedValue(
-        makeStatement({ appointmentsDebt: 150, advancesCredit: 0, remainingBudgetProjection: 0 })
-      )
-
-      renderSection()
+      renderSection({
+        statement: makeStatement({ appointmentsDebt: 150, advancesCredit: 0, remainingBudgetProjection: 0 }),
+      })
 
       await waitFor(() => {
         expect(screen.getByText('Nueva Entrega')).toBeInTheDocument()
@@ -145,11 +138,9 @@ describe('PaymentSection', () => {
 
     it('does not render when the user lacks PAYMENTS_CREATE, regardless of the statement', async () => {
       canMock.mockImplementation((perm: Permission) => perm !== Permission.PAYMENTS_CREATE)
-      getAccountStatementMock.mockResolvedValue(
-        makeStatement({ appointmentsDebt: 150, advancesCredit: 0, remainingBudgetProjection: 0 })
-      )
-
-      renderSection()
+      renderSection({
+        statement: makeStatement({ appointmentsDebt: 150, advancesCredit: 0, remainingBudgetProjection: 0 }),
+      })
 
       // Wait for the section to finish loading (title always renders once
       // the statement/payments resolve) before asserting the button's absence.
@@ -159,26 +150,34 @@ describe('PaymentSection', () => {
       expect(screen.queryByText('Nueva Entrega')).not.toBeInTheDocument()
     })
 
-    it('does not render when the initial statement fetch fails', async () => {
-      getAccountStatementMock.mockRejectedValue(new Error('network fail'))
+    it('does not render when the parent has no statement (null: still loading or its fetch failed)', async () => {
+      renderSection({ statement: null })
+
+      await waitFor(() => {
+        expect(screen.getByText('Entregas')).toBeInTheDocument()
+      })
+      expect(screen.queryByText('Nueva Entrega')).not.toBeInTheDocument()
+      expect(screen.queryByText('Deuda por consultas realizadas')).not.toBeInTheDocument()
+    })
+
+    it('shows the payments-fetch error when the payments request fails', async () => {
+      getPatientPaymentsMock.mockRejectedValue(new Error('network fail'))
 
       renderSection()
 
       await waitFor(() => {
         expect(screen.getByText('network fail')).toBeInTheDocument()
       })
-      expect(screen.queryByText('Nueva Entrega')).not.toBeInTheDocument()
-      expect(screen.queryByText('Deuda por consultas realizadas')).not.toBeInTheDocument()
     })
   })
 
   describe('loading state', () => {
-    it('shows a loading spinner until the initial statement/payments fetch resolves', async () => {
-      let resolveStatement: (value: AccountStatement) => void = () => {}
-      getAccountStatementMock.mockImplementation(
+    it('shows a loading spinner until the initial payments fetch resolves', async () => {
+      let resolvePayments: (value: typeof emptyPayments) => void = () => {}
+      getPatientPaymentsMock.mockImplementation(
         () =>
-          new Promise<AccountStatement>((resolve) => {
-            resolveStatement = resolve
+          new Promise<typeof emptyPayments>((resolve) => {
+            resolvePayments = resolve
           })
       )
 
@@ -187,7 +186,7 @@ describe('PaymentSection', () => {
       expect(container.querySelector('.animate-spin')).toBeInTheDocument()
       expect(screen.queryByText('Entregas')).not.toBeInTheDocument()
 
-      resolveStatement(makeStatement())
+      resolvePayments(emptyPayments)
 
       await waitFor(() => {
         expect(screen.getByText('Entregas')).toBeInTheDocument()
@@ -223,17 +222,14 @@ describe('PaymentSection', () => {
       })
     })
 
-    it('re-requests ADVANCE-kind payments and the account statement on every refresh (refreshKey bump)', async () => {
+    it('re-requests ADVANCE-kind payments on every refresh (refreshKey bump)', async () => {
       const { rerender } = renderSection({ refreshKey: 0 })
       await waitFor(() => expect(getPatientPaymentsMock).toHaveBeenCalledTimes(1))
-      expect(getAccountStatementMock).toHaveBeenCalledTimes(1)
 
-      rerender(<PaymentSection patientId="patient-1" refreshKey={1} />)
+      rerender(<PaymentSection patientId="patient-1" statement={makeStatement()} refreshKey={1} />)
 
       await waitFor(() => expect(getPatientPaymentsMock).toHaveBeenCalledTimes(2))
       expect(getPatientPaymentsMock).toHaveBeenLastCalledWith('patient-1', { limit: 50, kind: 'ADVANCE', includeReversed: true })
-      expect(getAccountStatementMock).toHaveBeenCalledTimes(2)
-      expect(getAccountStatementMock).toHaveBeenLastCalledWith('patient-1')
     })
 
     it('renders the ADVANCE-kind payments returned by the (already-filtered) API response, with no "Pago en consulta" note anywhere', async () => {
@@ -264,11 +260,9 @@ describe('PaymentSection', () => {
   // between PaymentSection and that component.
   describe('account statement (task #376)', () => {
     it('renders all three statement figures, individually labelled, at the same time', async () => {
-      getAccountStatementMock.mockResolvedValue(
-        makeStatement({ appointmentsDebt: 120, advancesCredit: 45, remainingBudgetProjection: 30, advancesTotal: 45 })
-      )
-
-      renderSection()
+      renderSection({
+        statement: makeStatement({ appointmentsDebt: 120, advancesCredit: 45, remainingBudgetProjection: 30, advancesTotal: 45 }),
+      })
 
       await waitFor(() => {
         expect(screen.getByText('Deuda por consultas realizadas')).toBeInTheDocument()
@@ -282,9 +276,7 @@ describe('PaymentSection', () => {
     })
 
     it('renders each figure as 0 (not hidden, not blank) when the patient has no balance activity at all', async () => {
-      getAccountStatementMock.mockResolvedValue(makeStatement())
-
-      renderSection()
+      renderSection({ statement: makeStatement() })
 
       await waitFor(() => {
         expect(screen.getByText('Deuda por consultas realizadas')).toBeInTheDocument()
@@ -418,7 +410,7 @@ describe('PaymentSection', () => {
   })
 
   describe('onPaymentsChange callback (task #374 / #376)', () => {
-    it('fires onPaymentsChange and re-fetches the account statement after successfully creating a payment', async () => {
+    it('fires onPaymentsChange and re-fetches the payments list after successfully creating a payment', async () => {
       const onPaymentsChange = vi.fn()
       createPaymentMock.mockResolvedValue(
         makePayment({ id: 'new-pay', amount: 25, kind: 'ADVANCE' })
@@ -426,7 +418,7 @@ describe('PaymentSection', () => {
 
       renderSection({ onPaymentsChange })
 
-      await waitFor(() => expect(getAccountStatementMock).toHaveBeenCalledTimes(1))
+      await waitFor(() => expect(getPatientPaymentsMock).toHaveBeenCalledTimes(1))
 
       const newPaymentButton = await screen.findByText('Nueva Entrega')
       fireEvent.click(newPaymentButton)
@@ -444,10 +436,11 @@ describe('PaymentSection', () => {
       await waitFor(() => {
         expect(onPaymentsChange).toHaveBeenCalledTimes(1)
       })
-      // fetchData is re-run after create, so both the ADVANCE-only filter
-      // and the account statement are re-fetched on refresh too.
+      // fetchData is re-run after create, so the ADVANCE-only list is
+      // re-fetched. The statement is re-fetched by the parent page in
+      // response to onPaymentsChange (see PatientDetailPage.test.tsx).
+      expect(getPatientPaymentsMock).toHaveBeenCalledTimes(2)
       expect(getPatientPaymentsMock).toHaveBeenLastCalledWith('patient-1', { limit: 50, kind: 'ADVANCE', includeReversed: true })
-      expect(getAccountStatementMock).toHaveBeenCalledTimes(2)
     })
 
     it('does not fire onPaymentsChange when createPayment rejects', async () => {
@@ -470,7 +463,7 @@ describe('PaymentSection', () => {
       expect(screen.getByText('boom')).toBeInTheDocument()
     })
 
-    it('fires onPaymentsChange and re-fetches the account statement after successfully deleting a payment', async () => {
+    it('fires onPaymentsChange and re-fetches the payments list after successfully deleting a payment', async () => {
       const onPaymentsChange = vi.fn()
       const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
       // Task #392: the reversal now also asks for a reason.
@@ -483,7 +476,7 @@ describe('PaymentSection', () => {
 
       renderSection({ onPaymentsChange })
 
-      await waitFor(() => expect(getAccountStatementMock).toHaveBeenCalledTimes(1))
+      await waitFor(() => expect(getPatientPaymentsMock).toHaveBeenCalledTimes(1))
 
       const deleteButton = await screen.findByTitle('Eliminar')
       fireEvent.click(deleteButton)
@@ -495,7 +488,7 @@ describe('PaymentSection', () => {
       await waitFor(() => {
         expect(onPaymentsChange).toHaveBeenCalledTimes(1)
       })
-      expect(getAccountStatementMock).toHaveBeenCalledTimes(2)
+      expect(getPatientPaymentsMock).toHaveBeenCalledTimes(2)
 
       confirmSpy.mockRestore()
     })
