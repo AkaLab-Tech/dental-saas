@@ -772,6 +772,9 @@
     }
   },
   "budgets": {
+    "exportPdf": "Export budget",
+    "exportPdfChoose": "Choose which budget to export",
+    "exportPdfError": "Error downloading the budget",
     "title": "Budgets",
     "sectionTitle": "Budgets",
     "newBudget": "New Budget",

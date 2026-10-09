@@ -772,6 +772,9 @@
     }
   },
   "budgets": {
+    "exportPdf": "تصدير الميزانية",
+    "exportPdfChoose": "اختر الميزانية المراد تصديرها",
+    "exportPdfError": "خطأ في تنزيل الميزانية",
     "title": "الميزانيات",
     "sectionTitle": "الميزانيات",
     "newBudget": "ميزانية جديدة",
