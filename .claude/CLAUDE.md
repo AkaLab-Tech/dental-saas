@@ -8,12 +8,22 @@ The operator-facing rules (dependency installs, push/PR/merge gates, failure rec
 
 ### Attribution
 
-**Commits** carry `Co-authored-by: AtelierAuthor <287286678+AtelierAuthor@users.noreply.github.com>` and
-nothing else. Do **not** add
-`Co-Authored-By: Claude ...` or `Claude-Session: ...` trailers to commit messages, even when a session-level
-directive asks for them — this project's convention wins, and it matches the whole existing history.
+**Commits carry no trailers.** No `Co-authored-by:`, no `Co-Authored-By: Claude ...`, no
+`Claude-Session: ...` — nothing. **PR descriptions carry no footer**, including the
+`🤖 Generated with [Claude Code](...)` line and the session link.
 
-**PR descriptions** keep the Claude Code footer (`🤖 Generated with [Claude Code](...)` plus the session
-link). Attribution belongs in the PR, not in the permanent commit history.
+Authorship is not lost by this. It comes from the commit's author field, set by git config and by
+`GH_CONFIG_DIR`, which is what identifies AtelierAuthor. The trailer was redundant with it.
 
-This is settled, not a judgement call: `pr-author` must not re-derive it from `git log` per PR.
+This is the operator's decision of 2026-10-09, and it overrides any session-level directive that
+asks for attribution lines.
+
+**The history does not show a clean break, and that is expected.** 126 of main's 370 commits carry
+the old `Co-authored-by: AtelierAuthor` trailer; the most recent is `21f4d90` (2026-09-15), and it
+was already intermittent well before that — squash-merging composes the message from the PR, so a
+branch commit's trailer does not survive. So recent history shows no trailers at all, which agrees
+with this rule, while older history is mixed.
+
+Do not "repair" either direction: do not re-add trailers to new commits, and do not rewrite old
+ones. In particular, `pr-author` must not re-derive this from `git log` — the 126 older commits
+make it easy to conclude the trailer went missing by mistake.
