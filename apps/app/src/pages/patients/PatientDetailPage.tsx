@@ -55,6 +55,7 @@ import {
 import { PatientAppointmentsSection } from './PatientAppointmentsSection'
 import { PatientLabworksSection } from './PatientLabworksSection'
 import { BudgetsSection } from '@/components/budgets/BudgetsSection'
+import { PatientBudgetPdfButton } from '@/components/budgets/PatientBudgetPdfButton'
 import { remapPrimaryFdi } from './odontogram-utils'
 
 type PatientDetailTabId =
@@ -684,6 +685,7 @@ export default function PatientDetailPage() {
               )}
               Exportar PDF
             </button>
+            <PatientBudgetPdfButton patientId={patient.id} onError={setError} />
             <Link
               to={`/patients?edit=${patient.id}`}
               className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"

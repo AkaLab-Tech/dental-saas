@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { Mock } from 'vitest'
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router'
@@ -11,6 +11,8 @@ import { createAppointment } from '@/lib/appointment-api'
 import { getAccountStatement, type AccountStatement } from '@/lib/payment-api'
 import type { Patient } from '@/lib/patient-api'
 import type { Appointment } from '@/lib/appointment-api'
+import type { Budget } from '@/lib/budget-api'
+import { useBudgetsStore } from '@/stores/budgets.store'
 
 // ============================================================================
 // Mocks
@@ -778,6 +780,40 @@ describe('PatientDetailPage — visual polish (task #218)', () => {
       expect(headerRow).toHaveClass('flex-wrap', 'gap-3')
       expect(headerRow).toContainElement(editLink)
       expect(headerRow).toHaveTextContent('Juan Pérez')
+    })
+  })
+
+  describe('budget PDF export beside the history export (task #527)', () => {
+    // BudgetsSection is mocked above, so it never overwrites the seeded store.
+    const budget = {
+      id: 'budget-1',
+      patientId: 'p1',
+      status: 'APPROVED',
+      totalAmount: '250.50',
+      createdAt: '2026-03-15T12:00:00Z',
+    } as Budget
+
+    beforeEach(() => {
+      useBudgetsStore.setState({ budgets: [budget], currentPatientId: 'p1', loading: false })
+    })
+
+    afterEach(() => {
+      useBudgetsStore.setState({ budgets: [], currentPatientId: null, loading: false })
+    })
+
+    it('renders both the history export and the budget export in the same header row when the patient has a budget and BUDGETS_VIEW is granted', async () => {
+      ;(usePermissions as unknown as Mock).mockReturnValue({
+        can: (permission: Permission) => permission === Permission.BUDGETS_VIEW,
+        canAny: () => true,
+        canAll: () => true,
+      })
+      await renderLoadedPage()
+
+      const historyButton = screen.getByRole('button', { name: /^Exportar PDF$/ })
+      const budgetButton = screen.getByRole('button', { name: /^budgets\.exportPdf$/ })
+
+      expect(historyButton).not.toBe(budgetButton)
+      expect(historyButton.parentElement).toBe(budgetButton.parentElement?.parentElement)
     })
   })
 

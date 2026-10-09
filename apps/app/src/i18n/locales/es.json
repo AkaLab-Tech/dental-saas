@@ -772,6 +772,9 @@
     }
   },
   "budgets": {
+    "exportPdf": "Exportar presupuesto",
+    "exportPdfChoose": "Elige qué presupuesto exportar",
+    "exportPdfError": "Error al descargar el presupuesto",
     "title": "Presupuestos",
     "sectionTitle": "Presupuestos",
     "newBudget": "Nuevo Presupuesto",
