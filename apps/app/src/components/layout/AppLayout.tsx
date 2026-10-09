@@ -148,7 +148,7 @@ export function AppLayout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 ease-in-out lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`flex flex-col fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 ease-in-out lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         onClick={(e) => e.stopPropagation()}
       >
@@ -175,7 +175,7 @@ export function AppLayout() {
         </div>
 
         {/* Navigation */}
-        <nav className="mt-6 px-4">
+        <nav className="mt-6 px-4 flex-1 overflow-y-auto">
           <ul className="space-y-1">
             {navItems.filter((item) => !item.permission || can(item.permission)).map((item) => {
               const isActive =
@@ -202,7 +202,7 @@ export function AppLayout() {
         </nav>
 
         {/* User info & Logout */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
+        <div className="p-4 border-t border-gray-200">
           <div className="flex items-center gap-3 px-2 mb-3">
             <div className="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center">
               <span className="text-sm font-medium text-white">
