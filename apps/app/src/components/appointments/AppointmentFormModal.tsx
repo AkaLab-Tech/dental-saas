@@ -100,13 +100,14 @@ export function AppointmentFormModal({
   const { t } = useTranslation()
   const modalTitleId = useId()
   const isEditing = !!appointment
-  // When editing an already-paid appointment, the input must be locked:
-  // the FIFO payment can only be reversed by deleting the underlying PatientPayment.
+  // isPaid is FIFO-owned: after a reversal the patient's advances can re-cover
+  // the item, so it can be true with no consultation payment left to reverse.
+  // It says the item is covered, not that anything was charged here (#523).
   const isAlreadyPaid = isEditing && !!appointment?.isPaid
   // Keyed off the server's linked-payment check, not the FIFO-allocated
   // paidAmount (which can read 0 despite a payment being recorded — #373).
   const hasRecordedPaidAmount = isEditing && !!appointment?.hasRecordedPayment
-  const paidAmountLocked = isAlreadyPaid || hasRecordedPaidAmount
+  const paidAmountLocked = hasRecordedPaidAmount
   const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
   const typeListId = useId()
   const doctorFieldId = useId()
@@ -643,13 +644,17 @@ export function AppointmentFormModal({
                     placeholder="0.00"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
                   />
-                  {isAlreadyPaid ? (
+                  {hasRecordedPaidAmount && isAlreadyPaid ? (
                     <p className="mt-1 text-xs text-gray-500">
                       {t('appointments.form.alreadyPaidHint')}
                     </p>
                   ) : hasRecordedPaidAmount ? (
                     <p className="mt-1 text-xs text-gray-500">
                       {t('appointments.form.partialPaymentRecordedHint')}
+                    </p>
+                  ) : isAlreadyPaid ? (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {t('appointments.form.coveredByBalanceHint')}
                     </p>
                   ) : (
                     <p className="mt-1 text-xs text-gray-500">

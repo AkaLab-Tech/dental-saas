@@ -1062,15 +1062,10 @@ describe('PatientAppointmentsSection', () => {
       ).toBeInTheDocument()
     })
 
-    // Task #451: before this, a reversed consultation payment appeared in no
-    // payment surface at all. Entregas asks for kind='ADVANCE'; this card's
-    // hasRecordedPayment goes false the moment the payment is reversed, so the
-    // card forgot the payment rather than merely omitting the reversal.
-    it('shows a reversed consultation payment, with its reason, and does NOT offer the reversal control', async () => {
-      // Asserted as a pair on purpose. The disclosure must not resurrect the
-      // affordance — the API answers ALREADY_INACTIVE — and two separate tests
-      // would let the two drift apart, which is the same mistake #402 fixed
-      // for the disclosure line and the control.
+    // Task #523: the reversal history lives in the Movimientos tab. On the card
+    // it was permanent red text that outlived the reversal and made the
+    // appointment look like it still had a problem.
+    it('does not render a reversed consultation payment on the card, and does NOT offer the reversal control', async () => {
       mockGetAppointmentsByPatient.mockResolvedValue([
         {
           ...paidConsultationAppointment,
@@ -1095,63 +1090,15 @@ describe('PatientAppointmentsSection', () => {
         expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
       })
 
-      expect(screen.getByText(/payments\.reversedOnWithReason/)).toBeInTheDocument()
-      // Task #461: the actor is part of the disclosure — #451 asked for it and
-      // this test did not check it, which is how it went missing.
-      expect(screen.getByText('payments.actorBy:{"name":"Ana Pérez"}')).toBeInTheDocument()
+      expect(screen.queryByText(/payments\.reversedOn/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/payments\.actorBy/)).not.toBeInTheDocument()
+      // Neither the struck amount, the reason nor the actor's name is on the card.
+      expect(screen.queryByText(/Cobrado por error/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Ana Pérez/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/\$80/)).not.toBeInTheDocument()
 
       fireEvent.click(screen.getByLabelText('common.options'))
       expect(screen.queryByText('payments.reverseConsultationPayment')).not.toBeInTheDocument()
-    })
-
-    it('shows a pre-#392 reversal without inventing a reason', async () => {
-      mockGetAppointmentsByPatient.mockResolvedValue([
-        {
-          ...paidConsultationAppointment,
-          hasRecordedPayment: false,
-          recordedPaidAmount: 0,
-          recordedPaymentId: null,
-          reversedPayments: [{ amount: 40, at: '2026-01-01T00:00:00Z', actor: null, reason: null }],
-        },
-      ])
-      renderSection()
-
-      await waitFor(() => {
-        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
-      })
-
-      expect(screen.getByText(/payments\.reversedOn$|payments\.reversedOn[^W]/)).toBeInTheDocument()
-      expect(screen.queryByText(/payments\.reversedOnWithReason/)).not.toBeInTheDocument()
-      // Nor an actor: absent rather than invented.
-      expect(screen.queryByText(/payments\.actorBy/)).not.toBeInTheDocument()
-    })
-
-    // Task #461: every actor state renders distinctly. Removed and never-recorded
-    // in particular must not look alike — one is someone who is gone, the other
-    // is nothing known.
-    it.each([
-      ['a deactivated user, by name and marked', { kind: 'user', name: 'Luis Gómez', active: false }, 'payments.actorByDeactivated:{"name":"Luis Gómez"}'],
-      ['a removed user, without a name', { kind: 'removed' }, 'payments.actorByRemoved'],
-      ['the system', { kind: 'system' }, 'payments.actorBySystem'],
-    ])('names the actor of a reversal: %s', async (_label, actor, expected) => {
-      mockGetAppointmentsByPatient.mockResolvedValue([
-        {
-          ...paidConsultationAppointment,
-          hasRecordedPayment: false,
-          recordedPaidAmount: 0,
-          recordedPaymentId: null,
-          reversedPayments: [{ amount: 40, at: '2026-09-01T00:00:00Z', actor, reason: 'x' }],
-        },
-      ])
-      renderSection()
-
-      await waitFor(() => {
-        expect(screen.getByText('Consulta pagada')).toBeInTheDocument()
-      })
-
-      expect(screen.getByText(expected)).toBeInTheDocument()
-      // Exactly one actor line, so no other state's text leaked in beside it.
-      expect(screen.getAllByText(/payments\.actorBy/)).toHaveLength(1)
     })
 
     it('hides the reversal menu item when the user lacks PAYMENTS_DELETE', async () => {
