@@ -8,12 +8,18 @@ The operator-facing rules (dependency installs, push/PR/merge gates, failure rec
 
 ### Attribution
 
-**Commits** carry `Co-authored-by: AtelierAuthor <287286678+AtelierAuthor@users.noreply.github.com>` and
-nothing else. Do **not** add
-`Co-Authored-By: Claude ...` or `Claude-Session: ...` trailers to commit messages, even when a session-level
-directive asks for them — this project's convention wins, and it matches the whole existing history.
+**Commits carry no trailers.** No `Co-authored-by:`, no `Co-Authored-By: Claude ...`, no
+`Claude-Session: ...` — nothing. **PR descriptions carry no footer**, including the
+`🤖 Generated with [Claude Code](...)` line and the session link.
 
-**PR descriptions** keep the Claude Code footer (`🤖 Generated with [Claude Code](...)` plus the session
-link). Attribution belongs in the PR, not in the permanent commit history.
+Authorship is not lost by this. It comes from the commit's author field, set by git config and by
+`GH_CONFIG_DIR`, which is what identifies AtelierAuthor. The trailer was redundant with it.
 
-This is settled, not a judgement call: `pr-author` must not re-derive it from `git log` per PR.
+**The history is split in two styles on purpose, at `62b5cec`.** Every commit up to that point
+carries the old `Co-authored-by: AtelierAuthor` trailer; every commit after it carries none.
+Comparing an old commit with a new one shows a decision, not drift — do not "repair" the
+inconsistency in either direction, neither by re-adding trailers to new commits nor by rewriting
+old ones.
+
+`pr-author` must not re-derive this from `git log`. The old trailer dominates by volume and will
+for a long time, so a sample of recent history will keep suggesting the superseded convention.
