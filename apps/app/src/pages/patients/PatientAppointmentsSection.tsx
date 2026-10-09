@@ -261,7 +261,7 @@ function PatientAppointmentCard({
           <div className="mt-2 text-xs">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-gray-700">{formatCurrency(cost, currency)}</span>
-              <PaidStatusBadge isPaid={appointment.isPaid} cost={cost} paidAmount={appointment.paidAmount} />
+              <PaidStatusBadge isPaid={appointment.isPaid} cost={cost} paidAmount={appointment.paidAmount} recordedPaidAmount={appointment.recordedPaidAmount} />
             </div>
             {isPartial && (
               <div className="mt-0.5 text-[11px] text-gray-500">

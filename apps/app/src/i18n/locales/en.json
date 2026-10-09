@@ -1079,7 +1079,10 @@
     "paid": "Paid",
     "pending": "Pending",
     "partial": "Partial",
-    "appliedOf": "Applied: {{paid}} of {{total}}"
+    "appliedOf": "Applied: {{paid}} of {{total}}",
+    "chargedHere": "Charged here",
+    "coveredByBalance": "Covered by balance",
+    "chargedAndCovered": "Charged + balance"
   },
   "payments": {
     "title": "Payments",

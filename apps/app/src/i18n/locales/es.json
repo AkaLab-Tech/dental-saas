@@ -1088,7 +1088,10 @@
     "paid": "Pagado",
     "pending": "Pendiente",
     "partial": "Parcial",
-    "appliedOf": "Aplicado: {{paid}} de {{total}}"
+    "appliedOf": "Aplicado: {{paid}} de {{total}}",
+    "chargedHere": "Cobrado en la consulta",
+    "coveredByBalance": "Cubierto por saldo",
+    "chargedAndCovered": "Cobrado + saldo"
   },
   "payments": {
     "title": "Entregas",
