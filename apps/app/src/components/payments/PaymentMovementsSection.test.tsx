@@ -121,6 +121,23 @@ describe('PaymentMovementsSection', () => {
       expect(screen.getByText('Cobrado por error')).toBeInTheDocument()
     })
 
+    // Moved here from the appointment card in #523 (was "a pre-#392 reversal
+    // without inventing a reason"): the Movimientos tab is now the only place
+    // a consultation-payment reversal is shown.
+    it('renders a REVERSED row with no reason line and no actor line when neither was recorded', async () => {
+      getPatientPaymentMovementsMock.mockResolvedValue([
+        makeMovement({ type: 'REVERSED', amount: 40, reason: null, actor: null }),
+      ])
+      renderSection()
+
+      await waitFor(() => {
+        expect(screen.getByText('Entrega revertida · USD 40.00')).toBeInTheDocument()
+      })
+      const row = screen.getByText('Entrega revertida · USD 40.00').parentElement as HTMLElement
+      // Only the type/amount line and the date line: no reason, no actor.
+      expect(row.querySelectorAll('p')).toHaveLength(2)
+    })
+
     it('renders a CONVERTED_TO_ADVANCE row with its type label and amount', async () => {
       getPatientPaymentMovementsMock.mockResolvedValue([
         makeMovement({ type: 'CONVERTED_TO_ADVANCE', amount: 100, at: '2026-05-12T09:00:00.000Z' }),

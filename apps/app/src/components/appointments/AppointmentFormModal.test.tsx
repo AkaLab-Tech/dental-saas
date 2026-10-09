@@ -969,13 +969,9 @@ describe('AppointmentFormModal — paidAmount input (task #373)', () => {
     expect(screen.getByText('Para revertir el pago, elimine la entrega correspondiente desde la sección de pagos.')).toBeInTheDocument()
   })
 
-  it('shows the recorded 0 (not cost) when editing an already-paid appointment with no linked payment', async () => {
-    // isPaid can be true (legacy data, or a FIFO edge case) while the server
-    // still reports no linked payment — the field must not fall back to
-    // `cost` in that case either; it is locked and mirrors recordedPaidAmount
-    // verbatim (0 renders as "0", not blank — `0?.toString() || ''`
-    // evaluates the truthy non-empty string "0", not the empty-string
-    // branch). Never contributes to the payload either way (locked).
+  it('stays editable and blank when isPaid is true but no consultation payment is recorded (#523)', async () => {
+    // isPaid is FIFO-owned: after a reversal the patient's advances can cover
+    // the item. Nothing was charged here, so there is nothing to lock.
     const appointment = makeAppointment({
       cost: 150,
       isPaid: true,
@@ -986,12 +982,14 @@ describe('AppointmentFormModal — paidAmount input (task #373)', () => {
     await waitForOptionsLoaded()
 
     const input = getPaidAmountInput() as HTMLInputElement
-    await waitFor(() => expect(input.value).toBe('0'))
-    expect(input.value).not.toBe('150')
-    expect(input).toBeDisabled()
+    await waitFor(() => expect(getDoctorPickerInput()).not.toBeDisabled())
+    expect(input.value).toBe('')
+    expect(input).not.toBeDisabled()
+    expect(screen.getByText(/cubierta por el saldo del paciente/)).toBeInTheDocument()
+    expect(screen.queryByText(/Para revertir el pago/)).not.toBeInTheDocument()
   })
 
-  it('stays empty when editing an already-paid appointment with recordedPaidAmount entirely absent from the response', async () => {
+  it('stays empty and editable when editing an isPaid appointment with recordedPaidAmount entirely absent from the response', async () => {
     // Distinct from the "0" case above: an appointment payload that omits
     // recordedPaidAmount altogether (undefined, not 0) renders the field
     // truly blank, not "0" — and it must not fall back to `cost`.
@@ -1008,7 +1006,91 @@ describe('AppointmentFormModal — paidAmount input (task #373)', () => {
     await waitFor(() => expect(getDoctorPickerInput()).not.toBeDisabled())
     expect(input.value).toBe('')
     expect(input.value).not.toBe('150')
-    expect(input).toBeDisabled()
+    expect(input).not.toBeDisabled()
+  })
+
+  // Task #523, the headline guard. isPaid is FIFO-owned. The state that
+  // discriminates is isPaid === true WITH no recorded consultation payment —
+  // reached only by: charge it, reverse it, then a later unrelated advance
+  // makes FIFO mark the item paid. A "reverse, then edit" test alone passes
+  // against the broken lock too (isPaid is false in that window), so step 3
+  // is the one that must stay.
+  it('walks charge -> reverse -> FIFO re-covers: locked, then editable, then STILL editable with the covered hint (#523)', async () => {
+    const charged = makeAppointment({
+      cost: 3000,
+      isPaid: true,
+      hasRecordedPayment: true,
+      recordedPaidAmount: 3000,
+    })
+    const { rerender, onClose, onSubmit } = renderModal({ appointment: charged })
+    await waitForOptionsLoaded()
+
+    // Step 1: the consultation payment is live — locked, today's hint.
+    expect(getPaidAmountInput()).toBeDisabled()
+    expect(screen.getByText(/Para revertir el pago/)).toBeInTheDocument()
+
+    // Step 2: reversed. Nothing recorded, FIFO has nothing to cover it with.
+    const reversed = { ...charged, isPaid: false, hasRecordedPayment: false, recordedPaidAmount: 0 }
+    rerender(<AppointmentFormModal isOpen onClose={onClose} onSubmit={onSubmit} appointment={reversed} />)
+    await waitFor(() => expect(getPaidAmountInput()).not.toBeDisabled())
+
+    // Step 3: an unrelated advance arrives; FIFO flips isPaid back to true
+    // while the consultation payment stays reversed (hasRecordedPayment false).
+    const recovered = { ...reversed, isPaid: true }
+    expect(recovered.isPaid).toBe(true)
+    expect(recovered.hasRecordedPayment).toBe(false)
+    rerender(<AppointmentFormModal isOpen onClose={onClose} onSubmit={onSubmit} appointment={recovered} />)
+
+    await waitFor(() => expect(screen.getByText(/cubierta por el saldo del paciente/)).toBeInTheDocument())
+    expect(getPaidAmountInput()).not.toBeDisabled()
+    expect(screen.queryByText(/Para revertir el pago/)).not.toBeInTheDocument()
+  })
+
+  it('submits a typed paidAmount for an isPaid appointment with no recorded consultation payment (#523)', async () => {
+    const appointment = makeAppointment({
+      cost: 3000,
+      isPaid: true,
+      hasRecordedPayment: false,
+      recordedPaidAmount: 0,
+    })
+    const { onSubmit } = renderModal({ appointment })
+    await waitForOptionsLoaded()
+
+    fireEvent.change(getPaidAmountInput(), { target: { value: '1200' } })
+    fireEvent.click(screen.getByRole('button', { name: /guardar cambios/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect((onSubmit.mock.calls[0][0] as { paidAmount?: number }).paidAmount).toBe(1200)
+  })
+
+  // Task #523: the hint is split by what is true, not by isPaid alone.
+  // Covered-but-nothing-recorded must not tell her to reverse a payment that
+  // does not exist; a live payment must not claim the balance covers it.
+  it('shows the covered-by-balance hint, not the reverse-the-payment instruction, when isPaid with nothing recorded (#523)', async () => {
+    renderModal({
+      appointment: makeAppointment({ cost: 150, isPaid: true, hasRecordedPayment: false, recordedPaidAmount: 0 }),
+    })
+    await waitForOptionsLoaded()
+
+    expect(
+      screen.getByText(
+        'Esta cita está cubierta por el saldo del paciente. No hay un pago de consulta registrado, así que el monto aún se puede editar.'
+      )
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Para revertir el pago/)).not.toBeInTheDocument()
+  })
+
+  it('keeps the locked state and the reverse-the-payment hint, without the covered hint, when a consultation payment is live (#523 acceptance 4)', async () => {
+    renderModal({
+      appointment: makeAppointment({ cost: 150, isPaid: true, hasRecordedPayment: true, recordedPaidAmount: 150 }),
+    })
+    await waitForOptionsLoaded()
+
+    expect(getPaidAmountInput()).toBeDisabled()
+    expect(
+      screen.getByText('Para revertir el pago, elimine la entrega correspondiente desde la sección de pagos.')
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/cubierta por el saldo del paciente/)).not.toBeInTheDocument()
   })
 
   // Reviewer finding on PR #379: FIFO can record a payment against this
