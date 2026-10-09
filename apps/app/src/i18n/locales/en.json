@@ -435,7 +435,10 @@
       "selectHint": "Select the budget items that will be addressed in this appointment.",
       "filterHint": "Items already scheduled into another appointment or already executed are not shown here.",
       "empty": "This patient has no budget items available to associate.",
-      "loading": "Loading budget items..."
+      "loading": "Loading budget items...",
+      "executedCharge": "Budget items executed in this appointment: {{count}} · {{total}}",
+      "executedChargeStatus": "Covered: {{paid}} · Outstanding: {{outstanding}}",
+      "executedChargeHint": "They are charged separately from the appointment cost. If you also typed them into the cost, clear the cost so they are not charged twice."
     },
     "complete": {
       "title": "Complete appointment",

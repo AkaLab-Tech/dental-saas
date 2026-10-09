@@ -435,7 +435,10 @@
       "selectHint": "Selecciona los ítems del presupuesto que se atenderán en esta cita.",
       "filterHint": "Los ítems ya programados en otra cita o ya ejecutados no se muestran aquí.",
       "empty": "Este paciente no tiene ítems de presupuesto disponibles para asociar.",
-      "loading": "Cargando ítems de presupuesto..."
+      "loading": "Cargando ítems de presupuesto...",
+      "executedCharge": "Ítems de presupuesto ejecutados en esta cita: {{count}} · {{total}}",
+      "executedChargeStatus": "Cubierto: {{paid}} · Pendiente: {{outstanding}}",
+      "executedChargeHint": "Se cobran por separado del costo de la cita. Si ya los escribiste también en el costo, borra el costo para no cobrarlos dos veces."
     },
     "complete": {
       "title": "Completar cita",

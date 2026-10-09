@@ -700,6 +700,10 @@ model BudgetItem {
   notes                  String?          @db.Text
   /// Display order inside the budget (ascending)
   order                  Int              @default(0)
+  /// Cache of "the patient's payments fully cover this item's charge". Separate
+  /// from `status` on purpose: EXECUTED says the work was done, not that it was
+  /// paid. Written by recalculatePaidStatus from the FIFO allocation.
+  isPaid                 Boolean          @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

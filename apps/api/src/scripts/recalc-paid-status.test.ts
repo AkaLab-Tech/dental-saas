@@ -54,7 +54,7 @@ describe('recalc-paid-status script exit code', () => {
       { tenantId: 't1', patientId: 'p2' },
     ] as never)
     mockRecalculate
-      .mockResolvedValueOnce({ appointmentChanges: 1, labworkChanges: 0 })
+      .mockResolvedValueOnce({ appointmentChanges: 1, labworkChanges: 0, budgetItemChanges: 0 })
       .mockRejectedValueOnce(new Error('boom: simulated per-patient failure'))
 
     await import('./recalc-paid-status.js')
@@ -69,7 +69,7 @@ describe('recalc-paid-status script exit code', () => {
       { tenantId: 't1', patientId: 'p1' },
       { tenantId: 't1', patientId: 'p2' },
     ] as never)
-    mockRecalculate.mockResolvedValue({ appointmentChanges: 0, labworkChanges: 0 })
+    mockRecalculate.mockResolvedValue({ appointmentChanges: 0, labworkChanges: 0, budgetItemChanges: 0 })
 
     await import('./recalc-paid-status.js')
     await vi.waitFor(() => expect(mockDisconnect).toHaveBeenCalledTimes(1))

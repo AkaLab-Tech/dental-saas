@@ -1,6 +1,7 @@
 import { prisma, Prisma, type BudgetItemAppointmentRole } from '@dental/database'
 import { logger } from '../utils/logger.js'
 import { recalculateBudgetAggregates } from './budget.service.js'
+import { recalculatePaidStatus } from './payment.service.js'
 
 const BUDGET_ITEM_SUMMARY_SELECT = {
   id: true,
@@ -306,6 +307,15 @@ export async function confirmExecutedBudgetItems(
       }
       throw e
     }
+
+    // Task #544: an executed item is a new charge, so the patient's credit is
+    // consumed and the persisted isPaid caches must follow, outside the
+    // transaction like every other recalculatePaidStatus caller.
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      select: { patientId: true },
+    })
+    if (appointment) await recalculatePaidStatus(tenantId, appointment.patientId)
   }
 
   const data = await loadAppointmentBudgetItems(appointmentId)
