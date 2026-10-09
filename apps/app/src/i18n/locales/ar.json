@@ -1088,7 +1088,10 @@
     "paid": "مدفوع",
     "pending": "معلق",
     "partial": "جزئي",
-    "appliedOf": "مطبق: {{paid}} من {{total}}"
+    "appliedOf": "مطبق: {{paid}} من {{total}}",
+    "chargedHere": "محصّل في الزيارة",
+    "coveredByBalance": "مغطى بالرصيد",
+    "chargedAndCovered": "محصّل + الرصيد"
   },
   "payments": {
     "title": "المدفوعات",

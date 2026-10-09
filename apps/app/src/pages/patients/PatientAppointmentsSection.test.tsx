@@ -398,6 +398,40 @@ describe('PatientAppointmentsSection', () => {
         })
         expect(screen.queryByText('payment.partial')).not.toBeInTheDocument()
       })
+
+      // Task #524: the list is fed the shape the API produces
+      // (appointments-paid-badge-figures.test.ts on the API side builds these
+      // exact figures from real rows). The section must hand BOTH figures to
+      // the badge — dropping recordedPaidAmount collapses all three paid
+      // readings back into "payment.paid".
+      describe('charged here vs covered by balance (#524)', () => {
+        it.each([
+          { name: 'case 2: covered by an advance', figures: { cost: 3000, isPaid: true, paidAmount: 3000, recordedPaidAmount: 0 }, expectedKey: 'payment.coveredByBalance' },
+          { name: 'case 3: charged in the consultation', figures: { cost: 2000, isPaid: true, paidAmount: 2000, recordedPaidAmount: 2000 }, expectedKey: 'payment.chargedHere' },
+          { name: 'case 4: charged + covered', figures: { cost: 5000, isPaid: true, paidAmount: 5000, recordedPaidAmount: 2000 }, expectedKey: 'payment.chargedAndCovered' },
+        ])('$name shows $expectedKey', async ({ figures, expectedKey }) => {
+          mockGetAppointmentsByPatient.mockResolvedValue([{ ...upcomingAppointment, ...figures }])
+          renderSection()
+
+          await waitFor(() => {
+            expect(screen.getByText(expectedKey)).toBeInTheDocument()
+          })
+          expect(screen.queryByText('payment.paid')).not.toBeInTheDocument()
+          expect(screen.queryByText('payment.pending')).not.toBeInTheDocument()
+        })
+
+        it('case 1: nothing charged, no advance -> "payment.pending"', async () => {
+          mockGetAppointmentsByPatient.mockResolvedValue([
+            { ...upcomingAppointment, cost: 3000, isPaid: false, paidAmount: 0, recordedPaidAmount: 0 },
+          ])
+          renderSection()
+
+          await waitFor(() => {
+            expect(screen.getByText('payment.pending')).toBeInTheDocument()
+          })
+          expect(screen.queryByText('payment.coveredByBalance')).not.toBeInTheDocument()
+        })
+      })
     })
 
     it('shows empty state when no upcoming appointments', async () => {
