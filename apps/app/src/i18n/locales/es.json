@@ -419,7 +419,7 @@
       "notes": "Notas",
       "cost": "Costo",
       "paidAmount": "Monto abonado",
-      "paidAmountHint": "Se registra como pago de esta cita, separado de las entregas, y se aplica a la deuda más antigua del paciente.",
+      "paidAmountHint": "Se cobra en esta cita y cubre primero su costo; solo lo que exceda ese costo pasa al saldo restante del paciente.",
       "alreadyPaidHint": "Para revertir el pago, elimine la entrega correspondiente desde la sección de pagos.",
       "coveredByBalanceHint": "Esta cita está cubierta por el saldo del paciente. No hay un pago de consulta registrado, así que el monto aún se puede editar.",
       "partialPaymentRecordedHint": "Ya hay un pago registrado para esta cita. Para modificarlo, edítelo desde la sección de pagos.",
