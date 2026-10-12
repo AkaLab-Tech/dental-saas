@@ -438,7 +438,8 @@
       "loading": "Cargando ítems de presupuesto...",
       "executedCharge": "Ítems de presupuesto ejecutados en esta cita: {{count}} · {{total}}",
       "executedChargeStatus": "Cubierto: {{paid}} · Pendiente: {{outstanding}}",
-      "executedChargeHint": "Se cobran por separado del costo de la cita. Si ya los escribiste también en el costo, borra el costo para no cobrarlos dos veces."
+      "executedChargeHint": "Se cobran por separado del costo de la cita. Si ya los escribiste también en el costo, borra el costo para no cobrarlos dos veces.",
+      "executedChargeUnavailable": "No se pudo cargar el monto de los ítems de presupuesto ejecutados en esta cita, por lo que aquí no se puede verificar si el costo los duplica. Revisa la ficha del paciente antes de guardar un costo."
     },
     "complete": {
       "title": "Completar cita",

@@ -11,7 +11,7 @@ import type {
   AppointmentStatus,
   AppointmentBudgetItemSummary,
 } from '../../lib/appointment-api'
-import { getStatusLabel, getAppointmentBudgetItems } from '../../lib/appointment-api'
+import { getStatusLabel, getAppointmentBudgetItems, getAppointmentById } from '../../lib/appointment-api'
 import * as patientApi from '../../lib/patient-api'
 import * as doctorApi from '../../lib/doctor-api'
 import { listBudgetsByPatient, type BudgetItemStatus } from '../../lib/budget-api'
@@ -109,6 +109,35 @@ export function AppointmentFormModal({
   const hasRecordedPaidAmount = isEditing && !!appointment?.hasRecordedPayment
   const paidAmountLocked = hasRecordedPaidAmount
   const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
+  // The executed-items figure is only on appointments read through get-by-id or
+  // get-by-patient; the calendar and the doctor record feed the modal without
+  // it. Absence on the prop therefore cannot tell "none executed" from "never
+  // loaded", so when it is missing the modal asks the server itself (#544).
+  const appointmentId = appointment?.id
+  const propExecuted = appointment?.budgetItems
+  const [fetchedExecuted, setFetchedExecuted] = useState<{
+    id: string
+    failed: boolean
+    summary?: NonNullable<Appointment['budgetItems']>
+  } | null>(null)
+  useEffect(() => {
+    if (!isOpen || !appointmentId || propExecuted) return
+    let cancelled = false
+    getAppointmentById(appointmentId)
+      .then((full) => {
+        if (!cancelled) setFetchedExecuted({ id: appointmentId, failed: false, summary: full.budgetItems })
+      })
+      .catch(() => {
+        if (!cancelled) setFetchedExecuted({ id: appointmentId, failed: true })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, appointmentId, propExecuted])
+  const executedFetch = fetchedExecuted?.id === appointmentId ? fetchedExecuted : null
+  const executedSummary = propExecuted ?? executedFetch?.summary
+  const executedLoading = isEditing && !propExecuted && !executedFetch
+  const executedUnavailable = isEditing && !propExecuted && !!executedFetch?.failed
   const typeListId = useId()
   const doctorFieldId = useId()
 
@@ -664,24 +693,36 @@ export function AppointmentFormModal({
                 </div>
               </div>
 
-              {isEditing && appointment?.budgetItems && (
+              {executedSummary && (
                 <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
                   <p className="text-gray-700">
                     {t('appointments.budgetItems.executedCharge', {
-                      count: appointment.budgetItems.count,
-                      total: formatCurrency(appointment.budgetItems.cost, currency),
+                      count: executedSummary.count,
+                      total: formatCurrency(executedSummary.cost, currency),
                     })}
                   </p>
                   <p className="text-xs text-gray-500">
                     {t('appointments.budgetItems.executedChargeStatus', {
-                      paid: formatCurrency(appointment.budgetItems.paidAmount, currency),
-                      outstanding: formatCurrency(appointment.budgetItems.outstanding, currency),
+                      paid: formatCurrency(executedSummary.paidAmount, currency),
+                      outstanding: formatCurrency(executedSummary.outstanding, currency),
                     })}
                   </p>
                   <p className="mt-1 text-xs text-gray-500">
                     {t('appointments.budgetItems.executedChargeHint')}
                   </p>
                 </div>
+              )}
+
+              {executedLoading && (
+                <p className="flex items-center gap-2 text-xs text-gray-500">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {t('appointments.budgetItems.loading')}
+                </p>
+              )}
+              {executedUnavailable && (
+                <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  {t('appointments.budgetItems.executedChargeUnavailable')}
+                </p>
               )}
 
               {/* Budget items */}

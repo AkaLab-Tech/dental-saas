@@ -438,7 +438,8 @@
       "loading": "Loading budget items...",
       "executedCharge": "Budget items executed in this appointment: {{count}} · {{total}}",
       "executedChargeStatus": "Covered: {{paid}} · Outstanding: {{outstanding}}",
-      "executedChargeHint": "They are charged separately from the appointment cost. If you also typed them into the cost, clear the cost so they are not charged twice."
+      "executedChargeHint": "They are charged separately from the appointment cost. If you also typed them into the cost, clear the cost so they are not charged twice.",
+      "executedChargeUnavailable": "The executed budget items figure could not be loaded for this appointment, so the duplicate-cost check is unavailable here. Check the patient record before saving a cost."
     },
     "complete": {
       "title": "Complete appointment",

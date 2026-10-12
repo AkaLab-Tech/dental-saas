@@ -19,6 +19,7 @@ const getDoctorsMock = vi.fn()
 const getPatientsMock = vi.fn()
 const listBudgetsByPatientMock = vi.fn()
 const getAppointmentBudgetItemsMock = vi.fn()
+const getAppointmentByIdMock = vi.fn()
 
 vi.mock('../../lib/doctor-api', () => ({
   getDoctors: (...args: unknown[]) => getDoctorsMock(...args),
@@ -41,6 +42,7 @@ vi.mock('../../lib/appointment-api', async () => {
   return {
     ...actual,
     getAppointmentBudgetItems: (...args: unknown[]) => getAppointmentBudgetItemsMock(...args),
+    getAppointmentById: (...args: unknown[]) => getAppointmentByIdMock(...args),
   }
 })
 
@@ -116,6 +118,14 @@ vi.mock('../ui/PatientSearchCombobox', () => ({
       </div>
     ),
 }))
+
+// Every edit-mode render of an appointment without `budgetItems` fetches the
+// full record (task #544). Suites that do not care default to "fetched fine,
+// nothing executed"; the #544 suite below overrides this per case.
+beforeEach(() => {
+  getAppointmentByIdMock.mockReset()
+  getAppointmentByIdMock.mockImplementation(() => Promise.resolve(makeAppointment()))
+})
 
 // ============================================================================
 // Fixtures
@@ -1591,3 +1601,147 @@ function formatDateForInputHelper(date: Date): string {
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
 }
+
+// ============================================================================
+// Task #544 (review finding 1): executed budget items on an edited appointment
+// ============================================================================
+//
+// `appointment.budgetItems` is only populated by the two API read paths that
+// call mergeAllocation (get-by-id and get-by-patient). The modal is also fed
+// from the Appointments page (list/calendar) and the doctor record
+// (get-by-doctor), whose appointments carry NO `budgetItems`. In that shape the
+// modal used to render nothing — an editable `cost` with no figure and no
+// duplicate-cost hint, and nobody learns it is missing. The contract pinned
+// here: the operator is always told, either the figure plus the hint, or an
+// explicit "unavailable" notice.
+describe('AppointmentFormModal — executed budget items disclosure (#544)', () => {
+  // Resolved through i18n (the suite pins 'es'), so a reworded string does not
+  // break the test but a missing key does (t() would return the raw key and
+  // the equality below would fail the "is translated" assertion).
+  const hintText = () => i18n.t('appointments.budgetItems.executedChargeHint')
+  const unavailableText = () => i18n.t('appointments.budgetItems.executedChargeUnavailable')
+
+  beforeEach(() => {
+    getDoctorsMock.mockResolvedValue([mockDoctor])
+    getPatientsMock.mockResolvedValue([mockPatientRecord])
+    listBudgetsByPatientMock.mockResolvedValue({ data: [], total: 0 })
+    getAppointmentBudgetItemsMock.mockResolvedValue([])
+    getAppointmentByIdMock.mockReset()
+  })
+
+  const loadingText = () => i18n.t('appointments.budgetItems.loading')
+  const figureLine = /Ítems de presupuesto ejecutados en esta cita/
+
+  it('WITH the figure: shows count, total, covered/outstanding and the duplicate-cost hint', async () => {
+    renderModal({
+      appointment: makeAppointment({
+        cost: 4200,
+        budgetItems: { count: 3, cost: 5500, paidAmount: 3000, outstanding: 2500 },
+      }),
+    })
+    await waitForOptionsLoaded()
+
+    expect(screen.getByText(/Ítems de presupuesto ejecutados en esta cita: 3/)).toHaveTextContent('USD 5,500.00')
+    expect(screen.getByText(/Cubierto: USD 3,000\.00 · Pendiente: USD 2,500\.00/)).toBeInTheDocument()
+    expect(screen.getByText(hintText())).toBeInTheDocument()
+    // The notice for the missing figure must NOT appear when the figure is there.
+    expect(screen.queryByText(unavailableText())).not.toBeInTheDocument()
+  })
+
+  it('prop already carries budgetItems: shows the figure and never calls getAppointmentById', async () => {
+    renderModal({
+      appointment: makeAppointment({
+        budgetItems: { count: 2, cost: 900, paidAmount: 0, outstanding: 900 },
+      }),
+    })
+    await waitForOptionsLoaded()
+
+    expect(screen.getByText(/Ítems de presupuesto ejecutados en esta cita: 2/)).toHaveTextContent('USD 900.00')
+    expect(getAppointmentByIdMock).not.toHaveBeenCalled()
+  })
+
+  it('prop lacks budgetItems and the fetch REJECTS: says explicitly that the figure is unavailable', async () => {
+    getAppointmentByIdMock.mockRejectedValue(new Error('network down'))
+    const appt = makeAppointment({ cost: 4200 })
+    expect(appt.budgetItems).toBeUndefined()
+    renderModal({ appointment: appt })
+    await waitForOptionsLoaded()
+
+    expect(await screen.findByText(unavailableText())).toBeInTheDocument()
+    expect(getAppointmentByIdMock).toHaveBeenCalledTimes(1)
+    expect(getAppointmentByIdMock).toHaveBeenCalledWith('apt-1')
+    // The key must resolve to a real translation, not echo the key back.
+    expect(unavailableText()).not.toBe('appointments.budgetItems.executedChargeUnavailable')
+    expect(screen.queryByText(figureLine)).not.toBeInTheDocument()
+    expect(screen.queryByText(hintText())).not.toBeInTheDocument()
+  })
+
+  it('prop lacks budgetItems and the fetch RESOLVES without budgetItems: renders nothing (no false alarm)', async () => {
+    getAppointmentByIdMock.mockResolvedValue(makeAppointment({ cost: 4200 }))
+    renderModal({ appointment: makeAppointment({ cost: 4200 }) })
+    await waitForOptionsLoaded()
+    await waitFor(() => expect(getAppointmentByIdMock).toHaveBeenCalledTimes(1))
+    // Let the resolved fetch settle into state before asserting absence.
+    await waitFor(() => expect(screen.queryByText(loadingText())).not.toBeInTheDocument())
+
+    expect(screen.queryByText(unavailableText())).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText(figureLine)).not.toBeInTheDocument()
+    expect(screen.queryByText(hintText())).not.toBeInTheDocument()
+  })
+
+  it('prop lacks budgetItems and the fetch RESOLVES with budgetItems: shows the fetched figure and hint', async () => {
+    getAppointmentByIdMock.mockResolvedValue(
+      makeAppointment({ budgetItems: { count: 1, cost: 700, paidAmount: 200, outstanding: 500 } }),
+    )
+    renderModal({ appointment: makeAppointment({ cost: 4200 }) })
+    await waitForOptionsLoaded()
+
+    expect(await screen.findByText(/Ítems de presupuesto ejecutados en esta cita: 1/)).toHaveTextContent('USD 700.00')
+    expect(screen.getByText(hintText())).toBeInTheDocument()
+    expect(screen.queryByText(unavailableText())).not.toBeInTheDocument()
+  })
+
+  it('fetch PENDING: shows the loading state and never the unavailable notice', async () => {
+    getAppointmentByIdMock.mockReturnValue(new Promise(() => {}))
+    renderModal({ appointment: makeAppointment({ cost: 4200 }) })
+    await waitForOptionsLoaded()
+    await waitFor(() => expect(getAppointmentByIdMock).toHaveBeenCalledTimes(1))
+
+    expect(screen.getByText(loadingText())).toBeInTheDocument()
+    expect(screen.queryByText(unavailableText())).not.toBeInTheDocument()
+    expect(screen.queryByText(figureLine)).not.toBeInTheDocument()
+  })
+
+  it('switching appointments does not show the previous appointment figure', async () => {
+    getAppointmentByIdMock.mockImplementation((id: string) =>
+      id === 'apt-1'
+        ? Promise.resolve(makeAppointment({ id: 'apt-1', budgetItems: { count: 4, cost: 1000, paidAmount: 0, outstanding: 1000 } }))
+        : new Promise(() => {}),
+    )
+    const { rerender } = renderModal({ appointment: makeAppointment({ id: 'apt-1' }) })
+    await waitForOptionsLoaded()
+    expect(await screen.findByText(/Ítems de presupuesto ejecutados en esta cita: 4/)).toBeInTheDocument()
+
+    rerender(
+      <AppointmentFormModal
+        isOpen
+        onClose={() => {}}
+        onSubmit={vi.fn().mockResolvedValue(undefined)}
+        appointment={makeAppointment({ id: 'apt-2' })}
+      />,
+    )
+
+    await waitFor(() => expect(getAppointmentByIdMock).toHaveBeenCalledWith('apt-2'))
+    expect(screen.queryByText(/Ítems de presupuesto ejecutados en esta cita: 4/)).not.toBeInTheDocument()
+    expect(screen.getByText(loadingText())).toBeInTheDocument()
+  })
+
+  it('does not show any executed-items disclosure when creating (no appointment)', async () => {
+    renderModal()
+    await waitForOptionsLoaded()
+
+    expect(screen.queryByText(unavailableText())).not.toBeInTheDocument()
+    expect(screen.queryByText(hintText())).not.toBeInTheDocument()
+  })
+})

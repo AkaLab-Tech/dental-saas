@@ -104,10 +104,19 @@ describe('executed budget item creates a charge (#544)', () => {
     patientId: string,
     price: number,
     status: 'PENDING' | 'SCHEDULED' | 'EXECUTED',
-    overrides: { itemId?: string; budgetIsActive?: boolean } = {}
+    overrides: {
+      itemId?: string
+      budgetIsActive?: boolean
+      budgetStatus?: 'DRAFT' | 'APPROVED' | 'PARTIAL' | 'COMPLETED' | 'CANCELLED'
+    } = {}
   ) {
     const budget = await prisma.budget.create({
-      data: { tenantId, patientId, isActive: overrides.budgetIsActive ?? true },
+      data: {
+        tenantId,
+        patientId,
+        isActive: overrides.budgetIsActive ?? true,
+        ...(overrides.budgetStatus ? { status: overrides.budgetStatus } : {}),
+      },
     })
     return prisma.budgetItem.create({
       data: {
@@ -476,6 +485,82 @@ describe('executed budget item creates a charge (#544)', () => {
       const [shown] = await getAppointmentsByPatient(tenantId, patientId)
       expect(shown.cost?.toString()).toBe('4100')
       expect(shown.budgetItems).toEqual({ count: 1, cost: 5500, paidAmount: 2900, outstanding: 2600 })
+    })
+  })
+
+  // --------------------------------------------------------------------
+  // Decisions the PR asks to be debated, pinned so they cannot drift silently
+  // --------------------------------------------------------------------
+  describe('budget status is not a filter: executed work is charged because it was performed', () => {
+    it('charges an EXECUTED item of a CANCELLED (but still active) budget in all three sites', async () => {
+      const patientId = await newPatient('CancelledBudget')
+      await seedAdvance(patientId, 2000)
+      const appt = await seedAppointment(patientId, at(0), null)
+      const item = await seedBudgetItem(patientId, 7300, 'EXECUTED', { budgetStatus: 'CANCELLED' })
+      await link(item.id, appt.id, 'EXECUTED')
+
+      // Sanity: the fixture really is a cancelled-but-active budget.
+      const budget = await prisma.budget.findUniqueOrThrow({ where: { id: item.budgetId } })
+      expect(budget.status).toBe('CANCELLED')
+      expect(budget.isActive).toBe(true)
+
+      // Site 1: the ledger.
+      const billable = await listBillableItems(tenantId, patientId)
+      expect(billable).toHaveLength(1)
+      expect(billable[0]).toMatchObject({ id: item.id, type: 'budgetItem', cost: 7300, appointmentId: appt.id })
+
+      // Site 2: the per-patient balance.
+      expect(await getPatientBalance(tenantId, patientId)).toEqual({
+        success: true,
+        data: { totalDebt: 7300, totalPaid: 2000, outstanding: 5300, credit: 0 },
+      })
+
+      // Site 3: the tenant-wide aggregate.
+      expect((await computeOutstandingByPatient(tenantId)).get(patientId)).toEqual({
+        totalDebt: 7300,
+        totalPaid: 2000,
+        outstanding: 5300,
+      })
+    })
+  })
+
+  describe('price floor: an executed item with totalPrice 0 is not a charge, in all three sites', () => {
+    it('bills only the 4900 item next to a 0 item, and agrees across the ledger, the balance and the aggregate', async () => {
+      const patientId = await newPatient('ZeroPrice')
+      await seedAdvance(patientId, 1300)
+      const appt = await seedAppointment(patientId, at(0), null)
+      const free = await seedBudgetItem(patientId, 0, 'EXECUTED')
+      const paid = await seedBudgetItem(patientId, 4900, 'EXECUTED')
+      await link(free.id, appt.id, 'EXECUTED')
+      await link(paid.id, appt.id, 'EXECUTED')
+
+      const billable = await listBillableItems(tenantId, patientId)
+      expect(billable.map((b) => [b.id, b.cost])).toEqual([[paid.id, 4900]])
+
+      expect(await getPatientBalance(tenantId, patientId)).toEqual({
+        success: true,
+        data: { totalDebt: 4900, totalPaid: 1300, outstanding: 3600, credit: 0 },
+      })
+      expect((await computeOutstandingByPatient(tenantId)).get(patientId)).toEqual({
+        totalDebt: 4900,
+        totalPaid: 1300,
+        outstanding: 3600,
+      })
+    })
+
+    it('a patient whose only executed item costs 0 has no charge anywhere (and keeps the whole advance as credit)', async () => {
+      const patientId = await newPatient('ZeroOnly')
+      await seedAdvance(patientId, 1300)
+      const appt = await seedAppointment(patientId, at(0), null)
+      const free = await seedBudgetItem(patientId, 0, 'EXECUTED')
+      await link(free.id, appt.id, 'EXECUTED')
+
+      expect(await listBillableItems(tenantId, patientId)).toEqual([])
+      expect(await getPatientBalance(tenantId, patientId)).toEqual({
+        success: true,
+        data: { totalDebt: 0, totalPaid: 1300, outstanding: 0, credit: 1300 },
+      })
+      expect((await computeOutstandingByPatient(tenantId)).get(patientId)).toBeUndefined()
     })
   })
 })

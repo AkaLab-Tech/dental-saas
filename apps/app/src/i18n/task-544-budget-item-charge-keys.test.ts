@@ -1,9 +1,9 @@
 /**
  * i18n key-parity check for task #544 (an executed budget item creates a
- * charge). The three new `appointments.budgetItems.*` strings must exist as
+ * charge). The four new `appointments.budgetItems.*` strings must exist as
  * non-empty strings in es, en and ar, differ per locale (catches a Spanish
- * string pasted into ar.json), and — because they are three different surfaces
- * (a label, a status line and a duplicate-cost hint) — be distinct from each
+ * string pasted into ar.json), and — because they are four different surfaces
+ * (a label, a status line, a duplicate-cost hint and an "unavailable" notice) — be distinct from each
  * other within every locale.
  *
  * Follows task-524-paid-badge-charged-vs-covered-keys.test.ts.
@@ -18,9 +18,9 @@ type BudgetItems = Record<string, unknown>
 const budgetItemsOf = (dict: unknown) =>
   (dict as { appointments: { budgetItems: BudgetItems } }).appointments.budgetItems
 
-const NEW_KEYS = ['executedCharge', 'executedChargeStatus', 'executedChargeHint'] as const
+const NEW_KEYS = ['executedCharge', 'executedChargeStatus', 'executedChargeHint', 'executedChargeUnavailable'] as const
 
-describe('task #544 i18n key parity — appointments.budgetItems.executedCharge / executedChargeStatus / executedChargeHint', () => {
+describe('task #544 i18n key parity — appointments.budgetItems.executedCharge / executedChargeStatus / executedChargeHint / executedChargeUnavailable', () => {
   describe.each(NEW_KEYS)('key "appointments.budgetItems.%s"', (key) => {
     it('exists as a non-empty string in es, en, and ar', () => {
       for (const [code, dict] of Object.entries(locales)) {
@@ -40,11 +40,13 @@ describe('task #544 i18n key parity — appointments.budgetItems.executedCharge 
   })
 
   it.each(Object.entries(locales))(
-    '%s: the three strings are three different values',
+    '%s: the four strings are four different values',
     (code, dict) => {
       const b = budgetItemsOf(dict)
       const values = NEW_KEYS.map((k) => b[k])
-      expect(new Set(values).size, `${code}: ${JSON.stringify(values)}`).toBe(3)
+      // A missing key is `undefined`; without this it would count as a 4th distinct value.
+      expect(values.every((v) => typeof v === 'string' && v.trim() !== ''), `${code}: ${JSON.stringify(values)}`).toBe(true)
+      expect(new Set(values).size, `${code}: ${JSON.stringify(values)}`).toBe(4)
     }
   )
 })

@@ -1300,3 +1300,54 @@ describe('PatientAppointmentsSection', () => {
     })
   })
 })
+
+// ============================================================================
+// Task #544: executed budget items charged to an appointment card
+// ============================================================================
+//
+// This section is always fed by getAppointmentsByPatient, the one read path
+// that populates `budgetItems` (via mergeAllocation) — so unlike the edit
+// modal there is no "figure unavailable" shape here: an absent `budgetItems`
+// genuinely means "no executed items", and rendering nothing is correct.
+describe('PatientAppointmentsSection — executed budget items line (#544)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCanPermission = true
+    mockCanDeletePayments = true
+    localStorage.clear()
+    localStorage.setItem('patient-appointments-collapsed', 'false')
+  })
+
+  it('shows the executed count and total, and the covered/outstanding split, on their own lines', async () => {
+    mockGetAppointmentsByPatient.mockResolvedValue([
+      {
+        ...upcomingAppointment,
+        cost: 4200,
+        budgetItems: { count: 3, cost: 5500, paidAmount: 3000, outstanding: 2500 },
+      },
+    ])
+    renderSection()
+
+    // t() is mocked to `${key}:${JSON.stringify(options)}`; formatCurrency to `$${amount}`.
+    await waitFor(() => {
+      expect(
+        screen.getByText('appointments.budgetItems.executedCharge:{"count":3,"total":"$5500"}')
+      ).toBeInTheDocument()
+    })
+    expect(
+      screen.getByText('appointments.budgetItems.executedChargeStatus:{"paid":"$3000","outstanding":"$2500"}')
+    ).toBeInTheDocument()
+    // The typed cost stays visible and is not folded into the executed figure.
+    expect(screen.getByText('$4200')).toBeInTheDocument()
+  })
+
+  it('shows no executed-items line when the appointment has no executed budget items', async () => {
+    mockGetAppointmentsByPatient.mockResolvedValue([{ ...upcomingAppointment, cost: 4200 }])
+    renderSection()
+
+    await waitFor(() => {
+      expect(screen.getByText('$4200')).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/appointments\.budgetItems\.executedCharge/)).not.toBeInTheDocument()
+  })
+})
