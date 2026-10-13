@@ -51,6 +51,9 @@ export interface Appointment {
   // getAppointmentById). undefined elsewhere.
   paidAmount?: number
   outstanding?: number
+  // Executed budget items charged to this appointment (display aggregate, kept
+  // apart from cost/paidAmount/outstanding). Absent when there are none.
+  budgetItems?: { count: number; cost: number; paidAmount: number; outstanding: number }
   // Actual linked-payment state; use this (not paidAmount) to lock/prefill.
   hasRecordedPayment?: boolean
   recordedPaidAmount?: number

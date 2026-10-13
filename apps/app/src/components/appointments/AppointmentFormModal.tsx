@@ -11,7 +11,7 @@ import type {
   AppointmentStatus,
   AppointmentBudgetItemSummary,
 } from '../../lib/appointment-api'
-import { getStatusLabel, getAppointmentBudgetItems } from '../../lib/appointment-api'
+import { getStatusLabel, getAppointmentBudgetItems, getAppointmentById } from '../../lib/appointment-api'
 import * as patientApi from '../../lib/patient-api'
 import * as doctorApi from '../../lib/doctor-api'
 import { listBudgetsByPatient, type BudgetItemStatus } from '../../lib/budget-api'
@@ -109,6 +109,42 @@ export function AppointmentFormModal({
   const hasRecordedPaidAmount = isEditing && !!appointment?.hasRecordedPayment
   const paidAmountLocked = hasRecordedPaidAmount
   const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
+  // The executed-items figure is only on appointments read through get-by-id or
+  // get-by-patient; the calendar and the doctor record feed the modal without
+  // it. Absence on the prop therefore cannot tell "none executed" from "never
+  // loaded", so when it is missing the modal asks the server itself (#544).
+  const appointmentId = appointment?.id
+  const propExecuted = appointment?.budgetItems
+  const [fetchedExecuted, setFetchedExecuted] = useState<{
+    id: string
+    failed: boolean
+    summary?: NonNullable<Appointment['budgetItems']>
+  } | null>(null)
+  useEffect(() => {
+    if (!isOpen || !appointmentId || propExecuted) return
+    let cancelled = false
+    // Drop any previous outcome before asking again. Without this a failure
+    // sticks for the life of the component: `isOpen` false -> true re-runs this
+    // effect, but `if (!isOpen) return null` is a render guard and not an
+    // unmount, so the old `failed: true` survived and the reopened modal showed
+    // the warning instantly without ever retrying. Clearing it also restores the
+    // in-flight state, which is what makes the retry visible.
+    setFetchedExecuted(null)
+    getAppointmentById(appointmentId)
+      .then((full) => {
+        if (!cancelled) setFetchedExecuted({ id: appointmentId, failed: false, summary: full.budgetItems })
+      })
+      .catch(() => {
+        if (!cancelled) setFetchedExecuted({ id: appointmentId, failed: true })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, appointmentId, propExecuted])
+  const executedFetch = fetchedExecuted?.id === appointmentId ? fetchedExecuted : null
+  const executedSummary = propExecuted ?? executedFetch?.summary
+  const executedLoading = isEditing && !propExecuted && !executedFetch
+  const executedUnavailable = isEditing && !propExecuted && !!executedFetch?.failed
   const typeListId = useId()
   const doctorFieldId = useId()
 
@@ -174,6 +210,12 @@ export function AppointmentFormModal({
   })
 
   const watchedPatientId = watch('patientId')
+  // The double charge is only CONFIRMED when a cost has been typed alongside
+  // executed items; the figure on its own is information, not a warning. Only
+  // the confirmed case gets the loud treatment, so the alert keeps meaning
+  // something (the inverted-weight finding from #547's browser pass: the app
+  // used to shout when it did NOT know and whisper when it did).
+  const executedDuplication = !!executedSummary && (Number(watch('cost')) || 0) > 0
   const watchedType = watch('type')
   const watchedStartTime = watch('startTime')
 
@@ -663,6 +705,57 @@ export function AppointmentFormModal({
                   )}
                 </div>
               </div>
+
+              {executedSummary && (
+                <div
+                  {...(executedDuplication ? { role: 'alert' as const } : {})}
+                  className={
+                    executedDuplication
+                      ? 'rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm'
+                      : 'rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm'
+                  }
+                >
+                  <p className={executedDuplication ? 'font-medium text-amber-900' : 'text-gray-700'}>
+                    {t('appointments.budgetItems.executedCharge', {
+                      count: executedSummary.count,
+                      total: formatCurrency(executedSummary.cost, currency),
+                    })}
+                  </p>
+                  <p className={executedDuplication ? 'text-xs text-amber-800' : 'text-xs text-gray-500'}>
+                    {t('appointments.budgetItems.executedChargeStatus', {
+                      paid: formatCurrency(executedSummary.paidAmount, currency),
+                      outstanding: formatCurrency(executedSummary.outstanding, currency),
+                    })}
+                  </p>
+                  <p
+                    className={
+                      executedDuplication
+                        ? 'mt-1 text-sm font-medium text-amber-900'
+                        : 'mt-1 text-xs text-gray-500'
+                    }
+                  >
+                    {t('appointments.budgetItems.executedChargeHint')}
+                  </p>
+                </div>
+              )}
+
+              {executedLoading && (
+                <p className="flex items-center gap-2 text-xs text-gray-500">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {/* Its own string: `budgetItems.loading` also labels the
+                      selection list below, so the same sentence appeared twice
+                      meaning two different things. */}
+                  {t('appointments.budgetItems.executedChargeLoading')}
+                </p>
+              )}
+              {/* Uncertainty, not a confirmed double charge: it keeps role="alert"
+                  so a screen reader still hears it, but drops to the quiet
+                  treatment. If everything is amber, nothing is. */}
+              {executedUnavailable && (
+                <p role="alert" className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                  {t('appointments.budgetItems.executedChargeUnavailable')}
+                </p>
+              )}
 
               {/* Budget items */}
               {watchedPatientId && (

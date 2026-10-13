@@ -275,6 +275,26 @@ function PatientAppointmentCard({
         )
       })()}
 
+      {/* Executed budget items charged to this appointment — their own line,
+          never folded into the cost above, so a typed cost that duplicates
+          them stays visible. */}
+      {appointment.budgetItems && (
+        <div className="mt-2 text-xs">
+          <div className="text-gray-700">
+            {t('appointments.budgetItems.executedCharge', {
+              count: appointment.budgetItems.count,
+              total: formatCurrency(appointment.budgetItems.cost, currency),
+            })}
+          </div>
+          <div className="mt-0.5 text-[11px] text-gray-500">
+            {t('appointments.budgetItems.executedChargeStatus', {
+              paid: formatCurrency(appointment.budgetItems.paidAmount, currency),
+              outstanding: formatCurrency(appointment.budgetItems.outstanding, currency),
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Reversible share of the paid figure (kind=APPOINTMENT payment recorded on
           this appointment). Shown whenever the amount the reversal button would
           undo differs from the paid figure shown above, in EITHER direction.

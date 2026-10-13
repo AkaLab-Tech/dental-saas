@@ -126,7 +126,7 @@ export async function backfillCancelledAppointmentPayments(options: {
   let paidStatusChanges = 0
   for (const { tenantId, patientId } of affectedPatients.values()) {
     const result = await recalculatePaidStatus(tenantId, patientId, { dryRun })
-    paidStatusChanges += result.appointmentChanges + result.labworkChanges
+    paidStatusChanges += result.appointmentChanges + result.labworkChanges + result.budgetItemChanges
   }
 
   return {
