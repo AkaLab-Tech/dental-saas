@@ -218,6 +218,19 @@ describe('report-cost-budget-overlap (#546)', () => {
 
     it('sums prices that binary floating point cannot represent exactly, to the exact printed cent', async () => {
       // Float: 0.1 + 0.2 = 0.30000000000000004 and 33.33 * 3 = 99.99000000000001.
+      //
+      // What this catches, and the one thing it cannot: a float sum PRINTED RAW shows
+      // 100.28999999999999 and fails here. A float sum still passed through toFixed(2)
+      // prints 100.29 and passes, and no fixture can change that. Both money columns are
+      // Decimal(10, 2), so the exact sum is always a whole number of cents and therefore
+      // sits a full 0.005 from the nearest rounding boundary, while double error over a
+      // handful of clinic-scale prices is ~1e-10. Measured: 500 items at 5,000 each give
+      // an error of 4.7e-10, seven orders of magnitude short of moving the printed cent.
+      // So for THIS report the two worlds are output-identical and there is nothing to
+      // guard - do not add a lint rule or a wider assertion chasing it.
+      // The bound is a bound, not a law: it breaks around 1e5 rows at the column maximum
+      // (100,000 items at 99,999,999.99 shift the printed figure by 0.15). A future
+      // aggregate - a per-tenant total, say - must re-derive it instead of inheriting it.
       const { items } = await createBudget(patientId, token, [
         { description: 'item-dec-a', unitPrice: 0.1 },
         { description: 'item-dec-b', unitPrice: 0.2 },
