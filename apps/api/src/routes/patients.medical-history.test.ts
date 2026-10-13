@@ -245,6 +245,10 @@ describe('Patient medical history API', () => {
       expect(row.conditions).toBe('[normal] CONDITION-REPLACED')
       expect(row.allergies).toBe('[critical] ALLERGY-ONE synthetic latex reaction')
       expect(row.medicalNotes).toBe('[normal] NOTE-FIVE synthetic prefers morning visits')
+      expect(row.currentMedication).toBe(
+        '[normal] MEDICATION-TWO synthetic daily tablet\n[critical] MEDICATION-TWO-B synthetic evening drops'
+      )
+      expect(row.previousSurgeries).toBe('[normal] SURGERY-FOUR synthetic appendix removal')
     })
 
     it('an empty array clears that section to null and only that section', async () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, useLocation } from 'react-router'
 import i18n from 'i18next'
 import '@/i18n'
 import type { Patient, PatientsStats } from '@/lib/patient-api'
@@ -678,5 +678,59 @@ describe('PatientsPage', () => {
 
       expect(screen.queryByTestId('patient-form-modal')).not.toBeInTheDocument()
     })
+  })
+})
+
+describe('PatientsPage ?edit=<id>', () => {
+  function LocationProbe() {
+    return <span data-testid="search">{useLocation().search}</span>
+  }
+
+  function renderAt(url: string) {
+    const ui = () => (
+      <MemoryRouter initialEntries={[url]}>
+        <PatientsPage />
+        <LocationProbe />
+      </MemoryRouter>
+    )
+    return { ...render(ui()), ui }
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPatientsState.patients = [mockPatient1]
+    mockPatientsState.stats = null
+    mockPatientsState.isLoading = false
+    mockPatientsState.error = null
+  })
+
+  it('opens the edit modal for the patient in the param and clears it on close', () => {
+    renderAt('/patients?edit=1')
+
+    expect(screen.getByTestId('patient-form-modal')).toBeInTheDocument()
+    expect(screen.getByText('Editar Paciente')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /cerrar/i }))
+
+    expect(screen.queryByTestId('patient-form-modal')).not.toBeInTheDocument()
+    expect(screen.getByTestId('search').textContent).toBe('')
+  })
+
+  it('opens the modal once the list loads after the param arrived first', () => {
+    mockPatientsState.patients = []
+    const { rerender, ui } = renderAt('/patients?edit=1')
+    expect(screen.queryByTestId('patient-form-modal')).not.toBeInTheDocument()
+
+    mockPatientsState.patients = [mockPatient1]
+    rerender(ui())
+
+    expect(screen.getByTestId('patient-form-modal')).toBeInTheDocument()
+  })
+
+  it('renders the plain list when the id matches no patient', () => {
+    renderAt('/patients?edit=999')
+
+    expect(screen.queryByTestId('patient-form-modal')).not.toBeInTheDocument()
+    expect(screen.getByTestId('patients-list-view')).toBeInTheDocument()
   })
 })

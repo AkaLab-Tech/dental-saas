@@ -499,6 +499,36 @@
     },
     "exportPdf": "تصدير PDF",
     "medicalHistory": "التاريخ الطبي",
+    "medicalHistoryBlock": {
+      "criticalMarker": "حرج",
+      "edit": "تعديل",
+      "add": "إضافة",
+      "addEntry": "إضافة إدخال",
+      "remove": "إزالة",
+      "save": "حفظ",
+      "cancel": "إلغاء",
+      "entryLabel": "الإدخال {{number}}",
+      "criticalityLabel": "الأهمية",
+      "sections": {
+        "allergies": "الحساسية",
+        "currentMedication": "الأدوية الحالية",
+        "conditions": "الحالات الصحية",
+        "previousSurgeries": "العمليات السابقة",
+        "medicalNotes": "ملاحظات طبية"
+      },
+      "criticality": {
+        "critical": "حرج",
+        "normal": "عادي"
+      },
+      "errors": {
+        "empty": "لا يمكن أن يكون الإدخال فارغًا",
+        "tooLong": "الحد الأقصى {{max}} حرفًا",
+        "multiline": "يجب أن يكون الإدخال سطرًا واحدًا",
+        "invalidCriticality": "أهمية غير صالحة",
+        "tooManyEntries": "الحد الأقصى {{max}} إدخالًا لكل قسم",
+        "saveFailed": "تعذر الحفظ. حاول مرة أخرى."
+      }
+    },
     "dentalChart": "مخطط الأسنان",
     "dentalChartNotes": "ملاحظات مخطط الأسنان",
     "showPrimaryTeeth": "عرض الأسنان اللبنية",

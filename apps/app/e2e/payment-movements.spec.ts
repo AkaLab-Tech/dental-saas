@@ -31,12 +31,23 @@ test.describe('Payment Movements tab (#453)', () => {
     await expect(patientDialog).not.toBeVisible()
 
     // --- Find the new patient and open its detail page ---
+    // Never `.first()` of the list. The list renders unfiltered until the
+    // debounced search lands, and PatientsListView sorts it client-side by
+    // "firstName lastName" — every e2e patient is firstName "E2E", so the first
+    // row is whichever sibling spec's patient sorts first, not this one (it was
+    // "E2E Historial ...", and this spec then piled its payment onto it). Pin the
+    // row by this run's unique name: it exists in the unfiltered and the filtered
+    // list alike, so there is no window in which it can be the wrong patient.
     await page.getByPlaceholder(/buscar por nombre/i).fill(uniqueLastName)
-    const viewRecordLink = page.getByRole('link', { name: /ver ficha/i }).first()
-    await expect(viewRecordLink).toBeVisible()
-    await viewRecordLink.click()
+    const patientRow = page.getByRole('row').filter({ hasText: uniqueLastName })
+    await expect(patientRow).toHaveCount(1)
+    await patientRow.getByRole('link', { name: /ver ficha/i }).click()
 
     await expect(page).toHaveURL(/\/patients\/[a-zA-Z0-9-]+/)
+    // Prove which record opened before recording anything on it.
+    await expect(
+      page.getByRole('heading', { name: new RegExp(uniqueLastName), level: 1 })
+    ).toBeVisible()
 
     const tabs = page.getByRole('navigation', { name: 'Tabs' })
 
@@ -62,7 +73,12 @@ test.describe('Payment Movements tab (#453)', () => {
       fullPage: true,
     })
 
-    await expect(page.getByText(/entrega recibida/i)).toBeVisible()
+    // Scoped to what THIS spec recorded: the row carrying its own 150 amount,
+    // and exactly one received row on a record that is provably its own. A
+    // page-wide unscoped getByText fails strict mode as soon as the record
+    // holds any other payment.
+    await expect(page.getByText(/entrega recibida\s*·\s*UYU\s*150[.,]00/i)).toHaveCount(1)
+    await expect(page.getByText(/entrega recibida/i)).toHaveCount(1)
 
     // No FIFO allocation text — that belongs to the Payments tab only
     // (payment.appliedOf: "Aplicado: {{paid}} de {{total}}").

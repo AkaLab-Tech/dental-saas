@@ -499,6 +499,36 @@
     },
     "exportPdf": "Exportar PDF",
     "medicalHistory": "Historial Médico",
+    "medicalHistoryBlock": {
+      "criticalMarker": "Crítico",
+      "edit": "Editar",
+      "add": "Agregar",
+      "addEntry": "Agregar entrada",
+      "remove": "Quitar",
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "entryLabel": "Entrada {{number}}",
+      "criticalityLabel": "Criticidad",
+      "sections": {
+        "allergies": "Alergias",
+        "currentMedication": "Medicación actual",
+        "conditions": "Condiciones",
+        "previousSurgeries": "Cirugías previas",
+        "medicalNotes": "Notas médicas"
+      },
+      "criticality": {
+        "critical": "Crítico",
+        "normal": "Normal"
+      },
+      "errors": {
+        "empty": "La entrada no puede estar vacía",
+        "tooLong": "Máximo {{max}} caracteres",
+        "multiline": "La entrada debe ser de una sola línea",
+        "invalidCriticality": "Criticidad no válida",
+        "tooManyEntries": "Máximo {{max}} entradas por sección",
+        "saveFailed": "No se pudo guardar. Intenta de nuevo."
+      }
+    },
     "dentalChart": "Odontograma",
     "dentalChartNotes": "Notas del Odontograma",
     "showPrimaryTeeth": "Mostrar dientes temporales",

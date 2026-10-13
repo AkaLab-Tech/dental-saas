@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Plus, Search, AlertCircle, Users, Loader2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router'
 import { usePatientsStore } from '@/stores/patients.store'
 import { PatientsListView } from '@/components/patients/PatientsListView'
 import { PatientFormModal } from '@/components/patients/PatientFormModal'
@@ -27,6 +28,8 @@ export function PatientsPage() {
     clearError,
   } = usePatientsStore()
 
+  const [searchParams, setSearchParams] = useSearchParams()
+  const editId = searchParams.get('edit')
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
   const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null)
@@ -56,6 +59,28 @@ export function PatientsPage() {
       return () => clearTimeout(timer)
     }
   }, [successMessage])
+
+  const clearEditParam = useCallback(() => {
+    setSearchParams(
+      (prev) => {
+        if (!prev.has('edit')) return prev
+        prev.delete('edit')
+        return prev
+      },
+      { replace: true }
+    )
+  }, [setSearchParams])
+
+  // Open the edit modal for ?edit=<id>; re-runs when the list loads. Unknown ids are ignored.
+  useEffect(() => {
+    if (!editId || isFormOpen) return
+    const patient = patients.find((p) => p.id === editId)
+    if (patient) {
+      setSelectedPatient(patient)
+      setIsFormOpen(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId, patients])
 
   const handleOpenCreate = () => {
     setSelectedPatient(null)
@@ -92,11 +117,12 @@ export function PatientsPage() {
         }
         setIsFormOpen(false)
         setSelectedPatient(null)
+        clearEditParam()
       } catch {
         // Error is handled by store
       }
     },
-    [selectedPatient, addPatient, editPatient, t]
+    [selectedPatient, addPatient, editPatient, clearEditParam, t]
   )
 
   const handleConfirmDelete = async () => {
@@ -257,6 +283,7 @@ export function PatientsPage() {
         onClose={() => {
           setIsFormOpen(false)
           setSelectedPatient(null)
+          clearEditParam()
         }}
         onSubmit={handleFormSubmit}
         patient={selectedPatient}
