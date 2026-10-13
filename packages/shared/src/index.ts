@@ -19,6 +19,9 @@ export type Role = UserRole
 // Re-export permissions
 export * from './permissions.js'
 
+// Medical history (sections, criticality set, line format)
+export * from './medical-history.js'
+
 // Translation functions
 export {
   t,
