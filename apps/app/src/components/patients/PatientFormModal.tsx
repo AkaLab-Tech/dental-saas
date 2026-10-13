@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { X, Loader2 } from 'lucide-react'
 import type { Patient, CreatePatientData } from '@/lib/patient-api'
 import { getConvenioNames } from '@/lib/patient-api'
+import { MedicalHistoryEditSections } from './medical-history-sections'
 
 // ============================================================================
 // Validation Schema
@@ -185,6 +186,7 @@ export function PatientFormModal({
   if (!isOpen) return null
 
   const modalTitleId = 'patient-form-modal-title'
+  const formId = 'patient-form'
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -218,9 +220,10 @@ export function PatientFormModal({
             </button>
           </div>
 
-          {/* Form */}
-          <form noValidate onSubmit={handleSubmit(handleFormSubmit)}>
-            <div className="px-6 py-4 space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto">
+          {/* Scrollable body: demographic form, then the medical history sections */}
+          <div className="max-h-[calc(100vh-200px)] overflow-y-auto">
+          <form id={formId} noValidate onSubmit={handleSubmit(handleFormSubmit)}>
+            <div className="px-6 py-4 space-y-6">
               {/* Basic info */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -373,9 +376,19 @@ export function PatientFormModal({
                 )}
               </div>
             </div>
+          </form>
 
-            {/* Footer */}
-            <div className="px-6 py-4 bg-gray-50 rounded-b-xl border-t border-gray-200 flex justify-end gap-3">
+          {/*
+            Outside the <form> on purpose: Enter in an entry input would otherwise submit
+            the patient form. Medical history saves per section through its own endpoint,
+            so it needs an existing patient and never rides this form's submit. Entry
+            point only; the record body still shows nothing for an empty history.
+          */}
+          {patient && <MedicalHistoryEditSections key={patient.id} patientId={patient.id} />}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-4 bg-gray-50 rounded-b-xl border-t border-gray-200 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={onClose}
@@ -386,14 +399,14 @@ export function PatientFormModal({
               </button>
               <button
                 type="submit"
+                form={formId}
                 disabled={isSubmitting || isLoading}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
                 {(isSubmitting || isLoading) && <Loader2 className="h-4 w-4 animate-spin" />}
                 {isEditing ? 'Guardar Cambios' : 'Crear Paciente'}
               </button>
-            </div>
-          </form>
+          </div>
         </div>
       </div>
     </div>

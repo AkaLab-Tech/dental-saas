@@ -1,6 +1,7 @@
 import { readFileSync, mkdirSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import type { Page } from '@playwright/test'
 import { test, expect } from './fixtures/authed'
 import { AUTH_STATE_PATH } from './global-setup'
 
@@ -125,5 +126,188 @@ test.describe('Patient record medical history', () => {
     await expect(section.getByText('Hipertensión controlada')).toBeVisible()
     await expect(section.locator('li')).toHaveCount(2)
     await expect(section.getByRole('button', { name: 'Guardar' })).toHaveCount(0)
+  })
+  // The record's own "Editar" link, then the modal the patients page mounts
+  // from the `edit` query param. Returns the dialog and the medical section.
+  async function openEditFromRecord(page: Page, id: string, heading: string) {
+    const historyLoaded = page.waitForResponse(
+      (r) => r.url().includes(`/patients/${id}/medical-history`) && r.request().method() === 'GET'
+    )
+    await page.goto(`/patients/${id}`)
+    await historyLoaded
+    await expect(page.getByRole('heading', { name: heading, level: 1 })).toBeVisible()
+    return historyLoaded
+  }
+
+  // Opens the Edit modal from the patients LIST row (search, then the row's
+  // "Editar" button). Used by tests that are not about the record's own link;
+  // the record link (`/patients?edit=<id>`) is exercised by openModalFromRecord.
+  async function openModal(page: Page, label: string) {
+    await page.goto('/patients')
+    await page.getByPlaceholder(/buscar/i).fill(`E2E Historial ${label}`)
+    const row = page.getByRole('row').filter({ hasText: `E2E Historial ${label}` })
+    await row.getByRole('button', { name: 'Editar', exact: true }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByRole('heading', { name: 'Editar Paciente', level: 2 })).toBeVisible()
+    return dialog
+  }
+
+  // Opens the Edit modal the way a user does from the record: the record's own
+  // "Editar" link navigates to /patients?edit=<id>, and the patients page mounts
+  // the modal for that id.
+  async function openModalFromRecord(page: Page, id: string, name: string) {
+    await openEditFromRecord(page, id, name)
+    await page.getByRole('link', { name: 'Editar', exact: true }).click()
+    await expect(page).toHaveURL(new RegExp(`/patients\\?edit=${id}$`))
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByRole('heading', { name: 'Editar Paciente', level: 2 })).toBeVisible()
+    return dialog
+  }
+
+  async function shot(page: Page, name: string) {
+    await page.screenshot({ path: path.join(SHOT_DIR, `${name}.png`), fullPage: true })
+  }
+
+  test.describe('Edit modal entry point', () => {
+    test('first entry created through the Edit modal shows in the record body (empty -> modal -> populated)', async ({
+      authedPage: page,
+    }) => {
+      const id = await createPatient('roundtrip')
+      const name = 'E2E Historial roundtrip'
+
+      // Empty end: the record shows nothing in the medical area.
+      await openEditFromRecord(page, id, name)
+      await expect(page.locator('[data-testid="medical-history-block"]')).toHaveCount(0)
+      await expect(page.locator('[data-testid^="medical-history-section-"]')).toHaveCount(0)
+      await expect(page.getByText('Penicilina')).toHaveCount(0)
+      await shot(page, 'roundtrip-1-record-empty')
+
+      // Entry point: the record's own "Editar" link, then all five sections on an empty history.
+      const dialog = await openModalFromRecord(page, id, name)
+      const edit = dialog.getByTestId('medical-history-edit')
+      await expect(edit.getByRole('heading', { name: 'Historial Médico', level: 3 })).toBeVisible()
+      for (const label of ['Alergias', 'Medicación actual', 'Condiciones', 'Cirugías previas', 'Notas médicas']) {
+        await expect(edit.getByRole('heading', { name: label, level: 4, exact: true })).toBeVisible()
+      }
+      // The modal body scrolls internally, so a full-page frame would miss the sections.
+      await edit.getByRole('heading', { name: 'Notas médicas', level: 4, exact: true }).scrollIntoViewIfNeeded()
+      await shot(page, 'roundtrip-2-modal-five-sections-empty')
+
+      const allergies = dialog.getByTestId('medical-history-section-allergies')
+      await allergies.getByRole('button', { name: 'Editar: Alergias' }).click()
+      await allergies.getByRole('button', { name: 'Agregar entrada' }).click()
+      await allergies.getByLabel('Entrada 1').fill('Penicilina')
+      await allergies.getByLabel('Criticidad').selectOption('critical')
+      const saved = page.waitForResponse(
+        (r) => r.url().includes(`/patients/${id}/medical-history`) && r.request().method() === 'PUT'
+      )
+      await allergies.getByRole('button', { name: 'Guardar', exact: true }).click()
+      expect((await saved).ok()).toBe(true)
+      await expect(allergies.getByText('Penicilina')).toBeVisible()
+      await expect(allergies.getByRole('button', { name: 'Guardar', exact: true })).toHaveCount(0)
+      await allergies.scrollIntoViewIfNeeded()
+      await shot(page, 'roundtrip-3-modal-entry-saved')
+
+      // Populated end: back on the record, the entry is in the body.
+      await dialog.getByRole('button', { name: 'Cancelar', exact: true }).click()
+      await expect(dialog).toHaveCount(0)
+      await expect(page).not.toHaveURL(/edit=/)
+      await openEditFromRecord(page, id, name)
+      const block = page.getByTestId('medical-history-block')
+      await expect(block).toHaveCount(1)
+      const item = block.getByTestId('medical-history-section-allergies').locator('li')
+      await expect(item).toHaveText(/Penicilina/)
+      await expect(item).toHaveAttribute('data-criticality', 'critical')
+      await shot(page, 'roundtrip-4-record-populated')
+    })
+
+    test('Enter in a medical entry input does not submit the patient form (real keypress)', async ({
+      authedPage: page,
+    }) => {
+      const id = await createPatient('enter')
+      const writes: string[] = []
+      page.on('request', (r) => {
+        if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(r.method()) && r.url().includes('/api/patients')) {
+          writes.push(`${r.method()} ${new URL(r.url()).pathname}`)
+        }
+      })
+      const dialog = await openModal(page, 'enter')
+
+      const conditions = dialog.getByTestId('medical-history-section-conditions')
+      await conditions.getByRole('button', { name: 'Editar: Condiciones' }).click()
+      await conditions.getByRole('button', { name: 'Agregar entrada' }).click()
+      const input = conditions.getByLabel('Entrada 1')
+      await input.fill('Paciente renal')
+      await input.press('Enter')
+
+      // Implicit submission is synchronous with the keypress; the settle only
+      // gives a (wrongly) triggered async handler time to reach the network.
+      await page.waitForTimeout(750)
+      await expect(dialog).toBeVisible()
+      await expect(input).toHaveValue('Paciente renal')
+      await expect(page.getByText(/actualizado/i)).toHaveCount(0)
+      expect(writes).toEqual([])
+      await shot(page, 'enter-1-modal-still-open')
+
+      // Positive control: the same keypress in a patient-form input DOES submit,
+      // so the absence above is the guard working, not Enter being inert here.
+      await dialog.getByPlaceholder('Pérez').press('Enter')
+      await expect(dialog).toHaveCount(0)
+      expect(writes).toContain(`PUT /api/patients/${id}`)
+    })
+
+    // The record's "Editar" link goes to /patients?edit=<id>; the patients page
+    // reads the `edit` param and opens the Edit modal for that patient. Closing
+    // the modal clears the param, so a reload does not reopen it.
+    test('the record "Editar" link opens the Edit modal and closing it clears ?edit', async ({
+      authedPage: page,
+    }) => {
+      const id = await createPatient('link')
+      const dialog = await openModalFromRecord(page, id, 'E2E Historial link')
+      await shot(page, 'link-1-modal-open-from-record')
+
+      await dialog.getByRole('button', { name: 'Cancelar', exact: true }).click()
+      await expect(dialog).toHaveCount(0)
+      await expect(page).not.toHaveURL(/edit=/)
+
+      await page.reload()
+      await expect(page.getByRole('heading', { name: 'Pacientes', level: 1 })).toBeVisible()
+      await expect(page.getByRole('dialog')).toHaveCount(0)
+      await expect(page).not.toHaveURL(/edit=/)
+    })
+
+    test('a MEDICAL_HISTORY_UPDATE holder sees all five section labels in the modal on an empty history', async ({
+      authedPage: page,
+    }) => {
+      const id = await createPatient('labels')
+      const dialog = await openModal(page, 'labels')
+      const sections = dialog.locator('[data-testid^="medical-history-section-"]')
+      await expect(sections).toHaveCount(5)
+      for (const label of ['Alergias', 'Medicación actual', 'Condiciones', 'Cirugías previas', 'Notas médicas']) {
+        await expect(dialog.getByRole('heading', { name: label, level: 4, exact: true })).toBeVisible()
+      }
+      // Empty sections offer "Agregar", never a populated list.
+      await expect(dialog.getByText('Agregar', { exact: true })).toHaveCount(5)
+      await expect(dialog.locator('[data-criticality]')).toHaveCount(0)
+    })
+
+    test('the demographic save still works through the restructured footer (form association)', async ({
+      authedPage: page,
+    }) => {
+      const id = await createPatient('footer')
+      const dialog = await openModal(page, 'footer')
+
+      await dialog.getByPlaceholder('Pérez').fill('Historial footer guardado')
+      const saved = page.waitForResponse(
+        (r) => r.url().endsWith(`/api/patients/${id}`) && r.request().method() === 'PUT'
+      )
+      await dialog.getByRole('button', { name: 'Guardar Cambios', exact: true }).click()
+      expect((await saved).ok()).toBe(true)
+      await expect(dialog).toHaveCount(0)
+
+      const fetched = await api('GET', `/patients/${id}`)
+      const patient = fetched.data ?? fetched.patient ?? fetched
+      expect(patient.lastName).toBe('Historial footer guardado')
+    })
   })
 })
