@@ -780,6 +780,8 @@ const createPaymentSchema = z.object({
   amount: z.number().min(0.01, 'Amount must be greater than 0'),
   date: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
   note: z.string().optional(),
+  // Task #529: reserve the advance to one of this patient's budgets.
+  budgetId: z.string().min(1).optional(),
 })
 
 // Task #392: a reversal must say why. Required by product decision and free
@@ -971,6 +973,7 @@ patientsRouter.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREAT
       amount: parsed.data.amount,
       date: new Date(parsed.data.date),
       note: parsed.data.note,
+      budgetId: parsed.data.budgetId,
       createdBy: req.user!.profileUserId || req.user!.userId,
     })
 
@@ -978,10 +981,14 @@ patientsRouter.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREAT
       const statusMap: Record<string, number> = {
         PATIENT_NOT_FOUND: 404,
         EXCEEDS_BALANCE: 400,
+        BUDGET_NOT_FOUND: 404,
+        BUDGET_NOT_OPEN: 400,
       }
       const messageMap: Record<string, string> = {
         PATIENT_NOT_FOUND: 'Patient not found',
         EXCEEDS_BALANCE: 'Payment amount exceeds outstanding balance',
+        BUDGET_NOT_FOUND: 'Budget not found for this patient',
+        BUDGET_NOT_OPEN: 'Budget is already completed or cancelled',
       }
       res.status(statusMap[result.code] || 500).json({
         success: false,

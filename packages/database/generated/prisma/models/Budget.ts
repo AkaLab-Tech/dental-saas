@@ -283,6 +283,7 @@ export type BudgetWhereInput = {
   tenant?: Prisma.XOR<Prisma.TenantScalarRelationFilter, Prisma.TenantWhereInput>
   patient?: Prisma.XOR<Prisma.PatientScalarRelationFilter, Prisma.PatientWhereInput>
   items?: Prisma.BudgetItemListRelationFilter
+  payments?: Prisma.PatientPaymentListRelationFilter
 }
 
 export type BudgetOrderByWithRelationInput = {
@@ -302,6 +303,7 @@ export type BudgetOrderByWithRelationInput = {
   tenant?: Prisma.TenantOrderByWithRelationInput
   patient?: Prisma.PatientOrderByWithRelationInput
   items?: Prisma.BudgetItemOrderByRelationAggregateInput
+  payments?: Prisma.PatientPaymentOrderByRelationAggregateInput
 }
 
 export type BudgetWhereUniqueInput = Prisma.AtLeast<{
@@ -324,6 +326,7 @@ export type BudgetWhereUniqueInput = Prisma.AtLeast<{
   tenant?: Prisma.XOR<Prisma.TenantScalarRelationFilter, Prisma.TenantWhereInput>
   patient?: Prisma.XOR<Prisma.PatientScalarRelationFilter, Prisma.PatientWhereInput>
   items?: Prisma.BudgetItemListRelationFilter
+  payments?: Prisma.PatientPaymentListRelationFilter
 }, "id" | "publicToken">
 
 export type BudgetOrderByWithAggregationInput = {
@@ -381,6 +384,7 @@ export type BudgetCreateInput = {
   tenant: Prisma.TenantCreateNestedOneWithoutBudgetsInput
   patient: Prisma.PatientCreateNestedOneWithoutBudgetsInput
   items?: Prisma.BudgetItemCreateNestedManyWithoutBudgetInput
+  payments?: Prisma.PatientPaymentCreateNestedManyWithoutBudgetInput
 }
 
 export type BudgetUncheckedCreateInput = {
@@ -398,6 +402,7 @@ export type BudgetUncheckedCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   items?: Prisma.BudgetItemUncheckedCreateNestedManyWithoutBudgetInput
+  payments?: Prisma.PatientPaymentUncheckedCreateNestedManyWithoutBudgetInput
 }
 
 export type BudgetUpdateInput = {
@@ -415,6 +420,7 @@ export type BudgetUpdateInput = {
   tenant?: Prisma.TenantUpdateOneRequiredWithoutBudgetsNestedInput
   patient?: Prisma.PatientUpdateOneRequiredWithoutBudgetsNestedInput
   items?: Prisma.BudgetItemUpdateManyWithoutBudgetNestedInput
+  payments?: Prisma.PatientPaymentUpdateManyWithoutBudgetNestedInput
 }
 
 export type BudgetUncheckedUpdateInput = {
@@ -432,6 +438,7 @@ export type BudgetUncheckedUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   items?: Prisma.BudgetItemUncheckedUpdateManyWithoutBudgetNestedInput
+  payments?: Prisma.PatientPaymentUncheckedUpdateManyWithoutBudgetNestedInput
 }
 
 export type BudgetCreateManyInput = {
@@ -488,6 +495,11 @@ export type BudgetListRelationFilter = {
 
 export type BudgetOrderByRelationAggregateInput = {
   _count?: Prisma.SortOrder
+}
+
+export type BudgetNullableScalarRelationFilter = {
+  is?: Prisma.BudgetWhereInput | null
+  isNot?: Prisma.BudgetWhereInput | null
 }
 
 export type BudgetCountOrderByAggregateInput = {
@@ -635,6 +647,22 @@ export type BudgetUncheckedUpdateManyWithoutPatientNestedInput = {
   deleteMany?: Prisma.BudgetScalarWhereInput | Prisma.BudgetScalarWhereInput[]
 }
 
+export type BudgetCreateNestedOneWithoutPaymentsInput = {
+  create?: Prisma.XOR<Prisma.BudgetCreateWithoutPaymentsInput, Prisma.BudgetUncheckedCreateWithoutPaymentsInput>
+  connectOrCreate?: Prisma.BudgetCreateOrConnectWithoutPaymentsInput
+  connect?: Prisma.BudgetWhereUniqueInput
+}
+
+export type BudgetUpdateOneWithoutPaymentsNestedInput = {
+  create?: Prisma.XOR<Prisma.BudgetCreateWithoutPaymentsInput, Prisma.BudgetUncheckedCreateWithoutPaymentsInput>
+  connectOrCreate?: Prisma.BudgetCreateOrConnectWithoutPaymentsInput
+  upsert?: Prisma.BudgetUpsertWithoutPaymentsInput
+  disconnect?: Prisma.BudgetWhereInput | boolean
+  delete?: Prisma.BudgetWhereInput | boolean
+  connect?: Prisma.BudgetWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.BudgetUpdateToOneWithWhereWithoutPaymentsInput, Prisma.BudgetUpdateWithoutPaymentsInput>, Prisma.BudgetUncheckedUpdateWithoutPaymentsInput>
+}
+
 export type EnumBudgetStatusFieldUpdateOperationsInput = {
   set?: $Enums.BudgetStatus
 }
@@ -667,6 +695,7 @@ export type BudgetCreateWithoutTenantInput = {
   updatedAt?: Date | string
   patient: Prisma.PatientCreateNestedOneWithoutBudgetsInput
   items?: Prisma.BudgetItemCreateNestedManyWithoutBudgetInput
+  payments?: Prisma.PatientPaymentCreateNestedManyWithoutBudgetInput
 }
 
 export type BudgetUncheckedCreateWithoutTenantInput = {
@@ -683,6 +712,7 @@ export type BudgetUncheckedCreateWithoutTenantInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   items?: Prisma.BudgetItemUncheckedCreateNestedManyWithoutBudgetInput
+  payments?: Prisma.PatientPaymentUncheckedCreateNestedManyWithoutBudgetInput
 }
 
 export type BudgetCreateOrConnectWithoutTenantInput = {
@@ -744,6 +774,7 @@ export type BudgetCreateWithoutPatientInput = {
   updatedAt?: Date | string
   tenant: Prisma.TenantCreateNestedOneWithoutBudgetsInput
   items?: Prisma.BudgetItemCreateNestedManyWithoutBudgetInput
+  payments?: Prisma.PatientPaymentCreateNestedManyWithoutBudgetInput
 }
 
 export type BudgetUncheckedCreateWithoutPatientInput = {
@@ -760,6 +791,7 @@ export type BudgetUncheckedCreateWithoutPatientInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   items?: Prisma.BudgetItemUncheckedCreateNestedManyWithoutBudgetInput
+  payments?: Prisma.PatientPaymentUncheckedCreateNestedManyWithoutBudgetInput
 }
 
 export type BudgetCreateOrConnectWithoutPatientInput = {
@@ -788,6 +820,90 @@ export type BudgetUpdateManyWithWhereWithoutPatientInput = {
   data: Prisma.XOR<Prisma.BudgetUpdateManyMutationInput, Prisma.BudgetUncheckedUpdateManyWithoutPatientInput>
 }
 
+export type BudgetCreateWithoutPaymentsInput = {
+  id?: string
+  createdById?: string | null
+  status?: $Enums.BudgetStatus
+  notes?: string | null
+  validUntil?: Date | string | null
+  totalAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  publicToken?: string | null
+  publicTokenExpiresAt?: Date | string | null
+  isActive?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  tenant: Prisma.TenantCreateNestedOneWithoutBudgetsInput
+  patient: Prisma.PatientCreateNestedOneWithoutBudgetsInput
+  items?: Prisma.BudgetItemCreateNestedManyWithoutBudgetInput
+}
+
+export type BudgetUncheckedCreateWithoutPaymentsInput = {
+  id?: string
+  tenantId: string
+  patientId: string
+  createdById?: string | null
+  status?: $Enums.BudgetStatus
+  notes?: string | null
+  validUntil?: Date | string | null
+  totalAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  publicToken?: string | null
+  publicTokenExpiresAt?: Date | string | null
+  isActive?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  items?: Prisma.BudgetItemUncheckedCreateNestedManyWithoutBudgetInput
+}
+
+export type BudgetCreateOrConnectWithoutPaymentsInput = {
+  where: Prisma.BudgetWhereUniqueInput
+  create: Prisma.XOR<Prisma.BudgetCreateWithoutPaymentsInput, Prisma.BudgetUncheckedCreateWithoutPaymentsInput>
+}
+
+export type BudgetUpsertWithoutPaymentsInput = {
+  update: Prisma.XOR<Prisma.BudgetUpdateWithoutPaymentsInput, Prisma.BudgetUncheckedUpdateWithoutPaymentsInput>
+  create: Prisma.XOR<Prisma.BudgetCreateWithoutPaymentsInput, Prisma.BudgetUncheckedCreateWithoutPaymentsInput>
+  where?: Prisma.BudgetWhereInput
+}
+
+export type BudgetUpdateToOneWithWhereWithoutPaymentsInput = {
+  where?: Prisma.BudgetWhereInput
+  data: Prisma.XOR<Prisma.BudgetUpdateWithoutPaymentsInput, Prisma.BudgetUncheckedUpdateWithoutPaymentsInput>
+}
+
+export type BudgetUpdateWithoutPaymentsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  createdById?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  status?: Prisma.EnumBudgetStatusFieldUpdateOperationsInput | $Enums.BudgetStatus
+  notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  validUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  totalAmount?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  publicToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  publicTokenExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  tenant?: Prisma.TenantUpdateOneRequiredWithoutBudgetsNestedInput
+  patient?: Prisma.PatientUpdateOneRequiredWithoutBudgetsNestedInput
+  items?: Prisma.BudgetItemUpdateManyWithoutBudgetNestedInput
+}
+
+export type BudgetUncheckedUpdateWithoutPaymentsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  patientId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdById?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  status?: Prisma.EnumBudgetStatusFieldUpdateOperationsInput | $Enums.BudgetStatus
+  notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  validUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  totalAmount?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  publicToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  publicTokenExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  items?: Prisma.BudgetItemUncheckedUpdateManyWithoutBudgetNestedInput
+}
+
 export type BudgetCreateWithoutItemsInput = {
   id?: string
   createdById?: string | null
@@ -802,6 +918,7 @@ export type BudgetCreateWithoutItemsInput = {
   updatedAt?: Date | string
   tenant: Prisma.TenantCreateNestedOneWithoutBudgetsInput
   patient: Prisma.PatientCreateNestedOneWithoutBudgetsInput
+  payments?: Prisma.PatientPaymentCreateNestedManyWithoutBudgetInput
 }
 
 export type BudgetUncheckedCreateWithoutItemsInput = {
@@ -818,6 +935,7 @@ export type BudgetUncheckedCreateWithoutItemsInput = {
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  payments?: Prisma.PatientPaymentUncheckedCreateNestedManyWithoutBudgetInput
 }
 
 export type BudgetCreateOrConnectWithoutItemsInput = {
@@ -850,6 +968,7 @@ export type BudgetUpdateWithoutItemsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tenant?: Prisma.TenantUpdateOneRequiredWithoutBudgetsNestedInput
   patient?: Prisma.PatientUpdateOneRequiredWithoutBudgetsNestedInput
+  payments?: Prisma.PatientPaymentUpdateManyWithoutBudgetNestedInput
 }
 
 export type BudgetUncheckedUpdateWithoutItemsInput = {
@@ -866,6 +985,7 @@ export type BudgetUncheckedUpdateWithoutItemsInput = {
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  payments?: Prisma.PatientPaymentUncheckedUpdateManyWithoutBudgetNestedInput
 }
 
 export type BudgetCreateManyTenantInput = {
@@ -897,6 +1017,7 @@ export type BudgetUpdateWithoutTenantInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   patient?: Prisma.PatientUpdateOneRequiredWithoutBudgetsNestedInput
   items?: Prisma.BudgetItemUpdateManyWithoutBudgetNestedInput
+  payments?: Prisma.PatientPaymentUpdateManyWithoutBudgetNestedInput
 }
 
 export type BudgetUncheckedUpdateWithoutTenantInput = {
@@ -913,6 +1034,7 @@ export type BudgetUncheckedUpdateWithoutTenantInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   items?: Prisma.BudgetItemUncheckedUpdateManyWithoutBudgetNestedInput
+  payments?: Prisma.PatientPaymentUncheckedUpdateManyWithoutBudgetNestedInput
 }
 
 export type BudgetUncheckedUpdateManyWithoutTenantInput = {
@@ -959,6 +1081,7 @@ export type BudgetUpdateWithoutPatientInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tenant?: Prisma.TenantUpdateOneRequiredWithoutBudgetsNestedInput
   items?: Prisma.BudgetItemUpdateManyWithoutBudgetNestedInput
+  payments?: Prisma.PatientPaymentUpdateManyWithoutBudgetNestedInput
 }
 
 export type BudgetUncheckedUpdateWithoutPatientInput = {
@@ -975,6 +1098,7 @@ export type BudgetUncheckedUpdateWithoutPatientInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   items?: Prisma.BudgetItemUncheckedUpdateManyWithoutBudgetNestedInput
+  payments?: Prisma.PatientPaymentUncheckedUpdateManyWithoutBudgetNestedInput
 }
 
 export type BudgetUncheckedUpdateManyWithoutPatientInput = {
@@ -999,10 +1123,12 @@ export type BudgetUncheckedUpdateManyWithoutPatientInput = {
 
 export type BudgetCountOutputType = {
   items: number
+  payments: number
 }
 
 export type BudgetCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   items?: boolean | BudgetCountOutputTypeCountItemsArgs
+  payments?: boolean | BudgetCountOutputTypeCountPaymentsArgs
 }
 
 /**
@@ -1020,6 +1146,13 @@ export type BudgetCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Exten
  */
 export type BudgetCountOutputTypeCountItemsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.BudgetItemWhereInput
+}
+
+/**
+ * BudgetCountOutputType without action
+ */
+export type BudgetCountOutputTypeCountPaymentsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.PatientPaymentWhereInput
 }
 
 
@@ -1040,6 +1173,7 @@ export type BudgetSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   items?: boolean | Prisma.Budget$itemsArgs<ExtArgs>
+  payments?: boolean | Prisma.Budget$paymentsArgs<ExtArgs>
   _count?: boolean | Prisma.BudgetCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["budget"]>
 
@@ -1100,6 +1234,7 @@ export type BudgetInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   items?: boolean | Prisma.Budget$itemsArgs<ExtArgs>
+  payments?: boolean | Prisma.Budget$paymentsArgs<ExtArgs>
   _count?: boolean | Prisma.BudgetCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type BudgetIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1117,6 +1252,7 @@ export type $BudgetPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs
     tenant: Prisma.$TenantPayload<ExtArgs>
     patient: Prisma.$PatientPayload<ExtArgs>
     items: Prisma.$BudgetItemPayload<ExtArgs>[]
+    payments: Prisma.$PatientPaymentPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1547,6 +1683,7 @@ export interface Prisma__BudgetClient<T, Null = never, ExtArgs extends runtime.T
   tenant<T extends Prisma.TenantDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.TenantDefaultArgs<ExtArgs>>): Prisma.Prisma__TenantClient<runtime.Types.Result.GetResult<Prisma.$TenantPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   patient<T extends Prisma.PatientDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.PatientDefaultArgs<ExtArgs>>): Prisma.Prisma__PatientClient<runtime.Types.Result.GetResult<Prisma.$PatientPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   items<T extends Prisma.Budget$itemsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Budget$itemsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$BudgetItemPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  payments<T extends Prisma.Budget$paymentsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Budget$paymentsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PatientPaymentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -2006,6 +2143,30 @@ export type Budget$itemsArgs<ExtArgs extends runtime.Types.Extensions.InternalAr
   take?: number
   skip?: number
   distinct?: Prisma.BudgetItemScalarFieldEnum | Prisma.BudgetItemScalarFieldEnum[]
+}
+
+/**
+ * Budget.payments
+ */
+export type Budget$paymentsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PatientPayment
+   */
+  select?: Prisma.PatientPaymentSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the PatientPayment
+   */
+  omit?: Prisma.PatientPaymentOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PatientPaymentInclude<ExtArgs> | null
+  where?: Prisma.PatientPaymentWhereInput
+  orderBy?: Prisma.PatientPaymentOrderByWithRelationInput | Prisma.PatientPaymentOrderByWithRelationInput[]
+  cursor?: Prisma.PatientPaymentWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.PatientPaymentScalarFieldEnum | Prisma.PatientPaymentScalarFieldEnum[]
 }
 
 /**

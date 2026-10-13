@@ -6,6 +6,7 @@ import {
   convertAppointmentPaymentsToAdvance,
   createPayment,
   getAppointmentEarmarks,
+  getBudgetReservations,
   getTotalPaid,
   listBillableItems,
   recalculatePaidStatus,
@@ -368,12 +369,13 @@ async function buildPatientAllocationMap(
   tenantId: string,
   patientId: string
 ): Promise<AllocationMaps> {
-  const [items, totalPaid, earmarks] = await Promise.all([
+  const [items, totalPaid, earmarks, reservations] = await Promise.all([
     listBillableItems(tenantId, patientId),
     getTotalPaid(tenantId, patientId),
     getAppointmentEarmarks(tenantId, patientId),
+    getBudgetReservations(tenantId, patientId),
   ])
-  const allocations = computeFifoAllocation(items, totalPaid, earmarks)
+  const allocations = computeFifoAllocation(items, totalPaid, earmarks, reservations)
   const appointments: AllocationMaps['appointments'] = new Map()
   const budgetItems: AllocationMaps['budgetItems'] = new Map()
   for (const a of allocations) {
