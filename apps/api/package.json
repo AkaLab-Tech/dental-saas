@@ -17,7 +17,8 @@
     "recalc:paid": "tsx --env-file=../../.env src/scripts/recalc-paid-status.ts",
     "recalc:paid:dry": "tsx --env-file=../../.env src/scripts/recalc-paid-status.ts --dry-run",
     "backfill:cancelled-payments": "tsx --env-file=../../.env src/scripts/backfill-cancelled-appointment-payments.ts",
-    "backfill:cancelled-payments:apply": "tsx --env-file=../../.env src/scripts/backfill-cancelled-appointment-payments.ts --apply"
+    "backfill:cancelled-payments:apply": "tsx --env-file=../../.env src/scripts/backfill-cancelled-appointment-payments.ts --apply",
+    "report:cost-budget-overlap": "tsx --env-file=../../.env src/scripts/report-cost-budget-overlap.ts"
   },
   "dependencies": {
     "@dental/database": "workspace:*",
