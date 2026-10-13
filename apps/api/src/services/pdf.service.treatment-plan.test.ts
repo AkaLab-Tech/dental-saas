@@ -309,6 +309,35 @@ describe('#541 PdfService.getPatientBudgetsPdfData', () => {
       expect(text).toContain('Plan de Tratamiento')
     })
 
+    it('prints each of the nine rows exactly once', async () => {
+      // The gap the two assertions above leave open, and it is a render gap
+      // only: the data layer is already pinned by `toEqual` on the nine
+      // descriptions plus `toHaveLength(9)`, so duplication cannot arrive
+      // through the query. A template that emitted every row twice onto one
+      // page would satisfy all three of them at once — `pdfPageCount` still
+      // reads 1, every description is still present to `toContain`, and the
+      // 22500 total is derived from the data rather than from the rendered
+      // rows, so it does not move either. This is the only assertion that
+      // looks at what the template does with rows the data layer has already
+      // guaranteed unique.
+      const data = await planFor(ninePatientId)
+      const pdf = await PdfService.generatePdf(
+        React.createElement(PatientTreatmentPlanPdf, { data })
+      )
+      const text = pdfTextFlat(pdf)
+
+      // No PLAN description is a substring of another, so a plain split counts
+      // whole rows.
+      const occurrences = (needle: string) => text.split(needle).length - 1
+
+      for (const { description } of PLAN) {
+        expect(
+          occurrences(description),
+          `"${description}" should appear exactly once in the rendered plan`
+        ).toBe(1)
+      }
+    })
+
     it('prints no budget id', async () => {
       const budgets = await prisma.budget.findMany({
         where: { patientId: ninePatientId },
