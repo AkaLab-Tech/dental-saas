@@ -1,10 +1,18 @@
 import { readFileSync, mkdirSync } from 'fs'
 import path from 'path'
+import { fileURLToPath } from 'url'
 import { test, expect } from './fixtures/authed'
 import { AUTH_STATE_PATH } from './global-setup'
 
+// `__dirname` does not exist here: this package is "type": "module", so the
+// bare identifier throws at module load and Playwright reports 0 tests in 0
+// files - the whole e2e suite, not just this spec. `global-setup.ts` derives it
+// the same way. Note the throw is reachable only when E2E_SHOT_DIR is unset,
+// which is how it passed locally and failed in CI.
+const here = path.dirname(fileURLToPath(import.meta.url))
+
 const API_URL = process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:5001'
-const SHOT_DIR = process.env.E2E_SHOT_DIR ?? path.resolve(__dirname, '../test-results/medical-history-shots')
+const SHOT_DIR = process.env.E2E_SHOT_DIR ?? path.resolve(here, '../test-results/medical-history-shots')
 
 type Entry = { text: string; criticality: 'critical' | 'normal' }
 type History = Partial<
