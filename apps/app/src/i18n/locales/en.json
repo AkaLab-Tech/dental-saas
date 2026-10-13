@@ -772,7 +772,9 @@
     }
   },
   "budgets": {
-    "exportPdf": "Export budget",
+    "exportPdf": "Export treatment plan",
+    "exportPdfPlanError": "Error downloading the treatment plan",
+    "exportPdfIndividual": "Individual budgets",
     "exportPdfChoose": "Choose which budget to export",
     "exportPdfError": "Error downloading the budget",
     "title": "Budgets",

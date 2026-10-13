@@ -79,6 +79,14 @@ export async function downloadBudgetPdf(budgetId: string): Promise<void> {
 }
 
 /**
+ * Download the patient's whole treatment plan (every item of every budget) as
+ * a single PDF
+ */
+export async function downloadPatientBudgetsPdf(patientId: string): Promise<void> {
+  await downloadPdf(`/patients/${patientId}/budgets/pdf`, `treatment-plan-${patientId}.pdf`)
+}
+
+/**
  * Download a labwork order as PDF
  */
 export async function downloadLabworkPdf(labworkId: string): Promise<void> {

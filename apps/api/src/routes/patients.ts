@@ -20,7 +20,7 @@ import {
   listConvenioNames,
 } from '../services/patient.service.js'
 import { PdfService } from '../services/pdf.service.js'
-import { PatientHistoryPdf, sanitizeFilename } from '../pdfs/index.js'
+import { PatientHistoryPdf, PatientTreatmentPlanPdf, sanitizeFilename } from '../pdfs/index.js'
 import {
   createPayment,
   listPayments,
@@ -960,6 +960,45 @@ patientsRouter.get(
           offset: offset ? parseInt(String(offset), 10) : 0,
         },
       })
+    } catch (e) {
+      next(e)
+    }
+  }
+)
+
+/**
+ * GET /api/patients/:id/budgets/pdf
+ * Download the patient's whole treatment plan — every item of every budget — as
+ * a single PDF. Same permission as the per-budget PDF: it is the same data.
+ */
+patientsRouter.get(
+  '/:id/budgets/pdf',
+  requirePermission(Permission.BUDGETS_VIEW),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.user!.tenantId!
+      const { id } = req.params
+
+      const result = await PdfService.getPatientBudgetsPdfData(tenantId, id)
+
+      if ('error' in result) {
+        const status = result.error === 'NOT_FOUND' ? 404 : 400
+        return res.status(status).json({
+          success: false,
+          error: { code: result.error, message: result.message },
+        })
+      }
+
+      const pdfBuffer = await PdfService.generatePdf(
+        React.createElement(PatientTreatmentPlanPdf, { data: result.data })
+      )
+
+      const patientName = sanitizeFilename(`${result.data.patient.firstName}-${result.data.patient.lastName}`)
+      const filename = `treatment-plan-${patientName}-${id}.pdf`
+      res.setHeader('Content-Type', 'application/pdf')
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+      res.setHeader('Content-Length', pdfBuffer.length)
+      res.send(pdfBuffer)
     } catch (e) {
       next(e)
     }
