@@ -1629,7 +1629,12 @@ describe('AppointmentFormModal — executed budget items disclosure (#544)', () 
     getAppointmentByIdMock.mockReset()
   })
 
-  const loadingText = () => i18n.t('appointments.budgetItems.loading')
+  // Its own key since #547: `budgetItems.loading` also labels the selection
+  // list below, so the same sentence stood for two different things.
+  const loadingText = () => i18n.t('appointments.budgetItems.executedChargeLoading')
+  // The strong treatment is carried by role="alert" on the FIGURE block, so the
+  // assertion is about which element is the alert, not about class names.
+  const hintAlert = () => screen.getByText(hintText()).closest('[role="alert"]')
   const figureLine = /Ítems de presupuesto ejecutados en esta cita/
 
   it('WITH the figure: shows count, total, covered/outstanding and the duplicate-cost hint', async () => {
@@ -1711,6 +1716,73 @@ describe('AppointmentFormModal — executed budget items disclosure (#544)', () 
     expect(screen.getByText(loadingText())).toBeInTheDocument()
     expect(screen.queryByText(unavailableText())).not.toBeInTheDocument()
     expect(screen.queryByText(figureLine)).not.toBeInTheDocument()
+  })
+
+  // #547 browser pass: the app used to shout when it did NOT know the figure
+  // and whisper when it DID know a cost was typed beside executed items. These
+  // three pin the weight where the consequence is, and they are a set: the
+  // first two differ only in the typed cost, so a component that always alerts
+  // (or never does) fails one of them.
+  it('figure WITH a typed cost is the alert: the confirmed double charge is the loud one', async () => {
+    renderModal({
+      appointment: makeAppointment({
+        cost: 4200,
+        budgetItems: { count: 1, cost: 700, paidAmount: 0, outstanding: 700 },
+      }),
+    })
+    await waitForOptionsLoaded()
+
+    expect(hintAlert()).not.toBeNull()
+  })
+
+  it('figure WITHOUT a typed cost is not an alert: nothing is being double charged yet', async () => {
+    renderModal({
+      appointment: makeAppointment({
+        cost: 0,
+        budgetItems: { count: 1, cost: 700, paidAmount: 0, outstanding: 700 },
+      }),
+    })
+    await waitForOptionsLoaded()
+
+    expect(screen.getByText(hintText())).toBeInTheDocument()
+    expect(hintAlert()).toBeNull()
+  })
+
+  it('the unavailable notice keeps role=alert for screen readers but is not the figure alert', async () => {
+    getAppointmentByIdMock.mockRejectedValue(new Error('network down'))
+    renderModal({ appointment: makeAppointment({ cost: 4200 }) })
+    await waitForOptionsLoaded()
+
+    const notice = await screen.findByText(unavailableText())
+    expect(notice).toHaveAttribute('role', 'alert')
+    // and the figure is absent, so the only alert on screen is this quiet one
+    expect(screen.queryByText(figureLine)).not.toBeInTheDocument()
+  })
+
+  it('reopening after a failure clears the stale notice and goes back to loading', async () => {
+    // The bug lives in the INTERMEDIATE state, not the settled one. A version of
+    // this test that let the second fetch resolve passed even with the fix
+    // removed, because the arriving success overwrote the stale failure either
+    // way -- it asserted the end state for a defect that only exists on the way
+    // there. So the second call is left PENDING on purpose.
+    getAppointmentByIdMock.mockRejectedValueOnce(new Error('network down'))
+    const appt = makeAppointment({ cost: 4200 })
+    const { rerender } = render(
+      <AppointmentFormModal isOpen onClose={vi.fn()} onSubmit={vi.fn()} appointment={appt} />,
+    )
+    await waitForOptionsLoaded()
+    expect(await screen.findByText(unavailableText())).toBeInTheDocument()
+
+    // `if (!isOpen) return null` is a render guard, not an unmount, so the
+    // failed result survives in state: the reopened modal used to show the
+    // notice instantly and never ask again.
+    getAppointmentByIdMock.mockReturnValue(new Promise(() => {}))
+    rerender(<AppointmentFormModal isOpen={false} onClose={vi.fn()} onSubmit={vi.fn()} appointment={appt} />)
+    rerender(<AppointmentFormModal isOpen onClose={vi.fn()} onSubmit={vi.fn()} appointment={appt} />)
+
+    expect(await screen.findByText(loadingText())).toBeInTheDocument()
+    expect(screen.queryByText(unavailableText())).not.toBeInTheDocument()
+    expect(getAppointmentByIdMock).toHaveBeenCalledTimes(2)
   })
 
   it('switching appointments does not show the previous appointment figure', async () => {
