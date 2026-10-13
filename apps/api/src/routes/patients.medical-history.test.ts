@@ -372,6 +372,36 @@ describe('Patient medical history API', () => {
       const row = await prisma.patient.findUniqueOrThrow({ where: { id: foreign.id } })
       expect(row.allergies).toBe('[critical] FOREIGN-SECRET')
     })
+
+    it("does not read or write another tenant's patient as a DOCTOR either", async () => {
+      // The same assertions with a DOCTOR token, and the reason is the removal of
+      // requireOwnership from the medical PUT. Tenant isolation never lived in that
+      // middleware — it next()s unconditionally for CLINIC_ADMIN and above, so it
+      // never even loaded the row for them — it lives in medical-history.service's
+      // findFirst({ id, tenantId }), which runs before the update.
+      //
+      // Today this traverses the same code path as the ADMIN case above, because the
+      // route is left with a single middleware that is a pure role predicate with no
+      // resource lookup, and the handler has no role-dependent branch. So this test
+      // is redundant *today* and that is precisely the point: the moment anyone
+      // reintroduces role-dependent scoping, the ADMIN case stops covering DOCTOR
+      // and would keep passing while saying nothing about it.
+      const foreign = await makePatient(null, { allergies: '[critical] FOREIGN-SECRET-DOC' }, otherTenantId)
+
+      const get = await api()
+        .get(`/api/patients/${foreign.id}/medical-history`)
+        .set('Authorization', `Bearer ${doctorToken}`)
+      const put = await api()
+        .put(`/api/patients/${foreign.id}/medical-history`)
+        .set('Authorization', `Bearer ${doctorToken}`)
+        .send({ allergies: [{ text: 'hijack', criticality: 'normal' }] })
+
+      expect(get.status).toBe(404)
+      expect(JSON.stringify(get.body)).not.toContain('FOREIGN-SECRET-DOC')
+      expect(put.status).toBe(404)
+      const row = await prisma.patient.findUniqueOrThrow({ where: { id: foreign.id } })
+      expect(row.allergies).toBe('[critical] FOREIGN-SECRET-DOC')
+    })
   })
 
   describe('whole-row leak (guard 5)', () => {
