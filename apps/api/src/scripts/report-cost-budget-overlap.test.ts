@@ -216,6 +216,28 @@ describe('report-cost-budget-overlap (#546)', () => {
       expect(appointmentIds(await report())).not.toContain(appointmentId)
     })
 
+    it('sums prices that binary floating point cannot represent exactly, to the exact printed cent', async () => {
+      // Float: 0.1 + 0.2 = 0.30000000000000004 and 33.33 * 3 = 99.99000000000001.
+      const { items } = await createBudget(patientId, token, [
+        { description: 'item-dec-a', unitPrice: 0.1 },
+        { description: 'item-dec-b', unitPrice: 0.2 },
+        { description: 'item-dec-c', unitPrice: 33.33, quantity: 3 },
+      ])
+      const appointmentId = await createAppointment({
+        patientId,
+        doctorId,
+        cost: 33.33,
+        budgetItemIds: items.map((i) => i.id),
+      })
+      await markDone(appointmentId, items.map((i) => i.id))
+
+      const row = find(await report(), appointmentId)!.a
+      expect(row.executedItems.map((i) => i.totalPrice).sort()).toEqual(['0.10', '0.20', '99.99'])
+      expect(row.executedItemsSubtotal).toBe('100.29')
+      expect(row.typedCost).toBe('33.33')
+      expect(formatReport(await report())).toContain('Executed items subtotal: 100.29')
+    })
+
     it('sums only EXECUTED links when an item has both SCHEDULED and EXECUTED links to the same appointment, and ignores scheduled-only siblings', async () => {
       const { items } = await createBudget(patientId, token, [
         { description: 'item-dual-a', unitPrice: 100 },
@@ -532,8 +554,47 @@ describe('report-cost-budget-overlap (#546)', () => {
       const text = formatReport(await report())
       expect(text).toContain('overlaps to review')
       expect(text).toContain('Read-only report: nothing was modified.')
+
+      // The banned-word scan runs on a synthetic report, never on `text`: the real one embeds the
+      // clinic's data (status enums such as CONFIRMED, clinician-typed descriptions), so a
+      // CONFIRMED appointment would fail a correct script. The constraint is on the script's own
+      // wording; the synthetic statuses and description below contain none of the banned words.
+      const synthetic = formatReport({
+        appointmentCount: 1,
+        tenants: [
+          {
+            tenantId: 'tenant-synthetic',
+            patients: [
+              {
+                patientId: 'patient-synthetic',
+                appointments: [
+                  {
+                    appointmentId: 'appt-synthetic',
+                    startTime: new Date('2031-01-02T10:00:00.000Z'),
+                    appointmentStatus: 'DONE',
+                    typedCost: '150.00',
+                    executedItemsSubtotal: '100.00',
+                    executedItems: [
+                      {
+                        budgetItemId: 'item-synthetic',
+                        budgetId: 'budget-synthetic',
+                        description: 'neutral description',
+                        toothNumber: '16',
+                        totalPrice: '100.00',
+                        itemStatus: 'DONE',
+                        budgetStatus: 'DONE',
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      })
+      expect(synthetic).toContain('overlaps to review')
       for (const banned of ['duplicate', 'confirmed', 'overcharge', 'owed', 'refund', 'grand total']) {
-        expect(text.toLowerCase()).not.toContain(banned)
+        expect(synthetic.toLowerCase()).not.toContain(banned)
       }
       // Only per-appointment figures are printed: no line is a cross-appointment money total.
       const moneyLines = text
