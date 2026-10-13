@@ -217,20 +217,26 @@ describe('report-cost-budget-overlap (#546)', () => {
     })
 
     it('sums prices that binary floating point cannot represent exactly, to the exact printed cent', async () => {
-      // Float: 0.1 + 0.2 = 0.30000000000000004 and 33.33 * 3 = 99.99000000000001.
+      // The float artifact here comes from 0.1 + 0.2 = 0.30000000000000004 alone.
+      // 33.33 * 3 is exactly 99.99 in doubles; it is in the fixture for the quantity path,
+      // not for a rounding error. The raw float sum of the three is 100.28999999999999.
       //
-      // What this catches, and the one thing it cannot: a float sum PRINTED RAW shows
-      // 100.28999999999999 and fails here. A float sum still passed through toFixed(2)
-      // prints 100.29 and passes, and no fixture can change that. Both money columns are
-      // Decimal(10, 2), so the exact sum is always a whole number of cents and therefore
-      // sits a full 0.005 from the nearest rounding boundary, while double error over a
-      // handful of clinic-scale prices is ~1e-10. Measured: 500 items at 5,000 each give
-      // an error of 4.7e-10, seven orders of magnitude short of moving the printed cent.
-      // So for THIS report the two worlds are output-identical and there is nothing to
-      // guard - do not add a lint rule or a wider assertion chasing it.
-      // The bound is a bound, not a law: it breaks around 1e5 rows at the column maximum
-      // (100,000 items at 99,999,999.99 shift the printed figure by 0.15). A future
-      // aggregate - a per-tenant total, say - must re-derive it instead of inheriting it.
+      // What this catches, and the one thing it cannot: a float sum PRINTED RAW fails here.
+      // A float sum still passed through toFixed(2) prints 100.29 and passes, and no fixture
+      // can change that, because both money columns are Decimal(10, 2): an exact sum is a
+      // whole number of cents and so sits a full 0.005 from the nearest rounding boundary,
+      // which the double error has to exceed to move a printed cent. So for THIS report the
+      // two worlds are output-identical and there is nothing to guard - no lint rule, no
+      // wider assertion.
+      //
+      // Measured, because a bound stated without its breaking point gets believed where it
+      // does not hold. It is driven by the running total's magnitude AND the number of
+      // additions, not by either alone. Identical: 20 items at 99,999.99; 5,000 items at
+      // 99,999.99; 2,000 items at the column maximum 99,999,999.99. Divergent: 3,000 items
+      // at the column maximum (prints ...969.99 for ...970.00), and 100,000 items at
+      // 99,999.99 (...8999.98 for ...9000.00). A per-appointment subtotal of clinic-priced
+      // items sits many orders of magnitude inside the safe region; a future aggregate, such
+      // as a per-tenant total, is not covered by that and must re-derive this.
       const { items } = await createBudget(patientId, token, [
         { description: 'item-dec-a', unitPrice: 0.1 },
         { description: 'item-dec-b', unitPrice: 0.2 },
@@ -606,8 +612,12 @@ describe('report-cost-budget-overlap (#546)', () => {
         ],
       })
       expect(synthetic).toContain('overlaps to review')
+      // The empty-report early return prints its own prose and is reached by neither string
+      // above, so it needs the scan too: banned words planted in it went unnoticed otherwise.
+      const empty = formatReport({ tenants: [], appointmentCount: 0 })
       for (const banned of ['duplicate', 'confirmed', 'overcharge', 'owed', 'refund', 'grand total']) {
         expect(synthetic.toLowerCase()).not.toContain(banned)
+        expect(empty.toLowerCase()).not.toContain(banned)
       }
       // Only per-appointment figures are printed: no line is a cross-appointment money total.
       const moneyLines = text
