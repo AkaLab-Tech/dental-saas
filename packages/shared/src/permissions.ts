@@ -80,6 +80,12 @@ export enum Permission {
   BUDGETS_UPDATE = 'budgets:update',
   BUDGETS_DELETE = 'budgets:delete',
   BUDGETS_SHARE = 'budgets:share',
+
+  // Medical history (allergies, medication, conditions, surgeries, notes).
+  // Deliberately separate from PATIENTS_*: STAFF holds PATIENTS_VIEW, and
+  // reusing it would hand every receptionist every patient's clinical data.
+  MEDICAL_HISTORY_VIEW = 'medical_history:view',
+  MEDICAL_HISTORY_UPDATE = 'medical_history:update',
 }
 
 /**
@@ -159,6 +165,9 @@ const CLINIC_ADMIN_PERMISSIONS = [
   Permission.ATTACHMENTS_VIEW,
   Permission.ATTACHMENTS_UPLOAD,
   Permission.ATTACHMENTS_DELETE,
+
+  Permission.MEDICAL_HISTORY_VIEW,
+  Permission.MEDICAL_HISTORY_UPDATE,
 ];
 
 const ADMIN_PERMISSIONS = [
@@ -216,6 +225,9 @@ const ADMIN_PERMISSIONS = [
   Permission.ATTACHMENTS_VIEW,
   Permission.ATTACHMENTS_UPLOAD,
   Permission.ATTACHMENTS_DELETE,
+
+  Permission.MEDICAL_HISTORY_VIEW,
+  Permission.MEDICAL_HISTORY_UPDATE,
 ];
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -233,6 +245,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     // Doctors typically build and adjust the patient's treatment plan (budget)
     Permission.BUDGETS_CREATE,
     Permission.BUDGETS_UPDATE,
+    // Clinical data: doctors read and record it. STAFF does not (see enum note).
+    Permission.MEDICAL_HISTORY_VIEW,
+    Permission.MEDICAL_HISTORY_UPDATE,
   ],
 
   CLINIC_ADMIN: CLINIC_ADMIN_PERMISSIONS,

@@ -267,6 +267,22 @@ model Patient {
   address String? @db.Text
   notes   Json?
 
+  /// Medical history: five separate plain-text sections (the clinic asked for them
+  /// separate so they can be searched and filtered later, hence no Json column and
+  /// no single blob). Criticality is per ENTRY, so it lives inside the text: one
+  /// entry per line, formatted `[critical] text` or `[normal] text`. Lines are
+  /// written and parsed only by the API (see packages/shared medical-history.ts),
+  /// which validates the token against the closed set. This keeps LIKE / full-text
+  /// search working on the column and avoids a child table the plan ruled out.
+  /// Free text that predates these fields may still sit in `address`; it is NOT
+  /// migrated (nothing can tell an address from a medical note) and writing these
+  /// fields never touches `address`.
+  allergies         String? @db.Text
+  currentMedication String? @db.Text
+  conditions        String? @db.Text
+  previousSurgeries String? @db.Text
+  medicalNotes      String? @db.Text
+
   /// Dental chart notes per tooth (ISO 3950 notation)
   /// Format: { "11": "Crown needed", "21": "Caries", ... }
   teeth Json?

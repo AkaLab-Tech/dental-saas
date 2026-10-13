@@ -1,7 +1,7 @@
 import { Router, type IRouter } from 'express'
 import { z } from 'zod'
 import React from 'react'
-import { type TeethData } from '@dental/shared'
+import { type TeethData, MEDICAL_CRITICALITIES } from '@dental/shared'
 import { requireMinRole } from '../middleware/auth.js'
 import { requireOwnership } from '../middleware/ownership.js'
 import {
@@ -19,6 +19,7 @@ import {
   updatePatientShowPrimaryTeeth,
   listConvenioNames,
 } from '../services/patient.service.js'
+import { getMedicalHistory, updateMedicalHistory } from '../services/medical-history.service.js'
 import { PdfService } from '../services/pdf.service.js'
 import { PatientHistoryPdf, PatientTreatmentPlanPdf, sanitizeFilename } from '../pdfs/index.js'
 import {
@@ -281,6 +282,110 @@ patientsRouter.get('/:id', requireMinRole('STAFF'), async (req, res, next) => {
     next(e)
   }
 })
+
+/**
+ * Medical history is gated with requirePermission(), NOT requireMinRole(), and
+ * lives on its own routes. The neighbouring GET/PUT /:id use requireMinRole
+ * ('STAFF' / 'DOCTOR') because patient CRUD predates the permission table, but
+ * STAFF holds PATIENTS_VIEW: riding on those routes would let every receptionist
+ * read every patient's clinical data. Those routes never return these columns
+ * (PATIENT_SELECT is explicit and does not list them), and updatePatientSchema
+ * strips them from a PUT body. Do not add them to either.
+ */
+const medicalEntrySchema = z
+  .object({
+    text: z
+      .string()
+      .trim()
+      .min(1, 'Entry text is required')
+      .max(500, 'Entry text cannot exceed 500 characters')
+      .refine((v) => !/[\r\n]/.test(v), { message: 'Entry text must be a single line' }),
+    criticality: z.enum(MEDICAL_CRITICALITIES),
+  })
+  .strict()
+
+const medicalSectionSchema = z.array(medicalEntrySchema).max(50, 'A section cannot have more than 50 entries')
+
+// strict(): an unknown key (e.g. `address`) is a 400, never silently dropped or applied.
+const updateMedicalHistorySchema = z
+  .object({
+    allergies: medicalSectionSchema.optional(),
+    currentMedication: medicalSectionSchema.optional(),
+    conditions: medicalSectionSchema.optional(),
+    previousSurgeries: medicalSectionSchema.optional(),
+    medicalNotes: medicalSectionSchema.optional(),
+  })
+  .strict()
+
+/**
+ * GET /api/patients/:id/medical-history
+ * Requires MEDICAL_HISTORY_VIEW (DOCTOR and above; not STAFF)
+ */
+patientsRouter.get(
+  '/:id/medical-history',
+  requirePermission(Permission.MEDICAL_HISTORY_VIEW),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.user!.tenantId!
+      const { id } = req.params
+
+      const medicalHistory = await getMedicalHistory(tenantId, id)
+
+      if (!medicalHistory) {
+        return res.status(404).json({
+          success: false,
+          error: { message: 'Patient not found', code: 'NOT_FOUND' },
+        })
+      }
+
+      res.json({ success: true, data: medicalHistory })
+    } catch (e) {
+      next(e)
+    }
+  }
+)
+
+/**
+ * PUT /api/patients/:id/medical-history
+ * Requires MEDICAL_HISTORY_UPDATE. Sections present in the body are replaced,
+ * omitted ones are untouched; an empty array clears a section.
+ *
+ * requireOwnership('patient') is kept, matching PUT /:id: doctor-scoping applies
+ * to every write on a patient record, so a DOCTOR only edits patients they created.
+ * Reads are not scoped (same as GET /:id).
+ */
+patientsRouter.put(
+  '/:id/medical-history',
+  requirePermission(Permission.MEDICAL_HISTORY_UPDATE),
+  requireOwnership('patient'),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.user!.tenantId!
+      const { id } = req.params
+
+      const parsed = updateMedicalHistorySchema.safeParse(req.body)
+      if (!parsed.success) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Invalid request body', code: 'VALIDATION_ERROR', details: parsed.error.errors },
+        })
+      }
+
+      const medicalHistory = await updateMedicalHistory(tenantId, id, parsed.data)
+
+      if (!medicalHistory) {
+        return res.status(404).json({
+          success: false,
+          error: { message: 'Patient not found', code: 'NOT_FOUND' },
+        })
+      }
+
+      res.json({ success: true, data: medicalHistory })
+    } catch (e) {
+      next(e)
+    }
+  }
+)
 
 /**
  * GET /api/patients/:id/appointments

@@ -36,6 +36,11 @@ export type PatientMinAggregateOutputType = {
   coverageType: $Enums.PatientCoverageType | null
   convenioName: string | null
   address: string | null
+  allergies: string | null
+  currentMedication: string | null
+  conditions: string | null
+  previousSurgeries: string | null
+  medicalNotes: string | null
   showPrimaryTeeth: boolean | null
   createdBy: string | null
   isActive: boolean | null
@@ -55,6 +60,11 @@ export type PatientMaxAggregateOutputType = {
   coverageType: $Enums.PatientCoverageType | null
   convenioName: string | null
   address: string | null
+  allergies: string | null
+  currentMedication: string | null
+  conditions: string | null
+  previousSurgeries: string | null
+  medicalNotes: string | null
   showPrimaryTeeth: boolean | null
   createdBy: string | null
   isActive: boolean | null
@@ -75,6 +85,11 @@ export type PatientCountAggregateOutputType = {
   convenioName: number
   address: number
   notes: number
+  allergies: number
+  currentMedication: number
+  conditions: number
+  previousSurgeries: number
+  medicalNotes: number
   teeth: number
   showPrimaryTeeth: number
   createdBy: number
@@ -97,6 +112,11 @@ export type PatientMinAggregateInputType = {
   coverageType?: true
   convenioName?: true
   address?: true
+  allergies?: true
+  currentMedication?: true
+  conditions?: true
+  previousSurgeries?: true
+  medicalNotes?: true
   showPrimaryTeeth?: true
   createdBy?: true
   isActive?: true
@@ -116,6 +136,11 @@ export type PatientMaxAggregateInputType = {
   coverageType?: true
   convenioName?: true
   address?: true
+  allergies?: true
+  currentMedication?: true
+  conditions?: true
+  previousSurgeries?: true
+  medicalNotes?: true
   showPrimaryTeeth?: true
   createdBy?: true
   isActive?: true
@@ -136,6 +161,11 @@ export type PatientCountAggregateInputType = {
   convenioName?: true
   address?: true
   notes?: true
+  allergies?: true
+  currentMedication?: true
+  conditions?: true
+  previousSurgeries?: true
+  medicalNotes?: true
   teeth?: true
   showPrimaryTeeth?: true
   createdBy?: true
@@ -230,6 +260,11 @@ export type PatientGroupByOutputType = {
   convenioName: string | null
   address: string | null
   notes: runtime.JsonValue | null
+  allergies: string | null
+  currentMedication: string | null
+  conditions: string | null
+  previousSurgeries: string | null
+  medicalNotes: string | null
   teeth: runtime.JsonValue | null
   showPrimaryTeeth: boolean
   createdBy: string | null
@@ -272,6 +307,11 @@ export type PatientWhereInput = {
   convenioName?: Prisma.StringNullableFilter<"Patient"> | string | null
   address?: Prisma.StringNullableFilter<"Patient"> | string | null
   notes?: Prisma.JsonNullableFilter<"Patient">
+  allergies?: Prisma.StringNullableFilter<"Patient"> | string | null
+  currentMedication?: Prisma.StringNullableFilter<"Patient"> | string | null
+  conditions?: Prisma.StringNullableFilter<"Patient"> | string | null
+  previousSurgeries?: Prisma.StringNullableFilter<"Patient"> | string | null
+  medicalNotes?: Prisma.StringNullableFilter<"Patient"> | string | null
   teeth?: Prisma.JsonNullableFilter<"Patient">
   showPrimaryTeeth?: Prisma.BoolFilter<"Patient"> | boolean
   createdBy?: Prisma.StringNullableFilter<"Patient"> | string | null
@@ -298,6 +338,11 @@ export type PatientOrderByWithRelationInput = {
   convenioName?: Prisma.SortOrderInput | Prisma.SortOrder
   address?: Prisma.SortOrderInput | Prisma.SortOrder
   notes?: Prisma.SortOrderInput | Prisma.SortOrder
+  allergies?: Prisma.SortOrderInput | Prisma.SortOrder
+  currentMedication?: Prisma.SortOrderInput | Prisma.SortOrder
+  conditions?: Prisma.SortOrderInput | Prisma.SortOrder
+  previousSurgeries?: Prisma.SortOrderInput | Prisma.SortOrder
+  medicalNotes?: Prisma.SortOrderInput | Prisma.SortOrder
   teeth?: Prisma.SortOrderInput | Prisma.SortOrder
   showPrimaryTeeth?: Prisma.SortOrder
   createdBy?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -328,6 +373,11 @@ export type PatientWhereUniqueInput = Prisma.AtLeast<{
   convenioName?: Prisma.StringNullableFilter<"Patient"> | string | null
   address?: Prisma.StringNullableFilter<"Patient"> | string | null
   notes?: Prisma.JsonNullableFilter<"Patient">
+  allergies?: Prisma.StringNullableFilter<"Patient"> | string | null
+  currentMedication?: Prisma.StringNullableFilter<"Patient"> | string | null
+  conditions?: Prisma.StringNullableFilter<"Patient"> | string | null
+  previousSurgeries?: Prisma.StringNullableFilter<"Patient"> | string | null
+  medicalNotes?: Prisma.StringNullableFilter<"Patient"> | string | null
   teeth?: Prisma.JsonNullableFilter<"Patient">
   showPrimaryTeeth?: Prisma.BoolFilter<"Patient"> | boolean
   createdBy?: Prisma.StringNullableFilter<"Patient"> | string | null
@@ -354,6 +404,11 @@ export type PatientOrderByWithAggregationInput = {
   convenioName?: Prisma.SortOrderInput | Prisma.SortOrder
   address?: Prisma.SortOrderInput | Prisma.SortOrder
   notes?: Prisma.SortOrderInput | Prisma.SortOrder
+  allergies?: Prisma.SortOrderInput | Prisma.SortOrder
+  currentMedication?: Prisma.SortOrderInput | Prisma.SortOrder
+  conditions?: Prisma.SortOrderInput | Prisma.SortOrder
+  previousSurgeries?: Prisma.SortOrderInput | Prisma.SortOrder
+  medicalNotes?: Prisma.SortOrderInput | Prisma.SortOrder
   teeth?: Prisma.SortOrderInput | Prisma.SortOrder
   showPrimaryTeeth?: Prisma.SortOrder
   createdBy?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -381,6 +436,11 @@ export type PatientScalarWhereWithAggregatesInput = {
   convenioName?: Prisma.StringNullableWithAggregatesFilter<"Patient"> | string | null
   address?: Prisma.StringNullableWithAggregatesFilter<"Patient"> | string | null
   notes?: Prisma.JsonNullableWithAggregatesFilter<"Patient">
+  allergies?: Prisma.StringNullableWithAggregatesFilter<"Patient"> | string | null
+  currentMedication?: Prisma.StringNullableWithAggregatesFilter<"Patient"> | string | null
+  conditions?: Prisma.StringNullableWithAggregatesFilter<"Patient"> | string | null
+  previousSurgeries?: Prisma.StringNullableWithAggregatesFilter<"Patient"> | string | null
+  medicalNotes?: Prisma.StringNullableWithAggregatesFilter<"Patient"> | string | null
   teeth?: Prisma.JsonNullableWithAggregatesFilter<"Patient">
   showPrimaryTeeth?: Prisma.BoolWithAggregatesFilter<"Patient"> | boolean
   createdBy?: Prisma.StringNullableWithAggregatesFilter<"Patient"> | string | null
@@ -401,6 +461,11 @@ export type PatientCreateInput = {
   convenioName?: string | null
   address?: string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: string | null
+  currentMedication?: string | null
+  conditions?: string | null
+  previousSurgeries?: string | null
+  medicalNotes?: string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: boolean
   createdBy?: string | null
@@ -427,6 +492,11 @@ export type PatientUncheckedCreateInput = {
   convenioName?: string | null
   address?: string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: string | null
+  currentMedication?: string | null
+  conditions?: string | null
+  previousSurgeries?: string | null
+  medicalNotes?: string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: boolean
   createdBy?: string | null
@@ -451,6 +521,11 @@ export type PatientUpdateInput = {
   convenioName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   address?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currentMedication?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conditions?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousSurgeries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  medicalNotes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -477,6 +552,11 @@ export type PatientUncheckedUpdateInput = {
   convenioName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   address?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currentMedication?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conditions?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousSurgeries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  medicalNotes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -502,6 +582,11 @@ export type PatientCreateManyInput = {
   convenioName?: string | null
   address?: string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: string | null
+  currentMedication?: string | null
+  conditions?: string | null
+  previousSurgeries?: string | null
+  medicalNotes?: string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: boolean
   createdBy?: string | null
@@ -522,6 +607,11 @@ export type PatientUpdateManyMutationInput = {
   convenioName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   address?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currentMedication?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conditions?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousSurgeries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  medicalNotes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -543,6 +633,11 @@ export type PatientUncheckedUpdateManyInput = {
   convenioName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   address?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currentMedication?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conditions?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousSurgeries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  medicalNotes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -579,6 +674,11 @@ export type PatientCountOrderByAggregateInput = {
   convenioName?: Prisma.SortOrder
   address?: Prisma.SortOrder
   notes?: Prisma.SortOrder
+  allergies?: Prisma.SortOrder
+  currentMedication?: Prisma.SortOrder
+  conditions?: Prisma.SortOrder
+  previousSurgeries?: Prisma.SortOrder
+  medicalNotes?: Prisma.SortOrder
   teeth?: Prisma.SortOrder
   showPrimaryTeeth?: Prisma.SortOrder
   createdBy?: Prisma.SortOrder
@@ -599,6 +699,11 @@ export type PatientMaxOrderByAggregateInput = {
   coverageType?: Prisma.SortOrder
   convenioName?: Prisma.SortOrder
   address?: Prisma.SortOrder
+  allergies?: Prisma.SortOrder
+  currentMedication?: Prisma.SortOrder
+  conditions?: Prisma.SortOrder
+  previousSurgeries?: Prisma.SortOrder
+  medicalNotes?: Prisma.SortOrder
   showPrimaryTeeth?: Prisma.SortOrder
   createdBy?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
@@ -618,6 +723,11 @@ export type PatientMinOrderByAggregateInput = {
   coverageType?: Prisma.SortOrder
   convenioName?: Prisma.SortOrder
   address?: Prisma.SortOrder
+  allergies?: Prisma.SortOrder
+  currentMedication?: Prisma.SortOrder
+  conditions?: Prisma.SortOrder
+  previousSurgeries?: Prisma.SortOrder
+  medicalNotes?: Prisma.SortOrder
   showPrimaryTeeth?: Prisma.SortOrder
   createdBy?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
@@ -751,6 +861,11 @@ export type PatientCreateWithoutTenantInput = {
   convenioName?: string | null
   address?: string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: string | null
+  currentMedication?: string | null
+  conditions?: string | null
+  previousSurgeries?: string | null
+  medicalNotes?: string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: boolean
   createdBy?: string | null
@@ -775,6 +890,11 @@ export type PatientUncheckedCreateWithoutTenantInput = {
   convenioName?: string | null
   address?: string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: string | null
+  currentMedication?: string | null
+  conditions?: string | null
+  previousSurgeries?: string | null
+  medicalNotes?: string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: boolean
   createdBy?: string | null
@@ -829,6 +949,11 @@ export type PatientScalarWhereInput = {
   convenioName?: Prisma.StringNullableFilter<"Patient"> | string | null
   address?: Prisma.StringNullableFilter<"Patient"> | string | null
   notes?: Prisma.JsonNullableFilter<"Patient">
+  allergies?: Prisma.StringNullableFilter<"Patient"> | string | null
+  currentMedication?: Prisma.StringNullableFilter<"Patient"> | string | null
+  conditions?: Prisma.StringNullableFilter<"Patient"> | string | null
+  previousSurgeries?: Prisma.StringNullableFilter<"Patient"> | string | null
+  medicalNotes?: Prisma.StringNullableFilter<"Patient"> | string | null
   teeth?: Prisma.JsonNullableFilter<"Patient">
   showPrimaryTeeth?: Prisma.BoolFilter<"Patient"> | boolean
   createdBy?: Prisma.StringNullableFilter<"Patient"> | string | null
@@ -849,6 +974,11 @@ export type PatientCreateWithoutAppointmentsInput = {
   convenioName?: string | null
   address?: string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: string | null
+  currentMedication?: string | null
+  conditions?: string | null
+  previousSurgeries?: string | null
+  medicalNotes?: string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: boolean
   createdBy?: string | null
@@ -874,6 +1004,11 @@ export type PatientUncheckedCreateWithoutAppointmentsInput = {
   convenioName?: string | null
   address?: string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: string | null
+  currentMedication?: string | null
+  conditions?: string | null
+  previousSurgeries?: string | null
+  medicalNotes?: string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: boolean
   createdBy?: string | null
@@ -913,6 +1048,11 @@ export type PatientUpdateWithoutAppointmentsInput = {
   convenioName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   address?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currentMedication?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conditions?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousSurgeries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  medicalNotes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -938,6 +1078,11 @@ export type PatientUncheckedUpdateWithoutAppointmentsInput = {
   convenioName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   address?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currentMedication?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conditions?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousSurgeries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  medicalNotes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -961,6 +1106,11 @@ export type PatientCreateWithoutLabworksInput = {
   convenioName?: string | null
   address?: string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: string | null
+  currentMedication?: string | null
+  conditions?: string | null
+  previousSurgeries?: string | null
+  medicalNotes?: string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: boolean
   createdBy?: string | null
@@ -986,6 +1136,11 @@ export type PatientUncheckedCreateWithoutLabworksInput = {
   convenioName?: string | null
   address?: string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: string | null
+  currentMedication?: string | null
+  conditions?: string | null
+  previousSurgeries?: string | null
+  medicalNotes?: string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: boolean
   createdBy?: string | null
@@ -1025,6 +1180,11 @@ export type PatientUpdateWithoutLabworksInput = {
   convenioName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   address?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currentMedication?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conditions?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousSurgeries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  medicalNotes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1050,6 +1210,11 @@ export type PatientUncheckedUpdateWithoutLabworksInput = {
   convenioName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   address?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currentMedication?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conditions?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousSurgeries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  medicalNotes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1073,6 +1238,11 @@ export type PatientCreateWithoutPaymentsInput = {
   convenioName?: string | null
   address?: string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: string | null
+  currentMedication?: string | null
+  conditions?: string | null
+  previousSurgeries?: string | null
+  medicalNotes?: string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: boolean
   createdBy?: string | null
@@ -1098,6 +1268,11 @@ export type PatientUncheckedCreateWithoutPaymentsInput = {
   convenioName?: string | null
   address?: string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: string | null
+  currentMedication?: string | null
+  conditions?: string | null
+  previousSurgeries?: string | null
+  medicalNotes?: string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: boolean
   createdBy?: string | null
@@ -1137,6 +1312,11 @@ export type PatientUpdateWithoutPaymentsInput = {
   convenioName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   address?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currentMedication?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conditions?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousSurgeries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  medicalNotes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1162,6 +1342,11 @@ export type PatientUncheckedUpdateWithoutPaymentsInput = {
   convenioName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   address?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currentMedication?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conditions?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousSurgeries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  medicalNotes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1185,6 +1370,11 @@ export type PatientCreateWithoutBudgetsInput = {
   convenioName?: string | null
   address?: string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: string | null
+  currentMedication?: string | null
+  conditions?: string | null
+  previousSurgeries?: string | null
+  medicalNotes?: string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: boolean
   createdBy?: string | null
@@ -1210,6 +1400,11 @@ export type PatientUncheckedCreateWithoutBudgetsInput = {
   convenioName?: string | null
   address?: string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: string | null
+  currentMedication?: string | null
+  conditions?: string | null
+  previousSurgeries?: string | null
+  medicalNotes?: string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: boolean
   createdBy?: string | null
@@ -1249,6 +1444,11 @@ export type PatientUpdateWithoutBudgetsInput = {
   convenioName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   address?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currentMedication?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conditions?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousSurgeries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  medicalNotes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1274,6 +1474,11 @@ export type PatientUncheckedUpdateWithoutBudgetsInput = {
   convenioName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   address?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currentMedication?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conditions?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousSurgeries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  medicalNotes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1297,6 +1502,11 @@ export type PatientCreateManyTenantInput = {
   convenioName?: string | null
   address?: string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: string | null
+  currentMedication?: string | null
+  conditions?: string | null
+  previousSurgeries?: string | null
+  medicalNotes?: string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: boolean
   createdBy?: string | null
@@ -1317,6 +1527,11 @@ export type PatientUpdateWithoutTenantInput = {
   convenioName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   address?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currentMedication?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conditions?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousSurgeries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  medicalNotes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1341,6 +1556,11 @@ export type PatientUncheckedUpdateWithoutTenantInput = {
   convenioName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   address?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currentMedication?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conditions?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousSurgeries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  medicalNotes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1365,6 +1585,11 @@ export type PatientUncheckedUpdateManyWithoutTenantInput = {
   convenioName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   address?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   notes?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  currentMedication?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conditions?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousSurgeries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  medicalNotes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   teeth?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   showPrimaryTeeth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1444,6 +1669,11 @@ export type PatientSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   convenioName?: boolean
   address?: boolean
   notes?: boolean
+  allergies?: boolean
+  currentMedication?: boolean
+  conditions?: boolean
+  previousSurgeries?: boolean
+  medicalNotes?: boolean
   teeth?: boolean
   showPrimaryTeeth?: boolean
   createdBy?: boolean
@@ -1471,6 +1701,11 @@ export type PatientSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   convenioName?: boolean
   address?: boolean
   notes?: boolean
+  allergies?: boolean
+  currentMedication?: boolean
+  conditions?: boolean
+  previousSurgeries?: boolean
+  medicalNotes?: boolean
   teeth?: boolean
   showPrimaryTeeth?: boolean
   createdBy?: boolean
@@ -1493,6 +1728,11 @@ export type PatientSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   convenioName?: boolean
   address?: boolean
   notes?: boolean
+  allergies?: boolean
+  currentMedication?: boolean
+  conditions?: boolean
+  previousSurgeries?: boolean
+  medicalNotes?: boolean
   teeth?: boolean
   showPrimaryTeeth?: boolean
   createdBy?: boolean
@@ -1515,6 +1755,11 @@ export type PatientSelectScalar = {
   convenioName?: boolean
   address?: boolean
   notes?: boolean
+  allergies?: boolean
+  currentMedication?: boolean
+  conditions?: boolean
+  previousSurgeries?: boolean
+  medicalNotes?: boolean
   teeth?: boolean
   showPrimaryTeeth?: boolean
   createdBy?: boolean
@@ -1523,7 +1768,7 @@ export type PatientSelectScalar = {
   updatedAt?: boolean
 }
 
-export type PatientOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "firstName" | "lastName" | "email" | "phone" | "dob" | "gender" | "coverageType" | "convenioName" | "address" | "notes" | "teeth" | "showPrimaryTeeth" | "createdBy" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["patient"]>
+export type PatientOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "firstName" | "lastName" | "email" | "phone" | "dob" | "gender" | "coverageType" | "convenioName" | "address" | "notes" | "allergies" | "currentMedication" | "conditions" | "previousSurgeries" | "medicalNotes" | "teeth" | "showPrimaryTeeth" | "createdBy" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["patient"]>
 export type PatientInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   appointments?: boolean | Prisma.Patient$appointmentsArgs<ExtArgs>
@@ -1561,6 +1806,23 @@ export type $PatientPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     convenioName: string | null
     address: string | null
     notes: runtime.JsonValue | null
+    /**
+     * Medical history: five separate plain-text sections (the clinic asked for them
+     * separate so they can be searched and filtered later, hence no Json column and
+     * no single blob). Criticality is per ENTRY, so it lives inside the text: one
+     * entry per line, formatted `[critical] text` or `[normal] text`. Lines are
+     * written and parsed only by the API (see packages/shared medical-history.ts),
+     * which validates the token against the closed set. This keeps LIKE / full-text
+     * search working on the column and avoids a child table the plan ruled out.
+     * Free text that predates these fields may still sit in `address`; it is NOT
+     * migrated (nothing can tell an address from a medical note) and writing these
+     * fields never touches `address`.
+     */
+    allergies: string | null
+    currentMedication: string | null
+    conditions: string | null
+    previousSurgeries: string | null
+    medicalNotes: string | null
     /**
      * Dental chart notes per tooth (ISO 3950 notation)
      * Format: { "11": "Crown needed", "21": "Caries", ... }
@@ -2018,6 +2280,11 @@ export interface PatientFieldRefs {
   readonly convenioName: Prisma.FieldRef<"Patient", 'String'>
   readonly address: Prisma.FieldRef<"Patient", 'String'>
   readonly notes: Prisma.FieldRef<"Patient", 'Json'>
+  readonly allergies: Prisma.FieldRef<"Patient", 'String'>
+  readonly currentMedication: Prisma.FieldRef<"Patient", 'String'>
+  readonly conditions: Prisma.FieldRef<"Patient", 'String'>
+  readonly previousSurgeries: Prisma.FieldRef<"Patient", 'String'>
+  readonly medicalNotes: Prisma.FieldRef<"Patient", 'String'>
   readonly teeth: Prisma.FieldRef<"Patient", 'Json'>
   readonly showPrimaryTeeth: Prisma.FieldRef<"Patient", 'Boolean'>
   readonly createdBy: Prisma.FieldRef<"Patient", 'String'>
