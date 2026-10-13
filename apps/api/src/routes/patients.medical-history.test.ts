@@ -27,9 +27,10 @@ describe('Patient medical history API', () => {
   let clinicAdminToken: string
   let ownerToken: string
   let doctorToken: string
-  let otherDoctorToken: string
   let staffToken: string
   let doctorId: string
+  let clinicAdminId: string
+  let staffId: string
   const slug = `test-clinic-medhist-${Date.now()}`
 
   async function makeUser(role: 'ADMIN' | 'CLINIC_ADMIN' | 'OWNER' | 'DOCTOR' | 'STAFF', tId: string, tag: string) {
@@ -60,13 +61,16 @@ describe('Patient medical history API', () => {
     otherTenantId = other.id
 
     adminToken = (await makeUser('ADMIN', tenantId, 'admin')).token
-    clinicAdminToken = (await makeUser('CLINIC_ADMIN', tenantId, 'clinicadmin')).token
+    const clinicAdmin = await makeUser('CLINIC_ADMIN', tenantId, 'clinicadmin')
+    clinicAdminToken = clinicAdmin.token
+    clinicAdminId = clinicAdmin.id
     ownerToken = (await makeUser('OWNER', tenantId, 'owner')).token
     const doctor = await makeUser('DOCTOR', tenantId, 'doctor')
     doctorToken = doctor.token
     doctorId = doctor.id
-    otherDoctorToken = (await makeUser('DOCTOR', tenantId, 'doctor2')).token
-    staffToken = (await makeUser('STAFF', tenantId, 'staff')).token
+    const staff = await makeUser('STAFF', tenantId, 'staff')
+    staffToken = staff.token
+    staffId = staff.id
   })
 
   afterAll(async () => {
@@ -142,23 +146,41 @@ describe('Patient medical history API', () => {
       expect(res.status).toBe(200)
     })
 
-    it('allows a DOCTOR to write a patient they created', async () => {
-      const patient = await makePatient(doctorId)
+    // These two replace a pair of ownership tests that asserted the opposite.
+    // The route is no longer ownership-scoped, so what must stop an unauthorised
+    // write is the PERMISSION, not who opened the record. The first of these
+    // previously built a state the API cannot produce: `makePatient(doctorId)`
+    // writes `createdBy` straight through Prisma, while POST /patients requires
+    // CLINIC_ADMIN (hierarchy 3) and DOCTOR is 2 — so no API-created patient can
+    // carry a doctor's `createdBy`, and that green test certified a row that does
+    // not exist in production.
+    it('lets a DOCTOR write medical history on a patient somebody else opened', async () => {
+      const patient = await makePatient(clinicAdminId)
       const res = await api()
         .put(`/api/patients/${patient.id}/medical-history`)
         .set('Authorization', `Bearer ${doctorToken}`)
-        .send({ allergies: [{ text: 'x', criticality: 'normal' }] })
+        .send({ allergies: [{ text: 'DOCTOR-WRITE synthetic penicillin', criticality: 'critical' }] })
+
       expect(res.status).toBe(200)
+      // Assert the stored row, not the echo: a handler that returned 200 without
+      // writing would pass on the status alone.
+      const row = await prisma.patient.findUniqueOrThrow({ where: { id: patient.id } })
+      expect(row.allergies).toBe('[critical] DOCTOR-WRITE synthetic penicillin')
     })
 
-    it('rejects a DOCTOR writing a patient created by someone else with the OWNERSHIP error (distinct from permission)', async () => {
-      const patient = await makePatient(doctorId)
+    it('still rejects a role without MEDICAL_HISTORY_UPDATE, whoever opened the record', async () => {
+      // The surviving guard, and the one that must be seen to fail: with the
+      // ownership check gone, only the permission stands between STAFF and a
+      // clinical write. `createdBy` is the staff user's own id, so ownership
+      // would have ALLOWED this — the 403 can only come from the permission.
+      const patient = await makePatient(staffId)
       const res = await api()
         .put(`/api/patients/${patient.id}/medical-history`)
-        .set('Authorization', `Bearer ${otherDoctorToken}`)
+        .set('Authorization', `Bearer ${staffToken}`)
         .send({ allergies: [{ text: 'x', criticality: 'normal' }] })
+
       expect(res.status).toBe(403)
-      expect(res.body.error.code).toBe('OWNERSHIP_REQUIRED')
+      expect(res.body.required).toBe('medical_history:update')
       const row = await prisma.patient.findUniqueOrThrow({ where: { id: patient.id } })
       expect(row.allergies).toBeNull()
     })

@@ -350,14 +350,24 @@ patientsRouter.get(
  * Requires MEDICAL_HISTORY_UPDATE. Sections present in the body are replaced,
  * omitted ones are untouched; an empty array clears a section.
  *
- * requireOwnership('patient') is kept, matching PUT /:id: doctor-scoping applies
- * to every write on a patient record, so a DOCTOR only edits patients they created.
- * Reads are not scoped (same as GET /:id).
+ * Deliberately NOT scoped by requireOwnership('patient'), unlike PUT /:id.
+ * Ownership-scoping is a data-stewardship control that fits demographic edits;
+ * clinical findings are closer to the dental chart (PATCH /:id/teeth, which has
+ * no ownership check) than to the patient's contact details. Reads here are
+ * unscoped too, so scoping the write alone made the route disagree with itself.
+ *
+ * It was also unsatisfiable, not merely strict: POST / requires CLINIC_ADMIN
+ * (ROLE_HIERARCHY 3) and DOCTOR is 2, so no API-created patient can ever carry
+ * a doctor's `createdBy`, and ownership.ts's `patient` case compares only
+ * `createdBy` — it has no `doctorId` escape like the `appointment` case. The
+ * effect was that NO doctor could record an allergy on ANY patient.
+ *
+ * If per-doctor scoping is ever wanted, it belongs on `doctorId` the way
+ * `appointment` does it, not on `createdBy`.
  */
 patientsRouter.put(
   '/:id/medical-history',
   requirePermission(Permission.MEDICAL_HISTORY_UPDATE),
-  requireOwnership('patient'),
   async (req, res, next) => {
     try {
       const tenantId = req.user!.tenantId!
