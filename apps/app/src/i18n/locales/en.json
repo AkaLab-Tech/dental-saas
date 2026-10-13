@@ -499,6 +499,36 @@
     },
     "exportPdf": "Export PDF",
     "medicalHistory": "Medical History",
+    "medicalHistoryBlock": {
+      "criticalMarker": "Critical",
+      "edit": "Edit",
+      "add": "Add",
+      "addEntry": "Add entry",
+      "remove": "Remove",
+      "save": "Save",
+      "cancel": "Cancel",
+      "entryLabel": "Entry {{number}}",
+      "criticalityLabel": "Criticality",
+      "sections": {
+        "allergies": "Allergies",
+        "currentMedication": "Current medication",
+        "conditions": "Conditions",
+        "previousSurgeries": "Previous surgeries",
+        "medicalNotes": "Medical notes"
+      },
+      "criticality": {
+        "critical": "Critical",
+        "normal": "Normal"
+      },
+      "errors": {
+        "empty": "The entry cannot be empty",
+        "tooLong": "Maximum {{max}} characters",
+        "multiline": "The entry must be a single line",
+        "invalidCriticality": "Invalid criticality",
+        "tooManyEntries": "Maximum {{max}} entries per section",
+        "saveFailed": "Couldn't save. Please try again."
+      }
+    },
     "dentalChart": "Dental Chart",
     "dentalChartNotes": "Dental Chart Notes",
     "showPrimaryTeeth": "Show primary teeth",

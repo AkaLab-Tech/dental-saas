@@ -39,6 +39,7 @@ import { formatCurrency } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth.store'
 import { AttachmentModule, Permission, ToothStatus, type ToothData } from '@dental/shared'
 import { usePermissions } from '@/hooks/usePermissions'
+import { MedicalHistoryBlock } from '@/components/patients/MedicalHistoryBlock'
 import { ImageUpload } from '@/components/ui/ImageUpload'
 import { ImageGallery } from '@/components/ui/ImageGallery'
 import { PaymentSection } from '@/components/payments/PaymentSection'
@@ -785,6 +786,7 @@ export default function PatientDetailPage() {
                   </span>
                 </div>
               </div>
+              <MedicalHistoryBlock patientId={patient.id} />
             </div>
 
             {/* Dental Chart Section */}
