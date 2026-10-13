@@ -590,6 +590,11 @@ model PatientPayment {
   /// Optional reference to the appointment this payment was generated for
   appointmentId String?
 
+  /// Task #529: when set, this advance is reserved to that budget — it is kept
+  /// out of the patient's general FIFO pool and covers only charges of that
+  /// budget's items. Null (every pre-existing row) means ordinary money.
+  budgetId String?
+
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -597,12 +602,14 @@ model PatientPayment {
   tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   patient     Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
   appointment Appointment?          @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  budget      Budget?               @relation(fields: [budgetId], references: [id], onDelete: SetNull)
   events      PatientPaymentEvent[]
 
   @@index([tenantId])
   @@index([patientId])
   @@index([date])
   @@index([appointmentId])
+  @@index([budgetId])
   @@index([patientId, kind])
   @@map("patient_payments")
 }
@@ -683,9 +690,10 @@ model Budget {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant  Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  patient Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  items   BudgetItem[]
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient  Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  items    BudgetItem[]
+  payments PatientPayment[]
 
   @@index([tenantId])
   @@index([patientId])

@@ -13,6 +13,7 @@ const PAYMENT_SELECT = {
   createdBy: true,
   kind: true,
   appointmentId: true,
+  budgetId: true,
   isActive: true,
   createdAt: true,
   updatedAt: true,
@@ -28,6 +29,8 @@ export type SafePayment = {
   createdBy: string | null
   kind: PatientPaymentKind
   appointmentId: string | null
+  /** Task #529: set when the advance is reserved to a budget. */
+  budgetId: string | null
   isActive: boolean
   createdAt: Date
   updatedAt: Date
@@ -44,6 +47,8 @@ export type PaymentErrorCode =
   | 'PATIENT_NOT_FOUND'
   | 'ALREADY_INACTIVE'
   | 'EXCEEDS_BALANCE'
+  | 'BUDGET_NOT_FOUND'
+  | 'BUDGET_NOT_OPEN'
 
 export interface CreatePaymentInput {
   amount: number
@@ -52,6 +57,8 @@ export interface CreatePaymentInput {
   createdBy?: string
   kind?: PatientPaymentKind
   appointmentId?: string
+  /** Task #529: reserve this advance to a budget of the same patient. */
+  budgetId?: string
 }
 
 export interface ListPaymentsOptions {
@@ -112,7 +119,25 @@ export interface BillableItem {
    * supplies `date`). Display aggregation reads this; the allocation ignores it.
    */
   appointmentId?: string
+  /**
+   * budgetItem only: the budget the charge belongs to. The allocation reads it
+   * to match the charge against advances reserved to that budget (task #529).
+   */
+  budgetId?: string
 }
+
+/**
+ * Task #529: the money of one patient reserved to one budget, as the allocation
+ * needs it. `amount` is the sum of the active advances carrying that budgetId.
+ * `open` is false once the budget is complete, cancelled or deleted — the
+ * moment a leftover stops being reserved.
+ */
+export interface BudgetReservation {
+  amount: number
+  open: boolean
+}
+
+export type BudgetReservations = ReadonlyMap<string, BudgetReservation>
 
 /**
  * Per-item result of FIFO allocation. paidAmount is what the patient's
@@ -151,7 +176,8 @@ export interface FifoAllocation {
 export function computeFifoAllocation(
   items: BillableItem[],
   totalPaid: number,
-  earmarks?: ReadonlyMap<string, number>
+  earmarks?: ReadonlyMap<string, number>,
+  reservations?: BudgetReservations
 ): FifoAllocation[] {
   // Run the whole allocation in integer cents (see toCents at module scope;
   // this is the isPaid regression that motivated it). Comparisons, capping,
@@ -163,18 +189,46 @@ export function computeFifoAllocation(
   )
   const totalEarmarkedCents = earmarkedCents.reduce((sum, cents) => sum + cents, 0)
 
+  // Task #529: money reserved to a budget. Without reservations every term
+  // below is 0 and the walk is exactly the pre-#529 one — that is what keeps
+  // an unreserved patient's figures from moving.
+  //
+  // DECIDED RULES (chosen by the product lead on 2026-10-09; they did NOT come
+  // from the clinic and do NOT follow from the domain, so do not "fix" them):
+  //  1. Excess: once a reserved advance's budget is complete (not `open`), what
+  //     its charges did not consume becomes ordinary credit and rejoins the
+  //     general pool. While the budget is still open the leftover stays held.
+  //  2. Overflow: a charge larger than the reserved balance is covered by the
+  //     reservation up to that balance; the rest is ordinary debt, payable from
+  //     the general pool like any other. The reservation neither stretches to
+  //     cover it nor blocks the charge.
+  const usage =
+    reservations && reservations.size > 0 ? computeReservationUsage(items, reservations) : null
+  let reservedCents = 0
+  let releasedCents = 0
+  if (usage) {
+    for (const budget of usage.budgets.values()) {
+      reservedCents += budget.reservedCents
+      if (!budget.open) releasedCents += budget.reservedCents - budget.consumedCents
+    }
+  }
+
   // Clamp to 0: totalPaid and earmarks come from separate, non-transactional
   // reads (see buildPatientAllocationMap's Promise.all), so a payment
   // inserted between them can make totalEarmarked outgrow the totalPaid
   // snapshot. Without the clamp that would go negative here.
-  let remainingCents = Math.max(0, toCents(totalPaid) - totalEarmarkedCents)
+  let remainingCents = Math.max(
+    0,
+    toCents(totalPaid) - totalEarmarkedCents - reservedCents + releasedCents
+  )
   const result: FifoAllocation[] = []
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
-    const capacityCents = costCents[i] - earmarkedCents[i]
+    const fromReservationCents = usage?.itemCents[i] ?? 0
+    const capacityCents = costCents[i] - earmarkedCents[i] - fromReservationCents
     const fromPoolCents = Math.min(remainingCents, capacityCents)
     remainingCents = Math.max(0, remainingCents - capacityCents)
-    const paidAmountCents = earmarkedCents[i] + fromPoolCents
+    const paidAmountCents = earmarkedCents[i] + fromReservationCents + fromPoolCents
     result.push({
       id: item.id,
       type: item.type,
@@ -186,6 +240,74 @@ export function computeFifoAllocation(
     })
   }
   return result
+}
+
+/**
+ * Task #529: how much of each reservation the charges of its budget consume.
+ * Items arrive oldest-first, so within a budget the reservation is spent in
+ * the same order the general pool would be. A charge takes at most its own
+ * cost and at most what is still unspent in its budget's reservation; a
+ * budget no charge matches consumes nothing. Pure and independent of
+ * earmarks and of the general pool, so the account statement can reuse it to
+ * report each reservation's balance.
+ */
+export function computeReservationUsage(
+  items: BillableItem[],
+  reservations: BudgetReservations
+): {
+  itemCents: number[]
+  budgets: Map<string, { reservedCents: number; consumedCents: number; open: boolean }>
+} {
+  const budgets = new Map<string, { reservedCents: number; consumedCents: number; open: boolean }>()
+  for (const [budgetId, reservation] of reservations) {
+    budgets.set(budgetId, {
+      reservedCents: toCents(reservation.amount),
+      consumedCents: 0,
+      open: reservation.open,
+    })
+  }
+  const itemCents = items.map((item) => {
+    const budget = item.budgetId ? budgets.get(item.budgetId) : undefined
+    if (!budget) return 0
+    const takenCents = Math.min(budget.reservedCents - budget.consumedCents, toCents(item.cost))
+    budget.consumedCents += takenCents
+    return takenCents
+  })
+  return { itemCents, budgets }
+}
+
+/**
+ * Task #529: the patient's active advances reserved to a budget, summed per
+ * budget. Empty for a patient with none — the caller then passes it straight
+ * to computeFifoAllocation, which treats an empty map as no reservations.
+ */
+export async function getBudgetReservations(
+  tenantId: string,
+  patientId: string
+): Promise<Map<string, BudgetReservation>> {
+  const grouped = await prisma.patientPayment.groupBy({
+    by: ['budgetId'],
+    where: { tenantId, patientId, isActive: true, budgetId: { not: null } },
+    _sum: { amount: true },
+  })
+  const reservations = new Map<string, BudgetReservation>()
+  if (grouped.length === 0) return reservations
+
+  const budgets = await prisma.budget.findMany({
+    where: { tenantId, patientId, id: { in: grouped.map((g) => g.budgetId as string) } },
+    select: { id: true, status: true, isActive: true },
+  })
+  const openById = new Map(
+    budgets.map((b) => [b.id, b.isActive && b.status !== 'COMPLETED' && b.status !== 'CANCELLED'])
+  )
+  for (const row of grouped) {
+    const budgetId = row.budgetId as string
+    reservations.set(budgetId, {
+      amount: row._sum.amount?.toNumber() || 0,
+      open: openById.get(budgetId) ?? false,
+    })
+  }
+  return reservations
 }
 
 /**
@@ -269,7 +391,7 @@ async function getBillableItems(tenantId: string, patientId: string): Promise<Bi
       select: {
         appointmentId: true,
         appointment: { select: { startTime: true } },
-        budgetItem: { select: { id: true, totalPrice: true, isPaid: true } },
+        budgetItem: { select: { id: true, budgetId: true, totalPrice: true, isPaid: true } },
       },
     }),
   ])
@@ -286,7 +408,7 @@ async function getBillableItems(tenantId: string, patientId: string): Promise<Bi
   // exclusion rather than an accident of a join.
   const budgetCharges = new Map<
     string,
-    { cost: number; isPaid: boolean; date: Date; appointmentId: string }
+    { cost: number; isPaid: boolean; date: Date; appointmentId: string; budgetId: string }
   >()
   for (const link of executedLinks) {
     const cost = link.budgetItem.totalPrice.toNumber()
@@ -303,6 +425,7 @@ async function getBillableItems(tenantId: string, patientId: string): Promise<Bi
         isPaid: link.budgetItem.isPaid,
         date,
         appointmentId: link.appointmentId,
+        budgetId: link.budgetItem.budgetId,
       })
     }
   }
@@ -331,6 +454,7 @@ async function getBillableItems(tenantId: string, patientId: string): Promise<Bi
       date: charge.date,
       isPaid: charge.isPaid,
       appointmentId: charge.appointmentId,
+      budgetId: charge.budgetId,
     })),
   ]
 
@@ -361,17 +485,18 @@ export async function recalculatePaidStatus(
 ): Promise<RecalculatePaidStatusResult> {
   const dryRun = options?.dryRun ?? false
 
-  const [items, paymentsAggregate, earmarks] = await Promise.all([
+  const [items, paymentsAggregate, earmarks, reservations] = await Promise.all([
     getBillableItems(tenantId, patientId),
     prisma.patientPayment.aggregate({
       where: { tenantId, patientId, isActive: true },
       _sum: { amount: true },
     }),
     getAppointmentEarmarks(tenantId, patientId),
+    getBudgetReservations(tenantId, patientId),
   ])
 
   const totalPaid = paymentsAggregate._sum.amount?.toNumber() || 0
-  const allocations = computeFifoAllocation(items, totalPaid, earmarks)
+  const allocations = computeFifoAllocation(items, totalPaid, earmarks, reservations)
 
   const appointmentUpdates: { id: string; isPaid: boolean }[] = []
   const labworkUpdates: { id: string; isPaid: boolean }[] = []
@@ -533,6 +658,23 @@ export interface PatientAccountStatement {
   totalPaid: number
   /** Share of totalPaid recorded as entregas (kind = ADVANCE), applied or not. */
   advancesTotal: number
+  /**
+   * Task #529: one row per budget that has advances reserved to it. `remaining`
+   * is what the budget's executed work has not consumed yet; it is held for
+   * that budget and is NOT part of advancesCredit while the budget is open.
+   * Absent (not empty) for a patient with no reserved advance, so their
+   * response is byte-identical to the pre-#529 one.
+   */
+  reservedAdvances?: ReservedAdvanceBalance[]
+}
+
+export interface ReservedAdvanceBalance {
+  budgetId: string
+  reserved: number
+  consumed: number
+  remaining: number
+  /** false once the budget is complete/cancelled/deleted: remaining is then ordinary credit. */
+  open: boolean
 }
 
 /**
@@ -555,10 +697,11 @@ export async function getPatientAccountStatement(
     return { success: false, code: 'PATIENT_NOT_FOUND' }
   }
 
-  const [items, totalPaid, earmarks, advancesAgg, budgetItemsAgg] = await Promise.all([
+  const [items, totalPaid, earmarks, reservations, advancesAgg, budgetItemsAgg] = await Promise.all([
     getBillableItems(tenantId, patientId),
     getTotalPaid(tenantId, patientId),
     getAppointmentEarmarks(tenantId, patientId),
+    getBudgetReservations(tenantId, patientId),
     prisma.patientPayment.aggregate({
       where: { tenantId, patientId, isActive: true, kind: 'ADVANCE' },
       _sum: { amount: true },
@@ -579,7 +722,7 @@ export async function getPatientAccountStatement(
     }),
   ])
 
-  const allocations = computeFifoAllocation(items, totalPaid, earmarks)
+  const allocations = computeFifoAllocation(items, totalPaid, earmarks, reservations)
   // Reduce and diff in integer cents (see toCents at module scope, #403):
   // the dollar-space reduces/subtraction below used to leave sub-cent
   // IEEE-754 residue in appointmentsDebt/totalBilled/advancesCredit.
@@ -587,17 +730,47 @@ export async function getPatientAccountStatement(
   const billedCents = items.reduce((sum, item) => sum + toCents(item.cost), 0)
   const paidCents = toCents(totalPaid)
 
+  const reservedAdvances: ReservedAdvanceBalance[] = []
+  let heldCents = 0
+  if (reservations.size > 0) {
+    for (const [budgetId, b] of computeReservationUsage(items, reservations).budgets) {
+      const remainingCents = b.reservedCents - b.consumedCents
+      if (b.open) heldCents += remainingCents
+      reservedAdvances.push({
+        budgetId,
+        reserved: fromCents(b.reservedCents),
+        consumed: fromCents(b.consumedCents),
+        remaining: fromCents(remainingCents),
+        open: b.open,
+      })
+    }
+  }
+  // Without reservations this is the pre-#529 expression, untouched. With
+  // them, money still held for an open budget is not ordinary credit, and
+  // money the engine could not apply to billed work (a reservation's excess
+  // does not cover other budgets' charges) is read off the allocation itself.
+  const advancesCreditCents =
+    reservations.size === 0
+      ? Math.max(0, paidCents - billedCents)
+      : Math.max(
+          0,
+          paidCents -
+            allocations.reduce((sum, a) => sum + toCents(a.paidAmount), 0) -
+            heldCents
+        )
+
   return {
     success: true,
     data: {
       appointmentsDebt: fromCents(appointmentsDebtCents),
       // Whatever FIFO could not apply to performed work. Advances already
       // consumed by an item are part of paidAmount, never counted here.
-      advancesCredit: fromCents(Math.max(0, paidCents - billedCents)),
+      advancesCredit: fromCents(advancesCreditCents),
       remainingBudgetProjection: budgetItemsAgg._sum.totalPrice?.toNumber() || 0,
       totalBilled: fromCents(billedCents),
       totalPaid,
       advancesTotal: advancesAgg._sum.amount?.toNumber() || 0,
+      ...(reservedAdvances.length > 0 ? { reservedAdvances } : {}),
     },
   }
 }
@@ -774,6 +947,22 @@ export async function createPayment(
     return { success: false, code: 'PATIENT_NOT_FOUND' }
   }
 
+  // Task #529: a reservation must point at a budget of this same patient and
+  // tenant (a budget of another patient would park this patient's money on
+  // someone else's work), and one that can still receive work.
+  if (input.budgetId) {
+    const budget = await prisma.budget.findFirst({
+      where: { id: input.budgetId, tenantId, patientId, isActive: true },
+      select: { status: true },
+    })
+    if (!budget) {
+      return { success: false, code: 'BUDGET_NOT_FOUND' }
+    }
+    if (budget.status === 'COMPLETED' || budget.status === 'CANCELLED') {
+      return { success: false, code: 'BUDGET_NOT_OPEN' }
+    }
+  }
+
   // Verify patient still exists before writing (balance no longer caps the amount:
   // overpayment is allowed and becomes credit, applied via FIFO on the next charge)
   const balanceResult = await getPatientBalance(tenantId, patientId)
@@ -792,6 +981,7 @@ export async function createPayment(
       createdBy: input.createdBy || null,
       kind: input.kind ?? 'ADVANCE',
       appointmentId: input.appointmentId || null,
+      budgetId: input.budgetId || null,
     },
     select: PAYMENT_SELECT,
   })
