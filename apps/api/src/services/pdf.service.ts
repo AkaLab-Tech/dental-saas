@@ -1,6 +1,6 @@
 import ReactPDF from '@react-pdf/renderer'
 import React from 'react'
-import { prisma, AppointmentStatus, type BudgetStatus, type BudgetItemStatus } from '@dental/database'
+import { prisma, Prisma, AppointmentStatus, type BudgetStatus, type BudgetItemStatus } from '@dental/database'
 import { logger } from '../utils/logger.js'
 import { getBudget } from './budget.service.js'
 import { getLabworkById } from './labwork.service.js'
@@ -132,6 +132,32 @@ export interface BudgetPdfData {
   tenant: TenantInfo
   patient: PatientInfo
   budget: BudgetPdfInfo
+  generatedAt: Date
+}
+
+/**
+ * One treatment-plan row: a single budget item, with the date of the budget it
+ * belongs to so the row stays traceable without printing budget ids.
+ */
+export interface TreatmentPlanItemPdfInfo {
+  id: string
+  budgetDate: Date
+  description: string
+  toothNumber: string | null
+  quantity: number
+  unitPrice: string // Formatted as string for display
+  totalPrice: string // Formatted as string for display
+}
+
+/**
+ * Data for the patient treatment plan PDF: every planned item of the patient,
+ * across all of their budgets, as one flat table with one grand total.
+ */
+export interface PatientTreatmentPlanData {
+  tenant: TenantInfo
+  patient: PatientInfo
+  items: TreatmentPlanItemPdfInfo[]
+  totalAmount: string // Formatted as string for display
   generatedAt: Date
 }
 
@@ -440,6 +466,109 @@ export const PdfService = {
             status: item.status,
           })),
         },
+        generatedAt: new Date(),
+      },
+    }
+  },
+
+  /**
+   * Get every planned item of a patient, across all of their budgets, for the
+   * treatment plan PDF. The clinic enters one item per budget on purpose, so
+   * the patient's plan lives in many budgets and must be handed over as one
+   * document.
+   *
+   * Queried here with `prisma.budget.findMany` rather than through
+   * `listBudgetsByPatient`, whose `take: limit ?? 50` is a list-view default: a
+   * patient past 50 budgets would silently lose the rest of their plan. Doing
+   * it directly also keeps the two status filters below local to this document.
+   */
+  async getPatientBudgetsPdfData(
+    tenantId: string,
+    patientId: string
+  ): Promise<{ data: PatientTreatmentPlanData } | { error: PdfErrorCode; message: string }> {
+    const patient = await prisma.patient.findFirst({
+      where: { id: patientId, tenantId, isActive: true },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        dob: true,
+        gender: true,
+        address: true,
+      },
+    })
+
+    if (!patient) {
+      return { error: 'NOT_FOUND', message: 'Patient not found' }
+    }
+
+    const tenant = await this.getTenantInfo(tenantId)
+    if (!tenant) {
+      return { error: 'INVALID_TENANT', message: 'Tenant not found' }
+    }
+
+    const budgets = await prisma.budget.findMany({
+      where: {
+        tenantId,
+        patientId,
+        isActive: true,
+        // DRAFT is deliberately INCLUDED. Do not "align" this with
+        // getPatientAccountStatement's `notIn: ['DRAFT', 'CANCELLED']`: every
+        // budget in the clinic's production data is DRAFT, so excluding drafts
+        // yields an empty document for every real patient. The statement
+        // measures what is billable; this document is the planned treatment.
+        status: { not: 'CANCELLED' },
+      },
+      select: {
+        createdAt: true,
+        items: {
+          // Every item except CANCELLED. Again, NOT the statement's
+          // `notIn: ['EXECUTED', 'CANCELLED']`: the statement excludes executed
+          // items because it measures work still outstanding, while this is the
+          // whole planned treatment handed to the patient. Filtering on EXECUTED
+          // would tie the document's contents to billing state, so a treatment
+          // would vanish from the patient's copy the moment it was executed.
+          where: { status: { not: 'CANCELLED' } },
+          select: {
+            id: true,
+            description: true,
+            toothNumber: true,
+            quantity: true,
+            unitPrice: true,
+            totalPrice: true,
+          },
+          orderBy: { order: 'asc' },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    })
+
+    const items: TreatmentPlanItemPdfInfo[] = budgets.flatMap((budget) =>
+      budget.items.map((item) => ({
+        id: item.id,
+        budgetDate: budget.createdAt,
+        description: item.description,
+        toothNumber: item.toothNumber,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice.toString(),
+        totalPrice: item.totalPrice.toString(),
+      }))
+    )
+
+    // Summed from the included items, not from budget.totalAmount, so the
+    // printed total always matches the rows above it.
+    const totalAmount = budgets
+      .flatMap((budget) => budget.items)
+      .reduce((sum, item) => sum.add(item.totalPrice), new Prisma.Decimal(0))
+
+    return {
+      data: {
+        tenant,
+        patient,
+        items,
+        totalAmount: totalAmount.toString(),
         generatedAt: new Date(),
       },
     }

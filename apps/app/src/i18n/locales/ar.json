@@ -772,7 +772,9 @@
     }
   },
   "budgets": {
-    "exportPdf": "تصدير الميزانية",
+    "exportPdf": "تصدير خطة العلاج",
+    "exportPdfPlanError": "خطأ في تنزيل خطة العلاج",
+    "exportPdfIndividual": "الميزانيات الفردية",
     "exportPdfChoose": "اختر الميزانية المراد تصديرها",
     "exportPdfError": "خطأ في تنزيل الميزانية",
     "title": "الميزانيات",

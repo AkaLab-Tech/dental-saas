@@ -81,6 +81,14 @@ export default {
       },
       "footer": "This budget is an estimate and may be subject to change."
     },
+    "treatmentPlan": {
+      "title": "Treatment Plan",
+      "planFor": "Plan for",
+      "itemsCount": "Treatments",
+      "noItems": "This patient has no budgeted treatments.",
+      "total": "Total",
+      "footer": "This treatment plan is an estimate and may be subject to change."
+    },
     "common": {
       "generatedOn": "Generated on",
       "at": "at",

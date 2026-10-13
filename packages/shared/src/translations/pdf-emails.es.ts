@@ -81,6 +81,14 @@ export default {
       },
       "footer": "Este presupuesto es una estimación y puede estar sujeto a cambios."
     },
+    "treatmentPlan": {
+      "title": "Plan de Tratamiento",
+      "planFor": "Plan para",
+      "itemsCount": "Tratamientos",
+      "noItems": "Este paciente no tiene tratamientos presupuestados.",
+      "total": "Total",
+      "footer": "Este plan de tratamiento es una estimación y puede estar sujeto a cambios."
+    },
     "common": {
       "generatedOn": "Generado el",
       "at": "a las",

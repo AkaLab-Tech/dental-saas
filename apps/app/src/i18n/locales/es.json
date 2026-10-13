@@ -772,7 +772,9 @@
     }
   },
   "budgets": {
-    "exportPdf": "Exportar presupuesto",
+    "exportPdf": "Exportar plan de tratamiento",
+    "exportPdfPlanError": "Error al descargar el plan de tratamiento",
+    "exportPdfIndividual": "Presupuestos individuales",
     "exportPdfChoose": "Elige qué presupuesto exportar",
     "exportPdfError": "Error al descargar el presupuesto",
     "title": "Presupuestos",
