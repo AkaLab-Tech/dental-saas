@@ -52,6 +52,7 @@ export type BudgetItemMinAggregateOutputType = {
   status: $Enums.BudgetItemStatus | null
   notes: string | null
   order: number | null
+  isPaid: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -68,6 +69,7 @@ export type BudgetItemMaxAggregateOutputType = {
   status: $Enums.BudgetItemStatus | null
   notes: string | null
   order: number | null
+  isPaid: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -84,6 +86,7 @@ export type BudgetItemCountAggregateOutputType = {
   status: number
   notes: number
   order: number
+  isPaid: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -116,6 +119,7 @@ export type BudgetItemMinAggregateInputType = {
   status?: true
   notes?: true
   order?: true
+  isPaid?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -132,6 +136,7 @@ export type BudgetItemMaxAggregateInputType = {
   status?: true
   notes?: true
   order?: true
+  isPaid?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -148,6 +153,7 @@ export type BudgetItemCountAggregateInputType = {
   status?: true
   notes?: true
   order?: true
+  isPaid?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -251,6 +257,7 @@ export type BudgetItemGroupByOutputType = {
   status: $Enums.BudgetItemStatus
   notes: string | null
   order: number
+  isPaid: boolean
   createdAt: Date
   updatedAt: Date
   _count: BudgetItemCountAggregateOutputType | null
@@ -290,6 +297,7 @@ export type BudgetItemWhereInput = {
   status?: Prisma.EnumBudgetItemStatusFilter<"BudgetItem"> | $Enums.BudgetItemStatus
   notes?: Prisma.StringNullableFilter<"BudgetItem"> | string | null
   order?: Prisma.IntFilter<"BudgetItem"> | number
+  isPaid?: Prisma.BoolFilter<"BudgetItem"> | boolean
   createdAt?: Prisma.DateTimeFilter<"BudgetItem"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"BudgetItem"> | Date | string
   budget?: Prisma.XOR<Prisma.BudgetScalarRelationFilter, Prisma.BudgetWhereInput>
@@ -308,6 +316,7 @@ export type BudgetItemOrderByWithRelationInput = {
   status?: Prisma.SortOrder
   notes?: Prisma.SortOrderInput | Prisma.SortOrder
   order?: Prisma.SortOrder
+  isPaid?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   budget?: Prisma.BudgetOrderByWithRelationInput
@@ -329,6 +338,7 @@ export type BudgetItemWhereUniqueInput = Prisma.AtLeast<{
   status?: Prisma.EnumBudgetItemStatusFilter<"BudgetItem"> | $Enums.BudgetItemStatus
   notes?: Prisma.StringNullableFilter<"BudgetItem"> | string | null
   order?: Prisma.IntFilter<"BudgetItem"> | number
+  isPaid?: Prisma.BoolFilter<"BudgetItem"> | boolean
   createdAt?: Prisma.DateTimeFilter<"BudgetItem"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"BudgetItem"> | Date | string
   budget?: Prisma.XOR<Prisma.BudgetScalarRelationFilter, Prisma.BudgetWhereInput>
@@ -347,6 +357,7 @@ export type BudgetItemOrderByWithAggregationInput = {
   status?: Prisma.SortOrder
   notes?: Prisma.SortOrderInput | Prisma.SortOrder
   order?: Prisma.SortOrder
+  isPaid?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.BudgetItemCountOrderByAggregateInput
@@ -371,6 +382,7 @@ export type BudgetItemScalarWhereWithAggregatesInput = {
   status?: Prisma.EnumBudgetItemStatusWithAggregatesFilter<"BudgetItem"> | $Enums.BudgetItemStatus
   notes?: Prisma.StringNullableWithAggregatesFilter<"BudgetItem"> | string | null
   order?: Prisma.IntWithAggregatesFilter<"BudgetItem"> | number
+  isPaid?: Prisma.BoolWithAggregatesFilter<"BudgetItem"> | boolean
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"BudgetItem"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"BudgetItem"> | Date | string
 }
@@ -386,6 +398,7 @@ export type BudgetItemCreateInput = {
   status?: $Enums.BudgetItemStatus
   notes?: string | null
   order?: number
+  isPaid?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   budget: Prisma.BudgetCreateNestedOneWithoutItemsInput
@@ -404,6 +417,7 @@ export type BudgetItemUncheckedCreateInput = {
   status?: $Enums.BudgetItemStatus
   notes?: string | null
   order?: number
+  isPaid?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   appointments?: Prisma.BudgetItemAppointmentUncheckedCreateNestedManyWithoutBudgetItemInput
@@ -420,6 +434,7 @@ export type BudgetItemUpdateInput = {
   status?: Prisma.EnumBudgetItemStatusFieldUpdateOperationsInput | $Enums.BudgetItemStatus
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   order?: Prisma.IntFieldUpdateOperationsInput | number
+  isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   budget?: Prisma.BudgetUpdateOneRequiredWithoutItemsNestedInput
@@ -438,6 +453,7 @@ export type BudgetItemUncheckedUpdateInput = {
   status?: Prisma.EnumBudgetItemStatusFieldUpdateOperationsInput | $Enums.BudgetItemStatus
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   order?: Prisma.IntFieldUpdateOperationsInput | number
+  isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   appointments?: Prisma.BudgetItemAppointmentUncheckedUpdateManyWithoutBudgetItemNestedInput
@@ -455,6 +471,7 @@ export type BudgetItemCreateManyInput = {
   status?: $Enums.BudgetItemStatus
   notes?: string | null
   order?: number
+  isPaid?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -470,6 +487,7 @@ export type BudgetItemUpdateManyMutationInput = {
   status?: Prisma.EnumBudgetItemStatusFieldUpdateOperationsInput | $Enums.BudgetItemStatus
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   order?: Prisma.IntFieldUpdateOperationsInput | number
+  isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -486,6 +504,7 @@ export type BudgetItemUncheckedUpdateManyInput = {
   status?: Prisma.EnumBudgetItemStatusFieldUpdateOperationsInput | $Enums.BudgetItemStatus
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   order?: Prisma.IntFieldUpdateOperationsInput | number
+  isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -512,6 +531,7 @@ export type BudgetItemCountOrderByAggregateInput = {
   status?: Prisma.SortOrder
   notes?: Prisma.SortOrder
   order?: Prisma.SortOrder
+  isPaid?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -535,6 +555,7 @@ export type BudgetItemMaxOrderByAggregateInput = {
   status?: Prisma.SortOrder
   notes?: Prisma.SortOrder
   order?: Prisma.SortOrder
+  isPaid?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -551,6 +572,7 @@ export type BudgetItemMinOrderByAggregateInput = {
   status?: Prisma.SortOrder
   notes?: Prisma.SortOrder
   order?: Prisma.SortOrder
+  isPaid?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -638,6 +660,7 @@ export type BudgetItemCreateWithoutBudgetInput = {
   status?: $Enums.BudgetItemStatus
   notes?: string | null
   order?: number
+  isPaid?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   appointments?: Prisma.BudgetItemAppointmentCreateNestedManyWithoutBudgetItemInput
@@ -654,6 +677,7 @@ export type BudgetItemUncheckedCreateWithoutBudgetInput = {
   status?: $Enums.BudgetItemStatus
   notes?: string | null
   order?: number
+  isPaid?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   appointments?: Prisma.BudgetItemAppointmentUncheckedCreateNestedManyWithoutBudgetItemInput
@@ -700,6 +724,7 @@ export type BudgetItemScalarWhereInput = {
   status?: Prisma.EnumBudgetItemStatusFilter<"BudgetItem"> | $Enums.BudgetItemStatus
   notes?: Prisma.StringNullableFilter<"BudgetItem"> | string | null
   order?: Prisma.IntFilter<"BudgetItem"> | number
+  isPaid?: Prisma.BoolFilter<"BudgetItem"> | boolean
   createdAt?: Prisma.DateTimeFilter<"BudgetItem"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"BudgetItem"> | Date | string
 }
@@ -715,6 +740,7 @@ export type BudgetItemCreateWithoutAppointmentsInput = {
   status?: $Enums.BudgetItemStatus
   notes?: string | null
   order?: number
+  isPaid?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   budget: Prisma.BudgetCreateNestedOneWithoutItemsInput
@@ -732,6 +758,7 @@ export type BudgetItemUncheckedCreateWithoutAppointmentsInput = {
   status?: $Enums.BudgetItemStatus
   notes?: string | null
   order?: number
+  isPaid?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -763,6 +790,7 @@ export type BudgetItemUpdateWithoutAppointmentsInput = {
   status?: Prisma.EnumBudgetItemStatusFieldUpdateOperationsInput | $Enums.BudgetItemStatus
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   order?: Prisma.IntFieldUpdateOperationsInput | number
+  isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   budget?: Prisma.BudgetUpdateOneRequiredWithoutItemsNestedInput
@@ -780,6 +808,7 @@ export type BudgetItemUncheckedUpdateWithoutAppointmentsInput = {
   status?: Prisma.EnumBudgetItemStatusFieldUpdateOperationsInput | $Enums.BudgetItemStatus
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   order?: Prisma.IntFieldUpdateOperationsInput | number
+  isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -795,6 +824,7 @@ export type BudgetItemCreateManyBudgetInput = {
   status?: $Enums.BudgetItemStatus
   notes?: string | null
   order?: number
+  isPaid?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -810,6 +840,7 @@ export type BudgetItemUpdateWithoutBudgetInput = {
   status?: Prisma.EnumBudgetItemStatusFieldUpdateOperationsInput | $Enums.BudgetItemStatus
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   order?: Prisma.IntFieldUpdateOperationsInput | number
+  isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   appointments?: Prisma.BudgetItemAppointmentUpdateManyWithoutBudgetItemNestedInput
@@ -826,6 +857,7 @@ export type BudgetItemUncheckedUpdateWithoutBudgetInput = {
   status?: Prisma.EnumBudgetItemStatusFieldUpdateOperationsInput | $Enums.BudgetItemStatus
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   order?: Prisma.IntFieldUpdateOperationsInput | number
+  isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   appointments?: Prisma.BudgetItemAppointmentUncheckedUpdateManyWithoutBudgetItemNestedInput
@@ -842,6 +874,7 @@ export type BudgetItemUncheckedUpdateManyWithoutBudgetInput = {
   status?: Prisma.EnumBudgetItemStatusFieldUpdateOperationsInput | $Enums.BudgetItemStatus
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   order?: Prisma.IntFieldUpdateOperationsInput | number
+  isPaid?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -889,6 +922,7 @@ export type BudgetItemSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   status?: boolean
   notes?: boolean
   order?: boolean
+  isPaid?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   budget?: boolean | Prisma.BudgetDefaultArgs<ExtArgs>
@@ -908,6 +942,7 @@ export type BudgetItemSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ex
   status?: boolean
   notes?: boolean
   order?: boolean
+  isPaid?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   budget?: boolean | Prisma.BudgetDefaultArgs<ExtArgs>
@@ -925,6 +960,7 @@ export type BudgetItemSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ex
   status?: boolean
   notes?: boolean
   order?: boolean
+  isPaid?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   budget?: boolean | Prisma.BudgetDefaultArgs<ExtArgs>
@@ -942,11 +978,12 @@ export type BudgetItemSelectScalar = {
   status?: boolean
   notes?: boolean
   order?: boolean
+  isPaid?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type BudgetItemOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "budgetId" | "description" | "toothNumber" | "quantity" | "unitPrice" | "totalPrice" | "plannedAppointmentType" | "status" | "notes" | "order" | "createdAt" | "updatedAt", ExtArgs["result"]["budgetItem"]>
+export type BudgetItemOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "budgetId" | "description" | "toothNumber" | "quantity" | "unitPrice" | "totalPrice" | "plannedAppointmentType" | "status" | "notes" | "order" | "isPaid" | "createdAt" | "updatedAt", ExtArgs["result"]["budgetItem"]>
 export type BudgetItemInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   budget?: boolean | Prisma.BudgetDefaultArgs<ExtArgs>
   appointments?: boolean | Prisma.BudgetItem$appointmentsArgs<ExtArgs>
@@ -1004,6 +1041,12 @@ export type $BudgetItemPayload<ExtArgs extends runtime.Types.Extensions.Internal
      * Display order inside the budget (ascending)
      */
     order: number
+    /**
+     * Cache of "the patient's payments fully cover this item's charge". Separate
+     * from `status` on purpose: EXECUTED says the work was done, not that it was
+     * paid. Written by recalculatePaidStatus from the FIFO allocation.
+     */
+    isPaid: boolean
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["budgetItem"]>
@@ -1442,6 +1485,7 @@ export interface BudgetItemFieldRefs {
   readonly status: Prisma.FieldRef<"BudgetItem", 'BudgetItemStatus'>
   readonly notes: Prisma.FieldRef<"BudgetItem", 'String'>
   readonly order: Prisma.FieldRef<"BudgetItem", 'Int'>
+  readonly isPaid: Prisma.FieldRef<"BudgetItem", 'Boolean'>
   readonly createdAt: Prisma.FieldRef<"BudgetItem", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"BudgetItem", 'DateTime'>
 }

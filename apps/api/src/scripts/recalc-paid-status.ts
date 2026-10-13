@@ -41,23 +41,32 @@ async function recalcPaidStatus(dryRun: boolean) {
   let processedCount = 0
   let changedCount = 0
   let errorCount = 0
-  const tenantTotals = new Map<string, { appointmentChanges: number; labworkChanges: number }>()
+  const tenantTotals = new Map<
+    string,
+    { appointmentChanges: number; labworkChanges: number; budgetItemChanges: number }
+  >()
 
   for (const { tenantId, patientId } of patients) {
     try {
       const result = await recalculatePaidStatus(tenantId, patientId, { dryRun })
       processedCount++
 
-      if (result.appointmentChanges > 0 || result.labworkChanges > 0) {
+      if (result.appointmentChanges > 0 || result.labworkChanges > 0 || result.budgetItemChanges > 0) {
         changedCount++
-        const totals = tenantTotals.get(tenantId) || { appointmentChanges: 0, labworkChanges: 0 }
+        const totals = tenantTotals.get(tenantId) || {
+          appointmentChanges: 0,
+          labworkChanges: 0,
+          budgetItemChanges: 0,
+        }
         totals.appointmentChanges += result.appointmentChanges
         totals.labworkChanges += result.labworkChanges
+        totals.budgetItemChanges += result.budgetItemChanges
         tenantTotals.set(tenantId, totals)
 
         const verb = dryRun ? 'Would flip' : 'Flipped'
         console.log(
-          `${verb} ${result.appointmentChanges} appointment(s) + ${result.labworkChanges} labwork(s) ` +
+          `${verb} ${result.appointmentChanges} appointment(s) + ${result.labworkChanges} labwork(s) + ` +
+            `${result.budgetItemChanges} budget item(s) ` +
             `for tenant ${tenantId} / patient ${patientId}`
         )
       }
@@ -80,7 +89,8 @@ async function recalcPaidStatus(dryRun: boolean) {
   console.log('\nPer-tenant changed-row totals:')
   for (const [tenantId, totals] of tenantTotals) {
     console.log(
-      `  ${tenantId}: ${totals.appointmentChanges} appointment(s), ${totals.labworkChanges} labwork(s)`
+      `  ${tenantId}: ${totals.appointmentChanges} appointment(s), ${totals.labworkChanges} labwork(s), ` +
+        `${totals.budgetItemChanges} budget item(s)`
     )
   }
   console.log(`${'='.repeat(60)}\n`)
