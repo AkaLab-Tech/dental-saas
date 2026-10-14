@@ -46,8 +46,11 @@ test.describe('Patient header balance (#526)', () => {
     // refetch, so the list is unfiltered until it lands; the unique name is
     // in both the unfiltered and the filtered list, so matching the row by
     // that text resolves to this run's patient either way. toHaveCount(1)
-    // does not wait for the refetch (the stale list already satisfies it);
-    // it asserts the match is unambiguous and gives a retrying assertion.
+    // asserts the match is unambiguous. It need not wait for the refetch only
+    // while the tenant fits the default page (patient.service.ts getPatients:
+    // limit = 50, take: Math.min(limit, 100), lastName asc); past that the
+    // row can be absent from the stale page and this retrying assertion waits
+    // for the filtered refetch. The pin holds either way.
     await page.getByPlaceholder(/buscar por nombre/i).fill(uniqueLastName)
     const patientRow = page.getByRole('row').filter({ hasText: uniqueLastName })
     await expect(patientRow).toHaveCount(1)
