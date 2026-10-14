@@ -983,12 +983,15 @@ patientsRouter.post('/:id/payments', requirePermission(Permission.PAYMENTS_CREAT
         EXCEEDS_BALANCE: 400,
         BUDGET_NOT_FOUND: 404,
         BUDGET_NOT_OPEN: 400,
+        BUDGET_RESERVATION_CONFLICT: 400,
       }
       const messageMap: Record<string, string> = {
         PATIENT_NOT_FOUND: 'Patient not found',
         EXCEEDS_BALANCE: 'Payment amount exceeds outstanding balance',
         BUDGET_NOT_FOUND: 'Budget not found for this patient',
         BUDGET_NOT_OPEN: 'Budget is already completed or cancelled',
+        BUDGET_RESERVATION_CONFLICT:
+          'A payment cannot be earmarked to an appointment and reserved to a budget at the same time',
       }
       res.status(statusMap[result.code] || 500).json({
         success: false,
