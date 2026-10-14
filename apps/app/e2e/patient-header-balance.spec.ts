@@ -1,4 +1,8 @@
+import { readFileSync } from 'fs'
 import { test, expect } from './fixtures/authed'
+import { AUTH_STATE_PATH } from './global-setup'
+
+const API_BASE_URL = process.env.VITE_API_URL || 'http://localhost:5001'
 
 /**
  * Patient record header shows debt and credit (task #526).
@@ -14,21 +18,50 @@ test.describe('Patient header balance (#526)', () => {
   }) => {
     const uniqueLastName = `Saldo${Date.now()}`
 
-    // --- Seed a patient via the UI ---
-    await page.goto('/patients')
-    await page.getByRole('button', { name: /nuevo paciente/i }).click()
-    const patientDialog = page.getByRole('dialog')
-    await expect(patientDialog).toBeVisible()
-    await page.getByPlaceholder('Juan').fill('E2E')
-    await page.getByPlaceholder('Pérez').fill(uniqueLastName)
-    await patientDialog.getByRole('button', { name: /crear paciente/i }).click()
-    await expect(patientDialog).not.toBeVisible()
+    // --- Seed a competing patient that sorts AHEAD of this run's own ---
+    // PatientsListView sorts client-side by "firstName lastName" and every e2e
+    // patient is firstName "E2E", so "AAA ..." is the first row of the
+    // unfiltered list. A spec that takes the first row opens this one.
+    const createPatient = async (firstName: string, lastName: string) => {
+      await page.getByRole('button', { name: /nuevo paciente/i }).click()
+      const patientDialog = page.getByRole('dialog')
+      await expect(patientDialog).toBeVisible()
+      await page.getByPlaceholder('Juan').fill(firstName)
+      await page.getByPlaceholder('Pérez').fill(lastName)
+      const created = page.waitForResponse(
+        (r) => r.request().method() === 'POST' && /\/api\/patients$/.test(r.url())
+      )
+      await patientDialog.getByRole('button', { name: /crear paciente/i }).click()
+      const id = (await (await created).json()).data.id as string
+      await expect(patientDialog).not.toBeVisible()
+      return id
+    }
 
+    await page.goto('/patients')
+    await createPatient('AAA', `Previo${Date.now()}`)
+    const ownPatientId = await createPatient('E2E', uniqueLastName)
+
+    // Never `.first()` of the list: it takes whatever row the client-side sort
+    // put on top, which is a different patient. The search is a debounced
+    // refetch, so the list is unfiltered until it lands; the unique name is
+    // in both the unfiltered and the filtered list, so matching the row by
+    // that text resolves to this run's patient either way. toHaveCount(1)
+    // asserts the match is unambiguous. It need not wait for the refetch only
+    // while the tenant fits the default page (patient.service.ts listPatients:
+    // limit = 50, take: Math.min(limit, 100), lastName asc); past that the
+    // row can be absent from the stale page and this retrying assertion waits
+    // for the filtered refetch. The pin holds either way.
     await page.getByPlaceholder(/buscar por nombre/i).fill(uniqueLastName)
-    const viewRecordLink = page.getByRole('link', { name: /ver ficha/i }).first()
-    await expect(viewRecordLink).toBeVisible()
-    await viewRecordLink.click()
+    const patientRow = page.getByRole('row').filter({ hasText: uniqueLastName })
+    await expect(patientRow).toHaveCount(1)
+    await patientRow.getByRole('link', { name: /ver ficha/i }).click()
     await expect(page).toHaveURL(/\/patients\/[a-zA-Z0-9-]+/)
+
+    // Prove which record opened before recording anything on it. The shell
+    // renders <h1>Alveo</h1> on every page, so name AND level are needed.
+    await expect(
+      page.getByRole('heading', { name: new RegExp(uniqueLastName), level: 1 })
+    ).toBeVisible()
 
     const balance = page.getByTestId('patient-balance')
 
@@ -59,6 +92,19 @@ test.describe('Patient header balance (#526)', () => {
     await expect(freshBalance).toContainText(/Saldo a favor:\s*\D*500[.,]00/)
     await expect(freshBalance).toContainText(/Deuda por consultas realizadas:\s*\D*0[.,]00/)
     await expect(freshBalance).not.toContainText('—')
+
+    // The 500 landed on THIS run's patient, read back by the id
+    // the API returned when it was created (not the id in the URL, which would
+    // follow a wrong-record open and make this check vacuous).
+    const { accessToken } = JSON.parse(readFileSync(AUTH_STATE_PATH, 'utf-8'))
+    const response = await page.request.get(
+      `${API_BASE_URL}/api/patients/${ownPatientId}/balance`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }
+    )
+    expect(response.ok()).toBe(true)
+    expect((await response.json()).data.credit).toBe(500)
 
     const creditText = (await freshBalance.textContent()) ?? ''
     console.log(`PATIENT_BALANCE_TEXT: ${creditText}`)
