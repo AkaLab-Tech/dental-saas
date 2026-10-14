@@ -6,6 +6,7 @@ import {
   deletePayment,
   getDebtors,
   getPatientPaymentMovements,
+  getPaymentApiErrorMessage,
   type Payment,
   type PatientBalance,
   type Debtor,
@@ -274,6 +275,76 @@ describe('payment-api', () => {
       const result = await getDebtors()
 
       expect(result).toEqual([])
+    })
+  })
+})
+
+// ============================================================================
+// Task #569: getPaymentApiErrorMessage
+// ============================================================================
+
+describe('getPaymentApiErrorMessage (task #569)', () => {
+  const http = (status: number, data: unknown) => ({ response: { status, data } })
+
+  it('reads the endpoint\'s bare-string error', () => {
+    expect(
+      getPaymentApiErrorMessage(http(400, { success: false, error: 'Budget is already completed or cancelled' }), 'fb')
+    ).toBe('Budget is already completed or cancelled')
+  })
+
+  it('reads the nested { message } shape the other endpoints use', () => {
+    expect(
+      getPaymentApiErrorMessage(http(400, { error: { message: 'Invalid request body', code: 'VALIDATION_ERROR' } }), 'fb')
+    ).toBe('Invalid request body')
+  })
+
+  it('a 404 with an override returns the override, never the server text', () => {
+    expect(
+      getPaymentApiErrorMessage(http(404, { error: 'Budget not found for this patient' }), 'fb', 'gone')
+    ).toBe('gone')
+  })
+
+  it('a 404 without an override keeps the server text', () => {
+    expect(getPaymentApiErrorMessage(http(404, { error: 'Patient not found' }), 'fb')).toBe('Patient not found')
+  })
+
+  it('the override is keyed on 404 only: a 400 keeps the server text even when an override is given', () => {
+    expect(
+      getPaymentApiErrorMessage(http(400, { error: 'Budget is already completed or cancelled' }), 'fb', 'gone')
+    ).toBe('Budget is already completed or cancelled')
+    expect(getPaymentApiErrorMessage(http(500, { error: 'boom' }), 'fb', 'gone')).toBe('boom')
+  })
+
+  it('a 404 with no usable body and an override still returns the override', () => {
+    expect(getPaymentApiErrorMessage(http(404, undefined), 'fb', 'gone')).toBe('gone')
+  })
+
+  it('an empty override is not an override', () => {
+    expect(getPaymentApiErrorMessage(http(404, { error: 'Patient not found' }), 'fb', '')).toBe('Patient not found')
+  })
+
+  it('falls back to Error.message when there is no response', () => {
+    expect(getPaymentApiErrorMessage(new Error('Network Error'), 'fb')).toBe('Network Error')
+  })
+
+  it('falls back to the fallback for anything else (undefined, null, string, empty error string)', () => {
+    expect(getPaymentApiErrorMessage(undefined, 'fb')).toBe('fb')
+    expect(getPaymentApiErrorMessage(null, 'fb')).toBe('fb')
+    expect(getPaymentApiErrorMessage('oops', 'fb')).toBe('fb')
+    expect(getPaymentApiErrorMessage(http(500, { error: '' }), 'fb')).toBe('fb')
+  })
+})
+
+describe('createPayment budgetId passthrough (task #569)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('posts budgetId when given', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { data: mockPayment } })
+    await createPayment('p1', { amount: 5, date: '2026-03-02', budgetId: 'b1' })
+    expect(apiClient.post).toHaveBeenCalledWith('/patients/p1/payments', {
+      amount: 5,
+      date: '2026-03-02',
+      budgetId: 'b1',
     })
   })
 })

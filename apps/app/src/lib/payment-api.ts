@@ -59,6 +59,8 @@ export interface CreatePaymentData {
   amount: number
   date: string
   note?: string
+  /** Reserve the advance to one of the patient's open budgets; omit for a general advance. */
+  budgetId?: string
 }
 
 /** Task #453: one row of the patient's payment-movements ledger. */
@@ -170,6 +172,35 @@ export async function createPayment(
     data
   )
   return response.data.data
+}
+
+/**
+ * The payments-create endpoint answers failures with `error` as a bare string
+ * (other endpoints send `{ message, code }`), so both shapes are read here.
+ *
+ * A 404 is replaced by `notFoundMessage` when given. The server's text for it
+ * ("Budget not found for this patient") is false for a budget that was merely
+ * deactivated: the budget lookup filters on `isActive` inside its `where`, so
+ * a deactivated budget falls through to the same not-found answer while the
+ * user is still looking at it in a stale option list. This endpoint sends no
+ * error code, so the override is keyed on the status. The caller owns that
+ * choice: it is only correct for a form whose sole 404 means "the selected
+ * budget is gone". The 400 (budget already completed or cancelled) keeps the
+ * server's text, which is truthful as it stands.
+ */
+export function getPaymentApiErrorMessage(
+  error: unknown,
+  fallback: string,
+  notFoundMessage?: string
+): string {
+  const status = (error as { response?: { status?: unknown } } | null)?.response?.status
+  if (status === 404 && notFoundMessage) return notFoundMessage
+  const serverError = (error as { response?: { data?: { error?: unknown } } } | null)?.response
+    ?.data?.error
+  if (typeof serverError === 'string' && serverError) return serverError
+  const nested = (serverError as { message?: unknown } | undefined)?.message
+  if (typeof nested === 'string' && nested) return nested
+  return error instanceof Error ? error.message : fallback
 }
 
 /**

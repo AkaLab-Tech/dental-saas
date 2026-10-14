@@ -8,6 +8,7 @@ import { formatCurrency } from '@/lib/format'
 import {
   getPatientPayments,
   createPayment,
+  getPaymentApiErrorMessage,
   deletePayment,
   type Payment,
   type AccountStatement as AccountStatementData,
@@ -78,15 +79,30 @@ export function PaymentSection({
     fetchData()
   }, [fetchData, refreshKey])
 
-  const handleCreatePayment = async (data: CreatePaymentData) => {
+  const handleCreatePayment = async (data: CreatePaymentData): Promise<boolean> => {
     setIsSaving(true)
     try {
       await createPayment(patientId, data)
       setIsFormOpen(false)
       await fetchData()
       onPaymentsChange?.()
+      return true
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error creating payment')
+      setError(
+        getPaymentApiErrorMessage(
+          e,
+          'Error creating payment',
+          // Only a reserved advance names a budget; for it a 404 means the
+          // chosen budget is gone (see getPaymentApiErrorMessage). The route
+          // maps two codes to 404, BUDGET_NOT_FOUND and PATIENT_NOT_FOUND, and
+          // the patient one cannot arrive here: both patient lookups in the
+          // payment path match on { id, tenantId } with no isActive term, and
+          // deletePatient is a soft delete, so a patient removed in another tab
+          // still resolves. Revisit if either lookup becomes isActive-aware.
+          data.budgetId ? t('payments.form.budgetGone') : undefined
+        )
+      )
+      return false
     } finally {
       setIsSaving(false)
     }
@@ -249,6 +265,7 @@ export function PaymentSection({
           isOpen={isFormOpen}
           onClose={() => setIsFormOpen(false)}
           onSubmit={handleCreatePayment}
+          patientId={patientId}
           formatCurrency={fmtCurrency}
           isLoading={isSaving}
         />

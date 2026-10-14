@@ -14,7 +14,8 @@
  *
  * No real patient data: synthetic names, ids, figures and states only.
  */
-import { describe, it, expect, afterAll } from 'vitest'
+import { describe, it, expect, afterAll, afterEach } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
@@ -975,5 +976,243 @@ describe('Task #562 (real routes): a reserved advance is held back by every read
     ])
     // 200 allocated out of a 100 payment: the inflation, as a figure.
     expect(inflated.reduce((sum, a) => sum + a.paidAmount, 0)).toBe(200)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Task #569: a reservation created by the FORM, not by a fixture
+// ---------------------------------------------------------------------------
+
+/**
+ * #562/#568 prove the engine from reservations built by a fixture. A fixture
+ * can build a state the screen cannot produce, so this block replays the exact
+ * request the real PaymentFormModal sends. That request is not written here:
+ * it is read from the contract file the app test
+ * (PaymentSection.reserve.test.tsx) asserts the form's serialised wire body
+ * EQUAL to. The same file also carries the failures the form is taught to
+ * handle, asserted below against the real endpoint.
+ *
+ * Seam, stated honestly: vitest cannot span the two processes, so the link is
+ * the checked-in file. If the form's body drifts, the APP test goes red (its
+ * assertion is against this file); if the API stops accepting or answering as
+ * the file says, THIS block goes red. This block alone does not notice a form
+ * regression, and the app test alone does not notice an API one.
+ *
+ * Guard 1's engine side (an unreserved advance allocates oldest-first, in one
+ * package) is `GUARD 2: an unreserved advance ...` above; the replay below
+ * only adds that the form's no-budget body reaches the same state.
+ */
+const contract = JSON.parse(
+  readFileSync(
+    new URL('../../../app/src/components/payments/__fixtures__/reserve-advance-contract.json', import.meta.url),
+    'utf8'
+  )
+) as {
+  budget: { id: string; patientId: string; status: string; isActive: boolean; totalAmount: string }
+  request: { urlTemplate: string; body: Record<string, unknown> }
+  requestGeneral: { urlTemplate: string; body: Record<string, unknown> }
+  responses: Record<'budgetNotOpen' | 'budgetGone', { status: number; body: Record<string, unknown> }>
+}
+
+describe('Task #569 (real routes): the form\'s own request, replayed', () => {
+  async function purge() {
+    for (const id of tenantIds) {
+      await prisma.patientPaymentEvent.deleteMany({ where: { payment: { tenantId: id } } })
+      await prisma.patientPayment.deleteMany({ where: { tenantId: id } })
+      await prisma.budgetItemAppointment.deleteMany({ where: { appointment: { tenantId: id } } })
+      await prisma.budget.deleteMany({ where: { tenantId: id } })
+      await prisma.appointment.deleteMany({ where: { tenantId: id } })
+      await prisma.patient.deleteMany({ where: { tenantId: id } })
+      await prisma.doctor.deleteMany({ where: { tenantId: id } })
+      await prisma.refreshToken.deleteMany({ where: { user: { tenantId: id } } })
+      await prisma.user.deleteMany({ where: { tenantId: id } })
+      await prisma.tenant.delete({ where: { id } }).catch(() => {})
+    }
+    tenantIds.length = 0
+  }
+  // The contract's budget id is fixed, so every test must free it.
+  afterEach(purge)
+  afterAll(purge)
+
+  /** The budget the contract describes, with the fixed id, for this patient. */
+  async function contractBudget(
+    world: World,
+    patientId: string,
+    prices: string[],
+    status: 'APPROVED' | 'COMPLETED' | 'CANCELLED' = 'APPROVED'
+  ) {
+    return prisma.budget.create({
+      data: {
+        id: contract.budget.id,
+        tenantId: world.tenantId,
+        patientId,
+        status,
+        totalAmount: prices.reduce((s, p) => s + Number(p), 0).toFixed(2),
+        items: {
+          create: prices.map((p, i) => ({
+            description: `Item ${i + 1}`,
+            quantity: 1,
+            unitPrice: p,
+            totalPrice: p,
+            order: i,
+          })),
+        },
+      },
+      include: { items: { orderBy: { order: 'asc' } } },
+    })
+  }
+
+  /** Replays a contract request against the real endpoint, URL template filled in. */
+  function replay(world: World, patientId: string, req: { urlTemplate: string; body: Record<string, unknown> }) {
+    return api()
+      .post('/api' + req.urlTemplate.replace('{patientId}', patientId))
+      .set(world.auth())
+      .send(req.body)
+  }
+
+  it('GUARD 4: the budget the form offers is listed by the API exactly as the contract says', async () => {
+    const world = await createWorld()
+    const patientId = await world.newPatient('Listed')
+    await contractBudget(world, patientId, ['100.00', '900.00'])
+    const res = await api().get(`/api/patients/${patientId}/budgets`).query({ limit: 100 }).set(world.auth())
+    expect(res.status).toBe(200)
+    expect(res.body.data).toHaveLength(1)
+    expect(res.body.data[0]).toMatchObject({
+      id: contract.budget.id,
+      status: contract.budget.status,
+      isActive: contract.budget.isActive,
+      totalAmount: contract.budget.totalAmount,
+      patientId, // the form compares this to ITS patient id before offering the option
+    })
+  })
+
+  it('GUARD 4: the form\'s reserved advance creates the reservation, and all four readers say 300', async () => {
+    const world = await createWorld()
+    const patientId = await world.newPatient('FormReserved')
+    await world.pastAppointment(patientId, '300.00', 10)
+    const budget = await contractBudget(world, patientId, ['100.00', '900.00'])
+
+    // The request is the captured one: no amount/budgetId is typed in here.
+    const res = await replay(world, patientId, contract.request)
+    expect(res.status).toBe(201)
+    expect(res.body.data).toMatchObject({
+      amount: '500', // Decimal serialises as a string
+      budgetId: contract.budget.id,
+      appointmentId: null,
+      kind: 'ADVANCE',
+    })
+    expect(await prisma.patientPayment.count({ where: { patientId, budgetId: contract.budget.id } })).toBe(1)
+
+    await world.executeItems(patientId, [budget.items[0].id])
+    expect((await prisma.budget.findUnique({ where: { id: budget.id } }))?.status).toBe('PARTIAL')
+
+    // Same figures as the fixture-built canonical world of #562: the screen
+    // reaches the state the engine was proven on.
+    const balance = await getPatientBalance(world.tenantId, patientId)
+    const debtors = await listDebtors(world.tenantId)
+    const stmt = await getPatientAccountStatement(world.tenantId, patientId)
+    if (!balance.success || !stmt.success) throw new Error('fixture')
+    expect({
+      getPatientBalance: balance.data.outstanding,
+      listDebtors: debtors.find((d) => d.patientId === patientId)?.outstanding ?? 0,
+      getTenantOutstandingTotal: await getTenantOutstandingTotal(world.tenantId),
+      accountStatement: stmt.data.appointmentsDebt,
+      accountStatementAdvancesCredit: stmt.data.advancesCredit,
+      getPatientBalanceCredit: balance.data.credit,
+    }).toEqual({
+      getPatientBalance: 300,
+      listDebtors: 300,
+      getTenantOutstandingTotal: 300,
+      accountStatement: 300,
+      accountStatementAdvancesCredit: 0,
+      getPatientBalanceCredit: 0,
+    })
+    expect(debtors).toHaveLength(1)
+    expect((await world.statement(patientId)).reservedAdvances).toEqual([
+      { budgetId: contract.budget.id, reserved: 500, consumed: 100, remaining: 400, open: true },
+    ])
+  })
+
+  it('GUARD 1: the form\'s no-budget body is a plain advance, allocated oldest-first in one package', async () => {
+    const world = await createWorld()
+    const patientId = await world.newPatient('FormGeneral')
+    const older = await world.pastAppointment(patientId, '400.00', 20)
+    const newer = await world.pastAppointment(patientId, '400.00', 10)
+    // The contract's general body is amount 500.
+    expect(contract.requestGeneral.body).not.toHaveProperty('budgetId')
+
+    const res = await replay(world, patientId, contract.requestGeneral)
+    expect(res.status).toBe(201)
+    expect(res.body.data).toMatchObject({ amount: '500', budgetId: null, appointmentId: null })
+
+    // Oldest first, all in one package: 400 to the older, the remaining 100 to the newer.
+    const rows = await world.appointmentRows(patientId)
+    expect(rows.get(older)).toEqual({ paidAmount: 400, outstanding: 0, isPaid: true })
+    expect(rows.get(newer)).toEqual({ paidAmount: 100, outstanding: 300, isPaid: false })
+    const balance = await getPatientBalance(world.tenantId, patientId)
+    if (!balance.success) throw new Error('fixture')
+    expect(balance.data).toEqual({ totalDebt: 800, totalPaid: 500, outstanding: 300, credit: 0 })
+    expect(await getTenantOutstandingTotal(world.tenantId)).toBe(300)
+    expect('reservedAdvances' in (await world.statement(patientId))).toBe(false)
+  })
+
+  it('GUARD 3 / 5: a COMPLETED budget refuses the form\'s request with 400 and the contract\'s text, writing no row', async () => {
+    const world = await createWorld()
+    const patientId = await world.newPatient('Closed')
+    const budget = await contractBudget(world, patientId, ['100.00'])
+    // Closed by the real path: its only item executed -> auto-COMPLETE.
+    await world.executeItems(patientId, [budget.items[0].id])
+    expect((await prisma.budget.findUnique({ where: { id: budget.id } }))?.status).toBe('COMPLETED')
+
+    const res = await replay(world, patientId, contract.request)
+    expect(res.status).toBe(contract.responses.budgetNotOpen.status)
+    expect(res.body).toEqual(contract.responses.budgetNotOpen.body)
+    expect(await prisma.patientPayment.count({ where: { patientId } })).toBe(0)
+
+    // The default list STILL returns it (so the form must filter by status on
+    // the reload that follows this 400).
+    const list = await api().get(`/api/patients/${patientId}/budgets`).query({ limit: 100 }).set(world.auth())
+    expect(list.body.data.map((b: { id: string; status: string }) => [b.id, b.status])).toEqual([
+      [contract.budget.id, 'COMPLETED'],
+    ])
+  })
+
+  it('GUARD 3: a CANCELLED budget is refused the same way', async () => {
+    const world = await createWorld()
+    const patientId = await world.newPatient('Cancelled')
+    await contractBudget(world, patientId, ['100.00'], 'CANCELLED')
+
+    const res = await replay(world, patientId, contract.request)
+    expect(res.status).toBe(400)
+    expect(res.body).toEqual(contract.responses.budgetNotOpen.body)
+    expect(await prisma.patientPayment.count({ where: { patientId } })).toBe(0)
+  })
+
+  it('GUARD 6: a merely DEACTIVATED budget answers 404 with the contract\'s "not found" text (false for the user), writing no row', async () => {
+    const world = await createWorld()
+    const patientId = await world.newPatient('Deactivated')
+    await contractBudget(world, patientId, ['100.00'])
+    // Deactivated by the real route, after the form could have loaded it.
+    const del = await api().delete(`/api/budgets/${contract.budget.id}`).set(world.auth())
+    expect(del.status).toBe(200)
+    expect((await prisma.budget.findUnique({ where: { id: contract.budget.id } }))?.isActive).toBe(false)
+
+    const res = await replay(world, patientId, contract.request)
+    expect(res.status).toBe(contract.responses.budgetGone.status)
+    expect(res.body).toEqual(contract.responses.budgetGone.body)
+    expect(await prisma.patientPayment.count({ where: { patientId } })).toBe(0)
+
+    // The default list no longer returns it: the reload shows it gone.
+    const list = await api().get(`/api/patients/${patientId}/budgets`).query({ limit: 100 }).set(world.auth())
+    expect(list.body.data).toEqual([])
+  })
+
+  it('the two failures are distinguishable by status alone: 400 vs 404 (the form keys its copy on it)', () => {
+    expect([contract.responses.budgetNotOpen.status, contract.responses.budgetGone.status]).toEqual([400, 404])
+    // Both bodies are a BARE string error with no code: this endpoint sends none.
+    for (const r of Object.values(contract.responses)) {
+      expect(Object.keys(r.body).sort()).toEqual(['error', 'success'])
+      expect(typeof r.body.error).toBe('string')
+    }
   })
 })

@@ -1,0 +1,43 @@
+{
+  "_note": "Task #569. One file, read by BOTH sides of the reserve-an-advance flow. The app test (PaymentSection.reserve.test.tsx) renders the real form and asserts the request it sends EQUALS `request` (and `requestGeneral` when no budget is picked), and feeds `responses` to the form as the server's failures. The API test (patients-reserved-advances-aggregates.test.ts, Task #569 block) replays `request` against the real endpoint, and asserts the real endpoint answers with exactly `responses` and lists a budget shaped like `budget`. If either side drifts, one of the two goes red. Synthetic ids only.",
+  "patientId": "fixture-patient-569",
+  "budget": {
+    "id": "fixture-budget-569",
+    "patientId": "fixture-patient-569",
+    "status": "APPROVED",
+    "isActive": true,
+    "totalAmount": "1000",
+    "createdAt": "2026-03-01T10:00:00.000Z"
+  },
+  "request": {
+    "urlTemplate": "/patients/{patientId}/payments",
+    "body": {
+      "amount": 500,
+      "date": "2026-03-02",
+      "budgetId": "fixture-budget-569"
+    }
+  },
+  "responses": {
+    "budgetNotOpen": {
+      "status": 400,
+      "body": {
+        "success": false,
+        "error": "Budget is already completed or cancelled"
+      }
+    },
+    "budgetGone": {
+      "status": 404,
+      "body": {
+        "success": false,
+        "error": "Budget not found for this patient"
+      }
+    }
+  },
+  "requestGeneral": {
+    "urlTemplate": "/patients/{patientId}/payments",
+    "body": {
+      "amount": 500,
+      "date": "2026-03-02"
+    }
+  }
+}
