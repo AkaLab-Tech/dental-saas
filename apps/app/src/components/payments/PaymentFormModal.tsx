@@ -36,6 +36,14 @@ function createPaymentSchema(
     amount,
     date: z.string().min(1, 'La fecha es requerida'),
     note: z.string().max(1000).optional(),
+    // Dead defence TODAY, kept on purpose. No UI path reaches it: when an
+    // option disappears the select reads '' and the stale-id effect drops the
+    // value before submit, so removing this .refine leaves every test green.
+    // It becomes live the moment the form can hold a budgetId absent from
+    // reservableBudgetIds — a programmatic setValue, a second writer of this
+    // form state, or dropping that clearing effect. Do NOT read it as the
+    // active guard for the stale-picker race: that is the clearing effect plus
+    // the 404/400 handling in PaymentSection.
     budgetId: z
       .string()
       .optional()
