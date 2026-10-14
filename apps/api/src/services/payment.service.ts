@@ -49,6 +49,7 @@ export type PaymentErrorCode =
   | 'EXCEEDS_BALANCE'
   | 'BUDGET_NOT_FOUND'
   | 'BUDGET_NOT_OPEN'
+  | 'BUDGET_RESERVATION_CONFLICT'
 
 export interface CreatePaymentInput {
   amount: number
@@ -277,6 +278,54 @@ export function computeReservationUsage(
 }
 
 /**
+ * Task #562: the share of a patient's payments that is still held for their
+ * reservations and therefore cannot pay down any other debt. The account
+ * statement has always held it back (its `heldCents`); the aggregate readers
+ * (getPatientBalance, computeOutstandingByPatient) did not, so a reserved
+ * advance paid down general debt there. This is the single rule all four now
+ * apply, so they cannot drift apart.
+ *
+ * A closed budget holds nothing: its leftover has already become ordinary
+ * credit and rejoined the pool (release rule 1 in computeFifoAllocation).
+ *
+ * Takes computeReservationUsage's own per-budget shape. A caller working from
+ * aggregates instead of items supplies `consumedCents` as
+ * min(reservedCents, chargedCents) — the same value the item walk reaches,
+ * since each charge takes at most what is left of the reservation.
+ */
+export function computeHeldCents(
+  budgets: Iterable<{ reservedCents: number; consumedCents: number; open: boolean }>
+): number {
+  let heldCents = 0
+  for (const budget of budgets) {
+    if (budget.open) heldCents += Math.max(0, budget.reservedCents - budget.consumedCents)
+  }
+  return heldCents
+}
+
+/**
+ * Task #562: computeHeldCents for a reader that works from aggregates — it has
+ * each budget's reservation and the total cost its charges carry, but no item
+ * list to walk. The aggregate readers need this because walking items
+ * per patient would make computeOutstandingByPatient an N+1 loop.
+ */
+export function computeHeldFromCharges(
+  reservations: BudgetReservations,
+  chargedCentsByBudget: ReadonlyMap<string, number>
+): number {
+  return computeHeldCents(
+    [...reservations].map(([budgetId, reservation]) => {
+      const reservedCents = toCents(reservation.amount)
+      return {
+        reservedCents,
+        consumedCents: Math.min(reservedCents, chargedCentsByBudget.get(budgetId) || 0),
+        open: reservation.open,
+      }
+    })
+  )
+}
+
+/**
  * Task #529: the patient's active advances reserved to a budget, summed per
  * budget. Empty for a patient with none — the caller then passes it straight
  * to computeFifoAllocation, which treats an empty map as no reservations.
@@ -308,6 +357,45 @@ export async function getBudgetReservations(
     })
   }
   return reservations
+}
+
+/**
+ * Task #562: getBudgetReservations for the whole tenant at once, keyed by
+ * patient. Two queries for every patient of the tenant, which is what keeps
+ * computeOutstandingByPatient free of a per-patient query. Applies the same
+ * ownership and open tests: a reservation whose budget is not that same
+ * patient's own live budget is reported as not open, so it holds nothing.
+ */
+async function getBudgetReservationsByPatient(
+  tenantId: string
+): Promise<Map<string, Map<string, BudgetReservation>>> {
+  const byPatient = new Map<string, Map<string, BudgetReservation>>()
+  const grouped = await prisma.patientPayment.groupBy({
+    by: ['patientId', 'budgetId'],
+    where: { tenantId, isActive: true, budgetId: { not: null } },
+    _sum: { amount: true },
+  })
+  if (grouped.length === 0) return byPatient
+
+  const budgets = await prisma.budget.findMany({
+    where: { tenantId, id: { in: grouped.map((g) => g.budgetId as string) } },
+    select: { id: true, patientId: true, status: true, isActive: true },
+  })
+  const budgetById = new Map(budgets.map((b) => [b.id, b]))
+  for (const row of grouped) {
+    const budgetId = row.budgetId as string
+    const budget = budgetById.get(budgetId)
+    const open =
+      !!budget &&
+      budget.patientId === row.patientId &&
+      budget.isActive &&
+      budget.status !== 'COMPLETED' &&
+      budget.status !== 'CANCELLED'
+    const reservations = byPatient.get(row.patientId) ?? new Map<string, BudgetReservation>()
+    reservations.set(budgetId, { amount: row._sum.amount?.toNumber() || 0, open })
+    byPatient.set(row.patientId, reservations)
+  }
+  return byPatient
 }
 
 /**
@@ -570,6 +658,10 @@ export async function recalculatePaidStatus(
  * — identical to the plain sum used here. Earmarking redistributes payments
  * *among* items, never changes the aggregate paid/outstanding/credit, so
  * this aggregate query stays correct without earmark data.
+ *
+ * It IS reservation-aware (task #562), because a reservation does change the
+ * aggregate: money held for an open budget cannot pay any other charge, so
+ * leaving it in the sum understated outstanding.
  */
 export async function getPatientBalance(
   tenantId: string,
@@ -590,7 +682,7 @@ export async function getPatientBalance(
     return { success: false, code: 'PATIENT_NOT_FOUND' }
   }
 
-  const [appointmentsAgg, labworksAgg, paymentsAgg, executedBudgetItems] = await Promise.all([
+  const [appointmentsAgg, labworksAgg, paymentsAgg, executedBudgetItems, reservations] = await Promise.all([
     prisma.appointment.aggregate({
       where: { tenantId, patientId, isActive: true, cost: { not: null, gt: 0 } },
       _sum: { cost: true },
@@ -604,15 +696,17 @@ export async function getPatientBalance(
       _sum: { amount: true },
     }),
     // Same rule as getBillableItems (BUDGET_ITEM_* there): one row per item
-    // holding an EXECUTED link on an active appointment.
+    // holding an EXECUTED link on an active appointment. `budgetId` is read
+    // only to total each budget's charges for computeHeldCents.
     prisma.budgetItem.findMany({
       where: {
         totalPrice: { gt: 0 },
         budget: { tenantId, patientId, isActive: true },
         appointments: { some: { role: 'EXECUTED', appointment: { isActive: true } } },
       },
-      select: { totalPrice: true },
+      select: { totalPrice: true, budgetId: true },
     }),
+    getBudgetReservations(tenantId, patientId),
   ])
 
   // Sum and diff in integer cents (see toCents at module scope, #403): the
@@ -623,14 +717,22 @@ export async function getPatientBalance(
     toCents(labworksAgg._sum.price?.toNumber() || 0) +
     executedBudgetItems.reduce((sum, item) => sum + toCents(item.totalPrice.toNumber()), 0)
   const paidCents = toCents(paymentsAgg._sum.amount?.toNumber() || 0)
+  // Task #562: what the open reservations hold is not available to pay other
+  // debt. totalPaid stays gross — it is the money received, and the account
+  // statement reports it the same way.
+  const chargedCentsByBudget = new Map<string, number>()
+  executedBudgetItems.forEach((item) =>
+    addToMap(chargedCentsByBudget, item.budgetId, toCents(item.totalPrice.toNumber()))
+  )
+  const availableCents = paidCents - computeHeldFromCharges(reservations, chargedCentsByBudget)
 
   return {
     success: true,
     data: {
       totalDebt: fromCents(debtCents),
       totalPaid: fromCents(paidCents),
-      outstanding: fromCents(Math.max(0, debtCents - paidCents)),
-      credit: fromCents(Math.max(0, paidCents - debtCents)),
+      outstanding: fromCents(Math.max(0, debtCents - availableCents)),
+      credit: fromCents(Math.max(0, availableCents - debtCents)),
     },
   }
 }
@@ -733,9 +835,12 @@ export async function getPatientAccountStatement(
   const reservedAdvances: ReservedAdvanceBalance[] = []
   let heldCents = 0
   if (reservations.size > 0) {
-    for (const [budgetId, b] of computeReservationUsage(items, reservations).budgets) {
+    const { budgets } = computeReservationUsage(items, reservations)
+    // Task #562: the shared rule, so the aggregate readers cannot drift from
+    // the figure this statement reports.
+    heldCents = computeHeldCents(budgets.values())
+    for (const [budgetId, b] of budgets) {
       const remainingCents = b.reservedCents - b.consumedCents
-      if (b.open) heldCents += remainingCents
       reservedAdvances.push({
         budgetId,
         reserved: fromCents(b.reservedCents),
@@ -797,10 +902,11 @@ export interface PatientOutstanding {
 /**
  * Outstanding balance per patient for the whole tenant, keyed by patientId.
  *
- * No per-patient N+1: the whole tenant is covered by exactly four tenant-wide
- * queries (appointments, labworks and payments as grouped aggregates, plus one
- * flat read of the executed budget items) — there is no query inside any
- * loop here, and callers must not add one.
+ * No per-patient N+1: the whole tenant is covered by exactly six tenant-wide
+ * queries (appointments, labworks, payments and reserved payments as grouped
+ * aggregates, plus one flat read of the executed budget items and one of the
+ * reserved budgets) — there is no query inside any loop here, and callers
+ * must not add one.
  *
  * Applies the same charge rules as getBillableItems (appointment cost,
  * labwork price, and executed budget items — see BUDGET_ITEM_* there), so the
@@ -817,6 +923,11 @@ export interface PatientOutstanding {
  * sums. Per-patient FIFO here would turn this into an N+1 loop for no
  * change in the numbers.
  *
+ * It IS reservation-aware (task #562), for the same reason as
+ * getPatientBalance: money held for an open budget pays no other charge, and
+ * omitting it understated the debtors column — under-reporting on the screen
+ * the clinic collects from.
+ *
  * Arithmetic runs in integer cents and `outstanding` is floored at 0 per
  * patient, so a patient in credit contributes exactly 0 and can never
  * offset another patient's debt.
@@ -824,7 +935,7 @@ export interface PatientOutstanding {
 export async function computeOutstandingByPatient(
   tenantId: string
 ): Promise<Map<string, PatientOutstanding>> {
-  const [appointments, labworks, payments, executedBudgetItems] = await Promise.all([
+  const [appointments, labworks, payments, executedBudgetItems, reservationsByPatient] = await Promise.all([
     prisma.appointment.groupBy({
       by: ['patientId'],
       where: { tenantId, isActive: true, cost: { not: null, gt: 0 } },
@@ -850,8 +961,9 @@ export async function computeOutstandingByPatient(
         budget: { tenantId, isActive: true },
         appointments: { some: { role: 'EXECUTED', appointment: { isActive: true } } },
       },
-      select: { totalPrice: true, budget: { select: { patientId: true } } },
+      select: { totalPrice: true, budgetId: true, budget: { select: { patientId: true } } },
     }),
+    getBudgetReservationsByPatient(tenantId),
   ])
 
   const debtCentsByPatient = new Map<string, number>()
@@ -871,13 +983,29 @@ export async function computeOutstandingByPatient(
     addToMap(paidCentsByPatient, r.patientId, toCents(r._sum.amount?.toNumber() || 0))
   )
 
+  // Task #562: the cost each budget's charges carry, so a reservation can be
+  // netted out of its patient's available money without walking their items.
+  const chargedCentsByBudget = new Map<string, number>()
+  executedBudgetItems.forEach((item) =>
+    addToMap(chargedCentsByBudget, item.budgetId, toCents(item.totalPrice.toNumber()))
+  )
+
   const result = new Map<string, PatientOutstanding>()
   for (const [patientId, debtCents] of debtCentsByPatient) {
     const paidCents = paidCentsByPatient.get(patientId) || 0
+    const reservations = reservationsByPatient.get(patientId)
+    // totalPaid stays gross: the held money was received, it just cannot be
+    // applied to this debt while the budget it is reserved to is open.
+    // No reservations means nothing is held back; the helper spreads its
+    // argument, so undefined must not reach it.
+    const heldCents = reservations
+      ? computeHeldFromCharges(reservations, chargedCentsByBudget)
+      : 0
+    const availableCents = paidCents - heldCents
     result.set(patientId, {
       totalDebt: fromCents(debtCents),
       totalPaid: fromCents(paidCents),
-      outstanding: fromCents(Math.max(0, debtCents - paidCents)),
+      outstanding: fromCents(Math.max(0, debtCents - availableCents)),
     })
   }
   return result
@@ -945,6 +1073,17 @@ export async function createPayment(
 
   if (!patient) {
     return { success: false, code: 'PATIENT_NOT_FOUND' }
+  }
+
+  // Task #562: a payment cannot be both earmarked to an appointment and
+  // reserved to a budget. Such a row leaves the general pool twice — once as
+  // the earmark, once as the reservation — which drives the item's capacity
+  // negative and, because the pool is reduced by that capacity, inflates the
+  // pool instead of shrinking it: the patient appears to hold money they
+  // never paid. Kept next to the reservation rule below so the two read
+  // together.
+  if (input.budgetId && input.appointmentId) {
+    return { success: false, code: 'BUDGET_RESERVATION_CONFLICT' }
   }
 
   // Task #529: a reservation must point at a budget of this same patient and
