@@ -47,7 +47,7 @@ test.describe('Patient header balance (#526)', () => {
     // in both the unfiltered and the filtered list, so matching the row by
     // that text resolves to this run's patient either way. toHaveCount(1)
     // asserts the match is unambiguous. It need not wait for the refetch only
-    // while the tenant fits the default page (patient.service.ts getPatients:
+    // while the tenant fits the default page (patient.service.ts listPatients:
     // limit = 50, take: Math.min(limit, 100), lastName asc); past that the
     // row can be absent from the stale page and this retrying assertion waits
     // for the filtered refetch. The pin holds either way.
