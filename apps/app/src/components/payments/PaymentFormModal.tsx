@@ -1,17 +1,33 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { X, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { CreatePaymentData } from '@/lib/payment-api'
+import { listBudgetsByPatient, type Budget } from '@/lib/budget-api'
 import { formatDateForInput } from '@/lib/format'
 
 // ============================================================================
 // Validation Schema
 // ============================================================================
 
-function createPaymentSchema(maxAmount?: number) {
+// Mirrors what createPayment accepts for a reservation: a budget of this
+// patient that is active and neither COMPLETED nor CANCELLED.
+function isReservableBudget(budget: Budget, patientId: string): boolean {
+  return (
+    budget.patientId === patientId &&
+    budget.isActive &&
+    budget.status !== 'COMPLETED' &&
+    budget.status !== 'CANCELLED'
+  )
+}
+
+function createPaymentSchema(
+  maxAmount?: number,
+  reservableBudgetIds: string[] = [],
+  budgetMessage = 'Presupuesto no disponible'
+) {
   let amount = z.coerce.number().min(0.01, 'El monto debe ser mayor a 0')
   if (maxAmount !== undefined) {
     amount = amount.max(maxAmount, `El monto no puede exceder ${maxAmount}`)
@@ -20,6 +36,10 @@ function createPaymentSchema(maxAmount?: number) {
     amount,
     date: z.string().min(1, 'La fecha es requerida'),
     note: z.string().max(1000).optional(),
+    budgetId: z
+      .string()
+      .optional()
+      .refine((id) => !id || reservableBudgetIds.includes(id), budgetMessage),
   })
 }
 
@@ -32,8 +52,11 @@ type PaymentFormData = z.infer<ReturnType<typeof createPaymentSchema>>
 interface PaymentFormModalProps {
   isOpen: boolean
   onClose: () => void
-  onSubmit: (data: CreatePaymentData) => Promise<void>
+  /** Resolves to false when the request failed (the modal stays open). */
+  onSubmit: (data: CreatePaymentData) => Promise<boolean | void>
   maxAmount?: number
+  /** When given, the form offers to reserve the advance to one of this patient's open budgets. */
+  patientId?: string
   formatCurrency: (amount: number) => string
   isLoading?: boolean
 }
@@ -43,22 +66,54 @@ export function PaymentFormModal({
   onClose,
   onSubmit,
   maxAmount,
+  patientId,
   formatCurrency,
   isLoading = false,
 }: PaymentFormModalProps) {
   const { t } = useTranslation()
+  const [budgets, setBudgets] = useState<Budget[]>([])
+  const [budgetsRefreshKey, setBudgetsRefreshKey] = useState(0)
+
+  useEffect(() => {
+    if (!isOpen || !patientId) {
+      setBudgets([])
+      return
+    }
+    let cancelled = false
+    listBudgetsByPatient(patientId, { limit: 100 })
+      .then(({ data }) => {
+        if (!cancelled) setBudgets(data.filter((b) => isReservableBudget(b, patientId)))
+      })
+      .catch(() => {
+        // The reservation is optional: without the list the form simply does
+        // not offer it, and the advance is recorded as a general one.
+        if (!cancelled) setBudgets([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, patientId, budgetsRefreshKey])
 
   const {
     register,
     handleSubmit,
     reset,
+    getValues,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<PaymentFormData>({
-    resolver: zodResolver(createPaymentSchema(maxAmount)),
+    resolver: zodResolver(
+      createPaymentSchema(
+        maxAmount,
+        budgets.map((b) => b.id),
+        t('payments.form.budgetNotOpen')
+      )
+    ),
     defaultValues: {
       amount: 0,
       date: formatDateForInput(new Date()),
       note: '',
+      budgetId: '',
     },
   })
 
@@ -68,17 +123,27 @@ export function PaymentFormModal({
         amount: 0,
         date: formatDateForInput(new Date()),
         note: '',
+        budgetId: '',
       })
     }
   }, [isOpen, reset])
 
   const handleFormSubmit = async (data: PaymentFormData) => {
-    await onSubmit({
+    const ok = await onSubmit({
       amount: data.amount,
       date: data.date,
       note: data.note || undefined,
+      budgetId: data.budgetId || undefined,
     })
+    // A reserved submit that failed may have raced a budget closed or
+    // deactivated elsewhere: reload the options instead of keeping a stale pick.
+    if (ok === false && data.budgetId) setBudgetsRefreshKey((k) => k + 1)
   }
+
+  useEffect(() => {
+    const selected = getValues('budgetId')
+    if (selected && !budgets.some((b) => b.id === selected)) setValue('budgetId', '')
+  }, [budgets, getValues, setValue])
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -195,6 +260,37 @@ export function PaymentFormModal({
                 />
                 {errors.note && <p className="mt-1 text-sm text-red-500">{errors.note.message}</p>}
               </div>
+
+              {/* Budget reservation: only offered when there is a budget to reserve to */}
+              {budgets.length > 0 && (
+                <div>
+                  <label htmlFor="payment-budget" className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('payments.form.budget')}
+                  </label>
+                  <select
+                    {...register('budgetId')}
+                    id="payment-budget"
+                    className={`w-full px-4 py-2 border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      errors.budgetId ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                  >
+                    <option value="">{t('payments.form.budgetNone')}</option>
+                    {budgets.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {t('budgets.createdOn', {
+                          date: new Date(b.createdAt).toLocaleDateString(),
+                        })}{' '}
+                        - {formatCurrency(Number(b.totalAmount))}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.budgetId ? (
+                    <p className="mt-1 text-sm text-red-500">{errors.budgetId.message}</p>
+                  ) : (
+                    <p className="mt-1 text-xs text-gray-500">{t('payments.form.budgetHint')}</p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Footer */}

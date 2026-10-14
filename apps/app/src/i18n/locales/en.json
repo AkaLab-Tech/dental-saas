@@ -1170,7 +1170,12 @@
       "advanceHint": "May exceed the outstanding balance; the surplus becomes patient credit",
       "date": "Date",
       "note": "Note (optional)",
-      "notePlaceholder": "E.g.: Partial cash payment..."
+      "notePlaceholder": "E.g.: Partial cash payment...",
+      "budget": "Reserve to a budget",
+      "budgetNone": "Not reserved (general advance)",
+      "budgetHint": "The advance will only be used for work in this budget",
+      "budgetNotOpen": "The chosen budget no longer accepts reservations",
+      "budgetGone": "The chosen option is no longer available"
     },
     "movements": {
       "subtitle": "Chronological history of payments and their movements",

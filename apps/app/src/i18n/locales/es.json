@@ -1179,7 +1179,12 @@
       "advanceHint": "Puede exceder el saldo pendiente; el excedente queda como saldo a favor del paciente",
       "date": "Fecha",
       "note": "Nota (opcional)",
-      "notePlaceholder": "Ej: Pago parcial en efectivo..."
+      "notePlaceholder": "Ej: Pago parcial en efectivo...",
+      "budget": "Reservar a un presupuesto",
+      "budgetNone": "Sin reservar (entrega general)",
+      "budgetHint": "La entrega solo se usará para trabajos de este presupuesto",
+      "budgetNotOpen": "El presupuesto elegido ya no admite reservas",
+      "budgetGone": "La opción elegida ya no está disponible"
     },
     "movements": {
       "subtitle": "Historial cronológico de entregas y sus movimientos",
