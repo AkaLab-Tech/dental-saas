@@ -43,7 +43,12 @@ describe('listPatients paging order (#566)', () => {
 
   async function pagesOf(limit: number) {
     const pages: string[][] = []
-    for (let offset = 0; ; offset += limit) {
+    // Bounded, like the route-layer twin in routes/patients.test.ts. One of the
+    // regressions these cases exist to catch is `offset` no longer being applied; in
+    // that state listPatients returns the same non-empty page forever and an unbounded
+    // loop never terminates, so the failure arrives as a vitest timeout instead of the
+    // page diff. 20 is far past the fixture's 5 rows at any limit used here.
+    for (let offset = 0; offset < 20; offset += limit) {
       const rows = await listPatients(tenantId, { limit, offset })
       if (rows.length === 0) break
       pages.push(rows.map(label))
