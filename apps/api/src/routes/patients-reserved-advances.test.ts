@@ -239,6 +239,7 @@ interface Statement {
   totalBilled: number
   totalPaid: number
   advancesTotal: number
+  advancesHeld?: number
   reservedAdvances?: Array<{
     budgetId: string
     reserved: number
@@ -406,6 +407,7 @@ describe('Task #529: advances reserved to a budget (real routes)', () => {
         totalBilled: 5500,
         totalPaid: 30500,
         advancesTotal: 30500,
+        advancesHeld: 17000,
         reservedAdvances: [{ budgetId: budget.id, reserved: 22500, consumed: 5500, remaining: 17000, open: true }],
       })
 
@@ -487,17 +489,30 @@ describe('Task #529: advances reserved to a budget (real routes)', () => {
         advancesTotal: 30500,
       })
       expect('reservedAdvances' in unreserved).toBe(false)
+      // #571: advancesHeld is emitted under exactly the same condition, so the
+      // unreserved world must not carry it either (the two `undefined`s added
+      // to the comparison below would otherwise hide a one-sided key).
+      expect('advancesHeld' in unreserved).toBe(false)
 
       const reserved = await statement(r)
       // Same totals in both worlds ...
-      expect({ ...reserved, reservedAdvances: undefined, advancesCredit: undefined }).toEqual({
+      expect({
+        ...reserved,
+        reservedAdvances: undefined,
+        advancesHeld: undefined,
+        advancesCredit: undefined,
+      }).toEqual({
         ...unreserved,
         reservedAdvances: undefined,
+        advancesHeld: undefined,
         advancesCredit: undefined,
       })
       // ... and the 17000 still held for the budget is the ONLY difference.
       expect(reserved.advancesCredit).toBe(unreserved.advancesCredit - 17000)
       expect(reserved.reservedAdvances?.[0].remaining).toBe(17000)
+      // #571: and that same 17000 is what the response NAMES, so the UI prints
+      // the figure the arithmetic above used, not one of its own.
+      expect(reserved.advancesHeld).toBe(17000)
     })
 
     it('walk-sensitive: a second charge that needs the pool pins the unreserved arithmetic in both worlds', async () => {
@@ -849,6 +864,113 @@ describe('Task #529: advances reserved to a budget (real routes)', () => {
       const res = await postAdvance(patientId, 10)
       expect(res.status).toBe(201)
       expect(res.body.data.budgetId).toBeNull()
+    })
+  })
+
+  // ---- Task #571 GUARD 2 (API side): advancesHeld is the statement's own
+  // heldCents, and the UI must never re-derive it from the rows -------------
+
+  describe('Task #571 GUARD 2: advancesHeld, the figure the UI names', () => {
+    /** The rows as a map, so an assertion does not depend on the walk's order. */
+    const rowsById = (s: Statement) =>
+      Object.fromEntries((s.reservedAdvances ?? []).map((r) => [r.budgetId, r]))
+
+    it('one open budget: advancesHeld is 17000, exactly the open row it labels', async () => {
+      const patientId = await newPatient()
+      const budget = await newBudget(patientId, ['5500.00', '9000.00'])
+      await postAdvance(patientId, 22500, budget.id)
+      await postAdvance(patientId, 8000)
+
+      await executeItems(patientId, [budget.items[0].id])
+
+      const s = await statement(patientId)
+      expect(s.advancesHeld).toBe(17000)
+      // The two figures the block prints: the total, and the one row's own
+      // `remaining`. Here they coincide, which is why the mixed fixture below
+      // (one closed budget) is the case that tells a sum from the rule.
+      expect(rowsById(s)[budget.id]).toEqual({
+        budgetId: budget.id,
+        reserved: 22500,
+        consumed: 5500,
+        remaining: 17000,
+        open: true,
+      })
+      // Held money is not credit; the statement's own arithmetic says so.
+      expect(s.advancesCredit).toBe(8000)
+      expect(s.totalPaid - s.advancesCredit - s.advancesHeld!).toBe(5500)
+    })
+
+    it('one open and one closed budget: advancesHeld is 17000, NOT the 20000 the rows add up to', async () => {
+      // The discriminator between "the held rule" and "sum of the rows": the
+      // closed budget's 3000 leftover has already rejoined the pool as
+      // ordinary credit (release rule 1), so it is held by nobody — yet its
+      // row still reports remaining 3000.
+      const patientId = await newPatient()
+      const open = await newBudget(patientId, ['5500.00', '9000.00'])
+      const closed = await newBudget(patientId, ['19500.00'])
+      await postAdvance(patientId, 22500, open.id)
+      await postAdvance(patientId, 22500, closed.id)
+
+      await executeItems(patientId, [open.items[0].id])
+      await executeItems(patientId, [closed.items[0].id])
+      expect((await prisma.budget.findUnique({ where: { id: closed.id } }))?.status).toBe('COMPLETED')
+
+      const s = await statement(patientId)
+      const rows = rowsById(s)
+      expect(rows[open.id]).toEqual({
+        budgetId: open.id,
+        reserved: 22500,
+        consumed: 5500,
+        remaining: 17000,
+        open: true,
+      })
+      expect(rows[closed.id]).toEqual({
+        budgetId: closed.id,
+        reserved: 22500,
+        consumed: 19500,
+        remaining: 3000,
+        open: false,
+      })
+      // Sum of every row's remaining = 20000; sum of the OPEN ones = 17000.
+      expect(
+        (s.reservedAdvances ?? []).reduce((sum, r) => sum + r.remaining, 0)
+      ).toBe(20000)
+      expect(s.advancesHeld).toBe(17000)
+      // And the closed budget's 3000 is credit, which is the other half of the
+      // same statement: 45000 paid - 25000 applied - 17000 held = 3000.
+      expect(s.advancesCredit).toBe(3000)
+      expect(s.totalPaid).toBe(45000)
+      expect(s.totalBilled).toBe(25000)
+      expect(s.appointmentsDebt).toBe(0)
+    })
+
+    it('every budget closed: advancesHeld is 0 while a row still reports remaining 3000', async () => {
+      const patientId = await newPatient()
+      const budget = await newBudget(patientId, ['19500.00'])
+      await postAdvance(patientId, 22500, budget.id)
+
+      await executeItems(patientId, [budget.items[0].id])
+
+      const s = await statement(patientId)
+      expect(s.reservedAdvances).toEqual([
+        { budgetId: budget.id, reserved: 22500, consumed: 19500, remaining: 3000, open: false },
+      ])
+      // Present (there IS a reservation) and zero (nothing is held) — the two
+      // are different statements, and the UI tells them apart.
+      expect('advancesHeld' in s).toBe(true)
+      expect(s.advancesHeld).toBe(0)
+      expect(s.advancesCredit).toBe(3000)
+    })
+
+    it('no reservation at all: the key is ABSENT, so absent never means "unknown"', async () => {
+      const patientId = await newPatient()
+      const budget = await newBudget(patientId, ['5500.00'])
+      await postAdvance(patientId, 8000) // general, not reserved
+      await executeItems(patientId, [budget.items[0].id])
+
+      const s = await statement(patientId)
+      expect('reservedAdvances' in s).toBe(false)
+      expect('advancesHeld' in s).toBe(false)
     })
   })
 })

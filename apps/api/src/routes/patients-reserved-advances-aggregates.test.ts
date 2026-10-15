@@ -252,6 +252,7 @@ interface Statement {
   totalBilled: number
   totalPaid: number
   advancesTotal: number
+  advancesHeld?: number
   reservedAdvances?: Array<{
     budgetId: string
     reserved: number

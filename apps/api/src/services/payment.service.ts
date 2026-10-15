@@ -761,6 +761,14 @@ export interface PatientAccountStatement {
   /** Share of totalPaid recorded as entregas (kind = ADVANCE), applied or not. */
   advancesTotal: number
   /**
+   * Task #571: the share of totalPaid still held for open reservations — the
+   * statement's own `heldCents`, the figure already subtracted from
+   * advancesCredit, so the UI names it instead of re-deriving it. Present
+   * exactly when `reservedAdvances` is: the two come from the same walk, so an
+   * absent field never means "held is unknown".
+   */
+  advancesHeld?: number
+  /**
    * Task #529: one row per budget that has advances reserved to it. `remaining`
    * is what the budget's executed work has not consumed yet; it is held for
    * that budget and is NOT part of advancesCredit while the budget is open.
@@ -875,7 +883,9 @@ export async function getPatientAccountStatement(
       totalBilled: fromCents(billedCents),
       totalPaid,
       advancesTotal: advancesAgg._sum.amount?.toNumber() || 0,
-      ...(reservedAdvances.length > 0 ? { reservedAdvances } : {}),
+      ...(reservedAdvances.length > 0
+        ? { advancesHeld: fromCents(heldCents), reservedAdvances }
+        : {}),
     },
   }
 }

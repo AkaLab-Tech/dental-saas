@@ -1165,7 +1165,10 @@
     "statement": {
       "appointmentsDebt": "Deuda por consultas realizadas",
       "remainingBudget": "Presupuesto restante",
-      "remainingBudgetDisclaimer": "Proyección de tratamiento pendiente — no es deuda."
+      "remainingBudgetDisclaimer": "Proyección de tratamiento pendiente — no es deuda.",
+      "heldAdvances": "Reservado a presupuestos",
+      "heldForBudget": "Presupuesto del {{date}}: {{amount}}",
+      "heldForUnnamedBudget": "Presupuesto reservado: {{amount}}"
     },
     "debtors": {
       "title": "Deudas de pacientes",
@@ -1184,7 +1187,9 @@
       "budgetNone": "Sin reservar (entrega general)",
       "budgetHint": "La entrega solo se usará para trabajos de este presupuesto",
       "budgetNotOpen": "El presupuesto elegido ya no admite reservas",
-      "budgetGone": "La opción elegida ya no está disponible"
+      "budgetGone": "La opción elegida ya no está disponible",
+      "budgetNoneExist": "Este paciente no tiene presupuestos: la entrega se registra como saldo general.",
+      "budgetAllClosed": "Todos los presupuestos de este paciente están cerrados: la entrega se registra como saldo general."
     },
     "movements": {
       "subtitle": "Historial cronológico de entregas y sus movimientos",

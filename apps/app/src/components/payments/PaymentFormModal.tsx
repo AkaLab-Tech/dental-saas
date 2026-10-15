@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useCallback, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -6,7 +6,7 @@ import { X, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { CreatePaymentData } from '@/lib/payment-api'
 import { listBudgetsByPatient, type Budget } from '@/lib/budget-api'
-import { formatDateForInput } from '@/lib/format'
+import { formatDateForInput, formatShortDate } from '@/lib/format'
 
 // ============================================================================
 // Validation Schema
@@ -53,6 +53,16 @@ function createPaymentSchema(
 
 type PaymentFormData = z.infer<ReturnType<typeof createPaymentSchema>>
 
+/**
+ * This patient's budgets as the form needs them: the ones an advance can be
+ * reserved to, and how many they have at all. The count is the only thing that
+ * tells "no budget yet" from "every budget closed".
+ */
+interface BudgetOptions {
+  reservable: Budget[]
+  ownedCount: number
+}
+
 // ============================================================================
 // Main Component
 // ============================================================================
@@ -78,24 +88,37 @@ export function PaymentFormModal({
   formatCurrency,
   isLoading = false,
 }: PaymentFormModalProps) {
-  const { t } = useTranslation()
-  const [budgets, setBudgets] = useState<Budget[]>([])
+  const { t, i18n } = useTranslation()
+  // null while the list has not been read (loading, failure, or no patientId).
+  // Branching on the fetch OUTCOME is what lets ownedCount === 0 mean "this
+  // patient has no budget" and never "we do not know yet".
+  const [budgetOptions, setBudgetOptions] = useState<BudgetOptions | null>(null)
   const [budgetsRefreshKey, setBudgetsRefreshKey] = useState(0)
+  // Memoised so the stale-pick clearing effect below keeps firing on a real
+  // change of options, not on every render.
+  const budgets = useMemo(() => budgetOptions?.reservable ?? [], [budgetOptions])
 
   useEffect(() => {
     if (!isOpen || !patientId) {
-      setBudgets([])
+      setBudgetOptions(null)
       return
     }
     let cancelled = false
     listBudgetsByPatient(patientId, { limit: 100 })
       .then(({ data }) => {
-        if (!cancelled) setBudgets(data.filter((b) => isReservableBudget(b, patientId)))
+        const owned = data.filter((b) => b.patientId === patientId)
+        if (!cancelled) {
+          setBudgetOptions({
+            reservable: owned.filter((b) => isReservableBudget(b, patientId)),
+            ownedCount: owned.length,
+          })
+        }
       })
       .catch(() => {
-        // The reservation is optional: without the list the form simply does
-        // not offer it, and the advance is recorded as a general one.
-        if (!cancelled) setBudgets([])
+        // The reservation is optional: without the list the form neither
+        // offers it nor claims anything about this patient's budgets, and the
+        // advance is recorded as a general one.
+        if (!cancelled) setBudgetOptions(null)
       })
     return () => {
       cancelled = true
@@ -269,6 +292,27 @@ export function PaymentFormModal({
                 {errors.note && <p className="mt-1 text-sm text-red-500">{errors.note.message}</p>}
               </div>
 
+              {/* Task #571, DECIDED (not inherited): with no budget to reserve
+                  to the picker stays absent, but the absence is explained and
+                  the two reasons are told apart — "no budget yet" and "every
+                  budget closed" call for different actions. Shown only once the
+                  list was really read: a failed fetch says nothing about this
+                  patient's budgets. */}
+              {budgetOptions !== null && budgets.length === 0 && (
+                <p
+                  data-testid={
+                    budgetOptions.ownedCount === 0
+                      ? 'payment-budget-no-budgets'
+                      : 'payment-budget-all-closed'
+                  }
+                  className="text-xs text-gray-500"
+                >
+                  {budgetOptions.ownedCount === 0
+                    ? t('payments.form.budgetNoneExist')
+                    : t('payments.form.budgetAllClosed')}
+                </p>
+              )}
+
               {/* Budget reservation: only offered when there is a budget to reserve to */}
               {budgets.length > 0 && (
                 <div>
@@ -286,7 +330,7 @@ export function PaymentFormModal({
                     {budgets.map((b) => (
                       <option key={b.id} value={b.id}>
                         {t('budgets.createdOn', {
-                          date: new Date(b.createdAt).toLocaleDateString(),
+                          date: formatShortDate(b.createdAt, i18n.language),
                         })}{' '}
                         - {formatCurrency(Number(b.totalAmount))}
                       </option>

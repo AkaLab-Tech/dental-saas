@@ -25,3 +25,17 @@ export function formatDateForInput(date: Date): string {
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
 }
+
+/**
+ * Format a date in the APP's language (pass i18n.language), e.g. "12 oct 2026".
+ *
+ * Never call toLocaleDateString without a locale: that reads the browser's
+ * locale, so one screen can render dates in a format no other screen uses.
+ */
+export function formatShortDate(iso: string | Date, locale: string): string {
+  return new Date(iso).toLocaleDateString(locale, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+}
