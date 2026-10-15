@@ -122,9 +122,10 @@ test.describe('Patients Management', () => {
 
       await page.goto('/patients')
 
-      // A competing patient that sorts AHEAD of this run's own: the list sorts
-      // client-side by "firstName lastName" and every e2e patient is firstName
-      // "E2E", so "AAA ..." is the first row. A test that takes the first row
+      // A competing patient that sorts AHEAD of this run's own: PatientsListView
+      // sorts the list client-side by "firstName lastName", and the e2e specs
+      // seed firstName "E2E" (labworks.spec.ts seeds "Overdue"), so "AAA ..."
+      // precedes them all and is the first row. A test that takes the first row
       // or the first "Ver ficha" link opens this one and fails the id check.
       const competingId = await createPatient('AAA', `Previo${Date.now()}`)
       const ownId = await createPatient('E2E', uniqueLastName)
@@ -133,10 +134,15 @@ test.describe('Patients Management', () => {
       // Bind to the patient's identity (its unique last name), not to a
       // position. The rows are <tr>; the mobile cards are <div>s, so the
       // role=row filter cannot match the CSS-hidden second copy of the link.
-      // The search is a debounced refetch, but the unique name is present in
-      // both the unfiltered and the filtered list, so the match resolves to
-      // this patient either way; toHaveCount(1) asserts it is unambiguous.
-      await page.getByPlaceholder(/buscar por nombre/i).fill(uniqueLastName)
+      //
+      // Deliberately NOT filtering with the search box: that search is a
+      // SERVER-side refetch on a 300 ms debounce, and once it lands the list
+      // holds this patient alone — at which point an unscoped `.first()` would
+      // open the right record and the competing patient above would guard
+      // nothing. Measured: with the debounce allowed to land, the pre-#567
+      // `.first()` pattern passes. Reading the unfiltered list keeps the
+      // competing row present at click time, so what resolves the row is the
+      // scoping, not a race; toHaveCount(1) asserts the name is unambiguous.
       const patientRow = page.getByRole('row').filter({ hasText: uniqueLastName })
       await expect(patientRow).toHaveCount(1)
 
