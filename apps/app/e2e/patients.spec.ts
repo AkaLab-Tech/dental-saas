@@ -99,27 +99,51 @@ test.describe('Patients Management', () => {
   })
 
   test.describe('Patient Details', () => {
-    test('should navigate to patient detail when clicking on patient card', async ({ authedPage: page }) => {
+    test('should open the record of the patient whose "Ver ficha" link is clicked', async ({ authedPage: page }) => {
+      // The list has no clickable row or card: the only way to a record is the
+      // "Ver ficha" link in each row's action column. The test seeds its own
+      // patient, so there is no empty-tenant case to skip.
+      const createPatient = async (firstName: string, lastName: string) => {
+        await page.getByRole('button', { name: /nuevo paciente/i }).click()
+        const patientDialog = page.getByRole('dialog')
+        await expect(patientDialog).toBeVisible()
+        await page.getByPlaceholder('Juan').fill(firstName)
+        await page.getByPlaceholder('Pérez').fill(lastName)
+        const created = page.waitForResponse(
+          (r) => r.request().method() === 'POST' && /\/api\/patients$/.test(r.url())
+        )
+        await patientDialog.getByRole('button', { name: /crear paciente/i }).click()
+        const id = (await (await created).json()).data.id as string
+        await expect(patientDialog).not.toBeVisible()
+        return id
+      }
+
+      const uniqueLastName = `Detalle${Date.now()}`
+
       await page.goto('/patients')
 
-      // Wait for any patient cards to load
-      await page.waitForTimeout(1000)
+      // A competing patient that sorts AHEAD of this run's own: the list sorts
+      // client-side by "firstName lastName" and every e2e patient is firstName
+      // "E2E", so "AAA ..." is the first row. A test that takes the first row
+      // or the first "Ver ficha" link opens this one and fails the id check.
+      const competingId = await createPatient('AAA', `Previo${Date.now()}`)
+      const ownId = await createPatient('E2E', uniqueLastName)
+      expect(ownId).not.toBe(competingId)
 
-      // Try to find a patient card (they have testid). A freshly registered
-      // tenant has no patients, so this is a no-op smoke check in that case.
-      const patientCard = page.locator('[data-testid^="patient-card-"]').first()
+      // Bind to the patient's identity (its unique last name), not to a
+      // position. The rows are <tr>; the mobile cards are <div>s, so the
+      // role=row filter cannot match the CSS-hidden second copy of the link.
+      // The search is a debounced refetch, but the unique name is present in
+      // both the unfiltered and the filtered list, so the match resolves to
+      // this patient either way; toHaveCount(1) asserts it is unambiguous.
+      await page.getByPlaceholder(/buscar por nombre/i).fill(uniqueLastName)
+      const patientRow = page.getByRole('row').filter({ hasText: uniqueLastName })
+      await expect(patientRow).toHaveCount(1)
 
-      const isVisible = await patientCard.isVisible().catch(() => false)
+      await patientRow.getByRole('link', { name: /ver ficha/i }).click()
 
-      if (isVisible) {
-        await patientCard.click()
-
-        // Should navigate to patient detail page
-        await expect(page).toHaveURL(/\/patients\/[a-zA-Z0-9]+/)
-      } else {
-        // No patients to click
-        test.skip()
-      }
+      // The exact id captured from POST /api/patients, not any patient's URL.
+      await expect(page).toHaveURL(new RegExp(`/patients/${ownId}$`))
     })
   })
 })
