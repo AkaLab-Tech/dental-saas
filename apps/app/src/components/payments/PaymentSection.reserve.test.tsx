@@ -530,7 +530,7 @@ describe('Task #569 GUARD 6 (client): BUDGET_NOT_FOUND (404) after the budget wa
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
-  it('another open budget remains: select re-offers it with nothing selected', async () => {
+  it('another open budget remains: the select re-offers it AND the resubmitted request body carries no budgetId', async () => {
     await pickBudgetThenChangeWorld(() => {
       net.budgets = listOf(makeBudget({ id: 'b-other', totalAmount: '300' }))
     }, { status: serverReply.status, body: serverReply.body })

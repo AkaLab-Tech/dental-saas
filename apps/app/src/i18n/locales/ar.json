@@ -1165,7 +1165,10 @@
     "statement": {
       "appointmentsDebt": "دين من المواعيد المنجزة",
       "remainingBudget": "الميزانية المتبقية",
-      "remainingBudgetDisclaimer": "توقّع للعلاج المخطط له وغير المنجز — ليس دينًا."
+      "remainingBudgetDisclaimer": "توقّع للعلاج المخطط له وغير المنجز — ليس دينًا.",
+      "heldAdvances": "محجوز للميزانيات",
+      "heldForBudget": "ميزانية {{date}}: {{amount}}",
+      "heldForUnnamedBudget": "ميزانية محجوزة: {{amount}}"
     },
     "debtors": {
       "title": "ديون المرضى",
@@ -1184,7 +1187,9 @@
       "budgetNone": "بدون حجز (دفعة عامة)",
       "budgetHint": "ستُستخدم الدفعة فقط لأعمال هذه الميزانية",
       "budgetNotOpen": "الميزانية المختارة لم تعد تقبل الحجز",
-      "budgetGone": "الخيار المحدد لم يعد متاحًا"
+      "budgetGone": "الخيار المحدد لم يعد متاحًا",
+      "budgetNoneExist": "لا توجد ميزانيات لهذا المريض: تُسجَّل الدفعة كرصيد عام.",
+      "budgetAllClosed": "جميع ميزانيات هذا المريض مغلقة: تُسجَّل الدفعة كرصيد عام."
     },
     "movements": {
       "subtitle": "سجل زمني للمدفوعات وحركاتها",

@@ -255,4 +255,108 @@ describe('AccountStatement', () => {
       }
     })
   })
+
+  // ==========================================================================
+  // Task #571 GUARD 2 (client side): the held block names the API's OWN figure
+  // ==========================================================================
+  //
+  // The fixtures below are states the API really produces (asserted against
+  // the real endpoint in apps/api/src/routes/patients-reserved-advances.test.ts,
+  // "Task #571 GUARD 2"): one open budget holding 17000 plus one COMPLETED
+  // budget whose 3000 leftover has already rejoined the pool as credit. That
+  // mix is the only shape that tells "advancesHeld" from "sum of the rows":
+  // the rows add up to 20000, the held figure is 17000.
+  describe('Task #571: held advances block', () => {
+    const OPEN_BUDGET = 'budget-open'
+    const CLOSED_BUDGET = 'budget-closed'
+
+    function renderHeld(
+      overrides: Partial<AccountStatementData>,
+      budgetCreatedAt?: Record<string, string>
+    ) {
+      return render(
+        <AccountStatement
+          statement={makeStatement(overrides)}
+          formatCurrency={fmtWith('USD')}
+          budgetCreatedAt={budgetCreatedAt}
+        />
+      )
+    }
+
+    /** advancesHeld 17000; rows remaining 17000 (open) + 3000 (closed) = 20000. */
+    const mixed: Partial<AccountStatementData> = {
+      advancesCredit: 3000,
+      totalPaid: 45000,
+      totalBilled: 25000,
+      advancesTotal: 45000,
+      advancesHeld: 17000,
+      reservedAdvances: [
+        { budgetId: OPEN_BUDGET, reserved: 22500, consumed: 5500, remaining: 17000, open: true },
+        { budgetId: CLOSED_BUDGET, reserved: 22500, consumed: 19500, remaining: 3000, open: false },
+      ],
+    }
+
+    it('prints advancesHeld as the total — not the 20000 the rows add up to', () => {
+      const { container } = renderHeld(mixed)
+
+      expect(screen.getByTestId('statement-held-total').textContent).toBe(
+        formatCurrency(17000, 'USD')
+      )
+      // A total re-derived by summing reservedAdvances would read 20000.
+      expect(container.textContent ?? '').not.toContain(formatCurrency(20000, 'USD'))
+    })
+
+    it('lists only the budgets that actually hold money: one row, the open one', () => {
+      renderHeld(mixed, {
+        [OPEN_BUDGET]: '2026-04-23T12:00:00Z',
+        [CLOSED_BUDGET]: '2026-01-05T12:00:00Z',
+      })
+
+      const rows = screen.getAllByTestId('statement-held-budget-row')
+      expect(rows).toHaveLength(1)
+      expect(rows[0].textContent).toBe(`Presupuesto del 23 abr 2026: ${formatCurrency(17000, 'USD')}`)
+      // The closed budget's date must not be named as held.
+      expect(screen.queryByText(/5 ene 2026/)).toBeNull()
+    })
+
+    it('a row whose budget is missing from the name map falls back to the unnamed wording', () => {
+      renderHeld(mixed, { [CLOSED_BUDGET]: '2026-01-05T12:00:00Z' })
+
+      const rows = screen.getAllByTestId('statement-held-budget-row')
+      expect(rows).toHaveLength(1)
+      expect(rows[0].textContent).toBe(`Presupuesto reservado: ${formatCurrency(17000, 'USD')}`)
+    })
+
+    it('every budget closed (advancesHeld 0, a row still reporting 3000): no block at all', () => {
+      renderHeld({
+        advancesCredit: 3000,
+        advancesHeld: 0,
+        reservedAdvances: [
+          { budgetId: CLOSED_BUDGET, reserved: 22500, consumed: 19500, remaining: 3000, open: false },
+        ],
+      })
+
+      expect(screen.queryByTestId('statement-held-advances')).toBeNull()
+      expect(screen.queryByText('Reservado a presupuestos')).toBeNull()
+    })
+
+    it('no reservation at all (advancesHeld absent): no block, and nothing claimed', () => {
+      renderHeld({ advancesCredit: 8000 })
+
+      expect(screen.queryByTestId('statement-held-advances')).toBeNull()
+      expect(screen.queryByTestId('statement-held-total')).toBeNull()
+    })
+
+    it('the held total is not folded into any other figure on the statement', () => {
+      const { container } = renderHeld(mixed)
+      const rendered = container.textContent ?? ''
+
+      // Each figure stands on its own: credit 3000 and held 17000, never their
+      // sum (20000) nor a "paid minus held" style aggregate (28000).
+      expect(rendered).toContain(formatCurrency(3000, 'USD'))
+      expect(rendered).toContain(formatCurrency(17000, 'USD'))
+      expect(rendered).not.toContain(formatCurrency(20000, 'USD'))
+      expect(rendered).not.toContain(formatCurrency(28000, 'USD'))
+    })
+  })
 })

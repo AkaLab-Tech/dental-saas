@@ -1156,7 +1156,10 @@
     "statement": {
       "appointmentsDebt": "Debt from performed appointments",
       "remainingBudget": "Remaining budget",
-      "remainingBudgetDisclaimer": "Projection of pending treatment — not a debt."
+      "remainingBudgetDisclaimer": "Projection of pending treatment — not a debt.",
+      "heldAdvances": "Reserved to budgets",
+      "heldForBudget": "Budget of {{date}}: {{amount}}",
+      "heldForUnnamedBudget": "Reserved budget: {{amount}}"
     },
     "debtors": {
       "title": "Patient Debts",
@@ -1175,7 +1178,9 @@
       "budgetNone": "Not reserved (general advance)",
       "budgetHint": "The advance will only be used for work in this budget",
       "budgetNotOpen": "The chosen budget no longer accepts reservations",
-      "budgetGone": "The chosen option is no longer available"
+      "budgetGone": "The chosen option is no longer available",
+      "budgetNoneExist": "This patient has no budgets: the advance is recorded as general credit.",
+      "budgetAllClosed": "All of this patient's budgets are closed: the advance is recorded as general credit."
     },
     "movements": {
       "subtitle": "Chronological history of payments and their movements",

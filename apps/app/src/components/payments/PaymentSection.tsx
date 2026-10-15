@@ -14,6 +14,7 @@ import {
   type AccountStatement as AccountStatementData,
   type CreatePaymentData,
 } from '@/lib/payment-api'
+import { listBudgetsByPatient } from '@/lib/budget-api'
 import { PaymentFormModal } from './PaymentFormModal'
 import { AccountStatement } from './AccountStatement'
 import { formatActor } from '@/lib/format-actor'
@@ -53,6 +54,14 @@ export function PaymentSection({
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  // Task #571: createdAt per budget id, only to NAME the held reservations the
+  // statement reports. Carries its own patientId because this tab is merely
+  // CSS-hidden when another patient's record is open (#539/#547): a map
+  // fetched for the previous patient must not label this one's money.
+  const [budgetNames, setBudgetNames] = useState<{
+    patientId: string
+    createdAt: Record<string, string>
+  } | null>(null)
 
   const fmtCurrency = useCallback(
     (amount: number) => formatCurrency(amount, currency),
@@ -78,6 +87,33 @@ export function PaymentSection({
   useEffect(() => {
     fetchData()
   }, [fetchData, refreshKey])
+
+  const hasHeldAdvances = !!statement?.reservedAdvances?.some((r) => r.open && r.remaining > 0)
+
+  useEffect(() => {
+    if (!hasHeldAdvances) {
+      setBudgetNames(null)
+      return
+    }
+    let cancelled = false
+    listBudgetsByPatient(patientId, { limit: 100 })
+      .then(({ data }) => {
+        if (cancelled) return
+        const createdAt: Record<string, string> = {}
+        for (const budget of data) {
+          if (budget.patientId === patientId) createdAt[budget.id] = budget.createdAt
+        }
+        setBudgetNames({ patientId, createdAt })
+      })
+      .catch(() => {
+        // Only the label is lost: the held figures come from the statement, so
+        // the block still renders, naming the reservation generically.
+        if (!cancelled) setBudgetNames(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [patientId, hasHeldAdvances, refreshKey])
 
   const handleCreatePayment = async (data: CreatePaymentData): Promise<boolean> => {
     setIsSaving(true)
@@ -176,7 +212,15 @@ export function PaymentSection({
       )}
 
       {/* Account Statement */}
-      {statement && <AccountStatement statement={statement} formatCurrency={fmtCurrency} />}
+      {statement && (
+        <AccountStatement
+          statement={statement}
+          formatCurrency={fmtCurrency}
+          budgetCreatedAt={
+            budgetNames?.patientId === patientId ? budgetNames.createdAt : undefined
+          }
+        />
+      )}
 
       {/* Payments List */}
       {payments.length === 0 ? (

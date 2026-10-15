@@ -53,6 +53,24 @@ export interface AccountStatement {
   totalBilled: number
   totalPaid: number
   advancesTotal: number
+  /**
+   * Task #571: money still held for open reservations (the API's own
+   * `heldCents`, already held back from advancesCredit). Present exactly when
+   * `reservedAdvances` is — never re-derived in the UI, or the two drift.
+   */
+  advancesHeld?: number
+  /** Task #529: one row per budget this patient has advances reserved to. */
+  reservedAdvances?: ReservedAdvanceBalance[]
+}
+
+/** Mirrors apps/api's ReservedAdvanceBalance. */
+export interface ReservedAdvanceBalance {
+  budgetId: string
+  reserved: number
+  consumed: number
+  remaining: number
+  /** false once the budget is complete/cancelled/deleted. */
+  open: boolean
 }
 
 export interface CreatePaymentData {
