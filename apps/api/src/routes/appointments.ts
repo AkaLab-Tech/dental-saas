@@ -78,6 +78,10 @@ const createAppointmentSchema = z.object({
   budgetItemIds: z.array(z.string()).optional(),
 })
 
+// On update, null clears the stored cost (an emptied form field); omitting the
+// key leaves it untouched.
+const clearableCostSchema = costSchema.nullable()
+
 const updateAppointmentSchema = z.object({
   patientId: z.string().min(1).optional(),
   doctorId: z.string().min(1).optional(),
@@ -88,7 +92,7 @@ const updateAppointmentSchema = z.object({
   type: z.string().max(100).optional().nullable(),
   notes: z.string().max(5000).optional().nullable(),
   privateNotes: z.string().max(5000).optional().nullable(),
-  cost: costSchema,
+  cost: clearableCostSchema,
   paidAmount: costSchema,
   isPaid: z.boolean().optional(),
   // Replace-set of associated budget items (SCHEDULED). Omit to leave associations untouched.

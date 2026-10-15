@@ -1817,3 +1817,80 @@ describe('AppointmentFormModal — executed budget items disclosure (#544)', () 
     expect(screen.queryByText(hintText())).not.toBeInTheDocument()
   })
 })
+
+// Task #588 guard 6 (frontend half): the cost field's submit shape. An emptied
+// field used to send `undefined`, which the API reads as "leave the stored cost
+// alone", so a cleared cost silently came back. Editing now sends `null`.
+describe('AppointmentFormModal — cost submit shape (task #588)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getDoctorsMock.mockResolvedValue([mockDoctor])
+    getPatientsMock.mockResolvedValue([mockPatientRecord])
+    listBudgetsByPatientMock.mockResolvedValue({ data: [], total: 0 })
+    getAppointmentBudgetItemsMock.mockResolvedValue([])
+  })
+
+  const COST_LABEL = 'Costo ($)'
+
+  function getCostInput() {
+    const container = screen.getByText(COST_LABEL).parentElement
+    if (!container) throw new Error('No cost container found')
+    return within(container).getByRole('spinbutton') as HTMLInputElement
+  }
+
+  async function submitEdit(appointmentOverrides: Parameters<typeof makeAppointment>[0], typed?: string) {
+    const appointment = makeAppointment({ id: 'apt-1', ...appointmentOverrides })
+    const { onSubmit } = renderModal({ appointment })
+    await waitForOptionsLoaded()
+    const input = getCostInput()
+    await waitFor(() => expect(input.value).toBe(appointment.cost?.toString() ?? ''))
+    if (typed !== undefined) fireEvent.change(input, { target: { value: typed } })
+    fireEvent.click(screen.getByRole('button', { name: /guardar cambios/i }))
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    return onSubmit.mock.calls[0][0] as Record<string, unknown>
+  }
+
+  it('editing, field emptied: cost is sent as null so the API clears it', async () => {
+    const payload = await submitEdit({ cost: 500 }, '')
+    expect('cost' in payload).toBe(true)
+    expect(payload.cost).toBeNull()
+  })
+
+  it('editing, a typed 0: cost is the number 0, not null', async () => {
+    const payload = await submitEdit({ cost: 500 }, '0')
+    expect(payload.cost).toBe(0)
+  })
+
+  it('editing, a typed amount: cost is that number', async () => {
+    const payload = await submitEdit({ cost: 500 }, '175.5')
+    expect(payload.cost).toBe(175.5)
+  })
+
+  it('editing an appointment that never had a cost and leaving it empty: sends null (nothing to keep)', async () => {
+    const payload = await submitEdit({ cost: null })
+    expect(payload.cost).toBeNull()
+  })
+
+  it('creating with the field empty: cost stays undefined (create rejects null)', async () => {
+    const { onSubmit } = renderModal()
+    await waitForOptionsLoaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+    await selectDoctor()
+    fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect((onSubmit.mock.calls[0][0] as { cost?: unknown }).cost).toBeUndefined()
+  })
+
+  it('creating with a typed 0: cost is the number 0', async () => {
+    const { onSubmit } = renderModal()
+    await waitForOptionsLoaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+    await selectDoctor()
+    fireEvent.change(getCostInput(), { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: /crear cita/i }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect((onSubmit.mock.calls[0][0] as { cost?: unknown }).cost).toBe(0)
+  })
+})

@@ -436,7 +436,9 @@ export function AppointmentFormModal({
       endTime: endDateTime.toISOString(),
       type: data.type || undefined,
       notes: data.notes || undefined,
-      cost: data.cost ? parseFloat(data.cost) : undefined,
+      // Editing: an emptied field sends null so the API clears the stored cost;
+      // "0" is a truthy string and still sends the number 0.
+      cost: data.cost ? parseFloat(data.cost) : isEditing ? null : undefined,
       // No default value + register()'s `disabled` excluding locked fields
       // from RHF's data means only an operator-typed amount is ever sent.
       paidAmount: data.paidAmount ? parseFloat(data.paidAmount) : undefined,
