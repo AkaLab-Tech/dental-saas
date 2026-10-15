@@ -89,10 +89,8 @@ vi.mock('@/components/expenses/ExpenseFormModal', () => ({
           await onSubmit({
             issuer: 'Test Supplier',
             items: ['Test items'],
-  tags: [],
-  note: null,
-  doctorIds: [],
-  deletedAt: null,
+            tags: [],
+            doctorIds: [],
             amount: 100,
             date: '2024-01-15',
           })
