@@ -1,6 +1,6 @@
 /**
  * Task #571 GUARD 1: a budget's date renders in the APP's language, and the
- * three surfaces that print it agree with each other.
+ * four surfaces that print it agree with each other.
  *
  * Shape copied from the repo's existing two-worlds exemplar
  * (pages/admin/AdminTenantsPage.test.tsx, `describe('date localization')`):
@@ -12,14 +12,19 @@
  * hardcoded to 'es-ES' would pass a browser-locale test while being wrong for
  * every user whose app language is en or ar.
  *
- * Cross-surface: three components render the same instant for the same budget
+ * Cross-surface: four components render the same instant for the same budget
  * — the payment form's picker (`budgets.createdOn`), the account statement's
- * held-advance row (`payments.statement.heldForBudget`) and the budget card
- * (`budgets.createdOn`). PaymentFormModal and AccountStatement call the shared
- * `lib/format.ts#formatShortDate`; BudgetCard still holds a private copy (its
- * dedupe is a separate follow-up). The guard is that the three strings stay
- * EQUAL and move TOGETHER, so an independent format in any one of them is
- * visible as a disagreement.
+ * held-advance row (`payments.statement.heldForBudget`), the budget card
+ * (`budgets.createdOn`) and the PDF export button's dropdown menu
+ * (`budgets.createdOn`). All four call the ONE shared
+ * `lib/format.ts#formatShortDate` (#573 removed the private copies in
+ * BudgetCard and PatientBudgetPdfButton). Since there is a single
+ * implementation, agreement between the surfaces is no longer evidence by
+ * itself; the guard's job is that the single implementation stays driven by
+ * `i18n.language` at every one of the four pinned surfaces: each string must
+ * equal the app-language format AND differ across es/en/ar. A hardcoded
+ * locale in the helper, or a new independent format at any surface, turns
+ * these assertions red.
  *
  * `switchLocale` is defined locally on purpose: there are nine such local
  * definitions in this app at e3c3ecb, which is the convention here.
@@ -35,6 +40,8 @@ import '@/i18n'
 import { PaymentFormModal } from '@/components/payments/PaymentFormModal'
 import { AccountStatement } from '@/components/payments/AccountStatement'
 import { BudgetCard } from '@/components/budgets/BudgetCard'
+import { PatientBudgetPdfButton } from '@/components/budgets/PatientBudgetPdfButton'
+import { useBudgetsStore } from '@/stores/budgets.store'
 import { formatCurrency } from '@/lib/format'
 import type { Budget } from '@/lib/budget-api'
 import type { AccountStatement as AccountStatementData } from '@/lib/payment-api'
@@ -126,7 +133,13 @@ function makeStatement(): AccountStatementData {
 
 const fmt = (amount: number) => formatCurrency(amount, 'USD')
 
-function renderAllThreeSurfaces() {
+function renderAllSurfaces() {
+  // PatientBudgetPdfButton never fetches: it reads the shared store, so seed it.
+  useBudgetsStore.setState({
+    budgets: [makeBudget()],
+    currentPatientId: PATIENT_ID,
+    loading: false,
+  })
   net.budgets = () => ({
     status: 200,
     body: { success: true, data: [makeBudget()], pagination: { total: 1 } },
@@ -142,6 +155,9 @@ function renderAllThreeSurfaces() {
       </div>
       <div data-testid="surface-card">
         <BudgetCard budget={makeBudget()} patientId={PATIENT_ID} onDelete={vi.fn()} />
+      </div>
+      <div data-testid="surface-pdf">
+        <PatientBudgetPdfButton patientId={PATIENT_ID} onError={vi.fn()} />
       </div>
       <div data-testid="surface-picker">
         <PaymentFormModal
@@ -164,7 +180,7 @@ function renderAllThreeSurfaces() {
  * Extracted from the rendered text (not recomputed), so an equality between
  * two surfaces is an observation about the DOM.
  */
-function datesOnScreen(): { picker: string; statement: string; card: string } {
+function datesOnScreen(): { picker: string; statement: string; card: string; pdf: string } {
   const select = within(screen.getByTestId('surface-picker')).getByLabelText(
     /presupuesto|budget|ميزانية/i
   ) as HTMLSelectElement
@@ -183,7 +199,23 @@ function datesOnScreen(): { picker: string; statement: string; card: string } {
     within(screen.getByTestId('surface-card')).getByText(/2026/).textContent ?? ''
   ).trim()
 
-  return { picker, statement, card }
+  // The PDF button's budget list lives in a dropdown: open it once (it stays
+  // open across a locale switch), then read the date line of the menu item.
+  const pdfScope = within(screen.getByTestId('surface-pdf'))
+  if (!pdfScope.queryByRole('menu')) {
+    act(() => {
+      pdfScope.getByRole('button', { expanded: false }).click()
+    })
+  }
+  const item = pdfScope.getByRole('menuitem')
+  const line = (item.querySelectorAll('span')[1]?.textContent ?? '').trim()
+  const statusSuffix = ` · ${i18n.t('budgets.status.APPROVED')}`
+  if (!line.endsWith(statusSuffix)) {
+    throw new Error(`"${line}" does not end with the status suffix "${statusSuffix}"`)
+  }
+  const pdf = line.slice(0, line.length - statusSuffix.length).trim()
+
+  return { picker, statement, card, pdf }
 }
 
 const MARK = '\u0001'
@@ -213,6 +245,8 @@ const pickerDate = (surfaces: { picker: string }) =>
   dateFromTemplate(surfaces.picker, 'budgets.createdOn')
 const cardDate = (surfaces: { card: string }) =>
   dateFromTemplate(surfaces.card, 'budgets.createdOn')
+const pdfDate = (surfaces: { pdf: string }) =>
+  dateFromTemplate(surfaces.pdf, 'budgets.createdOn')
 const statementDate = (surfaces: { statement: string }) =>
   dateFromTemplate(surfaces.statement, 'payments.statement.heldForBudget', {
     amount: fmt(17000),
@@ -234,8 +268,8 @@ beforeEach(async () => {
 })
 
 describe('Task #571 GUARD 1: the budget date follows the app language, on every surface', () => {
-  it('es then en: all three surfaces print the same date, and all three move together', async () => {
-    renderAllThreeSurfaces()
+  it('es then en: all four surfaces print the same date, and all four move together', async () => {
+    renderAllSurfaces()
     await waitFor(() =>
       expect(
         within(screen.getByTestId('surface-picker')).getByLabelText(/presupuesto|budget/i)
@@ -246,26 +280,33 @@ describe('Task #571 GUARD 1: the budget date follows the app language, on every 
     const esDate = pickerDate(es)
     // The format is the app language's, not the browser's: 'es' gives
     // "23 abr 2026" where 'en' gives "Apr 23, 2026".
-    expect(esDate).toBe(expectedFor('es'))
-    // Cross-surface: the three strings carry the SAME date.
-    expect(statementDate(es)).toBe(esDate)
-    expect(cardDate(es)).toBe(esDate)
+    expect.soft(esDate).toBe(expectedFor('es'))
+    // Every surface is compared to the app-language format ITSELF, not to the
+    // picker: a comparison against another surface stays green when the shared
+    // helper is wrong everywhere (all four then agree on the wrong string).
+    // expect.soft: every surface is evaluated even when an earlier one fails, so
+    // a single broken helper reports ALL the surfaces it reddens (and any that
+    // stays green) instead of hiding them behind the first failure.
+    expect.soft(statementDate(es)).toBe(expectedFor('es'))
+    expect.soft(cardDate(es)).toBe(expectedFor('es'))
+    expect.soft(pdfDate(es)).toBe(expectedFor('es'))
 
     await switchLocale('en')
 
     const en = datesOnScreen()
     const enDate = pickerDate(en)
-    expect(enDate).toBe(expectedFor('en'))
-    expect(statementDate(en)).toBe(enDate)
-    expect(cardDate(en)).toBe(enDate)
+    expect.soft(enDate).toBe(expectedFor('en'))
+    expect.soft(statementDate(en)).toBe(expectedFor('en'))
+    expect.soft(cardDate(en)).toBe(expectedFor('en'))
+    expect.soft(pdfDate(en)).toBe(expectedFor('en'))
 
     // Without this the whole test would pass vacuously if es and en formatted
     // the same instant identically.
     expect(esDate).not.toBe(enDate)
   })
 
-  it('ar: the three surfaces agree there too, and differ from es', async () => {
-    renderAllThreeSurfaces()
+  it('ar: the four surfaces agree there too, and differ from es', async () => {
+    renderAllSurfaces()
     await waitFor(() =>
       expect(
         within(screen.getByTestId('surface-picker')).getByLabelText(/presupuesto|budget/i)
@@ -277,16 +318,17 @@ describe('Task #571 GUARD 1: the budget date follows the app language, on every 
 
     const ar = datesOnScreen()
     const arDate = pickerDate(ar)
-    expect(arDate).toBe(expectedFor('ar'))
-    expect(statementDate(ar)).toBe(arDate)
-    expect(cardDate(ar)).toBe(arDate)
+    expect.soft(arDate).toBe(expectedFor('ar'))
+    expect.soft(statementDate(ar)).toBe(expectedFor('ar'))
+    expect.soft(cardDate(ar)).toBe(expectedFor('ar'))
+    expect.soft(pdfDate(ar)).toBe(expectedFor('ar'))
     expect(arDate).not.toBe(esDate)
 
     await switchLocale('es')
   })
 
   it('the prose around the date is translated too, not only the number', async () => {
-    renderAllThreeSurfaces()
+    renderAllSurfaces()
     await waitFor(() =>
       expect(
         within(screen.getByTestId('surface-picker')).getByLabelText(/presupuesto|budget/i)

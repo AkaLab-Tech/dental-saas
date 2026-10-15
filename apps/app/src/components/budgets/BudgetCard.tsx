@@ -23,7 +23,7 @@ import { getExecutedItemsCount } from '@/lib/budget-api'
 import { downloadBudgetPdf } from '@/lib/pdf-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAuthStore } from '@/stores/auth.store'
-import { formatCurrency } from '@/lib/format'
+import { formatCurrency, formatShortDate } from '@/lib/format'
 import { Can } from '@/components/auth'
 
 interface BudgetCardProps {
@@ -57,14 +57,6 @@ const ITEM_STATUS_COLOR: Record<BudgetItemStatus, string> = {
 }
 
 const VISIBLE_ITEMS_LIMIT = 6
-
-function formatShortDate(iso: string, locale: string): string {
-  return new Date(iso).toLocaleDateString(locale, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
-}
 
 export function BudgetCard({ budget, patientId, onDelete }: BudgetCardProps) {
   const { t, i18n } = useTranslation()
