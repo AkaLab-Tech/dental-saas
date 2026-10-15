@@ -11,12 +11,21 @@
  * money is invisible in the patient's payment breakdown even though it still
  * counts towards getTotalPaid(). This pass repairs that visibility.
  *
- * Match predicate is `appointment.isActive = false` alone — deliberately NOT
- * `status = 'CANCELLED'`. getBillableItems() has no status filter, so an
- * appointment leaves the billable set iff isActive goes false. Appointments
- * merely marked CANCELLED via PUT /api/appointments/:id keep isActive=true,
- * stay billable, and are consistent as-is; converting them would be
- * irreversible since the restore path only runs for isActive=false rows.
+ * Match predicate is `appointment.isActive = false` alone. The billable set is
+ * now defined by BOTH flags: getBillableItems() (and the other billing sites
+ * marked BILLABLE_APPOINTMENT_RULE) exclude an appointment when isActive is
+ * false OR status is CANCELLED. Appointments cancelled through
+ * PUT /api/appointments/:id keep isActive=true, so they are OUT of the billable
+ * set but are NOT selected here. The predicate that would select them is
+ * `{ kind: 'APPOINTMENT', appointment: { isActive: true, status: 'CANCELLED' } }`.
+ * It is deliberately NOT applied: restoreAppointmentPaymentsFromAdvance runs
+ * only from restoreAppointment, so editing the status back out of CANCELLED
+ * cannot reverse a conversion, and widening would create rows that cannot be
+ * undone. The residual for those rows is visibility/audit, not money:
+ * computeFifoAllocation ignores earmarks on items absent from its items, and
+ * getTotalPaid has no kind filter; what is missing is the CONVERTED_TO_ADVANCE
+ * event and the money showing up in Entregas. Follow-up: repair them together
+ * with making the edit-out-of-CANCELLED path restore the earmark.
  *
  * Idempotence is structural: a converted row is kind='ADVANCE' and no longer
  * matches the kind='APPOINTMENT' selector, so a second run converts zero rows
@@ -79,9 +88,12 @@ export async function backfillCancelledAppointmentPayments(options: {
 }): Promise<BackfillCancelledAppointmentPaymentsResult> {
   const { dryRun } = options
 
-  // The selector stays exactly as it was, and deliberately so: `isActive` alone,
-  // never `status = 'CANCELLED'` — see the note at the top of this file. It is
-  // the SCRIPT's scope, not the helper's, and the helper must not inherit it.
+  // The selector stays `isActive` alone on purpose. Edit-cancelled rows
+  // (isActive true, status CANCELLED) are also outside the billable set now,
+  // but converting them is irreversible (restore only runs from
+  // restoreAppointment), and their residual is visibility, not money — see the
+  // note at the top of this file for the predicate and the follow-up. It is the
+  // SCRIPT's scope, not the helper's, and the helper must not inherit it.
   const payments = await prisma.patientPayment.findMany({
     where: {
       isActive: true,

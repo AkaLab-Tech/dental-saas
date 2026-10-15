@@ -332,6 +332,116 @@ describe('Task #588: a cancelled appointment does not bill', () => {
     })
   })
 
+  describe('guard 7 (cycle 1): cancelling through the edit path clears the derived isPaid flag', () => {
+    // isPaid is derived by recalculatePaidStatus, which only reaches billable
+    // items. A CANCELLED appointment is outside that set, so without an explicit
+    // write in updateAppointment the flag freezes at true and the row renders as
+    // paid / "Cubierto por saldo". The pre-fix frozen row exists only as legacy
+    // data: the current code path cannot produce it, so the guard drives the
+    // real route instead of seeding the row.
+    async function getOne(id: string) {
+      const res = await api().get(`/api/appointments/${id}`).set('Authorization', `Bearer ${adminToken}`)
+      expect(res.status).toBe(200)
+      return res.body.data as { isPaid: boolean; paidAmount: number; recordedPaidAmount: number; cost: number }
+    }
+
+    // Covered by the patient's balance: an unearmarked advance pays it, so
+    // isPaid is true while recordedPaidAmount stays 0 (the "Cubierto por saldo" case).
+    async function coveredByBalance(patientId: string, cost: number) {
+      const a = await createViaApi(patientId, cost)
+      const adv = await api()
+        .post(`/api/patients/${patientId}/payments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: cost, date: new Date().toISOString() })
+      expect(adv.status).toBe(201)
+      return a
+    }
+
+    it('precondition: an appointment charged in the consultation is isPaid=true before the cancel', async () => {
+      const patientId = await newPatient()
+      const a = await createViaApi(patientId, 2300, 2300)
+      expect(await isPaid(a)).toBe(true)
+    })
+
+    it('cancel by edit of a paid (charged here) appointment: the stored isPaid is false', async () => {
+      const patientId = await newPatient()
+      const a = await createViaApi(patientId, 2300, 2300)
+      expect(await isPaid(a)).toBe(true)
+
+      expect((await put(a, { status: 'CANCELLED' })).status).toBe(200)
+
+      expect(await isPaid(a)).toBe(false)
+    })
+
+    it('cancel by edit of an appointment covered by the balance: the stored isPaid is false', async () => {
+      const patientId = await newPatient()
+      const a = await coveredByBalance(patientId, 400)
+      expect(await isPaid(a)).toBe(true)
+
+      expect((await put(a, { status: 'CANCELLED' })).status).toBe(200)
+
+      expect(await isPaid(a)).toBe(false)
+    })
+
+    it('the cancelling PUT response itself already reports isPaid=false', async () => {
+      const patientId = await newPatient()
+      const a = await createViaApi(patientId, 2300, 2300)
+
+      const res = await put(a, { status: 'CANCELLED' })
+      expect(res.status).toBe(200)
+
+      expect(res.body.data.isPaid).toBe(false)
+    })
+
+    it('cancelling leaves the row active: this is the edit path, not the soft delete', async () => {
+      const patientId = await newPatient()
+      const a = await createViaApi(patientId, 2300, 2300)
+      expect((await put(a, { status: 'CANCELLED' })).status).toBe(200)
+
+      const row = await prisma.appointment.findUniqueOrThrow({ where: { id: a } })
+      expect(row.isActive).toBe(true)
+      expect(row.status).toBe('CANCELLED')
+    })
+
+    // Guard B: the derived figures the badge reads, MEASURED rather than assumed.
+    it('GET of a cancelled-by-edit appointment (charged here): paidAmount 0, recordedPaidAmount 0, isPaid false', async () => {
+      const patientId = await newPatient()
+      const a = await createViaApi(patientId, 2300, 2300)
+      expect((await put(a, { status: 'CANCELLED' })).status).toBe(200)
+
+      const got = await getOne(a)
+      expect({ isPaid: got.isPaid, paidAmount: got.paidAmount, recordedPaidAmount: got.recordedPaidAmount }).toEqual({
+        isPaid: false,
+        paidAmount: 0,
+        recordedPaidAmount: 0,
+      })
+    })
+
+    it('GET of a cancelled-by-edit appointment (covered by balance): paidAmount 0, recordedPaidAmount 0, isPaid false', async () => {
+      const patientId = await newPatient()
+      const a = await coveredByBalance(patientId, 400)
+      expect((await put(a, { status: 'CANCELLED' })).status).toBe(200)
+
+      const got = await getOne(a)
+      expect({ isPaid: got.isPaid, paidAmount: got.paidAmount, recordedPaidAmount: got.recordedPaidAmount }).toEqual({
+        isPaid: false,
+        paidAmount: 0,
+        recordedPaidAmount: 0,
+      })
+    })
+
+    it('the cancelling PUT response carries the same figures: paidAmount 0 and recordedPaidAmount 0', async () => {
+      const patientId = await newPatient()
+      const a = await createViaApi(patientId, 2300, 2300)
+
+      const res = await put(a, { status: 'CANCELLED' })
+      expect(res.status).toBe(200)
+
+      expect(res.body.data.paidAmount).toBe(0)
+      expect(res.body.data.recordedPaidAmount).toBe(0)
+    })
+  })
+
   describe('guard 4: every status has its own decision', () => {
     // [status, bills?, why]. "Unchanged" is a decision, asserted as one.
     const decisions: Array<[Status, boolean, string]> = [
