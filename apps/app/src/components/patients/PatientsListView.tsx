@@ -25,11 +25,11 @@ interface PatientsListViewProps {
 
 function useSortedPatients(patients: Patient[], sortKey: SortKey, sortDir: SortDir) {
   return useMemo(() => {
+    // The name order is the server's (family name, then given name): display it, never re-derive it.
+    if (sortKey === 'name') return sortDir === 'asc' ? patients : [...patients].reverse()
     const dir = sortDir === 'asc' ? 1 : -1
     return [...patients].sort((a, b) => {
       switch (sortKey) {
-        case 'name':
-          return dir * `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)
         case 'gender':
           return dir * (a.gender || '').localeCompare(b.gender || '')
         case 'dob':
