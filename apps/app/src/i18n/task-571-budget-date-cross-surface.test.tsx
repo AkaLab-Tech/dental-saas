@@ -1,6 +1,6 @@
 /**
- * Task #571 GUARD 1: a budget's date renders in the APP's language, and the
- * four surfaces that print it agree with each other.
+ * Task #571 GUARD 1: a budget's dates render in the APP's language, on every
+ * call site that prints one.
  *
  * Shape copied from the repo's existing two-worlds exemplar
  * (pages/admin/AdminTenantsPage.test.tsx, `describe('date localization')`):
@@ -12,19 +12,26 @@
  * hardcoded to 'es-ES' would pass a browser-locale test while being wrong for
  * every user whose app language is en or ar.
  *
- * Cross-surface: four components render the same instant for the same budget
- * — the payment form's picker (`budgets.createdOn`), the account statement's
- * held-advance row (`payments.statement.heldForBudget`), the budget card
- * (`budgets.createdOn`) and the PDF export button's dropdown menu
- * (`budgets.createdOn`). All four call the ONE shared
- * `lib/format.ts#formatShortDate` (#573 removed the private copies in
- * BudgetCard and PatientBudgetPdfButton). Since there is a single
- * implementation, agreement between the surfaces is no longer evidence by
- * itself; the guard's job is that the single implementation stays driven by
- * `i18n.language` at every one of the four pinned surfaces: each string must
- * equal the app-language format AND differ across es/en/ar. A hardcoded
- * locale in the helper, or a new independent format at any surface, turns
- * these assertions red.
+ * Cross-surface: there is ONE definition, `lib/format.ts#formatShortDate`
+ * (#573 removed the private copies in BudgetCard and PatientBudgetPdfButton),
+ * and FIVE call sites, all five pinned here:
+ *   1. the payment form's picker (`budgets.createdOn`, createdAt),
+ *   2. the account statement's held-advance row
+ *      (`payments.statement.heldForBudget`, createdAt),
+ *   3. the budget card's creation line (`budgets.createdOn`, createdAt),
+ *   4. the PDF export button's dropdown menu (`budgets.createdOn`, createdAt),
+ *   5. the budget card's `validUntil` (`budgets.validUntil`).
+ * The fifth renders only when the budget HAS a `validUntil`, which is why the
+ * fixture sets one: with `validUntil: null` that branch never mounts and no
+ * assertion could observe it. The `validUntil` date is deliberately a
+ * different instant from `createdAt` (and in a different year, so the card's
+ * `/2026/` reader stays unambiguous), so a swapped-field bug cannot pass.
+ * Since there is a single implementation, agreement between the surfaces is
+ * no longer evidence by itself; the guard's job is that the single
+ * implementation stays driven by `i18n.language` at every one of the five
+ * pinned call sites: each string must equal the app-language format AND differ
+ * across es/en/ar. A hardcoded locale in the helper, or a new independent
+ * format at any call site, turns these assertions red.
  *
  * `switchLocale` is defined locally on purpose: there are nine such local
  * definitions in this app at e3c3ecb, which is the convention here.
@@ -50,6 +57,8 @@ const BUDGET_ID = 'budget-571'
 const PATIENT_ID = 'patient-571'
 /** Midday UTC, so the calendar day is the same in every realistic host TZ. */
 const CREATED_AT = '2026-04-23T12:00:00Z'
+/** Midday UTC for the same reason; a different instant AND year from CREATED_AT. */
+const VALID_UNTIL = '2027-09-07T12:00:00Z'
 
 async function switchLocale(code: string) {
   await act(async () => {
@@ -105,7 +114,7 @@ function makeBudget(): Budget {
     createdById: null,
     status: 'APPROVED',
     notes: null,
-    validUntil: null,
+    validUntil: VALID_UNTIL,
     totalAmount: '250.00',
     publicToken: null,
     publicTokenExpiresAt: null,
@@ -180,7 +189,13 @@ function renderAllSurfaces() {
  * Extracted from the rendered text (not recomputed), so an equality between
  * two surfaces is an observation about the DOM.
  */
-function datesOnScreen(): { picker: string; statement: string; card: string; pdf: string } {
+function datesOnScreen(): {
+  picker: string
+  statement: string
+  card: string
+  pdf: string
+  validUntil: string
+} {
   const select = within(screen.getByTestId('surface-picker')).getByLabelText(
     /presupuesto|budget|ميزانية/i
   ) as HTMLSelectElement
@@ -199,6 +214,18 @@ function datesOnScreen(): { picker: string; statement: string; card: string; pdf
     within(screen.getByTestId('surface-card')).getByText(/2026/).textContent ?? ''
   ).trim()
 
+  // The card's validUntil span is located by its own (locale-dependent) label.
+  const label = i18n.t('budgets.validUntil')
+  const validUntilSpans = Array.from(
+    screen.getByTestId('surface-card').querySelectorAll('span')
+  ).filter((span) => (span.textContent ?? '').trim().startsWith(label))
+  if (validUntilSpans.length !== 1) {
+    throw new Error(
+      `expected exactly one span starting with "${label}", found ${validUntilSpans.length}`
+    )
+  }
+  const validUntil = (validUntilSpans[0].textContent ?? '').trim()
+
   // The PDF button's budget list lives in a dropdown: open it once (it stays
   // open across a locale switch), then read the date line of the menu item.
   const pdfScope = within(screen.getByTestId('surface-pdf'))
@@ -215,7 +242,7 @@ function datesOnScreen(): { picker: string; statement: string; card: string; pdf
   }
   const pdf = line.slice(0, line.length - statusSuffix.length).trim()
 
-  return { picker, statement, card, pdf }
+  return { picker, statement, card, pdf, validUntil }
 }
 
 const MARK = '\u0001'
@@ -247,6 +274,17 @@ const cardDate = (surfaces: { card: string }) =>
   dateFromTemplate(surfaces.card, 'budgets.createdOn')
 const pdfDate = (surfaces: { pdf: string }) =>
   dateFromTemplate(surfaces.pdf, 'budgets.createdOn')
+/**
+ * The validUntil label is a plain string (no {{date}}), so the date is what
+ * follows "<label>: " in the span. Never a regex over digits (see above).
+ */
+const validUntilDate = (surfaces: { validUntil: string }) => {
+  const prefix = `${i18n.t('budgets.validUntil')}: `
+  if (!surfaces.validUntil.startsWith(prefix)) {
+    throw new Error(`"${surfaces.validUntil}" does not start with "${prefix}"`)
+  }
+  return surfaces.validUntil.slice(prefix.length).trim()
+}
 const statementDate = (surfaces: { statement: string }) =>
   dateFromTemplate(surfaces.statement, 'payments.statement.heldForBudget', {
     amount: fmt(17000),
@@ -254,6 +292,15 @@ const statementDate = (surfaces: { statement: string }) =>
 
 const expectedFor = (locale: string) =>
   new Date(CREATED_AT).toLocaleDateString(locale, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+
+// Sibling of expectedFor, NOT a parameterisation of it: validUntil is another
+// instant. Same hardcoded options, and it does not call formatShortDate.
+const expectedValidUntilFor = (locale: string) =>
+  new Date(VALID_UNTIL).toLocaleDateString(locale, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -268,7 +315,7 @@ beforeEach(async () => {
 })
 
 describe('Task #571 GUARD 1: the budget date follows the app language, on every surface', () => {
-  it('es then en: all four surfaces print the same date, and all four move together', async () => {
+  it('es then en: all five call sites print the right date, and all five move together', async () => {
     renderAllSurfaces()
     await waitFor(() =>
       expect(
@@ -290,6 +337,7 @@ describe('Task #571 GUARD 1: the budget date follows the app language, on every 
     expect.soft(statementDate(es)).toBe(expectedFor('es'))
     expect.soft(cardDate(es)).toBe(expectedFor('es'))
     expect.soft(pdfDate(es)).toBe(expectedFor('es'))
+    expect.soft(validUntilDate(es)).toBe(expectedValidUntilFor('es'))
 
     await switchLocale('en')
 
@@ -299,13 +347,14 @@ describe('Task #571 GUARD 1: the budget date follows the app language, on every 
     expect.soft(statementDate(en)).toBe(expectedFor('en'))
     expect.soft(cardDate(en)).toBe(expectedFor('en'))
     expect.soft(pdfDate(en)).toBe(expectedFor('en'))
+    expect.soft(validUntilDate(en)).toBe(expectedValidUntilFor('en'))
 
     // Without this the whole test would pass vacuously if es and en formatted
     // the same instant identically.
     expect(esDate).not.toBe(enDate)
   })
 
-  it('ar: the four surfaces agree there too, and differ from es', async () => {
+  it('ar: the five call sites agree there too, and differ from es', async () => {
     renderAllSurfaces()
     await waitFor(() =>
       expect(
@@ -322,6 +371,7 @@ describe('Task #571 GUARD 1: the budget date follows the app language, on every 
     expect.soft(statementDate(ar)).toBe(expectedFor('ar'))
     expect.soft(cardDate(ar)).toBe(expectedFor('ar'))
     expect.soft(pdfDate(ar)).toBe(expectedFor('ar'))
+    expect.soft(validUntilDate(ar)).toBe(expectedValidUntilFor('ar'))
     expect(arDate).not.toBe(esDate)
 
     await switchLocale('es')
