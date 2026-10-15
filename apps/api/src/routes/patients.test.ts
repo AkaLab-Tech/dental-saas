@@ -447,6 +447,50 @@ describe('Patients API', () => {
       expect(response.body.data).toHaveLength(1)
     })
 
+    // #566 GUARD 5 at the route layer: walking the pages shows every active
+    // patient exactly once, ordered by family name then given name. With the two
+    // rows from beforeEach (Brown, Smith; Wilson is inactive) the active set is
+    //   Alba Zoe | Brown Alice || Smith Ana | Smith Bob || Smith Carla
+    // so with limit 2 the Smith family name straddles the page 2 / page 3
+    // boundary and the given-name tie-breaker decides who ends page 2.
+    it('should page through every active patient exactly once in family-name then given-name order', async () => {
+      await prisma.patient.createMany({
+        data: [
+          { tenantId, firstName: 'Zoe', lastName: 'Alba' },
+          { tenantId, firstName: 'Carla', lastName: 'Smith' },
+          { tenantId, firstName: 'Ana', lastName: 'Smith' },
+        ],
+      })
+
+      type Row = { id: string; firstName: string; lastName: string }
+      const label = (p: Row) => `${p.lastName}, ${p.firstName}`
+      const limit = 2
+      const pages: Row[][] = []
+      for (let offset = 0; offset < 20; offset += limit) {
+        const response = await api()
+          .get(`/api/patients?limit=${limit}&offset=${offset}`)
+          .set('Authorization', `Bearer ${staffToken}`)
+        expect(response.status).toBe(200)
+        if (response.body.data.length === 0) break
+        pages.push(response.body.data)
+      }
+
+      expect(pages.map((page) => page.map(label))).toEqual([
+        ['Alba, Zoe', 'Brown, Alice'],
+        ['Smith, Ana', 'Smith, Bob'],
+        ['Smith, Carla'],
+      ])
+      const ids = pages.flat().map((p) => p.id)
+      expect(new Set(ids).size).toBe(5)
+
+      // Vacuity check: ordering by given name would give a different sequence,
+      // so the expectation above cannot be met by sorting on the wrong column.
+      // (Reachable: Zoe sorts first by family name but last by given name.)
+      const byFamily = pages.flat().map((p) => p.firstName)
+      expect(byFamily).toEqual(['Zoe', 'Alice', 'Ana', 'Bob', 'Carla'])
+      expect(byFamily).not.toEqual([...byFamily].sort())
+    })
+
     it('should return 401 without authentication', async () => {
       const response = await api().get('/api/patients')
 

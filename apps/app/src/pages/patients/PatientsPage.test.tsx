@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest'
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router'
 import i18n from 'i18next'
 import '@/i18n'
@@ -445,6 +445,87 @@ describe('PatientsPage', () => {
       })
 
       vi.useFakeTimers() // Restore fake timers
+    })
+  })
+
+  // #566 GUARD 6. The list order is the server's (family name, then given name), and the
+  // store only appends (create) or maps in place (edit). So the page must re-fetch after a
+  // save, or a new / renamed patient sits in the wrong row until the next reload.
+  // The mocked store models exactly that: addPatient appends, editPatient maps in place,
+  // and fetchPatients replaces the list with the server's family-name order. The modal
+  // mock always submits "Test Patient", whose family name 'Patient' sorts between
+  // 'Mendez' and 'Zuniga'. The rendered row order is asserted, not just the call.
+  describe('placement after save (#566)', () => {
+    const mk = (id: string, firstName: string, lastName: string): Patient => ({
+      ...mockPatient1,
+      id,
+      firstName,
+      lastName,
+    })
+    const alba = mk('a', 'Zoe', 'Alba')
+    const mendez = mk('m', 'Ana', 'Mendez')
+    const zuniga = mk('z', 'Bruno', 'Zuniga')
+
+    const byFamily = (list: Patient[]) =>
+      [...list].sort((x, y) => x.lastName.localeCompare(y.lastName))
+    const renderedNames = () =>
+      Array.from(screen.getByTestId('patients-list-view').children).map((row) => row.querySelector('span')!.textContent)
+
+    async function save() {
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /guardar/i }))
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      })
+    }
+
+    // Real timers for the whole block, restored even when an assertion throws, so one
+    // red test cannot leak real timers (and a mounted page) into the next.
+    beforeEach(() => {
+      vi.useRealTimers()
+    })
+
+    afterEach(() => {
+      vi.useFakeTimers()
+      mockFetchPatients.mockReset()
+      mockAddPatient.mockReset()
+      mockEditPatient.mockReset()
+    })
+
+    it('puts a created patient in her family-name place, not at the end', async () => {
+      mockPatientsState.stats = mockStats
+      mockPatientsState.patients = [alba, mendez, zuniga]
+      mockAddPatient.mockImplementation(async (data: { firstName: string; lastName: string }) => {
+        mockPatientsState.patients = [...mockPatientsState.patients, mk('new', data.firstName, data.lastName)]
+      })
+      mockFetchPatients.mockImplementation(async () => {
+        mockPatientsState.patients = byFamily(mockPatientsState.patients)
+      })
+      renderPatientsPage()
+
+      fireEvent.click(screen.getAllByRole('button', { name: /nuevo paciente/i })[0])
+      await save()
+
+      expect(renderedNames()).toEqual(['Zoe Alba', 'Ana Mendez', 'Test Patient', 'Bruno Zuniga'])
+    })
+
+    it('moves a renamed patient to her family-name place, not where she was', async () => {
+      mockPatientsState.patients = [alba, mendez, zuniga]
+      mockEditPatient.mockImplementation(async (id: string, data: { firstName: string; lastName: string }) => {
+        mockPatientsState.patients = mockPatientsState.patients.map((p) =>
+          p.id === id ? { ...p, firstName: data.firstName, lastName: data.lastName } : p
+        )
+      })
+      mockFetchPatients.mockImplementation(async () => {
+        mockPatientsState.patients = byFamily(mockPatientsState.patients)
+      })
+      renderPatientsPage()
+
+      // Rename the first row (Alba) -> "Test Patient"
+      const firstRow = screen.getByTestId('patient-row-a')
+      fireEvent.click(within(firstRow).getByRole('button', { name: /editar/i }))
+      await save()
+
+      expect(renderedNames()).toEqual(['Ana Mendez', 'Test Patient', 'Bruno Zuniga'])
     })
   })
 

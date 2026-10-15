@@ -119,10 +119,14 @@ describe('PatientsListView', () => {
   })
 
   describe('shared sorted array', () => {
-    it('renders the desktop table and mobile list in the same sorted order (default: name asc)', () => {
+    // #566 GUARD 1: the name order is the server's, so the view displays the array it
+    // was given. `patients` (Zeta, Alfa, Middle) is in no name order at all -- not by
+    // family name and not by given name (Carlos, Ana, Beto) -- so any comparator
+    // reintroduced in the 'name' case reorders it and this goes red.
+    it('renders the desktop table and mobile list in the order received (default: name asc)', () => {
       const { container } = renderView()
 
-      const expected = ['Ana Alfa', 'Beto Middle', 'Carlos Zeta']
+      const expected = ['Carlos Zeta', 'Ana Alfa', 'Beto Middle']
       expect(desktopRowNames(container)).toEqual(expected)
       expect(mobileRowNames(container)).toEqual(expected)
     })
@@ -145,6 +149,48 @@ describe('PatientsListView', () => {
 
       // Beto (no dob) < Ana (1985) < Carlos (1990)
       const expected = ['Beto Middle', 'Ana Alfa', 'Carlos Zeta']
+      expect(desktopRowNames(container)).toEqual(expected)
+      expect(mobileRowNames(container)).toEqual(expected)
+    })
+  })
+
+  // #566 GUARDS 3 + 4. The list arrives from the server ordered by FAMILY name
+  // (then given name). The old client comparator re-sorted by the joined
+  // "given family" string, i.e. by GIVEN name, so the two orders only disagree when
+  // the given names run against the family names. These three do: in server order
+  // the given names are Zoe, Ana, Bruno -- the old comparator would put Ana first and
+  // Zoe last.
+  describe('family-name order from the server (#566)', () => {
+    const zoeAlba = makePatient({ id: 'f-zoe', firstName: 'Zoe', lastName: 'Alba' })
+    const anaMora = makePatient({ id: 'f-ana', firstName: 'Ana', lastName: 'Mora' })
+    const brunoSoto = makePatient({ id: 'f-bruno', firstName: 'Bruno', lastName: 'Soto' })
+    const serverOrder = [zoeAlba, anaMora, brunoSoto]
+    const label = (p: Patient) => `${p.firstName} ${p.lastName}`
+
+    it('the fixture orders differently by family name than by given name (vacuity check)', () => {
+      const byFamily = [...serverOrder].sort((a, b) => a.lastName.localeCompare(b.lastName)).map(label)
+      const byGiven = [...serverOrder].sort((a, b) => a.firstName.localeCompare(b.firstName)).map(label)
+      expect(byFamily).toEqual(['Zoe Alba', 'Ana Mora', 'Bruno Soto'])
+      expect(byGiven).toEqual(['Ana Mora', 'Bruno Soto', 'Zoe Alba'])
+      expect(byFamily).not.toEqual(byGiven)
+      // and the array handed to the view is the family order
+      expect(serverOrder.map(label)).toEqual(byFamily)
+    })
+
+    it('displays the family-name order, on both the table and the mobile list', () => {
+      const { container } = renderView({ list: serverOrder })
+
+      const expected = ['Zoe Alba', 'Ana Mora', 'Bruno Soto']
+      expect(desktopRowNames(container)).toEqual(expected)
+      expect(mobileRowNames(container)).toEqual(expected)
+    })
+
+    it('desc is the exact reverse of the family-name order', () => {
+      const { container } = renderView({ list: serverOrder })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Nombre' }))
+
+      const expected = ['Bruno Soto', 'Ana Mora', 'Zoe Alba']
       expect(desktopRowNames(container)).toEqual(expected)
       expect(mobileRowNames(container)).toEqual(expected)
     })
@@ -188,7 +234,8 @@ describe('PatientsListView', () => {
       expect(nameHeader).toHaveAttribute('aria-sort', 'none')
     })
 
-    it('reverses the sorted order when toggling the active column direction', () => {
+    // #566 GUARD 2: desc is the explicit reversal of the given array, not a re-sort.
+    it('reverses the order received when toggling the active column direction', () => {
       const { container } = renderView()
 
       const nameButton = screen.getByRole('button', { name: 'Nombre' })
@@ -196,7 +243,10 @@ describe('PatientsListView', () => {
       fireEvent.click(nameButton) // asc -> desc
 
       expect(nameHeader).toHaveAttribute('aria-sort', 'descending')
-      expect(desktopRowNames(container)).toEqual(['Carlos Zeta', 'Beto Middle', 'Ana Alfa'])
+      const reversed = [...patients].reverse().map((p) => `${p.firstName} ${p.lastName}`)
+      expect(reversed).toEqual(['Beto Middle', 'Ana Alfa', 'Carlos Zeta'])
+      expect(desktopRowNames(container)).toEqual(reversed)
+      expect(mobileRowNames(container)).toEqual(reversed)
     })
   })
 
@@ -204,10 +254,11 @@ describe('PatientsListView', () => {
     it('renders a link to the patient record with the correct href', () => {
       renderView()
 
-      // Default sort is name asc, so the first rendered row is Ana Alfa.
+      // Default sort is name asc = the order received, so the first rendered row is
+      // the first patient of the array (Carlos Zeta), not the alphabetically first.
       const links = screen.getAllByRole('link', { name: 'Ver ficha' })
       expect(links.length).toBeGreaterThan(0)
-      expect(links[0]).toHaveAttribute('href', `/patients/${patientAna.id}`)
+      expect(links[0]).toHaveAttribute('href', `/patients/${patientCarlos.id}`)
     })
 
     it('calls onEdit with the correct patient when Edit is clicked', () => {

@@ -122,12 +122,14 @@ test.describe('Patients Management', () => {
 
       await page.goto('/patients')
 
-      // A competing patient that sorts AHEAD of this run's own: PatientsListView
-      // sorts the list client-side by "firstName lastName", and the e2e specs
-      // seed firstName "E2E" (labworks.spec.ts seeds "Overdue"), so "AAA ..."
-      // precedes them all and is the first row. A test that takes the first row
-      // or the first "Ver ficha" link opens this one and fails the id check.
-      const competingId = await createPatient('AAA', `Previo${Date.now()}`)
+      // A competing patient that sorts AHEAD of this run's own. The list is
+      // displayed in the SERVER's order: family name, then given name. This
+      // run's patient is family "Detalle<epoch>", so the competitor's family
+      // name "Anterior<epoch>" sorts before it ("A" < "D") whatever the given
+      // names are, and is the first row. A test that takes the first row or
+      // the first "Ver ficha" link opens this one and fails the id check; a
+      // competitor placed AFTER the target would let `.first()` pass.
+      const competingId = await createPatient('E2E', `Anterior${Date.now()}`)
       const ownId = await createPatient('E2E', uniqueLastName)
       expect(ownId).not.toBe(competingId)
 

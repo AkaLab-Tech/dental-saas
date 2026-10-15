@@ -115,6 +115,8 @@ export function PatientsPage() {
           await addPatient(data)
           setSuccessMessage(t('patients.toast.created', { name: `${data.firstName} ${data.lastName}` }))
         }
+        // The list order is server-owned; re-fetch so a created or renamed patient lands in her place.
+        void fetchPatients()
         setIsFormOpen(false)
         setSelectedPatient(null)
         clearEditParam()
@@ -122,7 +124,7 @@ export function PatientsPage() {
         // Error is handled by store
       }
     },
-    [selectedPatient, addPatient, editPatient, clearEditParam, t]
+    [selectedPatient, addPatient, editPatient, fetchPatients, clearEditParam, t]
   )
 
   const handleConfirmDelete = async () => {
