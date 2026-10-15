@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest'
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import i18n from 'i18next'
 import '@/i18n'
-import type { Expense, ExpensesStats } from '@/lib/expense-api'
+import type { Expense, ExpenseStats } from '@/lib/expense-api'
 
 // ExpensesPage now renders every user-facing string through t(). Initialize
 // the real i18n instance (Spanish, the app default) so assertions exercise
@@ -26,7 +26,7 @@ const mockClearError = vi.fn()
 // Mutable state
 const mockExpensesState = {
   expenses: [] as Expense[],
-  stats: null as ExpensesStats | null,
+  stats: null as ExpenseStats | null,
   total: 0,
   loading: false,
   error: null as string | null,
@@ -88,7 +88,9 @@ vi.mock('@/components/expenses/ExpenseFormModal', () => ({
         <button onClick={async () => {
           await onSubmit({
             issuer: 'Test Supplier',
-            items: 'Test items',
+            items: ['Test items'],
+            tags: [],
+            doctorIds: [],
             amount: 100,
             date: '2024-01-15',
           })
@@ -129,7 +131,11 @@ const mockExpense1: Expense = {
   id: '1',
   tenantId: 'tenant1',
   issuer: 'Dental Supply Co',
-  items: 'Dental materials',
+  items: ['Dental materials'],
+  tags: [],
+  note: null,
+  doctorIds: [],
+  deletedAt: null,
   amount: 500,
   date: '2024-01-15',
   isPaid: false,
@@ -142,7 +148,11 @@ const mockExpense2: Expense = {
   id: '2',
   tenantId: 'tenant1',
   issuer: 'Equipment Inc',
-  items: 'Dental equipment',
+  items: ['Dental equipment'],
+  tags: [],
+  note: null,
+  doctorIds: [],
+  deletedAt: null,
   amount: 1500,
   date: '2024-01-16',
   isPaid: true,
@@ -155,7 +165,11 @@ const mockInactiveExpense: Expense = {
   id: '3',
   tenantId: 'tenant1',
   issuer: 'Old Supplier',
-  items: 'Items',
+  items: ['Items'],
+  tags: [],
+  note: null,
+  doctorIds: [],
+  deletedAt: null,
   amount: 200,
   date: '2024-01-17',
   isPaid: false,
@@ -164,11 +178,13 @@ const mockInactiveExpense: Expense = {
   updatedAt: '2024-01-03T00:00:00Z',
 }
 
-const mockStats: ExpensesStats = {
+const mockStats: ExpenseStats = {
   total: 3,
   paid: 1,
   unpaid: 2,
   totalAmount: 2200,
+  paidAmount: 1500,
+  unpaidAmount: 700,
 }
 
 describe('ExpensesPage', () => {

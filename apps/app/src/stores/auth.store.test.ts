@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { UserRole } from '@dental/shared'
 import { useAuthStore, type User } from './auth.store'
 import { useLockStore } from './lock.store'
 
@@ -28,7 +29,7 @@ const mockUser: User = {
   email: 'test@example.com',
   firstName: 'John',
   lastName: 'Doe',
-  role: 'ADMIN',
+  role: UserRole.ADMIN,
   tenantId: 'tenant-456',
   phone: '+1234567890',
   tenant: {
@@ -307,7 +308,7 @@ describe('auth.store', () => {
   })
 
   describe('User type', () => {
-    it.each<User['role']>(['OWNER', 'ADMIN', 'DOCTOR', 'STAFF'])(
+    it.each<User['role']>([UserRole.OWNER, UserRole.ADMIN, UserRole.DOCTOR, UserRole.STAFF])(
       'should support %s role',
       (role) => {
         const userWithRole: User = { ...mockUser, role }
@@ -324,7 +325,7 @@ describe('auth.store', () => {
         email: 'test@example.com',
         firstName: 'John',
         lastName: 'Doe',
-        role: 'STAFF',
+        role: UserRole.STAFF,
         tenantId: 'tenant-456',
       }
 

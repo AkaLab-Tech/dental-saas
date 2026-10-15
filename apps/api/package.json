@@ -8,6 +8,7 @@
     "build": "tsc && tsc-alias",
     "start": "node -r dotenv/config dist/index.js",
     "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
     "lint:fix": "eslint src/ --fix",
     "test": "vitest run",
     "test:watch": "vitest",

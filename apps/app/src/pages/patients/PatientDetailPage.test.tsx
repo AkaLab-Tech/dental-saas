@@ -205,6 +205,8 @@ function makePatient(overrides: Partial<Patient> = {}): Patient {
     phone: '+1234567890',
     dob: '1990-01-01',
     gender: 'male',
+    coverageType: 'PARTICULAR',
+    convenioName: null,
     address: 'Calle Principal 123',
     notes: null,
     teeth: null,

@@ -22,6 +22,7 @@ const mockSettings: TenantSettings = {
   timeFormat: '24h',
   defaultAppointmentDuration: 30,
   appointmentBuffer: 15,
+  appointmentTypeDurations: [],
   businessHours: {
     monday: { start: '09:00', end: '18:00' },
     tuesday: { start: '09:00', end: '18:00' },
@@ -31,6 +32,7 @@ const mockSettings: TenantSettings = {
   smsNotifications: false,
   appointmentReminders: true,
   reminderHoursBefore: 24,
+  autoLockMinutes: 0,
   updatedAt: '2024-01-15T00:00:00Z',
 }
 

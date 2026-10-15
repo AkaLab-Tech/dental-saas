@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest'
 import {
   getLabworks,
   getLabworkById,
@@ -36,6 +36,8 @@ const mockLabwork: Labwork = {
   id: 'labwork-123',
   tenantId: 'tenant-456',
   patientId: 'patient-789',
+  appointmentId: null,
+  priceIncludedInAppointment: false,
   lab: 'Dental Lab Pro',
   phoneNumber: '+1234567890',
   date: '2024-01-20',
@@ -43,7 +45,9 @@ const mockLabwork: Labwork = {
   price: 350,
   isPaid: false,
   isDelivered: false,
+  status: 'PENDING',
   doctorIds: ['doctor-1'],
+  doctors: [],
   isActive: true,
   deletedAt: null,
   createdAt: '2024-01-01T00:00:00Z',
@@ -428,8 +432,8 @@ describe('labwork-api', () => {
 
   describe('exportLabworks', () => {
     let mockLink: { href: string; download: string; click: ReturnType<typeof vi.fn> }
-    let appendChildSpy: ReturnType<typeof vi.spyOn>
-    let removeChildSpy: ReturnType<typeof vi.spyOn>
+    let appendChildSpy: MockInstance<typeof document.body.appendChild>
+    let removeChildSpy: MockInstance<typeof document.body.removeChild>
 
     beforeEach(() => {
       mockLink = { href: '', download: '', click: vi.fn() }

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { ToothStatus } from '@dental/shared'
 import {
   getPatients,
   getPatientById,
@@ -45,9 +46,11 @@ const mockPatient: Patient = {
   phone: '+1234567890',
   dob: '1990-05-15',
   gender: 'male',
+  coverageType: 'PARTICULAR',
+  convenioName: null,
   address: '123 Main St',
   notes: { allergies: 'none' },
-  teeth: { '11': 'cavity' },
+  teeth: { '11': { note: 'cavity', status: ToothStatus.CARIES } },
   showPrimaryTeeth: false,
   isActive: true,
   createdAt: '2024-01-01T00:00:00Z',
@@ -308,8 +311,8 @@ describe('patient-api', () => {
     describe('updatePatientTeeth', () => {
       it('should update patient teeth data', async () => {
         const teethUpdate = {
-          '11': { note: 'treated', status: 'filled' },
-          '12': { note: 'cavity', status: 'caries' },
+          '11': { note: 'treated', status: ToothStatus.FILLED },
+          '12': { note: 'cavity', status: ToothStatus.CARIES },
         }
         vi.mocked(apiClient.patch).mockResolvedValue({
           data: { success: true, data: mockPatient },
@@ -328,7 +331,7 @@ describe('patient-api', () => {
           data: { success: true, data: mockPatient },
         })
 
-        const result = await updateToothData('patient-123', '11', { note: 'new note', status: 'caries' })
+        const result = await updateToothData('patient-123', '11', { note: 'new note', status: ToothStatus.CARIES })
 
         expect(apiClient.patch).toHaveBeenCalledWith('/patients/patient-123/teeth', {
           '11': { note: 'new note', status: 'caries' },

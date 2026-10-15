@@ -24,7 +24,7 @@
  */
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
-import { AxiosError, type InternalAxiosRequestConfig, type AxiosResponse } from 'axios'
+import { type InternalAxiosRequestConfig, type AxiosResponse } from 'axios'
 import i18n from 'i18next'
 import '@/i18n'
 import { PaymentSection } from './PaymentSection'

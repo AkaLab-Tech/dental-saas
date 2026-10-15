@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
 import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import i18n from 'i18next'
+import { UserRole } from '@dental/shared'
 import '@/i18n'
 import { useAuthStore, type User } from '@/stores/auth.store'
 import { useLockStore } from '@/stores/lock.store'
@@ -82,7 +83,7 @@ function openMenu(name: RegExp) {
 beforeEach(() => {
   vi.clearAllMocks()
   useLockStore.setState({ activeUser: null, fetchProfiles })
-  signInAs('ADMIN')
+  signInAs(UserRole.ADMIN)
   api.listUsers.mockResolvedValue([me, staff, profile])
   api.getUserStats.mockResolvedValue(stats)
 })
@@ -131,7 +132,7 @@ describe('UsersPage — permission gating against the real RBAC table', () => {
     expect(within(rowFor(/Ada Admin/)).queryByRole('button')).not.toBeInTheDocument()
   })
 
-  it.each(['CLINIC_ADMIN', 'DOCTOR', 'STAFF'] as const)(
+  it.each([UserRole.CLINIC_ADMIN, UserRole.DOCTOR, UserRole.STAFF] as const)(
     '%s: no create button and no action menu on any row',
     async (role) => {
       signInAs(role, 'someone-else')
@@ -335,7 +336,7 @@ describe('UsersPage — create', () => {
     const f = fields(form)
     fireEvent.change(f.firstName, { target: { value: 'Ulises' } })
     fireEvent.change(f.lastName, { target: { value: 'Usuario' } })
-    fireEvent.change(f.email, { target: { value: 'ulises@clinic.test' } })
+    fireEvent.change(f.email!, { target: { value: 'ulises@clinic.test' } })
     fireEvent.change(f.password!, { target: { value: 'Password123!' } })
     fireEvent.change(f.role, { target: { value: 'CLINIC_ADMIN' } })
     fireEvent.submit(form)

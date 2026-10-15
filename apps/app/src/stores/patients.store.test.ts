@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest'
+import { ToothStatus } from '@dental/shared'
 import { usePatientsStore } from './patients.store'
 import type { Patient, PatientStats } from '@/lib/patient-api'
 
@@ -39,7 +40,10 @@ const mockPatient: Patient = {
   gender: 'male',
   address: '123 Main St',
   notes: { allergies: 'penicillin' },
-  teeth: { '11': 'cavity' },
+  teeth: { '11': { note: 'cavity', status: ToothStatus.CARIES } },
+  coverageType: 'PARTICULAR',
+  convenioName: null,
+  showPrimaryTeeth: false,
   isActive: true,
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-01T00:00:00Z',
@@ -57,6 +61,9 @@ const mockPatient2: Patient = {
   address: '456 Oak Ave',
   notes: null,
   teeth: null,
+  coverageType: 'PARTICULAR',
+  convenioName: null,
+  showPrimaryTeeth: false,
   isActive: true,
   createdAt: '2024-01-02T00:00:00Z',
   updatedAt: '2024-01-02T00:00:00Z',

@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest'
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import i18n from 'i18next'
 import '@/i18n'
-import type { Doctor, DoctorsStats } from '@/lib/doctor-api'
+import type { Doctor, DoctorStats } from '@/lib/doctor-api'
 
 // DoctorsPage now renders every user-facing string through t(). Initialize
 // the real i18n instance (Spanish, the app default) so assertions exercise
@@ -27,7 +27,7 @@ const mockClearError = vi.fn()
 // Mutable state for mocks
 const mockDoctorsState = {
   doctors: [] as Doctor[],
-  stats: null as DoctorsStats | null,
+  stats: null as DoctorStats | null,
   isLoading: false,
   error: null as string | null,
   searchQuery: '',
@@ -131,6 +131,13 @@ const mockDoctor1: Doctor = {
   phone: '+1234567890',
   specialty: 'Ortodoncia',
   licenseNumber: 'LIC123',
+  workingDays: [],
+  workingHours: null,
+  consultingRoom: null,
+  avatar: null,
+  bio: null,
+  hourlyRate: null,
+  commissionPercentage: null,
   isActive: true,
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-01T00:00:00Z',
@@ -145,6 +152,13 @@ const mockDoctor2: Doctor = {
   phone: '+9876543210',
   specialty: 'Endodoncia',
   licenseNumber: 'LIC456',
+  workingDays: [],
+  workingHours: null,
+  consultingRoom: null,
+  avatar: null,
+  bio: null,
+  hourlyRate: null,
+  commissionPercentage: null,
   isActive: true,
   createdAt: '2024-01-02T00:00:00Z',
   updatedAt: '2024-01-02T00:00:00Z',
@@ -159,12 +173,19 @@ const mockInactiveDoctor: Doctor = {
   phone: null,
   specialty: 'General',
   licenseNumber: null,
+  workingDays: [],
+  workingHours: null,
+  consultingRoom: null,
+  avatar: null,
+  bio: null,
+  hourlyRate: null,
+  commissionPercentage: null,
   isActive: false,
   createdAt: '2024-01-03T00:00:00Z',
   updatedAt: '2024-01-03T00:00:00Z',
 }
 
-const mockStats: DoctorsStats = {
+const mockStats: DoctorStats = {
   active: 2,
   inactive: 1,
   total: 3,

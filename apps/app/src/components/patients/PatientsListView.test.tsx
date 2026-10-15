@@ -20,6 +20,8 @@ function makePatient(overrides: Partial<Patient>): Patient {
     phone: '+1000000000',
     dob: '2000-01-01',
     gender: 'male',
+    coverageType: 'PARTICULAR',
+    convenioName: null,
     address: null,
     notes: null,
     teeth: null,
@@ -243,7 +245,7 @@ describe('PatientsListView', () => {
     it('shows Edit and Delete (not Restore) for active rows', () => {
       const { container } = renderView({ list: [patientCarlos] })
 
-      const desktopRow = desktopSection(container).querySelector('tbody tr')!
+      const desktopRow = desktopSection(container).querySelector<HTMLElement>('tbody tr')!
       expect(within(desktopRow).getByRole('button', { name: 'Editar' })).toBeInTheDocument()
       expect(within(desktopRow).getByRole('button', { name: 'Eliminar' })).toBeInTheDocument()
       expect(within(desktopRow).queryByRole('button', { name: 'Restaurar' })).not.toBeInTheDocument()
@@ -252,7 +254,7 @@ describe('PatientsListView', () => {
     it('shows Restore (not Edit/Delete) for inactive rows when onRestore is provided', () => {
       const { container } = renderView({ list: [patientBeto] })
 
-      const desktopRow = desktopSection(container).querySelector('tbody tr')!
+      const desktopRow = desktopSection(container).querySelector<HTMLElement>('tbody tr')!
       expect(within(desktopRow).getByRole('button', { name: 'Restaurar' })).toBeInTheDocument()
       expect(within(desktopRow).queryByRole('button', { name: 'Editar' })).not.toBeInTheDocument()
       expect(within(desktopRow).queryByRole('button', { name: 'Eliminar' })).not.toBeInTheDocument()
@@ -261,7 +263,7 @@ describe('PatientsListView', () => {
     it('falls back to Edit/Delete for inactive rows when onRestore is not provided', () => {
       const { container } = renderView({ list: [patientBeto], onRestore: undefined })
 
-      const desktopRow = desktopSection(container).querySelector('tbody tr')!
+      const desktopRow = desktopSection(container).querySelector<HTMLElement>('tbody tr')!
       expect(within(desktopRow).queryByRole('button', { name: 'Restaurar' })).not.toBeInTheDocument()
       expect(within(desktopRow).getByRole('button', { name: 'Editar' })).toBeInTheDocument()
       expect(within(desktopRow).getByRole('button', { name: 'Eliminar' })).toBeInTheDocument()
@@ -286,7 +288,7 @@ describe('PatientsListView', () => {
     it('keeps icon + text on row actions (not icon-only)', () => {
       const { container } = renderView({ list: [patientCarlos] })
 
-      const desktopRow = desktopSection(container).querySelector('tbody tr')!
+      const desktopRow = desktopSection(container).querySelector<HTMLElement>('tbody tr')!
       const editButton = within(desktopRow).getByRole('button', { name: 'Editar' })
 
       expect(editButton.querySelector('svg')).toBeInTheDocument()

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
+import { UserRole } from '@dental/shared'
 
 // Define mock functions at module level (hoisted)
 const mockNavigate = vi.fn()
@@ -116,12 +117,12 @@ describe('useAuth', () => {
       const { result } = renderHook(() => useAuth())
 
       await act(async () => {
-        await result.current.login({ email: 'test@example.com', password: 'password' })
+        await result.current.login({ email: 'test@example.com', password: 'password', clinicSlug: 'test-clinic' })
       })
 
       expect(mockSetLoading).toHaveBeenCalledWith(true)
       expect(mockClearError).toHaveBeenCalled()
-      expect(mockLogin).toHaveBeenCalledWith({ email: 'test@example.com', password: 'password' })
+      expect(mockLogin).toHaveBeenCalledWith({ email: 'test@example.com', password: 'password', clinicSlug: 'test-clinic' })
       expect(mockSetAuth).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'user-123', email: 'test@example.com' }),
         'access-token',
@@ -140,7 +141,7 @@ describe('useAuth', () => {
 
       await expect(
         act(async () => {
-          await result.current.login({ email: 'test@example.com', password: 'wrong' })
+          await result.current.login({ email: 'test@example.com', password: 'wrong', clinicSlug: 'test-clinic' })
         })
       ).rejects.toEqual(error)
 
@@ -155,7 +156,7 @@ describe('useAuth', () => {
 
       await expect(
         act(async () => {
-          await result.current.login({ email: 'test@example.com', password: 'password' })
+          await result.current.login({ email: 'test@example.com', password: 'password', clinicSlug: 'test-clinic' })
         })
       ).rejects.toThrow('Network error')
 
@@ -273,7 +274,7 @@ describe('useAuth', () => {
     it('should return false when user is not logged in', () => {
       const { result } = renderHook(() => useAuth())
 
-      expect(result.current.hasRole('ADMIN')).toBe(false)
+      expect(result.current.hasRole(UserRole.ADMIN)).toBe(false)
     })
 
     it('should return true when user has the specified role', () => {
@@ -288,8 +289,8 @@ describe('useAuth', () => {
 
       const { result } = renderHook(() => useAuth())
 
-      expect(result.current.hasRole('ADMIN')).toBe(true)
-      expect(result.current.hasRole('OWNER')).toBe(false)
+      expect(result.current.hasRole(UserRole.ADMIN)).toBe(true)
+      expect(result.current.hasRole(UserRole.OWNER)).toBe(false)
     })
 
     it('should check multiple roles', () => {
@@ -304,8 +305,8 @@ describe('useAuth', () => {
 
       const { result } = renderHook(() => useAuth())
 
-      expect(result.current.hasRole(['ADMIN', 'DOCTOR'])).toBe(true)
-      expect(result.current.hasRole(['OWNER', 'ADMIN'])).toBe(false)
+      expect(result.current.hasRole([UserRole.ADMIN, UserRole.DOCTOR])).toBe(true)
+      expect(result.current.hasRole([UserRole.OWNER, UserRole.ADMIN])).toBe(false)
     })
   })
 
@@ -313,7 +314,7 @@ describe('useAuth', () => {
     it('should return false when user is not logged in', () => {
       const { result } = renderHook(() => useAuth())
 
-      expect(result.current.hasMinRole('STAFF')).toBe(false)
+      expect(result.current.hasMinRole(UserRole.STAFF)).toBe(false)
     })
 
     it('should return true when user has minimum required role', () => {
@@ -328,10 +329,10 @@ describe('useAuth', () => {
 
       const { result } = renderHook(() => useAuth())
 
-      expect(result.current.hasMinRole('STAFF')).toBe(true)
-      expect(result.current.hasMinRole('DOCTOR')).toBe(true)
-      expect(result.current.hasMinRole('ADMIN')).toBe(true)
-      expect(result.current.hasMinRole('OWNER')).toBe(false)
+      expect(result.current.hasMinRole(UserRole.STAFF)).toBe(true)
+      expect(result.current.hasMinRole(UserRole.DOCTOR)).toBe(true)
+      expect(result.current.hasMinRole(UserRole.ADMIN)).toBe(true)
+      expect(result.current.hasMinRole(UserRole.OWNER)).toBe(false)
     })
 
     it('should return true for OWNER with any min role', () => {
@@ -346,10 +347,10 @@ describe('useAuth', () => {
 
       const { result } = renderHook(() => useAuth())
 
-      expect(result.current.hasMinRole('STAFF')).toBe(true)
-      expect(result.current.hasMinRole('DOCTOR')).toBe(true)
-      expect(result.current.hasMinRole('ADMIN')).toBe(true)
-      expect(result.current.hasMinRole('OWNER')).toBe(true)
+      expect(result.current.hasMinRole(UserRole.STAFF)).toBe(true)
+      expect(result.current.hasMinRole(UserRole.DOCTOR)).toBe(true)
+      expect(result.current.hasMinRole(UserRole.ADMIN)).toBe(true)
+      expect(result.current.hasMinRole(UserRole.OWNER)).toBe(true)
     })
   })
 
