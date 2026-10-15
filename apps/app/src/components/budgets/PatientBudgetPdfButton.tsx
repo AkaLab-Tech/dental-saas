@@ -3,7 +3,7 @@ import { ChevronDown, ClipboardList, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Permission } from '@dental/shared'
 import { downloadBudgetPdf, downloadPatientBudgetsPdf } from '@/lib/pdf-api'
-import { formatCurrency } from '@/lib/format'
+import { formatCurrency, formatShortDate } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth.store'
 import { useBudgetsStore } from '@/stores/budgets.store'
 import { Can } from '@/components/auth'
@@ -11,14 +11,6 @@ import { Can } from '@/components/auth'
 interface PatientBudgetPdfButtonProps {
   patientId: string
   onError: (message: string) => void
-}
-
-function formatShortDate(iso: string, locale: string): string {
-  return new Date(iso).toLocaleDateString(locale, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
 }
 
 /**
