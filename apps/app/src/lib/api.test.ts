@@ -2,8 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { AxiosResponse } from 'axios'
 
 // Mock useAuthStore before importing api
+interface MockAuthState {
+  accessToken: string | null
+  refreshToken: string | null
+  logout: () => void
+  setTokens: (accessToken: string, refreshToken: string) => void
+}
+
 const mockAuthStore = {
-  getState: vi.fn(() => ({
+  getState: vi.fn((): MockAuthState => ({
     accessToken: null,
     refreshToken: null,
     logout: vi.fn(),

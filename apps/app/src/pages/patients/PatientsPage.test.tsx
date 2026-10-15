@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest'
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router'
 import i18n from 'i18next'
 import '@/i18n'
-import type { Patient, PatientsStats } from '@/lib/patient-api'
+import type { Patient, PatientStats } from '@/lib/patient-api'
 
 // PatientsPage now renders every user-facing string through t(). Initialize
 // the real i18n instance (Spanish, the app default) so assertions exercise
@@ -27,7 +27,7 @@ const mockClearError = vi.fn()
 // Mutable state for mocks
 const mockPatientsState = {
   patients: [] as Patient[],
-  stats: null as PatientsStats | null,
+  stats: null as PatientStats | null,
   isLoading: false,
   error: null as string | null,
   searchQuery: '',
@@ -131,7 +131,11 @@ const mockPatient1: Patient = {
   dob: '1990-01-01',
   gender: 'male',
   address: 'Calle Principal 123',
-  dentalChart: {},
+  coverageType: 'PARTICULAR',
+  convenioName: null,
+  notes: null,
+  teeth: {},
+  showPrimaryTeeth: false,
   isActive: true,
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-01T00:00:00Z',
@@ -147,7 +151,11 @@ const mockPatient2: Patient = {
   dob: '1985-05-15',
   gender: 'female',
   address: null,
-  dentalChart: {},
+  coverageType: 'PARTICULAR',
+  convenioName: null,
+  notes: null,
+  teeth: {},
+  showPrimaryTeeth: false,
   isActive: true,
   createdAt: '2024-01-02T00:00:00Z',
   updatedAt: '2024-01-02T00:00:00Z',
@@ -163,13 +171,17 @@ const mockInactivePatient: Patient = {
   dob: null,
   gender: null,
   address: null,
-  dentalChart: {},
+  coverageType: 'PARTICULAR',
+  convenioName: null,
+  notes: null,
+  teeth: {},
+  showPrimaryTeeth: false,
   isActive: false,
   createdAt: '2024-01-03T00:00:00Z',
   updatedAt: '2024-01-03T00:00:00Z',
 }
 
-const mockStats: PatientsStats = {
+const mockStats: PatientStats = {
   active: 2,
   inactive: 1,
   total: 3,

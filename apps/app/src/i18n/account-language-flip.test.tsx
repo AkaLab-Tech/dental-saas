@@ -57,6 +57,7 @@ function makeSettings(language: TenantSettings['language']): TenantSettings {
     timeFormat: '24h',
     defaultAppointmentDuration: 30,
     appointmentBuffer: 10,
+    appointmentTypeDurations: [],
     businessHours: {},
     workingDays: [1, 2, 3, 4, 5],
     emailNotifications: true,

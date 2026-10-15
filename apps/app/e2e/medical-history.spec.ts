@@ -279,7 +279,7 @@ test.describe('Patient record medical history', () => {
     test('a MEDICAL_HISTORY_UPDATE holder sees all five section labels in the modal on an empty history', async ({
       authedPage: page,
     }) => {
-      const id = await createPatient('labels')
+      await createPatient('labels')
       const dialog = await openModal(page, 'labels')
       const sections = dialog.locator('[data-testid^="medical-history-section-"]')
       await expect(sections).toHaveCount(5)

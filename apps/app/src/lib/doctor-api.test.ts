@@ -39,6 +39,7 @@ const mockDoctor: Doctor = {
   avatar: null,
   bio: 'Experienced orthodontist',
   hourlyRate: 150,
+  commissionPercentage: null,
   isActive: true,
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-15T00:00:00Z',

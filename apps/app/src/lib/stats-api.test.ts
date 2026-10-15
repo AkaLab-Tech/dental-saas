@@ -80,6 +80,8 @@ const mockDoctorPerformanceStats: DoctorPerformanceStats[] = [
     completedCount: 72,
     revenue: 12000,
     completionRate: 90,
+    commissionPercentage: null,
+    commission: 0,
   },
   {
     doctorId: 'doctor-2',
@@ -88,6 +90,8 @@ const mockDoctorPerformanceStats: DoctorPerformanceStats[] = [
     completedCount: 55,
     revenue: 9500,
     completionRate: 91.67,
+    commissionPercentage: null,
+    commission: 0,
   },
 ]
 

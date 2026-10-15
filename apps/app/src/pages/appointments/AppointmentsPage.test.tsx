@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import type { Appointment, AppointmentsStats } from '@/lib/appointment-api'
+import type { Appointment, AppointmentStats, AppointmentStatus } from '@/lib/appointment-api'
 
 // Mutable i18n language – mutated by locale regression tests (task #211)
 // Must be declared before vi.mock so the factory's inner closure can read it at render time.
@@ -67,11 +67,11 @@ const mockClearError = vi.fn()
 const mockAppointmentsState = {
   appointments: [] as Appointment[],
   listTotal: null as number | null,
-  stats: null as AppointmentsStats | null,
+  stats: null as AppointmentStats | null,
   isLoading: false,
   error: null as string | null,
   selectedDoctorId: null as string | null,
-  selectedStatus: null,
+  selectedStatus: null as AppointmentStatus | null,
   showInactive: false,
   currentDate: new Date('2024-01-15'),
 }
@@ -212,8 +212,12 @@ const mockAppointment1: Appointment = {
   startTime: '2024-01-15T10:00:00Z',
   endTime: '2024-01-15T11:00:00Z',
   status: 'SCHEDULED',
-  reason: 'Checkup',
+  type: 'Checkup',
+  duration: 60,
   notes: null,
+  privateNotes: null,
+  cost: null,
+  isPaid: false,
   isActive: true,
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-01T00:00:00Z',
@@ -221,11 +225,15 @@ const mockAppointment1: Appointment = {
     id: 'patient1',
     firstName: 'Juan',
     lastName: 'Pérez',
+    email: null,
+    phone: null,
   },
   doctor: {
     id: 'doctor1',
     firstName: 'Dr. María',
     lastName: 'García',
+    specialty: null,
+    email: null,
   },
 }
 
@@ -237,8 +245,12 @@ const mockAppointment2: Appointment = {
   startTime: '2024-01-16T14:00:00Z',
   endTime: '2024-01-16T15:00:00Z',
   status: 'CONFIRMED',
-  reason: 'Follow-up',
+  type: 'Follow-up',
+  duration: 60,
   notes: null,
+  privateNotes: null,
+  cost: null,
+  isPaid: false,
   isActive: true,
   createdAt: '2024-01-02T00:00:00Z',
   updatedAt: '2024-01-02T00:00:00Z',
@@ -246,11 +258,15 @@ const mockAppointment2: Appointment = {
     id: 'patient2',
     firstName: 'Ana',
     lastName: 'López',
+    email: null,
+    phone: null,
   },
   doctor: {
     id: 'doctor1',
     firstName: 'Dr. María',
     lastName: 'García',
+    specialty: null,
+    email: null,
   },
 }
 
@@ -262,8 +278,12 @@ const mockCancelledAppointment: Appointment = {
   startTime: '2024-01-17T09:00:00Z',
   endTime: '2024-01-17T10:00:00Z',
   status: 'CANCELLED',
-  reason: 'Cleaning',
+  type: 'Cleaning',
+  duration: 60,
   notes: null,
+  privateNotes: null,
+  cost: null,
+  isPaid: false,
   isActive: false,
   createdAt: '2024-01-03T00:00:00Z',
   updatedAt: '2024-01-03T00:00:00Z',
@@ -271,11 +291,15 @@ const mockCancelledAppointment: Appointment = {
     id: 'patient1',
     firstName: 'Juan',
     lastName: 'Pérez',
+    email: null,
+    phone: null,
   },
   doctor: {
     id: 'doctor1',
     firstName: 'Dr. María',
     lastName: 'García',
+    specialty: null,
+    email: null,
   },
 }
 
@@ -290,8 +314,12 @@ const mockAppointmentPastDate: Appointment = {
   startTime: '2024-01-10T12:00:00Z',
   endTime: '2024-01-10T13:00:00Z',
   status: 'COMPLETED',
-  reason: 'Past appointment',
+  type: 'Past appointment',
+  duration: 60,
   notes: null,
+  privateNotes: null,
+  cost: null,
+  isPaid: false,
   isActive: true,
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-01T00:00:00Z',
@@ -299,23 +327,28 @@ const mockAppointmentPastDate: Appointment = {
     id: 'patient1',
     firstName: 'Juan',
     lastName: 'Pérez',
+    email: null,
+    phone: null,
   },
   doctor: {
     id: 'doctor1',
     firstName: 'Dr. María',
     lastName: 'García',
+    specialty: null,
+    email: null,
   },
 }
 
-const mockStats: AppointmentsStats = {
+const mockStats: AppointmentStats = {
+  total: 21,
   scheduled: 5,
-  confirmed: 3,
-  inProgress: 0,
   completed: 10,
   cancelled: 2,
   noShow: 1,
-  rescheduled: 0,
-  total: 21,
+  todayCount: 0,
+  weekCount: 0,
+  revenue: 0,
+  pendingPayment: 0,
 }
 
 describe('AppointmentsPage', () => {
