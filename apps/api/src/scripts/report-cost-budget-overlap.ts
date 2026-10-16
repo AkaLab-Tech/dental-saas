@@ -5,12 +5,21 @@
  *
  * Since #544 an executed budget item creates its own charge. Task #590 made
  * the appointment's own `cost` the single authority for its visit: when the
- * appointment carries a cost above zero, its executed items no longer bill on
- * their own (see APPOINTMENT_COST_IS_THE_AUTHORITY in payment.service.ts). So
- * the rows below are the population that #590 moves - each one's debt falls by
- * what its executed items used to add - and the report puts the two figures
- * side by side. It still names nothing a duplicate and adds up no "amount
- * overcharged": the typed cost may legitimately cover work the items do not.
+ * appointment carries a cost above zero and is not CANCELLED, its executed
+ * items no longer bill on their own (see APPOINTMENT_COST_IS_THE_AUTHORITY in
+ * payment.service.ts).
+ *
+ * The predicate below is deliberately WIDER than that rule - it filters
+ * neither `cost > 0` nor `status` - so the rows it returns are of two kinds,
+ * and each row prints which one it is: the rows #590 moves, whose debt falls
+ * by what their executed items used to add, and the rows the rule leaves
+ * alone (a typed cost of zero, or a CANCELLED appointment), where the items
+ * keep billing and the printed subtotal is no fall in debt. Keeping both
+ * kinds visible is the point - this is the instrument for reviewing the
+ * population by hand, and a reporting predicate narrowed to the rule would
+ * hide rows nobody would then know to look for. It still names nothing a
+ * duplicate and adds up no "amount overcharged": the typed cost may
+ * legitimately cover work the items do not.
  *
  * Predicate:
  *   appointment.isActive = true AND appointment.cost IS NOT NULL
@@ -153,11 +162,25 @@ export async function findCostBudgetOverlaps(
   }
 }
 
+// Mirrors appointmentCostSupersedesItems in payment.service.ts, over the fields the
+// row already prints: the query is wider than the rule, so each row has to say which
+// side of it it falls on instead of leaving the reader to apply the rule by hand.
+function supersessionNote(appt: OverlapAppointment): string {
+  if (appt.appointmentStatus === 'CANCELLED')
+    return 'Typed cost supersedes the executed items: no - the appointment is CANCELLED, so it bills nothing of its own, the items keep billing, and this subtotal is no fall in debt.'
+  if (Number(appt.typedCost) <= 0)
+    return 'Typed cost supersedes the executed items: no - the typed cost is zero, so the items keep billing and this subtotal is no fall in debt.'
+  return "Typed cost supersedes the executed items: yes - they no longer bill on their own, so the patient's debt falls by this subtotal."
+}
+
 export function formatReport(report: CostBudgetOverlapReport): string {
   const lines: string[] = []
   lines.push('Appointments with a typed cost AND executed budget items - overlaps to review')
   lines.push(
-    "Since task #590 the appointment's typed cost is the only charge for its visit, so on each row below the executed items no longer bill on their own and the patient's debt falls by the subtotal shown."
+    "Since task #590 a typed cost above zero on a non-CANCELLED appointment is the only charge for its visit: on those rows the executed items no longer bill on their own, and the subtotal shown is how much the patient's debt falls."
+  )
+  lines.push(
+    'Not every row below is one of those. This report deliberately also lists the rows the rule leaves alone - a typed cost of zero, or a CANCELLED appointment - where the items keep billing and the subtotal is no fall in debt. Each appointment states which case it is.'
   )
   lines.push('')
 
@@ -184,6 +207,7 @@ export function formatReport(report: CostBudgetOverlapReport): string {
           )
         }
         lines.push(`      Executed items subtotal: ${appt.executedItemsSubtotal}`)
+        lines.push(`      ${supersessionNote(appt)}`)
       }
     }
     lines.push('')
