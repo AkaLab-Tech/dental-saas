@@ -700,6 +700,7 @@ export async function updateAppointment(
       isPaid: true,
       cost: true,
       status: true,
+      isActive: true,
     },
   })
 
@@ -808,6 +809,23 @@ export async function updateAppointment(
     })
   }
 
+  // The inverse of the cancellation above. Leaving CANCELLED puts the row back
+  // in the billable set, so the earmark the cancellation dissolved has to come
+  // back with it; and neither costChanged nor cancelledNow is true on this
+  // edit, so without the flag below nothing would re-derive the isPaid column
+  // (which the accrual aggregates read directly, outside FIFO).
+  // A soft-deleted row stays outside the billable set, so it restores nothing.
+  const restoredNow =
+    existing.isActive &&
+    existing.status === 'CANCELLED' &&
+    data.status !== undefined &&
+    data.status !== 'CANCELLED'
+  if (restoredNow) {
+    await prisma.$transaction((tx) =>
+      restoreAppointmentPaymentsFromAdvance(tx, tenantId, id, actorUserId)
+    )
+  }
+
   // Resolve effective post-update cost (numeric) and patient.
   const newCostNumber =
     data.cost === null
@@ -852,7 +870,7 @@ export async function updateAppointment(
       logger.info(`Appointment updated with auto-payment: ${id}`)
       return { appointment: updated }
     }
-  } else if (costChanged || cancelledNow) {
+  } else if (costChanged || cancelledNow || restoredNow) {
     // Cost changed without an isPaid transition: re-run FIFO so derived
     // isPaid stays consistent with the new debt total.
     await recalculatePaidStatus(tenantId, patientId)
