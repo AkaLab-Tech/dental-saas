@@ -1474,6 +1474,9 @@ export const CANCELLED_APPOINTMENT_NOTE_SUFFIX = ' (cita cancelada)'
  */
 export const SYSTEM_ACTOR_BACKFILL_406 = 'system:backfill-406'
 
+/** Task #597: the actor recorded by the repair of edit-cancelled appointments' payments. */
+export const SYSTEM_ACTOR_REPAIR_597 = 'system:repair-597'
+
 /**
  * Convert every active kind=APPOINTMENT payment linked to a cancelled
  * appointment into a kind=ADVANCE payment, inside the caller's transaction.
