@@ -446,45 +446,67 @@ describe('executed budget item creates a charge (#544)', () => {
   // --------------------------------------------------------------------
   // typed cost PLUS an executed item
   // --------------------------------------------------------------------
+  // Rewritten for task #590. These two used to pin the OPPOSITE rule — that
+  // 4100 + 5500 both billed, for a totalDebt of 9600, and that the appointment
+  // showed the two figures side by side. #590 made the appointment's own cost
+  // the single authority for its visit (APPOINTMENT_COST_IS_THE_AUTHORITY in
+  // payment.service.ts), so the item executed on a costed appointment carries
+  // no charge of its own and does not appear in the display aggregate either.
+  // The coverage is kept, with the expectations inverted, and the costless
+  // counterpart is kept beside it so the rule stays visibly CONDITIONAL here
+  // and not a blanket removal of the item charge.
   describe('typed cost plus an executed item on the same appointment', () => {
-    async function seedCostPlusItem() {
+    async function seedCostPlusItem(cost: number | null) {
       const patientId = await newPatient('CostPlusItem')
-      const appt = await seedAppointment(patientId, at(0), 4100)
+      const appt = await seedAppointment(patientId, at(0), cost)
       const item = await seedBudgetItem(patientId, 5500, 'EXECUTED')
       await link(item.id, appt.id, 'EXECUTED')
       await seedAdvance(patientId, 7000)
       return { patientId, appt, item }
     }
 
-    it('bills both the typed cost and the item, with no precedence rule', async () => {
-      const { patientId, item } = await seedCostPlusItem()
+    it('bills the typed cost ALONE: the item on a costed appointment adds nothing', async () => {
+      const { patientId, appt } = await seedCostPlusItem(4100)
 
-      // Both are charged: 4100 + 5500 = 9600 (neither is dropped, nor merged
-      // into one).
+      // 4100, not the old 9600 (= 4100 + 5500) and not the item's 5500.
       expect(await getPatientBalance(tenantId, patientId)).toEqual({
         success: true,
-        data: { totalDebt: 9600, totalPaid: 7000, outstanding: 2600, credit: 0 },
+        data: { totalDebt: 4100, totalPaid: 7000, outstanding: 0, credit: 2900 },
       })
       const billable = await listBillableItems(tenantId, patientId)
-      expect(billable.map((b) => [b.type, b.cost])).toEqual([
-        ['appointment', 4100],
-        ['budgetItem', 5500],
+      expect(billable.map((b) => [b.type, b.id, b.cost])).toEqual([
+        ['appointment', appt.id, 4100],
       ])
-      // The ledger keeps one charge per thing, with the budget identity.
-      expect(billable[1].id).toBe(item.id)
 
-      // Equal dates keep the appointment first (stable FIFO): the appointment's
-      // own figures are 4100 paid of 4100 typed cost, not 9600.
       const [shown] = await getAppointmentsByPatient(tenantId, patientId)
       expect(shown).toMatchObject({ paidAmount: 4100, outstanding: 0, isPaid: true })
       expect(shown.cost?.toString()).toBe('4100')
     })
 
-    it('shows both on the appointment, on separate figures (typed cost 4100, item 5500 with 2900 covered)', async () => {
-      const { patientId } = await seedCostPlusItem()
+    it('shows ONE figure on the appointment: the typed cost 4100, with no executed-items block', async () => {
+      const { patientId } = await seedCostPlusItem(4100)
       const [shown] = await getAppointmentsByPatient(tenantId, patientId)
       expect(shown.cost?.toString()).toBe('4100')
-      expect(shown.budgetItems).toEqual({ count: 1, cost: 5500, paidAmount: 2900, outstanding: 2600 })
+      // Absent, not zeroed: the item is no longer billable, so
+      // BUDGET_ITEMS_DISPLAY_AGGREGATE has nothing to sum for this appointment.
+      expect(shown.budgetItems).toBeUndefined()
+    })
+
+    it('the same item on a COSTLESS appointment still bills 5500 and still shows its block', async () => {
+      const { patientId, item } = await seedCostPlusItem(null)
+
+      expect(await getPatientBalance(tenantId, patientId)).toEqual({
+        success: true,
+        data: { totalDebt: 5500, totalPaid: 7000, outstanding: 0, credit: 1500 },
+      })
+      const billable = await listBillableItems(tenantId, patientId)
+      expect(billable.map((b) => [b.type, b.id, b.cost])).toEqual([
+        ['budgetItem', item.id, 5500],
+      ])
+
+      const [shown] = await getAppointmentsByPatient(tenantId, patientId)
+      expect(shown.cost).toBeNull()
+      expect(shown.budgetItems).toEqual({ count: 1, cost: 5500, paidAmount: 5500, outstanding: 0 })
     })
   })
 

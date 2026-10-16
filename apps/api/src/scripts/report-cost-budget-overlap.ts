@@ -3,12 +3,25 @@
  * Read-only report for task #546: appointments that carry BOTH a typed cost
  * and at least one budget item linked with role EXECUTED.
  *
- * Since #544 an executed budget item creates its own charge, so an appointment
- * that also has a typed `cost` can be charged twice. "Can be", not "is": the
- * typed cost may legitimately cover another procedure from the same visit. The
- * report therefore lists OVERLAPS TO REVIEW and puts the two figures side by
- * side. It does not call anything a duplicate and it adds up no "amount
- * overcharged" - that judgement belongs to whoever reads the rows.
+ * Since #544 an executed budget item creates its own charge. Task #590 made
+ * the appointment's own `cost` the single authority for its visit: when the
+ * appointment carries a cost above zero and is not CANCELLED, its executed
+ * items no longer bill on their own (see APPOINTMENT_COST_IS_THE_AUTHORITY in
+ * payment.service.ts).
+ *
+ * The predicate below is deliberately WIDER than that rule - it filters
+ * neither `cost > 0` nor `status` - so the rows it returns are of two kinds,
+ * and each row prints which one it is: the rows #590 moves, whose debt falls
+ * by at most what their executed items used to add (at most because
+ * getBillableItems skips per LINK, so an item executed on another visit the
+ * rule leaves alone keeps billing there), and the rows the rule leaves
+ * alone (a typed cost of zero, or a CANCELLED appointment), where the items
+ * keep billing and the printed subtotal is no fall in debt. Keeping both
+ * kinds visible is the point - this is the instrument for reviewing the
+ * population by hand, and a reporting predicate narrowed to the rule would
+ * hide rows nobody would then know to look for. It still names nothing a
+ * duplicate and adds up no "amount overcharged": the typed cost may
+ * legitimately cover work the items do not.
  *
  * Predicate:
  *   appointment.isActive = true AND appointment.cost IS NOT NULL
@@ -151,11 +164,31 @@ export async function findCostBudgetOverlaps(
   }
 }
 
+// Mirrors appointmentCostSupersedesItems in payment.service.ts, over the fields the
+// row already prints: the query is wider than the rule, so each row has to say which
+// side of it it falls on instead of leaving the reader to apply the rule by hand.
+function supersessionNote(appt: OverlapAppointment): string {
+  if (appt.appointmentStatus === 'CANCELLED')
+    return 'Typed cost supersedes the executed items: no - the appointment is CANCELLED, so it bills nothing of its own, the items keep billing, and this subtotal is no fall in debt.'
+  if (Number(appt.typedCost) <= 0)
+    return 'Typed cost supersedes the executed items: no - the typed cost is zero, so the items keep billing and this subtotal is no fall in debt.'
+  // Upper bound, not an equality: getBillableItems skips per LINK, so an item
+  // also linked EXECUTED to a visit this rule does not supersede (costless,
+  // zero-cost or CANCELLED) keeps billing there, and an item executed on two
+  // costed visits is counted in both their rows while it stops billing once.
+  // Stating the exact fall would need every other link of every item here,
+  // which this row does not carry.
+  return "Typed cost supersedes the executed items: yes - they no longer bill on their own here, so the patient's debt falls by at most this subtotal. It is an upper bound: an item also executed on a visit the rule leaves alone keeps billing there, and an item executed on two costed visits is counted in both rows though it stops billing once."
+}
+
 export function formatReport(report: CostBudgetOverlapReport): string {
   const lines: string[] = []
   lines.push('Appointments with a typed cost AND executed budget items - overlaps to review')
   lines.push(
-    'A typed cost beside executed items makes a double charge possible, not certain: the typed cost may cover another procedure from the same visit.'
+    "Since task #590 a typed cost above zero on a non-CANCELLED appointment is the only charge for its visit: on those rows the executed items no longer bill on their own, and the subtotal shown is at most how much the patient's debt falls - at most, because an item executed on several visits only stops billing when every one of those visits supersedes it."
+  )
+  lines.push(
+    'Not every row below is one of those. This report deliberately also lists the rows the rule leaves alone - a typed cost of zero, or a CANCELLED appointment - where the items keep billing and the subtotal is no fall in debt. Each appointment states which case it is.'
   )
   lines.push('')
 
@@ -182,6 +215,7 @@ export function formatReport(report: CostBudgetOverlapReport): string {
           )
         }
         lines.push(`      Executed items subtotal: ${appt.executedItemsSubtotal}`)
+        lines.push(`      ${supersessionNote(appt)}`)
       }
     }
     lines.push('')

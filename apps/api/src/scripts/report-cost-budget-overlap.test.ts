@@ -12,6 +12,7 @@ import {
   formatReport,
   parseArgs,
   type CostBudgetOverlapReport,
+  type OverlapAppointment,
 } from './report-cost-budget-overlap.js'
 
 const execFileAsync = promisify(execFile)
@@ -569,10 +570,19 @@ describe('report-cost-budget-overlap (#546)', () => {
   // Language guard
   // ==========================================================================
   describe('formatReport language', () => {
-    it('frames rows as overlaps to review and never as duplicates or an amount owed', async () => {
+    // Reworded for task #590. The framing this test guards MOVED: before #590
+    // the banner said a double charge was "possible, not certain", because the
+    // engine billed both figures. #590 made the appointment's cost the only
+    // charge for its visit, so that sentence became a false statement on
+    // screen. The rows are still "overlaps to review" and still name nothing a
+    // duplicate and total no amount overcharged — what the banner now states
+    // is that the executed items no longer bill on their own, which is pinned
+    // below so a revert to the old prose cannot pass unnoticed.
+    it('frames rows as overlaps to review, states that the items no longer bill on their own, and still names no duplicate or amount owed', async () => {
       const text = formatReport(await report())
       expect(text).toContain('overlaps to review')
       expect(text).toContain('Read-only report: nothing was modified.')
+      expect(text).toContain('no longer bill on their own')
 
       // The banned-word scan runs on a synthetic report, never on `text`: the real one embeds the
       // clinic's data (status enums such as CONFIRMED, clinician-typed descriptions), so a
@@ -612,6 +622,7 @@ describe('report-cost-budget-overlap (#546)', () => {
         ],
       })
       expect(synthetic).toContain('overlaps to review')
+      expect(synthetic).toContain('no longer bill on their own')
       // The empty-report early return prints its own prose and is reached by neither string
       // above, so it needs the scan too: banned words planted in it went unnoticed otherwise.
       const empty = formatReport({ tenants: [], appointmentCount: 0 })
@@ -639,6 +650,182 @@ describe('report-cost-budget-overlap (#546)', () => {
         expect(out).not.toContain('fixture-one')
         expect(out).not.toContain('fixture-two')
       }
+    })
+  })
+
+  // ==========================================================================
+  // Supersession discriminator (#590, review cycle 1)
+  // ==========================================================================
+  //
+  // `findCostBudgetOverlaps` is deliberately WIDER than the #590 rule: it
+  // filters neither `cost > 0` nor `status`, while the rule needs
+  // `status !== 'CANCELLED' && cost > 0`. So the report returns rows the rule
+  // leaves alone, and on those the items keep billing and the subtotal is no
+  // fall in debt. Both out-of-rule states are reachable in production: a typed
+  // cost of zero is built through POST /appointments by 'lists a cost of zero'
+  // above, and an appointment that carries a cost can be CANCELLED afterwards
+  // (the state #596/#599 are about).
+  //
+  // The 'no longer bill on their own' assertions in the block above cannot tell
+  // the qualified banner from the old unconditional one, because that phrase
+  // was in both. The assertions below are chosen so that they can: the banner
+  // strings are ones the old prose did not contain, and the per-row notes did
+  // not exist at all.
+  describe('supersession discriminator', () => {
+    function row(over: Partial<OverlapAppointment> = {}): OverlapAppointment {
+      return {
+        appointmentId: 'appt-synthetic',
+        startTime: new Date('2031-01-02T10:00:00.000Z'),
+        appointmentStatus: 'DONE',
+        typedCost: '150.00',
+        executedItemsSubtotal: '100.00',
+        executedItems: [
+          {
+            budgetItemId: 'item-synthetic',
+            budgetId: 'budget-synthetic',
+            description: 'neutral description',
+            toothNumber: '16',
+            totalPrice: '100.00',
+            itemStatus: 'DONE',
+            budgetStatus: 'DONE',
+          },
+        ],
+        ...over,
+      }
+    }
+
+    function render(rows: OverlapAppointment[]): string {
+      return formatReport({
+        appointmentCount: rows.length,
+        tenants: [
+          {
+            tenantId: 'tenant-synthetic',
+            patients: [{ patientId: 'patient-synthetic', appointments: rows }],
+          },
+        ],
+      })
+    }
+
+    // Only the per-row notes, so the banner's own sentences cannot stand in for
+    // a row having said which case it is.
+    function noteLines(text: string): string[] {
+      return text
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.startsWith('Typed cost supersedes the executed items:'))
+    }
+
+    const YES =
+      "Typed cost supersedes the executed items: yes - they no longer bill on their own here, so the patient's debt falls by at most this subtotal. It is an upper bound: an item also executed on a visit the rule leaves alone keeps billing there, and an item executed on two costed visits is counted in both rows though it stops billing once."
+    const ZERO =
+      'Typed cost supersedes the executed items: no - the typed cost is zero, so the items keep billing and this subtotal is no fall in debt.'
+    const CANCELLED =
+      'Typed cost supersedes the executed items: no - the appointment is CANCELLED, so it bills nothing of its own, the items keep billing, and this subtotal is no fall in debt.'
+
+    it('states the precondition of the rule in the banner, not an unconditional claim', () => {
+      expect(render([row()])).toContain(
+        'a typed cost above zero on a non-CANCELLED appointment is the only charge for its visit'
+      )
+    })
+
+    it('announces in the banner that it also lists rows the rule leaves alone', () => {
+      expect(render([row()])).toContain('the rows the rule leaves alone')
+    })
+
+    // ------------------------------------------------------------------------
+    // The subtotal is an UPPER BOUND on the fall in debt, not the fall
+    // (#590, review cycle 2)
+    // ------------------------------------------------------------------------
+    //
+    // `getBillableItems` skips per LINK, not per item, so the subtotal
+    // overstates the fall in two reachable ways: an item also executed on a
+    // visit this rule leaves alone (costless, zero-cost or CANCELLED) keeps
+    // billing there, and an item executed on two costed visits is counted in
+    // both of their rows although it stops billing once. Multi-link is
+    // reachable: the unique key is [item, appointment, role] and markDone
+    // upserts per appointment.
+    //
+    // The equality assertions on YES/ZERO/CANCELLED below would also hold on
+    // prose that dropped the qualification and said the debt falls BY the
+    // subtotal, because the constant would have been edited to match. These
+    // assertions name the property instead, so a silent return to the
+    // overstated claim is a red with a name.
+    it('the "yes" note bounds the fall in debt ("at most"), rather than equating it to the subtotal', () => {
+      const [note] = noteLines(render([row()]))
+      expect(note).toContain("the patient's debt falls by at most this subtotal")
+      expect(note).toContain('It is an upper bound')
+    })
+
+    it('the "yes" note does NOT state the debt falls BY the subtotal (the overstated claim)', () => {
+      expect(noteLines(render([row()]))[0]).not.toContain("debt falls by this subtotal")
+    })
+
+    it('the "yes" note names both ways the subtotal overstates the fall', () => {
+      const [note] = noteLines(render([row()]))
+      // Link-scoped skipping: another visit the rule leaves alone keeps billing.
+      expect(note).toContain('an item also executed on a visit the rule leaves alone keeps billing there')
+      // Double counting across two costed rows for one item that stops once.
+      expect(note).toContain('an item executed on two costed visits is counted in both rows though it stops billing once')
+    })
+
+    it('the banner bounds the fall in debt too ("at most how much"), not just the per-row note', () => {
+      expect(render([row()])).toContain("the subtotal shown is at most how much the patient's debt falls")
+    })
+
+    it('the banner does NOT claim the subtotal IS how much the debt falls', () => {
+      expect(render([row()])).not.toContain("the subtotal shown is how much the patient's debt falls")
+    })
+
+    it('the banner says why it is only a bound: a multi-visit item stops billing only when every one of those visits supersedes it', () => {
+      expect(render([row()])).toContain(
+        'an item executed on several visits only stops billing when every one of those visits supersedes it'
+      )
+    })
+
+    it('marks a non-CANCELLED row with a cost above zero as superseded', () => {
+      expect(noteLines(render([row()]))).toEqual([YES])
+    })
+
+    it('marks a typed cost of zero as not superseded, with no fall in debt', () => {
+      expect(noteLines(render([row({ typedCost: '0.00' })]))).toEqual([ZERO])
+    })
+
+    it('marks a CANCELLED row with a cost above zero as not superseded, with no fall in debt', () => {
+      expect(noteLines(render([row({ appointmentStatus: 'CANCELLED' })]))).toEqual([CANCELLED])
+    })
+
+    it('reports CANCELLED over the zero cost when both hold, so the row carries one note', () => {
+      expect(noteLines(render([row({ appointmentStatus: 'CANCELLED', typedCost: '0.00' })]))).toEqual([
+        CANCELLED,
+      ])
+    })
+
+    // Vacuity: without this, a note function that printed all three notes on
+    // every row would satisfy every positive assertion above.
+    it('prints no "not superseded" note on a report whose only row is superseded', () => {
+      const text = render([row()])
+      expect(noteLines(text)).not.toContain(ZERO)
+      expect(noteLines(text)).not.toContain(CANCELLED)
+    })
+
+    it('prints no "superseded" note on a report whose only row is left alone', () => {
+      expect(noteLines(render([row({ typedCost: '0.00' })]))).not.toContain(YES)
+    })
+
+    it('gives each row its own note, in row order', () => {
+      const rows = [
+        row({ appointmentId: 'appt-yes' }),
+        row({ appointmentId: 'appt-zero', typedCost: '0.00' }),
+        row({ appointmentId: 'appt-cancelled', appointmentStatus: 'CANCELLED' }),
+      ]
+      expect(noteLines(render(rows))).toEqual([YES, ZERO, CANCELLED])
+    })
+
+    it('puts the note directly under the subtotal it qualifies', () => {
+      const lines = render([row({ typedCost: '0.00' })]).split('\n')
+      const i = lines.findIndex((l) => l.includes('Executed items subtotal: 100.00'))
+      expect(i).toBeGreaterThan(-1)
+      expect(lines[i + 1]).toBe(`      ${ZERO}`)
     })
   })
 

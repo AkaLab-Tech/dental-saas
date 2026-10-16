@@ -275,9 +275,11 @@ function PatientAppointmentCard({
         )
       })()}
 
-      {/* Executed budget items charged to this appointment — their own line,
-          never folded into the cost above, so a typed cost that duplicates
-          them stays visible. */}
+      {/* Executed budget items charged to this appointment. Since #590 the
+          server sends this block only when the appointment has no cost of its
+          own — a costed appointment's cost IS the charge for the visit, and its
+          items carry none — so this line and the cost line above are never two
+          charges for the same work. */}
       {appointment.budgetItems && (
         <div className="mt-2 text-xs">
           <div className="text-gray-700">

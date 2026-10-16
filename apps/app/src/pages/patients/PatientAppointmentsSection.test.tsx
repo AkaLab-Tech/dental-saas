@@ -1351,3 +1351,79 @@ describe('PatientAppointmentsSection — executed budget items line (#544)', () 
     expect(screen.queryByText(/appointments\.budgetItems\.executedCharge/)).not.toBeInTheDocument()
   })
 })
+
+// ============================================================================
+// Task #590 guard 7(a): the appointment card, for guard 1's fixture
+// ============================================================================
+//
+// Guard 7 asks what EACH surface shows for one fixture — one executed item of
+// 2500 on an appointment whose cost is 2500 — rather than asserting the
+// surfaces equal one another, because three surfaces wrong together would
+// satisfy an equality. These are three distinct code paths:
+//
+//   (a) this card            getAppointmentsByPatient -> mergeAllocation
+//   (b) the patient statement  getPatientAccountStatement
+//   (c) the day's agenda       listAppointments (no allocation merge at all)
+//
+// (b) and (c) are stated in apps/api/src/routes/appointments-cost-is-the-authority.test.ts.
+// Stated here: the card shows the single figure 2500 and NO executed-items
+// line, because the server now omits `budgetItems` for a costed appointment.
+//
+// Note on the fixtures: a costed appointment that still carries `budgetItems`
+// is NOT unreachable after #590 — a CANCELLED appointment's cost supersedes
+// nothing (it bills nothing of its own), so its executed item keeps its charge
+// and the block is sent alongside the cost. That is the shape the pre-existing
+// "shows the executed count and total" test above renders, and it stays valid.
+describe('PatientAppointmentsSection — appointment cost is the single charge (#590)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCanPermission = true
+    mockCanDeletePayments = true
+    localStorage.clear()
+    localStorage.setItem('patient-appointments-collapsed', 'false')
+  })
+
+  it('guard 7(a): a costed visit shows ONE figure, 2500, and no executed-items line', async () => {
+    // Exactly what the API now returns for guard 1's fixture: cost 2500,
+    // outstanding 2500, and `budgetItems` absent (not zeroed).
+    mockGetAppointmentsByPatient.mockResolvedValue([
+      { ...upcomingAppointment, cost: 2500, paidAmount: 0, isPaid: false },
+    ])
+    renderSection()
+
+    await waitFor(() => {
+      expect(screen.getByText('$2500')).toBeInTheDocument()
+    })
+    // queryAllByText, not queryByText: the single-element variant THROWS a
+    // TestingLibraryElementError when a regex matches more than one node, and
+    // a query error reads like a broken test rather than a reported figure.
+    // The count is the assertion.
+    expect(screen.queryAllByText(/appointments\.budgetItems\.executedCharge/)).toHaveLength(0)
+    // And no second money figure of any kind on the card: 5000 is the double
+    // charge this task removed, 2500 appears exactly once.
+    expect(screen.queryByText('$5000')).not.toBeInTheDocument()
+    expect(screen.getAllByText('$2500')).toHaveLength(1)
+  })
+
+  it('guard 7(a) counterpart: a COSTLESS visit still shows its executed-items line of 2500', async () => {
+    // The conditional half: with no cost, the item still bills, so the server
+    // still sends the block. Without this the test above is satisfied by a
+    // card that lost the ability to render the block at all.
+    mockGetAppointmentsByPatient.mockResolvedValue([
+      {
+        ...upcomingAppointment,
+        cost: null,
+        budgetItems: { count: 1, cost: 2500, paidAmount: 0, outstanding: 2500 },
+      },
+    ])
+    renderSection()
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('appointments.budgetItems.executedCharge:{"count":1,"total":"$2500"}')
+      ).toBeInTheDocument()
+    })
+    // No cost line: the card renders it only when `cost !== null`.
+    expect(screen.queryByText('$100')).not.toBeInTheDocument()
+  })
+})

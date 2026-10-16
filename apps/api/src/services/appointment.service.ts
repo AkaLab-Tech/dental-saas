@@ -75,12 +75,17 @@ export type SafeAppointment = {
   outstanding?: number
   /**
    * Task #544: the executed budget items charged to this appointment, summed
-   * for DISPLAY ONLY. Each item is still its own charge in the ledger (the
-   * budget identity is what lets an advance be reserved to a budget); this is
-   * an aggregate, never a merge, and it is kept apart from `cost`/`paidAmount`/
-   * `outstanding` so the operator can see a typed cost and executed items
-   * side by side and spot a genuine duplicate. Absent when the appointment
-   * carries no executed budget item.
+   * for DISPLAY ONLY. Each item is its own charge in the ledger (the budget
+   * identity is what lets an advance be reserved to a budget); this is an
+   * aggregate, never a merge, and it is kept apart from `cost`/`paidAmount`/
+   * `outstanding`.
+   *
+   * Task #590 narrowed when it appears at all: the field is built from the
+   * patient's billable items, and an executed item on an appointment carrying
+   * a cost above zero no longer is one (APPOINTMENT_COST_IS_THE_AUTHORITY in
+   * payment.service.ts). So this is absent both when the appointment carries
+   * no executed item AND when its own cost is the charge for them — a reader
+   * must not take its absence for "nothing was executed here".
    */
   budgetItems?: { count: number; cost: number; paidAmount: number; outstanding: number }
   // Actual linked-payment state. paidAmount now agrees with this for the

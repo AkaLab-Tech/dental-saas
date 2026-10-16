@@ -1718,12 +1718,21 @@ describe('AppointmentFormModal — executed budget items disclosure (#544)', () 
     expect(screen.queryByText(figureLine)).not.toBeInTheDocument()
   })
 
-  // #547 browser pass: the app used to shout when it did NOT know the figure
-  // and whisper when it DID know a cost was typed beside executed items. These
-  // three pin the weight where the consequence is, and they are a set: the
-  // first two differ only in the typed cost, so a component that always alerts
-  // (or never does) fails one of them.
-  it('figure WITH a typed cost is the alert: the confirmed double charge is the loud one', async () => {
+  // GUARD 8 (task #590). Rewritten: this used to assert the OPPOSITE — that a
+  // typed cost beside executed items raised the amber role="alert" duplication
+  // warning (#547's "the confirmed double charge is the loud one"). #590
+  // removed that warning, because the appointment's cost now supersedes the
+  // items' own charge and a double charge is no longer possible, so the banner
+  // would be a false statement on screen.
+  //
+  // A removed guard that nothing replaced and a removed guard whose job the
+  // engine now does look identical in a diff, so this asserts BOTH halves: the
+  // warning is gone, AND the quiet hint in its place states the rule that
+  // replaced it ("si la cita tiene un costo, estos ítems no se cobran
+  // aparte"). The old hint said the opposite — "borra el costo para no
+  // cobrarlos dos veces" — so the absence check alone could not tell a
+  // deliberate removal from a dropped warning over unchanged prose.
+  it('GUARD 8 — the duplication warning is GONE for the exact case it used to fire on (figure + typed cost)', async () => {
     renderModal({
       appointment: makeAppointment({
         cost: 4200,
@@ -1732,10 +1741,43 @@ describe('AppointmentFormModal — executed budget items disclosure (#544)', () 
     })
     await waitForOptionsLoaded()
 
-    expect(hintAlert()).not.toBeNull()
+    // The figure is on screen: this really is the case that used to alert.
+    expect(screen.getByText(/Ítems de presupuesto ejecutados en esta cita: 1/)).toBeInTheDocument()
+    expect(hintAlert()).toBeNull()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('figure WITHOUT a typed cost is not an alert: nothing is being double charged yet', async () => {
+  it('GUARD 8 — and the block carries no amber (warning) styling for that case', async () => {
+    renderModal({
+      appointment: makeAppointment({
+        cost: 4200,
+        budgetItems: { count: 1, cost: 700, paidAmount: 0, outstanding: 700 },
+      }),
+    })
+    await waitForOptionsLoaded()
+
+    const block = screen.getByText(hintText()).closest('div')
+    expect(block).not.toBeNull()
+    expect(block!.className).not.toMatch(/amber/)
+  })
+
+  it('GUARD 8 — its absence is deliberate: the hint in its place states that the items do not bill beside a cost', async () => {
+    renderModal({
+      appointment: makeAppointment({
+        cost: 4200,
+        budgetItems: { count: 1, cost: 700, paidAmount: 0, outstanding: 700 },
+      }),
+    })
+    await waitForOptionsLoaded()
+
+    // The replacement statement, rendered. Quoted from es.json rather than
+    // re-derived through t(), so rewording the key back to the pre-#590
+    // "borra el costo para no cobrarlos dos veces" fails here.
+    expect(screen.getByText(hintText())).toHaveTextContent('no se cobran aparte')
+    expect(hintText()).not.toMatch(/dos veces/)
+  })
+
+  it('figure WITHOUT a typed cost is not an alert either: no visit can be double charged since #590', async () => {
     renderModal({
       appointment: makeAppointment({
         cost: 0,
@@ -1892,5 +1934,444 @@ describe('AppointmentFormModal — cost submit shape (task #588)', () => {
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalled())
     expect((onSubmit.mock.calls[0][0] as { cost?: unknown }).cost).toBe(0)
+  })
+})
+
+// ============================================================================
+// Task #590: the appointment's cost is the single authority for its visit
+// ============================================================================
+//
+// Guards 4, 5 and 6 of the task plan — the frontend halves. The backend halves
+// (the appointment ROW, and what the three charge queries bill) live in
+// apps/api/src/routes/appointments-cost-is-the-authority.test.ts; guards 1, 2,
+// 3 and 7 are backend-only, guard 8 is in the #544 disclosure suite above.
+//
+// Associating budget items now PROPOSES their total in the cost field instead
+// of billing them on their own. The three properties that makes safe:
+//   - it is a prefill, not a write (nothing leaves the modal until save);
+//   - it only fills an empty field or replaces its own last proposal, so a
+//     figure the operator typed is never silently overwritten;
+//   - a total falling to 0 leaves the field as the operator last saw it.
+//
+// The cost field has THREE states that reach the API differently — empty
+// (sends null on edit), "0" (sends the number 0) and a number — so each is
+// exercised below rather than only the empty one.
+describe('AppointmentFormModal — cost prefilled from associated budget items (task #590)', () => {
+  const COST_LABEL = 'Costo ($)'
+
+  function getCostInput() {
+    const container = screen.getByText(COST_LABEL).parentElement
+    if (!container) throw new Error('No cost container found')
+    return within(container).getByRole('spinbutton') as HTMLInputElement
+  }
+
+  const ITEM_2500 = 'Corona 2500'
+  const ITEM_1300 = 'Perno 1300'
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getDoctorsMock.mockResolvedValue([mockDoctor])
+    getPatientsMock.mockResolvedValue([mockPatientRecord])
+    getAppointmentBudgetItemsMock.mockResolvedValue([])
+    getAppointmentByIdMock.mockImplementation(() => Promise.resolve(makeAppointment()))
+    // One PENDING item of 2500 and one of 1300, so a prefill that sums the
+    // wrong set (both = 3800) is distinguishable from the right one (2500).
+    listBudgetsByPatientMock.mockResolvedValue({
+      data: [
+        makeBudget({
+          items: [
+            makeBudgetItem({ id: 'item-2500', description: ITEM_2500, unitPrice: '2500', totalPrice: '2500' }),
+            makeBudgetItem({ id: 'item-1300', description: ITEM_1300, unitPrice: '1300', totalPrice: '1300' }),
+          ],
+        }),
+      ],
+      total: 1,
+    })
+  })
+
+  /** Create mode with a patient and a doctor chosen and the item list loaded. */
+  async function openCreateWithItems() {
+    const rendered = renderModal()
+    await waitForOptionsLoaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+    await selectDoctor()
+    await waitFor(() => expect(screen.getByText(ITEM_2500)).toBeInTheDocument())
+    return rendered
+  }
+
+  async function submit(label = /crear cita/i) {
+    fireEvent.click(screen.getByRole('button', { name: label }))
+  }
+
+  // --------------------------------------------------------------------------
+  // GUARD 4 — the typed figure wins over the items' total
+  // --------------------------------------------------------------------------
+  //
+  // Three assertions, each in its own `it()`: a lone `toBe(2000)` cannot tell
+  // "the typed value won" from "the prefill never happened", and an assertion
+  // sitting after a failing one in the same `it()` is never reached.
+  async function prefillThenType(typed: string) {
+    const { onSubmit } = await openCreateWithItems()
+    fireEvent.click(getItemCheckbox(ITEM_2500))
+    // The prefill really happened: without this the test below would pass on a
+    // component that never prefills at all.
+    await waitFor(() => expect(getCostInput().value).toBe('2500'))
+    fireEvent.change(getCostInput(), { target: { value: typed } })
+    await submit()
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    return (onSubmit.mock.calls[0][0] as { cost?: unknown }).cost
+  }
+
+  it('GUARD 4 — prefill 2500, type 2000: the submitted cost is 2000', async () => {
+    expect(await prefillThenType('2000')).toBe(2000)
+  })
+
+  it('GUARD 4 — prefill 2500, type 2000: the submitted cost is NOT 2500 (the prefill did not win)', async () => {
+    expect(await prefillThenType('2000')).not.toBe(2500)
+  })
+
+  it('GUARD 4 — prefill 2500, type 2000: the submitted cost is NOT 4500 (the two were not added)', async () => {
+    expect(await prefillThenType('2000')).not.toBe(4500)
+  })
+
+  it('GUARD 4 — a figure typed BEFORE any item is selected is never overwritten by the prefill', async () => {
+    const { onSubmit } = await openCreateWithItems()
+    fireEvent.change(getCostInput(), { target: { value: '2000' } })
+    fireEvent.click(getItemCheckbox(ITEM_2500))
+
+    // Settle: the item is checked, so the effect has had its chance to run.
+    await waitFor(() => expect(getItemCheckbox(ITEM_2500)).toBeChecked())
+    expect(getCostInput().value).toBe('2000')
+
+    await submit()
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect((onSubmit.mock.calls[0][0] as { cost?: unknown }).cost).toBe(2000)
+  })
+
+  // --------------------------------------------------------------------------
+  // GUARD 5 — the prefill is a prefill, not a write
+  // --------------------------------------------------------------------------
+  it('GUARD 5 — selecting an item fills the field with its total', async () => {
+    await openCreateWithItems()
+    fireEvent.click(getItemCheckbox(ITEM_2500))
+    await waitFor(() => expect(getCostInput().value).toBe('2500'))
+  })
+
+  it('GUARD 5 — selecting two items fills the field with the SUM, in cents (2500 + 1300 = 3800)', async () => {
+    await openCreateWithItems()
+    fireEvent.click(getItemCheckbox(ITEM_2500))
+    await waitFor(() => expect(getCostInput().value).toBe('2500'))
+    fireEvent.click(getItemCheckbox(ITEM_1300))
+    await waitFor(() => expect(getCostInput().value).toBe('3800'))
+  })
+
+  it('GUARD 5 — nothing is submitted while the operator only selects items (no write before save)', async () => {
+    const { onSubmit } = await openCreateWithItems()
+    fireEvent.click(getItemCheckbox(ITEM_2500))
+    await waitFor(() => expect(getCostInput().value).toBe('2500'))
+
+    // onSubmit is the modal's ONLY writer: the component imports no update
+    // function, so "no write fired" is exactly "onSubmit was not called".
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('GUARD 5 — editing: the prefill does not fire an appointment write; the only appointment-api calls are reads', async () => {
+    getAppointmentBudgetItemsMock.mockResolvedValue([])
+    const { onSubmit } = renderModal({ appointment: makeAppointment({ id: 'apt-1', cost: null }) })
+    await waitForOptionsLoaded()
+    await waitFor(() => expect(screen.getByText(ITEM_2500)).toBeInTheDocument())
+    fireEvent.click(getItemCheckbox(ITEM_2500))
+    await waitFor(() => expect(getCostInput().value).toBe('2500'))
+
+    expect(onSubmit).not.toHaveBeenCalled()
+    // Reads only: the by-id fetch (the #544 disclosure) and the associated-items
+    // fetch. Neither writes. The appointment ROW staying at its old cost is
+    // asserted server-side in appointments-cost-is-the-authority.test.ts.
+    expect(getAppointmentByIdMock).toHaveBeenCalledWith('apt-1')
+    expect(getAppointmentBudgetItemsMock).toHaveBeenCalledWith('apt-1')
+  })
+
+  // --------------------------------------------------------------------------
+  // GUARD 6 — unlinking the last item leaves the cost as the operator last saw it
+  // --------------------------------------------------------------------------
+  it('GUARD 6 — unselecting the only item leaves the prefilled 2500 in the field', async () => {
+    await openCreateWithItems()
+    fireEvent.click(getItemCheckbox(ITEM_2500))
+    await waitFor(() => expect(getCostInput().value).toBe('2500'))
+
+    fireEvent.click(getItemCheckbox(ITEM_2500))
+    await waitFor(() => expect(getItemCheckbox(ITEM_2500)).not.toBeChecked())
+    expect(getCostInput().value).toBe('2500')
+  })
+
+  it('GUARD 6 — and that surviving 2500 is what gets submitted', async () => {
+    const { onSubmit } = await openCreateWithItems()
+    fireEvent.click(getItemCheckbox(ITEM_2500))
+    await waitFor(() => expect(getCostInput().value).toBe('2500'))
+    fireEvent.click(getItemCheckbox(ITEM_2500))
+    await waitFor(() => expect(getItemCheckbox(ITEM_2500)).not.toBeChecked())
+
+    await submit()
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const payload = onSubmit.mock.calls[0][0] as { cost?: unknown; budgetItemIds?: unknown }
+    expect(payload.cost).toBe(2500)
+    // Submitted once, as one figure: no item ids ride along to bill again.
+    expect(payload.budgetItemIds).toBeUndefined()
+  })
+
+  it('GUARD 6 — a TYPED figure survives selecting and then unselecting an item', async () => {
+    await openCreateWithItems()
+    fireEvent.change(getCostInput(), { target: { value: '2000' } })
+    fireEvent.click(getItemCheckbox(ITEM_2500))
+    await waitFor(() => expect(getItemCheckbox(ITEM_2500)).toBeChecked())
+    fireEvent.click(getItemCheckbox(ITEM_2500))
+    await waitFor(() => expect(getItemCheckbox(ITEM_2500)).not.toBeChecked())
+
+    expect(getCostInput().value).toBe('2000')
+  })
+
+  it('GUARD 6 — field state "0": a typed zero is not treated as empty and is not overwritten', async () => {
+    const { onSubmit } = await openCreateWithItems()
+    fireEvent.change(getCostInput(), { target: { value: '0' } })
+    fireEvent.click(getItemCheckbox(ITEM_2500))
+    await waitFor(() => expect(getItemCheckbox(ITEM_2500)).toBeChecked())
+
+    expect(getCostInput().value).toBe('0')
+    await submit()
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect((onSubmit.mock.calls[0][0] as { cost?: unknown }).cost).toBe(0)
+  })
+
+  it('GUARD 6 — field state "empty": only an empty field is filled by the prefill', async () => {
+    await openCreateWithItems()
+    expect(getCostInput().value).toBe('')
+    fireEvent.click(getItemCheckbox(ITEM_2500))
+    await waitFor(() => expect(getCostInput().value).toBe('2500'))
+  })
+
+  it('GUARD 6 — editing: emptying the field after a prefill still submits null, so the cost can be cleared', async () => {
+    const { onSubmit } = renderModal({ appointment: makeAppointment({ id: 'apt-1', cost: null }) })
+    await waitForOptionsLoaded()
+    await waitFor(() => expect(screen.getByText(ITEM_2500)).toBeInTheDocument())
+    fireEvent.click(getItemCheckbox(ITEM_2500))
+    await waitFor(() => expect(getCostInput().value).toBe('2500'))
+
+    fireEvent.change(getCostInput(), { target: { value: '' } })
+    await submit(/guardar cambios/i)
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const payload = onSubmit.mock.calls[0][0] as Record<string, unknown>
+    expect('cost' in payload).toBe(true)
+    expect(payload.cost).toBeNull()
+  })
+
+  // --------------------------------------------------------------------------
+  // The hint under the field, which is what tells the operator the figure is a
+  // proposal rather than a locked total. The field itself stays EDITABLE —
+  // a read-only field was considered for this task and rejected.
+  // --------------------------------------------------------------------------
+  it('the cost field stays enabled after a prefill (the figure is a proposal, not a lock)', async () => {
+    await openCreateWithItems()
+    fireEvent.click(getItemCheckbox(ITEM_2500))
+    await waitFor(() => expect(getCostInput().value).toBe('2500'))
+
+    expect(getCostInput()).toBeEnabled()
+    expect(getCostInput()).not.toHaveAttribute('readonly')
+  })
+
+  // --------------------------------------------------------------------------
+  // GUARD 7 (#590, review cycle 2) — the prefill needs an OPERATOR GESTURE
+  // --------------------------------------------------------------------------
+  //
+  // The prefill effect is keyed on `itemsChargeTotal`, and a total above zero
+  // on its own cannot tell "the operator just associated items" from "this
+  // appointment already had items when it opened": in edit mode the items load
+  // asynchronously AFTER the identity reset has written '' into the cost
+  // field, so the effect would fire on a plain reopen. Task #590's trigger is
+  // associating items or confirming them executed; a reopen is neither, and
+  // letting it fill the field turns an incidental save of a historically
+  // costless visit into a new charge (and, for merely SCHEDULED items, a
+  // charge for work nobody has confirmed executed, which
+  // BUDGET_ITEM_BILLABLE_AUTHORITY reserves for the EXECUTED role).
+  //
+  // Both fixtures are ordinary production states: a visit planned from a
+  // budget carries SCHEDULED links and no cost, and an EXECUTED link with no
+  // typed cost is exactly the state the #544 disclosure is about.
+  //
+  // Each block opens with a VACUITY CHECK on the items total. "The field is
+  // empty" is satisfied by a total of zero as well as by the gate, so without
+  // it these would pass on a fixture that never reaches the effect at all. The
+  // check is the hint under the field, which renders only while
+  // itemsChargeTotal > 0 and names the figure.
+  describe('GUARD 7 — items already associated when the modal opens', () => {
+    const PREASSOCIATED_HINT = () =>
+      screen.queryByText(i18n.t('appointments.form.costFromItemsHint', { total: 'USD 2,500.00' }))
+
+    /**
+     * Edit mode on an appointment with a stored `cost: null`, whose only item
+     * is already linked to it in `role` — the item is in the patient's budget
+     * with `itemStatus`, so it survives the PENDING filter via `associatedIds`
+     * exactly as it does in production.
+     */
+    async function openEditWithPreassociatedItem(
+      role: 'SCHEDULED' | 'EXECUTED',
+      itemStatus: BudgetItem['status']
+    ) {
+      listBudgetsByPatientMock.mockResolvedValue({
+        data: [
+          makeBudget({
+            items: [
+              makeBudgetItem({
+                id: 'item-2500',
+                description: ITEM_2500,
+                unitPrice: '2500',
+                totalPrice: '2500',
+                status: itemStatus,
+              }),
+            ],
+          }),
+        ],
+        total: 1,
+      })
+      getAppointmentBudgetItemsMock.mockResolvedValue([
+        makeAssociatedItem({
+          id: 'item-2500',
+          description: ITEM_2500,
+          unitPrice: '2500',
+          totalPrice: '2500',
+          status: itemStatus,
+          roles: [role],
+        }),
+      ])
+      const rendered = renderModal({ appointment: makeAppointment({ id: 'apt-1', cost: null }) })
+      await waitForOptionsLoaded()
+      await waitFor(() => expect(screen.getByText(ITEM_2500)).toBeInTheDocument())
+      // The association has landed: the item is checked (SCHEDULED is
+      // preselected; EXECUTED is checked+disabled), so the prefill effect has
+      // run with a total above zero.
+      await waitFor(() => expect(getItemCheckbox(ITEM_2500)).toBeChecked())
+      return rendered
+    }
+
+    // ---- SCHEDULED links -------------------------------------------------
+    it('VACUITY — a SCHEDULED pre-association puts 2500 on the table (so an empty field below is the gate, not a zero total)', async () => {
+      await openEditWithPreassociatedItem('SCHEDULED', 'SCHEDULED')
+      await waitFor(() => expect(PREASSOCIATED_HINT()).toBeInTheDocument())
+    })
+
+    it('a SCHEDULED pre-association leaves the cost field EMPTY — opening is not an operator gesture', async () => {
+      await openEditWithPreassociatedItem('SCHEDULED', 'SCHEDULED')
+      await waitFor(() => expect(PREASSOCIATED_HINT()).toBeInTheDocument())
+      expect(getCostInput().value).toBe('')
+    })
+
+    it('a SCHEDULED pre-association then saved unchanged submits cost: null', async () => {
+      const { onSubmit } = await openEditWithPreassociatedItem('SCHEDULED', 'SCHEDULED')
+      await waitFor(() => expect(PREASSOCIATED_HINT()).toBeInTheDocument())
+      await submit(/guardar cambios/i)
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+      const payload = onSubmit.mock.calls[0][0] as Record<string, unknown>
+      expect(payload.cost).toBeNull()
+    })
+
+    it('a SCHEDULED pre-association then saved unchanged does NOT submit the items total (2500)', async () => {
+      const { onSubmit } = await openEditWithPreassociatedItem('SCHEDULED', 'SCHEDULED')
+      await waitFor(() => expect(PREASSOCIATED_HINT()).toBeInTheDocument())
+      await submit(/guardar cambios/i)
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+      expect((onSubmit.mock.calls[0][0] as { cost?: unknown }).cost).not.toBe(2500)
+    })
+
+    // ---- EXECUTED links --------------------------------------------------
+    it('VACUITY — an EXECUTED pre-association puts 2500 on the table (so an empty field below is the gate, not a zero total)', async () => {
+      await openEditWithPreassociatedItem('EXECUTED', 'EXECUTED')
+      await waitFor(() => expect(PREASSOCIATED_HINT()).toBeInTheDocument())
+    })
+
+    it('an EXECUTED pre-association leaves the cost field EMPTY — opening is not an operator gesture', async () => {
+      await openEditWithPreassociatedItem('EXECUTED', 'EXECUTED')
+      await waitFor(() => expect(PREASSOCIATED_HINT()).toBeInTheDocument())
+      expect(getCostInput().value).toBe('')
+    })
+
+    it('an EXECUTED pre-association then saved unchanged submits cost: null', async () => {
+      const { onSubmit } = await openEditWithPreassociatedItem('EXECUTED', 'EXECUTED')
+      await waitFor(() => expect(PREASSOCIATED_HINT()).toBeInTheDocument())
+      await submit(/guardar cambios/i)
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+      const payload = onSubmit.mock.calls[0][0] as Record<string, unknown>
+      expect(payload.cost).toBeNull()
+    })
+
+    it('an EXECUTED pre-association then saved unchanged does NOT submit the items total (2500)', async () => {
+      const { onSubmit } = await openEditWithPreassociatedItem('EXECUTED', 'EXECUTED')
+      await waitFor(() => expect(PREASSOCIATED_HINT()).toBeInTheDocument())
+      await submit(/guardar cambios/i)
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+      expect((onSubmit.mock.calls[0][0] as { cost?: unknown }).cost).not.toBe(2500)
+    })
+
+    // The gate must not swallow the gesture it exists to detect: with the same
+    // pre-association open, ticking the OTHER item does prefill, so the field
+    // being empty above is "no gesture yet", not "prefill disabled in edit
+    // mode".
+    it('and the gate is not a blanket disable: ticking a further item in the same session still prefills', async () => {
+      listBudgetsByPatientMock.mockResolvedValue({
+        data: [
+          makeBudget({
+            items: [
+              makeBudgetItem({
+                id: 'item-2500',
+                description: ITEM_2500,
+                unitPrice: '2500',
+                totalPrice: '2500',
+                status: 'SCHEDULED',
+              }),
+              makeBudgetItem({
+                id: 'item-1300',
+                description: ITEM_1300,
+                unitPrice: '1300',
+                totalPrice: '1300',
+              }),
+            ],
+          }),
+        ],
+        total: 1,
+      })
+      getAppointmentBudgetItemsMock.mockResolvedValue([
+        makeAssociatedItem({
+          id: 'item-2500',
+          description: ITEM_2500,
+          unitPrice: '2500',
+          totalPrice: '2500',
+          status: 'SCHEDULED',
+          roles: ['SCHEDULED'],
+        }),
+      ])
+      renderModal({ appointment: makeAppointment({ id: 'apt-1', cost: null }) })
+      await waitForOptionsLoaded()
+      await waitFor(() => expect(screen.getByText(ITEM_1300)).toBeInTheDocument())
+      await waitFor(() => expect(getItemCheckbox(ITEM_2500)).toBeChecked())
+      expect(getCostInput().value).toBe('')
+
+      fireEvent.click(getItemCheckbox(ITEM_1300))
+      // 2500 (already associated) + 1300 (just ticked).
+      await waitFor(() => expect(getCostInput().value).toBe('3800'))
+    })
+  })
+
+  it('the hint names the items total and appears only while there is one', async () => {
+    await openCreateWithItems()
+    const hint = () => screen.queryByText(i18n.t('appointments.form.costFromItemsHint', { total: 'USD 2,500.00' }))
+    expect(hint()).not.toBeInTheDocument()
+
+    fireEvent.click(getItemCheckbox(ITEM_2500))
+    await waitFor(() => expect(hint()).toBeInTheDocument())
+    // The key resolves to a real translation rather than echoing itself.
+    expect(i18n.t('appointments.form.costFromItemsHint', { total: 'USD 2,500.00' })).not.toBe(
+      'appointments.form.costFromItemsHint'
+    )
+
+    fireEvent.click(getItemCheckbox(ITEM_2500))
+    await waitFor(() => expect(hint()).not.toBeInTheDocument())
   })
 })
