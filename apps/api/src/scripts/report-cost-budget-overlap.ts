@@ -3,12 +3,14 @@
  * Read-only report for task #546: appointments that carry BOTH a typed cost
  * and at least one budget item linked with role EXECUTED.
  *
- * Since #544 an executed budget item creates its own charge, so an appointment
- * that also has a typed `cost` can be charged twice. "Can be", not "is": the
- * typed cost may legitimately cover another procedure from the same visit. The
- * report therefore lists OVERLAPS TO REVIEW and puts the two figures side by
- * side. It does not call anything a duplicate and it adds up no "amount
- * overcharged" - that judgement belongs to whoever reads the rows.
+ * Since #544 an executed budget item creates its own charge. Task #590 made
+ * the appointment's own `cost` the single authority for its visit: when the
+ * appointment carries a cost above zero, its executed items no longer bill on
+ * their own (see APPOINTMENT_COST_IS_THE_AUTHORITY in payment.service.ts). So
+ * the rows below are the population that #590 moves - each one's debt falls by
+ * what its executed items used to add - and the report puts the two figures
+ * side by side. It still names nothing a duplicate and adds up no "amount
+ * overcharged": the typed cost may legitimately cover work the items do not.
  *
  * Predicate:
  *   appointment.isActive = true AND appointment.cost IS NOT NULL
@@ -155,7 +157,7 @@ export function formatReport(report: CostBudgetOverlapReport): string {
   const lines: string[] = []
   lines.push('Appointments with a typed cost AND executed budget items - overlaps to review')
   lines.push(
-    'A typed cost beside executed items makes a double charge possible, not certain: the typed cost may cover another procedure from the same visit.'
+    "Since task #590 the appointment's typed cost is the only charge for its visit, so on each row below the executed items no longer bill on their own and the patient's debt falls by the subtotal shown."
   )
   lines.push('')
 

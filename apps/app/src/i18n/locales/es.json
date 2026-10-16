@@ -420,6 +420,7 @@
       "cost": "Costo",
       "paidAmount": "Monto abonado",
       "paidAmountHint": "Se cobra en esta cita y cubre primero su costo; solo lo que exceda ese costo pasa al saldo restante del paciente.",
+      "costFromItemsHint": "Ítems del presupuesto de esta cita: {{total}}. Es el cobro de la visita; podés cambiarlo y se guarda lo que escribas.",
       "alreadyPaidHint": "Para revertir el pago, elimine la entrega correspondiente desde la sección de pagos.",
       "coveredByBalanceHint": "Esta cita está cubierta por el saldo del paciente. No hay un pago de consulta registrado, así que el monto aún se puede editar.",
       "partialPaymentRecordedHint": "Ya hay un pago registrado para esta cita. Para modificarlo, edítelo desde la sección de pagos.",
@@ -439,8 +440,8 @@
       "executedChargeLoading": "Cargando el monto de los ítems ya ejecutados...",
       "executedCharge": "Ítems de presupuesto ejecutados en esta cita: {{count}} · {{total}}",
       "executedChargeStatus": "Cubierto: {{paid}} · Pendiente: {{outstanding}}",
-      "executedChargeHint": "Se cobran por separado del costo de la cita. Si ya los escribiste también en el costo, borra el costo para no cobrarlos dos veces.",
-      "executedChargeUnavailable": "No se pudo cargar el monto de los ítems de presupuesto ejecutados en esta cita, por lo que aquí no se puede verificar si el costo los duplica. Revisa la ficha del paciente antes de guardar un costo."
+      "executedChargeHint": "El costo de la cita es el cobro de esta visita: si la cita tiene un costo, estos ítems no se cobran aparte.",
+      "executedChargeUnavailable": "No se pudo cargar el monto de los ítems de presupuesto ejecutados en esta cita. El costo que guardes es el cobro de la visita."
     },
     "complete": {
       "title": "Completar cita",

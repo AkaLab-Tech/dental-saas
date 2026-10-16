@@ -99,6 +99,49 @@ const toCents = (dollars: number) => Math.round(dollars * 100)
 const fromCents = (cents: number) => cents / 100
 
 /**
+ * APPOINTMENT_COST_IS_THE_AUTHORITY (task #590): a budget item holding an
+ * EXECUTED link does NOT create its own charge when the appointment it is
+ * executed on carries a cost above zero. That appointment's cost IS the charge
+ * for the visit, and it is the operator's single editable figure. When the
+ * appointment has no cost, the executed item bills exactly as it did before.
+ *
+ * The rule is deliberately conditional. The unconditional version ("executed
+ * items never bill") was rejected: every historical executed item on a
+ * costless appointment would stop billing on the first deploy, dropping the
+ * debt of every patient with budget work. The conditional rule moves money
+ * only for the visits that are charged twice today.
+ *
+ * A CANCELLED appointment bills nothing of its own (see
+ * BILLABLE_APPOINTMENT_RULE), so its cost supersedes nothing and the executed
+ * item keeps its charge — otherwise cancelling a visit would silently erase
+ * the budget work done at it.
+ *
+ * Three sites apply the rule and must stay in step: the EXECUTED-link query in
+ * getBillableItems (per link, in memory), and the item-level `some` filters in
+ * getPatientBalance and computeOutstandingByPatient (in SQL, via
+ * NOT_SUPERSEDED_BY_APPOINTMENT_COST).
+ */
+export function appointmentCostSupersedesItems(appointment: {
+  status: string
+  cost: Prisma.Decimal | number | null
+}): boolean {
+  if (appointment.status === 'CANCELLED') return false
+  if (appointment.cost === null) return false
+  const cost =
+    typeof appointment.cost === 'number' ? appointment.cost : appointment.cost.toNumber()
+  return cost > 0
+}
+
+/**
+ * The SQL half of APPOINTMENT_COST_IS_THE_AUTHORITY: an `appointment` filter
+ * matching exactly the appointments whose cost does NOT supersede their
+ * executed items — the complement of appointmentCostSupersedesItems.
+ */
+export const NOT_SUPERSEDED_BY_APPOINTMENT_COST = {
+  OR: [{ cost: null }, { cost: { lte: 0 } }, { status: 'CANCELLED' as const }],
+} satisfies Prisma.AppointmentWhereInput
+
+/**
  * The three sources of a charge. Declared once and shared by BillableItem and
  * FifoAllocation: the union used to be written out in both interfaces, so
  * widening one silently left the other narrow.
@@ -482,7 +525,8 @@ async function getBillableItems(tenantId: string, patientId: string): Promise<Bi
       },
       select: {
         appointmentId: true,
-        appointment: { select: { startTime: true } },
+        // `status`/`cost` feed APPOINTMENT_COST_IS_THE_AUTHORITY below.
+        appointment: { select: { startTime: true, status: true, cost: true } },
         budgetItem: { select: { id: true, budgetId: true, totalPrice: true, isPaid: true } },
       },
     }),
@@ -503,6 +547,10 @@ async function getBillableItems(tenantId: string, patientId: string): Promise<Bi
     { cost: number; isPaid: boolean; date: Date; appointmentId: string; budgetId: string }
   >()
   for (const link of executedLinks) {
+    // APPOINTMENT_COST_IS_THE_AUTHORITY (#590): skipped per LINK, not per
+    // item, so an item executed on a costed visit and also on a costless one
+    // keeps the charge the costless visit gives it instead of losing it.
+    if (appointmentCostSupersedesItems(link.appointment)) continue
     const cost = link.budgetItem.totalPrice.toNumber()
     if (cost <= 0) continue
     const date = link.appointment.startTime
@@ -702,11 +750,17 @@ export async function getPatientBalance(
     // Same rule as getBillableItems (BUDGET_ITEM_* there): one row per item
     // holding an EXECUTED link on an active appointment. `budgetId` is read
     // only to total each budget's charges for computeHeldCents.
+    // The appointment filter is APPOINTMENT_COST_IS_THE_AUTHORITY (#590).
     prisma.budgetItem.findMany({
       where: {
         totalPrice: { gt: 0 },
         budget: { tenantId, patientId, isActive: true },
-        appointments: { some: { role: 'EXECUTED', appointment: { isActive: true } } },
+        appointments: {
+          some: {
+            role: 'EXECUTED',
+            appointment: { isActive: true, ...NOT_SUPERSEDED_BY_APPOINTMENT_COST },
+          },
+        },
       },
       select: { totalPrice: true, budgetId: true },
     }),
@@ -968,12 +1022,18 @@ export async function computeOutstandingByPatient(
     // One row per ITEM (the `some` filter, not a join on links), so an item
     // with several EXECUTED links is counted once — same rule as
     // getBillableItems. Items with no EXECUTED link on an active appointment
-    // are dateless and excluded there, so they are excluded here.
+    // are dateless and excluded there, so they are excluded here. The
+    // appointment filter is APPOINTMENT_COST_IS_THE_AUTHORITY (#590).
     prisma.budgetItem.findMany({
       where: {
         totalPrice: { gt: 0 },
         budget: { tenantId, isActive: true },
-        appointments: { some: { role: 'EXECUTED', appointment: { isActive: true } } },
+        appointments: {
+          some: {
+            role: 'EXECUTED',
+            appointment: { isActive: true, ...NOT_SUPERSEDED_BY_APPOINTMENT_COST },
+          },
+        },
       },
       select: { totalPrice: true, budgetId: true, budget: { select: { patientId: true } } },
     }),

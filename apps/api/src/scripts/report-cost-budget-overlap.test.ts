@@ -569,10 +569,19 @@ describe('report-cost-budget-overlap (#546)', () => {
   // Language guard
   // ==========================================================================
   describe('formatReport language', () => {
-    it('frames rows as overlaps to review and never as duplicates or an amount owed', async () => {
+    // Reworded for task #590. The framing this test guards MOVED: before #590
+    // the banner said a double charge was "possible, not certain", because the
+    // engine billed both figures. #590 made the appointment's cost the only
+    // charge for its visit, so that sentence became a false statement on
+    // screen. The rows are still "overlaps to review" and still name nothing a
+    // duplicate and total no amount overcharged — what the banner now states
+    // is that the executed items no longer bill on their own, which is pinned
+    // below so a revert to the old prose cannot pass unnoticed.
+    it('frames rows as overlaps to review, states that the items no longer bill on their own, and still names no duplicate or amount owed', async () => {
       const text = formatReport(await report())
       expect(text).toContain('overlaps to review')
       expect(text).toContain('Read-only report: nothing was modified.')
+      expect(text).toContain('no longer bill on their own')
 
       // The banned-word scan runs on a synthetic report, never on `text`: the real one embeds the
       // clinic's data (status enums such as CONFIRMED, clinician-typed descriptions), so a
@@ -612,6 +621,7 @@ describe('report-cost-budget-overlap (#546)', () => {
         ],
       })
       expect(synthetic).toContain('overlaps to review')
+      expect(synthetic).toContain('no longer bill on their own')
       // The empty-report early return prints its own prose and is reached by neither string
       // above, so it needs the scan too: banned words planted in it went unnoticed otherwise.
       const empty = formatReport({ tenants: [], appointmentCount: 0 })
