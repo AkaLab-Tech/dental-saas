@@ -447,6 +447,10 @@ describe('Patients API', () => {
       expect(response.body.data).toHaveLength(1)
     })
 
+    // The active set's given names in family-name order. Shared by the paging
+    // case and its vacuity check so that repairing one re-evaluates the other.
+    const FAMILY_NAME_ORDER = ['Zoe', 'Alice', 'Ana', 'Bob', 'Carla']
+
     // #566 GUARD 5 at the route layer: walking the pages shows every active
     // patient exactly once, ordered by family name then given name. With the two
     // rows from beforeEach (Brown, Smith; Wilson is inactive) the active set is
@@ -466,7 +470,7 @@ describe('Patients API', () => {
       const label = (p: Row) => `${p.lastName}, ${p.firstName}`
       const limit = 2
       const pages: Row[][] = []
-      for (let offset = 0; offset < 20; offset += limit) {
+      for (let offset = 0; offset < FAMILY_NAME_ORDER.length + limit; offset += limit) {
         const response = await api()
           .get(`/api/patients?limit=${limit}&offset=${offset}`)
           .set('Authorization', `Bearer ${staffToken}`)
@@ -483,12 +487,26 @@ describe('Patients API', () => {
       const ids = pages.flat().map((p) => p.id)
       expect(new Set(ids).size).toBe(5)
 
-      // Vacuity check: ordering by given name would give a different sequence,
-      // so the expectation above cannot be met by sorting on the wrong column.
-      // (Reachable: Zoe sorts first by family name but last by given name.)
-      const byFamily = pages.flat().map((p) => p.firstName)
-      expect(byFamily).toEqual(['Zoe', 'Alice', 'Ana', 'Bob', 'Carla'])
-      expect(byFamily).not.toEqual([...byFamily].sort())
+      expect(pages.flat().map((p) => p.firstName)).toEqual(FAMILY_NAME_ORDER)
+    })
+
+    // The vacuity check for the case above, in a case of its own because as a
+    // trailing assertion it was shielded: any wrong ordering throws at the page
+    // expectation first, so the check was never evaluated when something was
+    // actually wrong. Measured on a service `orderBy` perturbation — the case
+    // failed at the page expectation and the vacuity assertion did not run.
+    //
+    // What it guards is the fixture, not the code: the paging expectation only
+    // proves the ordering column if the fixture distinguishes family-name order
+    // from given-name order. If a later edit makes the two coincide, that
+    // expectation becomes satisfiable by sorting on the wrong column, and this is
+    // the case that says so.
+    it('the fixture orders differently by family name than by given name (vacuity check)', () => {
+      const givenNameOrder = ['Alice', 'Ana', 'Bob', 'Carla', 'Zoe']
+      // Written out independently above, so this first assertion is what keeps it
+      // from going stale against the shared constant.
+      expect(givenNameOrder).toEqual([...FAMILY_NAME_ORDER].sort())
+      expect(FAMILY_NAME_ORDER).not.toEqual(givenNameOrder)
     })
 
     it('should return 401 without authentication', async () => {

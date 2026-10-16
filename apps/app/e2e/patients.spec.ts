@@ -126,9 +126,10 @@ test.describe('Patients Management', () => {
       // displayed in the SERVER's order: family name, then given name. This
       // run's patient is family "Detalle<epoch>", so the competitor's family
       // name "Anterior<epoch>" sorts before it ("A" < "D") whatever the given
-      // names are, and is the first row. A test that takes the first row or
-      // the first "Ver ficha" link opens this one and fails the id check; a
-      // competitor placed AFTER the target would let `.first()` pass.
+      // names are. What pins the record is its identity (the id check), not its
+      // position: a test that takes the first row or the first "Ver ficha" link
+      // opens the competitor and fails that check, whereas a competitor placed
+      // AFTER the target would let `.first()` pass.
       const competingId = await createPatient('E2E', `Anterior${Date.now()}`)
       const ownId = await createPatient('E2E', uniqueLastName)
       expect(ownId).not.toBe(competingId)
