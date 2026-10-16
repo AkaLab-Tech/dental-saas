@@ -451,10 +451,14 @@ export async function getAppointmentEarmarks(
 /**
  * Get all billable items for a patient, ordered by date ASC (for FIFO)
  */
+// BILLABLE_APPOINTMENT_RULE: an appointment bills unless it is soft-deleted
+// (isActive) or CANCELLED. `status: { not: 'CANCELLED' }` is deliberate over an
+// allow-list so a status added later bills by default. Mirrored in
+// getPatientBalance and computeOutstandingByPatient — change all three together.
 async function getBillableItems(tenantId: string, patientId: string): Promise<BillableItem[]> {
   const [appointments, labworks, executedLinks] = await Promise.all([
     prisma.appointment.findMany({
-      where: { tenantId, patientId, isActive: true, cost: { not: null } },
+      where: { tenantId, patientId, isActive: true, status: { not: 'CANCELLED' }, cost: { not: null } },
       select: { id: true, cost: true, startTime: true, isPaid: true },
       orderBy: { startTime: 'asc' },
     }),
@@ -684,7 +688,7 @@ export async function getPatientBalance(
 
   const [appointmentsAgg, labworksAgg, paymentsAgg, executedBudgetItems, reservations] = await Promise.all([
     prisma.appointment.aggregate({
-      where: { tenantId, patientId, isActive: true, cost: { not: null, gt: 0 } },
+      where: { tenantId, patientId, isActive: true, status: { not: 'CANCELLED' }, cost: { not: null, gt: 0 } },
       _sum: { cost: true },
     }),
     prisma.labwork.aggregate({
@@ -948,7 +952,7 @@ export async function computeOutstandingByPatient(
   const [appointments, labworks, payments, executedBudgetItems, reservationsByPatient] = await Promise.all([
     prisma.appointment.groupBy({
       by: ['patientId'],
-      where: { tenantId, isActive: true, cost: { not: null, gt: 0 } },
+      where: { tenantId, isActive: true, status: { not: 'CANCELLED' }, cost: { not: null, gt: 0 } },
       _sum: { cost: true },
     }),
     prisma.labwork.groupBy({

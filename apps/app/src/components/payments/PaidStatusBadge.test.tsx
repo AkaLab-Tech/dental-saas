@@ -156,6 +156,31 @@ describe('getPaidStatus — charged vs covered (#524)', () => {
   })
 })
 
+// #588: the badge has no notion of appointment status, so a cancelled row's
+// reading is decided entirely by the figures the API sends. After the fix the
+// API sends isPaid=false, paidAmount=0, recordedPaidAmount=0 for a cancelled
+// appointment (measured in apps/api appointments-cancelled-not-billed.test.ts).
+describe('getPaidStatus — cancelled appointment (#588)', () => {
+  it('post-fix cancelled state (isPaid false, paidAmount 0, recorded 0) reads "pending", not "paid"/"covered"', () => {
+    expect(getPaidStatus({ isPaid: false, cost: 2300, paidAmount: 0, recordedPaidAmount: 0 })).toBe('pending')
+  })
+
+  it('the pre-fix frozen state (isPaid true, recorded 0) reads "covered" - the contradiction #588 removes', () => {
+    expect(getPaidStatus({ isPaid: true, cost: 2300, paidAmount: 0, recordedPaidAmount: 0 })).toBe('covered')
+  })
+
+  it('with isPaid false NO combination of the other inputs yields paid/charged/covered/mixed (whole space given isPaid=false)', () => {
+    const costs = [0, 1, 400, 2300]
+    const amounts = [undefined, 0, 1, 400, 2300, 5000]
+    const seen = new Set<string>()
+    for (const cost of costs)
+      for (const paidAmount of amounts)
+        for (const recordedPaidAmount of amounts)
+          seen.add(getPaidStatus({ isPaid: false, cost, paidAmount, recordedPaidAmount }))
+    expect([...seen].sort()).toEqual(['partial', 'pending'])
+  })
+})
+
 describe('PaidStatusBadge — charged vs covered labels (#524)', () => {
   const cases = [
     { name: 'case 1', props: { isPaid: false, cost: 3000, paidAmount: 0, recordedPaidAmount: 0 }, label: 'Pendiente', icon: 'lucide-clock' },

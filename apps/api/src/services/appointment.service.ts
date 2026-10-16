@@ -699,6 +699,7 @@ export async function updateAppointment(
       endTime: true,
       isPaid: true,
       cost: true,
+      status: true,
     },
   })
 
@@ -792,6 +793,21 @@ export async function updateAppointment(
     },
   })
 
+  // Cancelling through the ordinary edit has to do what deleteAppointment does
+  // with the money: a cancelled appointment no longer bills, so a payment
+  // earmarked to it becomes an advance instead of silently re-allocating.
+  const cancelledNow = data.status === 'CANCELLED' && existing.status !== 'CANCELLED'
+  if (cancelledNow) {
+    await prisma.$transaction(async (tx) => {
+      await convertAppointmentPaymentsToAdvance(tx, tenantId, id, actorUserId)
+      // isPaid is derived by recalculatePaidStatus, which only reaches billable
+      // items, and a CANCELLED appointment is now outside that set for good. So
+      // nothing else will ever clear the flag: without this write the row keeps
+      // a frozen isPaid=true and renders as paid / covered by balance.
+      await tx.appointment.update({ where: { id }, data: { isPaid: false } })
+    })
+  }
+
   // Resolve effective post-update cost (numeric) and patient.
   const newCostNumber =
     data.cost === null
@@ -836,7 +852,7 @@ export async function updateAppointment(
       logger.info(`Appointment updated with auto-payment: ${id}`)
       return { appointment: updated }
     }
-  } else if (costChanged) {
+  } else if (costChanged || cancelledNow) {
     // Cost changed without an isPaid transition: re-run FIFO so derived
     // isPaid stays consistent with the new debt total.
     await recalculatePaidStatus(tenantId, patientId)
