@@ -252,6 +252,13 @@ export function AppointmentFormModal({
   const resetIdentityRef = useRef<string | null>(null)
   // The last cost figure the items prefill proposed (see the effect below).
   const prefilledCostRef = useRef<string | null>(null)
+  // Armed only by the operator ticking/unticking an item in this session. The
+  // items of an appointment being edited load asynchronously AFTER the reset
+  // below, so a total above zero on its own cannot tell "the operator just
+  // associated items" from "this appointment already had items when it
+  // opened" - and a reopen is neither of task #590's triggers (associating
+  // items, or confirming them executed), so it must propose nothing.
+  const costPrefillArmedRef = useRef(false)
 
   useEffect(() => {
     if (!isOpen) {
@@ -265,6 +272,7 @@ export function AppointmentFormModal({
     // A reset discards whatever the cost prefill proposed for the previous
     // identity, so its memory of its own proposal has to go with it.
     prefilledCostRef.current = null
+    costPrefillArmedRef.current = false
 
     if (appointment) {
       const startDate = new Date(appointment.startTime)
@@ -424,12 +432,18 @@ export function AppointmentFormModal({
   //     so a figure the operator typed is never silently overwritten;
   //   - a total that falls to 0 (the last item unlinked) leaves the field as
   //     the operator last saw it — clearing a number someone typed is
-  //     indistinguishable from losing it.
+  //     indistinguishable from losing it;
+  //   - it needs an operator gesture (see costPrefillArmedRef): merely opening
+  //     an appointment that already has items proposes nothing, so a
+  //     historically costless visit cannot acquire a cost on an incidental
+  //     save.
   useEffect(() => {
     if (!isOpen) {
       prefilledCostRef.current = null
+      costPrefillArmedRef.current = false
       return
     }
+    if (!costPrefillArmedRef.current) return
     if (itemsChargeTotal <= 0) return
     // Trailing zeros stripped: the number input shows "2500", not "2500.00".
     const proposal = String(Number(itemsChargeTotal.toFixed(2)))
@@ -440,6 +454,9 @@ export function AppointmentFormModal({
   }, [isOpen, itemsChargeTotal, getValues, setValue])
 
   const toggleBudgetItem = (itemId: string) => {
+    // The only gesture that arms the cost prefill. Set before the state update
+    // so the effect keyed on the new total sees it on the very next render.
+    costPrefillArmedRef.current = true
     setSelectedBudgetItemIds((prev) =>
       prev.includes(itemId) ? prev.filter((id) => id !== itemId) : [...prev, itemId]
     )

@@ -2178,6 +2178,187 @@ describe('AppointmentFormModal — cost prefilled from associated budget items (
     expect(getCostInput()).not.toHaveAttribute('readonly')
   })
 
+  // --------------------------------------------------------------------------
+  // GUARD 7 (#590, review cycle 2) — the prefill needs an OPERATOR GESTURE
+  // --------------------------------------------------------------------------
+  //
+  // The prefill effect is keyed on `itemsChargeTotal`, and a total above zero
+  // on its own cannot tell "the operator just associated items" from "this
+  // appointment already had items when it opened": in edit mode the items load
+  // asynchronously AFTER the identity reset has written '' into the cost
+  // field, so the effect would fire on a plain reopen. Task #590's trigger is
+  // associating items or confirming them executed; a reopen is neither, and
+  // letting it fill the field turns an incidental save of a historically
+  // costless visit into a new charge (and, for merely SCHEDULED items, a
+  // charge for work nobody has confirmed executed, which
+  // BUDGET_ITEM_BILLABLE_AUTHORITY reserves for the EXECUTED role).
+  //
+  // Both fixtures are ordinary production states: a visit planned from a
+  // budget carries SCHEDULED links and no cost, and an EXECUTED link with no
+  // typed cost is exactly the state the #544 disclosure is about.
+  //
+  // Each block opens with a VACUITY CHECK on the items total. "The field is
+  // empty" is satisfied by a total of zero as well as by the gate, so without
+  // it these would pass on a fixture that never reaches the effect at all. The
+  // check is the hint under the field, which renders only while
+  // itemsChargeTotal > 0 and names the figure.
+  describe('GUARD 7 — items already associated when the modal opens', () => {
+    const PREASSOCIATED_HINT = () =>
+      screen.queryByText(i18n.t('appointments.form.costFromItemsHint', { total: 'USD 2,500.00' }))
+
+    /**
+     * Edit mode on an appointment with a stored `cost: null`, whose only item
+     * is already linked to it in `role` — the item is in the patient's budget
+     * with `itemStatus`, so it survives the PENDING filter via `associatedIds`
+     * exactly as it does in production.
+     */
+    async function openEditWithPreassociatedItem(
+      role: 'SCHEDULED' | 'EXECUTED',
+      itemStatus: BudgetItem['status']
+    ) {
+      listBudgetsByPatientMock.mockResolvedValue({
+        data: [
+          makeBudget({
+            items: [
+              makeBudgetItem({
+                id: 'item-2500',
+                description: ITEM_2500,
+                unitPrice: '2500',
+                totalPrice: '2500',
+                status: itemStatus,
+              }),
+            ],
+          }),
+        ],
+        total: 1,
+      })
+      getAppointmentBudgetItemsMock.mockResolvedValue([
+        makeAssociatedItem({
+          id: 'item-2500',
+          description: ITEM_2500,
+          unitPrice: '2500',
+          totalPrice: '2500',
+          status: itemStatus,
+          roles: [role],
+        }),
+      ])
+      const rendered = renderModal({ appointment: makeAppointment({ id: 'apt-1', cost: null }) })
+      await waitForOptionsLoaded()
+      await waitFor(() => expect(screen.getByText(ITEM_2500)).toBeInTheDocument())
+      // The association has landed: the item is checked (SCHEDULED is
+      // preselected; EXECUTED is checked+disabled), so the prefill effect has
+      // run with a total above zero.
+      await waitFor(() => expect(getItemCheckbox(ITEM_2500)).toBeChecked())
+      return rendered
+    }
+
+    // ---- SCHEDULED links -------------------------------------------------
+    it('VACUITY — a SCHEDULED pre-association puts 2500 on the table (so an empty field below is the gate, not a zero total)', async () => {
+      await openEditWithPreassociatedItem('SCHEDULED', 'SCHEDULED')
+      await waitFor(() => expect(PREASSOCIATED_HINT()).toBeInTheDocument())
+    })
+
+    it('a SCHEDULED pre-association leaves the cost field EMPTY — opening is not an operator gesture', async () => {
+      await openEditWithPreassociatedItem('SCHEDULED', 'SCHEDULED')
+      await waitFor(() => expect(PREASSOCIATED_HINT()).toBeInTheDocument())
+      expect(getCostInput().value).toBe('')
+    })
+
+    it('a SCHEDULED pre-association then saved unchanged submits cost: null', async () => {
+      const { onSubmit } = await openEditWithPreassociatedItem('SCHEDULED', 'SCHEDULED')
+      await waitFor(() => expect(PREASSOCIATED_HINT()).toBeInTheDocument())
+      await submit(/guardar cambios/i)
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+      const payload = onSubmit.mock.calls[0][0] as Record<string, unknown>
+      expect(payload.cost).toBeNull()
+    })
+
+    it('a SCHEDULED pre-association then saved unchanged does NOT submit the items total (2500)', async () => {
+      const { onSubmit } = await openEditWithPreassociatedItem('SCHEDULED', 'SCHEDULED')
+      await waitFor(() => expect(PREASSOCIATED_HINT()).toBeInTheDocument())
+      await submit(/guardar cambios/i)
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+      expect((onSubmit.mock.calls[0][0] as { cost?: unknown }).cost).not.toBe(2500)
+    })
+
+    // ---- EXECUTED links --------------------------------------------------
+    it('VACUITY — an EXECUTED pre-association puts 2500 on the table (so an empty field below is the gate, not a zero total)', async () => {
+      await openEditWithPreassociatedItem('EXECUTED', 'EXECUTED')
+      await waitFor(() => expect(PREASSOCIATED_HINT()).toBeInTheDocument())
+    })
+
+    it('an EXECUTED pre-association leaves the cost field EMPTY — opening is not an operator gesture', async () => {
+      await openEditWithPreassociatedItem('EXECUTED', 'EXECUTED')
+      await waitFor(() => expect(PREASSOCIATED_HINT()).toBeInTheDocument())
+      expect(getCostInput().value).toBe('')
+    })
+
+    it('an EXECUTED pre-association then saved unchanged submits cost: null', async () => {
+      const { onSubmit } = await openEditWithPreassociatedItem('EXECUTED', 'EXECUTED')
+      await waitFor(() => expect(PREASSOCIATED_HINT()).toBeInTheDocument())
+      await submit(/guardar cambios/i)
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+      const payload = onSubmit.mock.calls[0][0] as Record<string, unknown>
+      expect(payload.cost).toBeNull()
+    })
+
+    it('an EXECUTED pre-association then saved unchanged does NOT submit the items total (2500)', async () => {
+      const { onSubmit } = await openEditWithPreassociatedItem('EXECUTED', 'EXECUTED')
+      await waitFor(() => expect(PREASSOCIATED_HINT()).toBeInTheDocument())
+      await submit(/guardar cambios/i)
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+      expect((onSubmit.mock.calls[0][0] as { cost?: unknown }).cost).not.toBe(2500)
+    })
+
+    // The gate must not swallow the gesture it exists to detect: with the same
+    // pre-association open, ticking the OTHER item does prefill, so the field
+    // being empty above is "no gesture yet", not "prefill disabled in edit
+    // mode".
+    it('and the gate is not a blanket disable: ticking a further item in the same session still prefills', async () => {
+      listBudgetsByPatientMock.mockResolvedValue({
+        data: [
+          makeBudget({
+            items: [
+              makeBudgetItem({
+                id: 'item-2500',
+                description: ITEM_2500,
+                unitPrice: '2500',
+                totalPrice: '2500',
+                status: 'SCHEDULED',
+              }),
+              makeBudgetItem({
+                id: 'item-1300',
+                description: ITEM_1300,
+                unitPrice: '1300',
+                totalPrice: '1300',
+              }),
+            ],
+          }),
+        ],
+        total: 1,
+      })
+      getAppointmentBudgetItemsMock.mockResolvedValue([
+        makeAssociatedItem({
+          id: 'item-2500',
+          description: ITEM_2500,
+          unitPrice: '2500',
+          totalPrice: '2500',
+          status: 'SCHEDULED',
+          roles: ['SCHEDULED'],
+        }),
+      ])
+      renderModal({ appointment: makeAppointment({ id: 'apt-1', cost: null }) })
+      await waitForOptionsLoaded()
+      await waitFor(() => expect(screen.getByText(ITEM_1300)).toBeInTheDocument())
+      await waitFor(() => expect(getItemCheckbox(ITEM_2500)).toBeChecked())
+      expect(getCostInput().value).toBe('')
+
+      fireEvent.click(getItemCheckbox(ITEM_1300))
+      // 2500 (already associated) + 1300 (just ticked).
+      await waitFor(() => expect(getCostInput().value).toBe('3800'))
+    })
+  })
+
   it('the hint names the items total and appears only while there is one', async () => {
     await openCreateWithItems()
     const hint = () => screen.queryByText(i18n.t('appointments.form.costFromItemsHint', { total: 'USD 2,500.00' }))

@@ -716,7 +716,7 @@ describe('report-cost-budget-overlap (#546)', () => {
     }
 
     const YES =
-      "Typed cost supersedes the executed items: yes - they no longer bill on their own, so the patient's debt falls by this subtotal."
+      "Typed cost supersedes the executed items: yes - they no longer bill on their own here, so the patient's debt falls by at most this subtotal. It is an upper bound: an item also executed on a visit the rule leaves alone keeps billing there, and an item executed on two costed visits is counted in both rows though it stops billing once."
     const ZERO =
       'Typed cost supersedes the executed items: no - the typed cost is zero, so the items keep billing and this subtotal is no fall in debt.'
     const CANCELLED =
@@ -730,6 +730,56 @@ describe('report-cost-budget-overlap (#546)', () => {
 
     it('announces in the banner that it also lists rows the rule leaves alone', () => {
       expect(render([row()])).toContain('the rows the rule leaves alone')
+    })
+
+    // ------------------------------------------------------------------------
+    // The subtotal is an UPPER BOUND on the fall in debt, not the fall
+    // (#590, review cycle 2)
+    // ------------------------------------------------------------------------
+    //
+    // `getBillableItems` skips per LINK, not per item, so the subtotal
+    // overstates the fall in two reachable ways: an item also executed on a
+    // visit this rule leaves alone (costless, zero-cost or CANCELLED) keeps
+    // billing there, and an item executed on two costed visits is counted in
+    // both of their rows although it stops billing once. Multi-link is
+    // reachable: the unique key is [item, appointment, role] and markDone
+    // upserts per appointment.
+    //
+    // The equality assertions on YES/ZERO/CANCELLED below would also hold on
+    // prose that dropped the qualification and said the debt falls BY the
+    // subtotal, because the constant would have been edited to match. These
+    // assertions name the property instead, so a silent return to the
+    // overstated claim is a red with a name.
+    it('the "yes" note bounds the fall in debt ("at most"), rather than equating it to the subtotal', () => {
+      const [note] = noteLines(render([row()]))
+      expect(note).toContain("the patient's debt falls by at most this subtotal")
+      expect(note).toContain('It is an upper bound')
+    })
+
+    it('the "yes" note does NOT state the debt falls BY the subtotal (the overstated claim)', () => {
+      expect(noteLines(render([row()]))[0]).not.toContain("debt falls by this subtotal")
+    })
+
+    it('the "yes" note names both ways the subtotal overstates the fall', () => {
+      const [note] = noteLines(render([row()]))
+      // Link-scoped skipping: another visit the rule leaves alone keeps billing.
+      expect(note).toContain('an item also executed on a visit the rule leaves alone keeps billing there')
+      // Double counting across two costed rows for one item that stops once.
+      expect(note).toContain('an item executed on two costed visits is counted in both rows though it stops billing once')
+    })
+
+    it('the banner bounds the fall in debt too ("at most how much"), not just the per-row note', () => {
+      expect(render([row()])).toContain("the subtotal shown is at most how much the patient's debt falls")
+    })
+
+    it('the banner does NOT claim the subtotal IS how much the debt falls', () => {
+      expect(render([row()])).not.toContain("the subtotal shown is how much the patient's debt falls")
+    })
+
+    it('the banner says why it is only a bound: a multi-visit item stops billing only when every one of those visits supersedes it', () => {
+      expect(render([row()])).toContain(
+        'an item executed on several visits only stops billing when every one of those visits supersedes it'
+      )
     })
 
     it('marks a non-CANCELLED row with a cost above zero as superseded', () => {
