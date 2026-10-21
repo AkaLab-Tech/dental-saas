@@ -92,8 +92,8 @@ export function BudgetCard({ budget, patientId, onDelete }: BudgetCardProps) {
   const canDelete = can(Permission.BUDGETS_DELETE)
   const canUpdate = can(Permission.BUDGETS_UPDATE)
 
-  // The store replaces the budget with the server's response, which may
-  // differ from the value chosen (APPROVED can come back as COMPLETED).
+  // The store replaces the budget with the server's response. The options
+  // come from getSettableBudgetStatuses, so the chosen status persists as picked.
   const handleStatusChange = async (status: BudgetStatus) => {
     setIsSavingStatus(true)
     try {

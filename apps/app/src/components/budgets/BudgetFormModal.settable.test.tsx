@@ -40,6 +40,7 @@ describe('BudgetFormModal schema follows the shared settable list (#606)', () =>
     const select = screen.getByLabelText('Estado') as HTMLSelectElement
     expect(Array.from(select.options).map((o) => o.value)).toContain('PARTIAL')
     fireEvent.change(select, { target: { value: 'PARTIAL' } })
+    expect(select).toHaveValue('PARTIAL')
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
     expect(onSubmit.mock.calls[0][0].status).toBe('PARTIAL')

@@ -38,6 +38,7 @@ describe('BudgetFormModal status (#606)', () => {
   it('sends the chosen non-default status in the create payload', async () => {
     openForm()
     fireEvent.change(screen.getByLabelText('Estado'), { target: { value: 'APPROVED' } })
+    expect(screen.getByLabelText('Estado')).toHaveValue('APPROVED')
     const payload = await submit()
     expect(payload.status).toBe('APPROVED')
   })
@@ -45,6 +46,7 @@ describe('BudgetFormModal status (#606)', () => {
   it('sends CANCELLED when that is chosen', async () => {
     openForm()
     fireEvent.change(screen.getByLabelText('Estado'), { target: { value: 'CANCELLED' } })
+    expect(screen.getByLabelText('Estado')).toHaveValue('CANCELLED')
     const payload = await submit()
     expect(payload.status).toBe('CANCELLED')
   })
