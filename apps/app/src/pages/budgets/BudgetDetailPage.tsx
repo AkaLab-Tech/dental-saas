@@ -23,7 +23,11 @@ import type {
   BudgetStatus,
   BudgetItemStatus,
 } from '@/lib/budget-api'
-import { getExecutedItemsCount, shareBudget } from '@/lib/budget-api'
+import {
+  getExecutedItemsCount,
+  shareBudget,
+  getSettableBudgetStatuses,
+} from '@/lib/budget-api'
 import { downloadBudgetPdf } from '@/lib/pdf-api'
 import { useBudgetsStore } from '@/stores/budgets.store'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -45,15 +49,6 @@ const ITEM_STATUS_OPTIONS: BudgetItemStatus[] = [
   'SCHEDULED',
   'IN_PROGRESS',
   'EXECUTED',
-  'CANCELLED',
-]
-
-// `PARTIAL` and `COMPLETED` are derived by the backend from item states
-// (see `deriveBudgetStatus` in `budget.service.ts`) and are normalized on
-// every write, so they must not appear as user-selectable options.
-const USER_SETTABLE_BUDGET_STATUSES: BudgetStatus[] = [
-  'DRAFT',
-  'APPROVED',
   'CANCELLED',
 ]
 
@@ -147,6 +142,7 @@ export default function BudgetDetailPage() {
   }
 
   const { executed, total: totalItems } = getExecutedItemsCount(currentBudget)
+  const settableStatuses = getSettableBudgetStatuses(currentBudget)
 
   const metadataDirty =
     metadataDraft.notes !== (currentBudget.notes ?? '') ||
@@ -406,7 +402,7 @@ export default function BudgetDetailPage() {
       {/* Metadata card */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">
-          {t('budgets.notes')}
+          {t('budgets.details')}
         </h2>
         <div className="space-y-4">
           <div>
@@ -425,7 +421,7 @@ export default function BudgetDetailPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t('common.status') /* fallback; we use budget status next */}
+              {t('common.status')}
             </label>
             <select
               value={metadataDraft.status}
@@ -438,12 +434,12 @@ export default function BudgetDetailPage() {
               }
               className="w-full sm:w-auto rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-500"
             >
-              {!USER_SETTABLE_BUDGET_STATUSES.includes(currentBudget.status) && (
+              {!settableStatuses.includes(currentBudget.status) && (
                 <option value={currentBudget.status} disabled>
                   {t(`budgets.status.${currentBudget.status}`)}
                 </option>
               )}
-              {USER_SETTABLE_BUDGET_STATUSES.map((s) => (
+              {settableStatuses.map((s) => (
                 <option key={s} value={s}>
                   {t(`budgets.status.${s}`)}
                 </option>

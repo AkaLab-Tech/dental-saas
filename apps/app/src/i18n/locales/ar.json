@@ -822,6 +822,7 @@
     "noBudgets": "لا توجد ميزانيات لهذا المريض بعد",
     "total": "الإجمالي",
     "validUntil": "صالح حتى",
+    "details": "تفاصيل الميزانية",
     "notes": "ملاحظات",
     "notesPlaceholder": "ملاحظات داخلية (اختياري)",
     "itemsCount_one": "{{count}} عنصر",

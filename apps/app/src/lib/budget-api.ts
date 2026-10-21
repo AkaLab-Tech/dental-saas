@@ -6,6 +6,15 @@ import { apiClient } from './api'
 
 export type BudgetStatus = 'DRAFT' | 'APPROVED' | 'PARTIAL' | 'COMPLETED' | 'CANCELLED'
 
+// `PARTIAL` and `COMPLETED` are derived by the backend from item states
+// (see `deriveBudgetStatus` in `budget.service.ts`) and are normalized on
+// every write, so they must not appear as user-selectable options.
+export const USER_SETTABLE_BUDGET_STATUSES = [
+  'DRAFT',
+  'APPROVED',
+  'CANCELLED',
+] as const satisfies readonly BudgetStatus[]
+
 export type BudgetItemStatus =
   | 'PENDING'
   | 'SCHEDULED'
@@ -208,6 +217,16 @@ export async function deleteBudgetItem(
 // ============================================================================
 // Helpers
 // ============================================================================
+
+// Statuses a user may pick for this budget. APPROVED is offered only when there
+// are no active (non-CANCELLED) lines or none of them is EXECUTED: otherwise the
+// backend derives PARTIAL (some executed) or COMPLETED (all executed) and the
+// choice would not persist. PARTIAL and COMPLETED are never offered.
+export function getSettableBudgetStatuses(budget: Pick<Budget, 'items'>): BudgetStatus[] {
+  const active = budget.items.filter((i) => i.status !== 'CANCELLED')
+  const anyExecuted = active.some((i) => i.status === 'EXECUTED')
+  return USER_SETTABLE_BUDGET_STATUSES.filter((s) => !(anyExecuted && s === 'APPROVED'))
+}
 
 /**
  * Returns the amount of items in EXECUTED status vs the total. Useful for

@@ -4,7 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { X, Loader2, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { CreateBudgetData } from '@/lib/budget-api'
+import type { BudgetStatus, CreateBudgetData } from '@/lib/budget-api'
+import { USER_SETTABLE_BUDGET_STATUSES } from '@/lib/budget-api'
 import { useAuthStore } from '@/stores/auth.store'
 import { formatCurrency } from '@/lib/format'
 
@@ -23,6 +24,7 @@ const budgetItemSchema = z.object({
 const budgetFormSchema = z.object({
   notes: z.string().max(2000).optional(),
   validUntil: z.string().optional(),
+  status: z.enum(USER_SETTABLE_BUDGET_STATUSES),
   items: z.array(budgetItemSchema).min(1, 'minOneItem'),
 })
 
@@ -64,6 +66,7 @@ export function BudgetFormModal({
     defaultValues: {
       notes: '',
       validUntil: '',
+      status: 'DRAFT',
       items: [EMPTY_ITEM],
     },
   })
@@ -73,7 +76,7 @@ export function BudgetFormModal({
   // Reset to a clean state every time the modal opens (create-only)
   useEffect(() => {
     if (isOpen) {
-      reset({ notes: '', validUntil: '', items: [EMPTY_ITEM] })
+      reset({ notes: '', validUntil: '', status: 'DRAFT', items: [EMPTY_ITEM] })
     }
   }, [isOpen, reset])
 
@@ -105,6 +108,7 @@ export function BudgetFormModal({
     const payload: CreateBudgetData = {
       ...(data.notes ? { notes: data.notes } : {}),
       ...(data.validUntil ? { validUntil: data.validUntil } : {}),
+      status: data.status,
       items: data.items.map((item, idx) => ({
         description: item.description,
         toothNumber: item.toothNumber?.trim() ? item.toothNumber.trim() : null,
@@ -169,6 +173,25 @@ export function BudgetFormModal({
                     {...register('validUntil')}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
+                </div>
+                <div>
+                  <label
+                    htmlFor="budget-status"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    {t('common.status')}
+                  </label>
+                  <select
+                    id="budget-status"
+                    {...register('status')}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    {USER_SETTABLE_BUDGET_STATUSES.map((s: BudgetStatus) => (
+                      <option key={s} value={s}>
+                        {t(`budgets.status.${s}`)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

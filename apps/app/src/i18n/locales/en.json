@@ -822,6 +822,7 @@
     "noBudgets": "This patient has no budgets yet",
     "total": "Total",
     "validUntil": "Valid until",
+    "details": "Budget details",
     "notes": "Notes",
     "notesPlaceholder": "Internal remarks (optional)",
     "itemsCount_one": "{{count}} item",
