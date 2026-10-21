@@ -108,6 +108,43 @@ export async function checkPatientLimit(
 }
 
 /**
+ * Splits a search query into the terms every matching row has to satisfy.
+ * A query that is empty or only whitespace yields no terms, which callers
+ * treat exactly like no search at all.
+ */
+function searchTerms(search: string | undefined): string[] {
+  return (search ?? '').split(/\s+/).filter((term) => term.length > 0)
+}
+
+/**
+ * Ids of the tenant's patients where EVERY term matches at least one of the
+ * searchable columns, so "Ana Perez" finds the row whose two words live in
+ * two different columns.
+ *
+ * Raw SQL because `unaccent()` makes the comparison accent-insensitive and
+ * Prisma's `contains` cannot call a SQL function. Raw SQL does not go through
+ * Prisma's tenant filtering, so the `tenantId` predicate is written here by
+ * hand; it and every term are bound as parameters, never interpolated.
+ */
+async function searchPatientIds(tenantId: string, terms: string[]): Promise<string[]> {
+  const termMatches = terms.map((term) => {
+    const pattern = `%${term}%`
+    return Prisma.sql`(
+      unaccent("firstName") ILIKE unaccent(${pattern})
+      OR unaccent("lastName") ILIKE unaccent(${pattern})
+      OR unaccent("email") ILIKE unaccent(${pattern})
+      OR unaccent("phone") ILIKE unaccent(${pattern})
+    )`
+  })
+
+  const rows = await prisma.$queryRaw<{ id: string }[]>(
+    Prisma.sql`SELECT "id" FROM "patients" WHERE "tenantId" = ${tenantId} AND ${Prisma.join(termMatches, ' AND ')}`
+  )
+
+  return rows.map((row) => row.id)
+}
+
+/**
  * List all patients for a tenant
  */
 export async function listPatients(
@@ -116,19 +153,12 @@ export async function listPatients(
 ): Promise<SafePatient[]> {
   const { limit = 50, offset = 0, includeInactive = false, search } = options || {}
 
+  const terms = searchTerms(search)
+
   const where: Prisma.PatientWhereInput = {
     tenantId,
     ...(includeInactive ? {} : { isActive: true }),
-    ...(search
-      ? {
-          OR: [
-            { firstName: { contains: search, mode: 'insensitive' } },
-            { lastName: { contains: search, mode: 'insensitive' } },
-            { email: { contains: search, mode: 'insensitive' } },
-            { phone: { contains: search, mode: 'insensitive' } },
-          ],
-        }
-      : {}),
+    ...(terms.length > 0 ? { id: { in: await searchPatientIds(tenantId, terms) } } : {}),
   }
 
   const patients = await prisma.patient.findMany({
