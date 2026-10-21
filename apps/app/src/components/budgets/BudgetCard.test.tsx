@@ -6,6 +6,8 @@ import '@/i18n'
 import { BudgetCard } from './BudgetCard'
 import type { Budget, BudgetItem, BudgetItemStatus } from '@/lib/budget-api'
 import { Permission } from '@dental/shared'
+import { useBudgetsStore } from '@/stores/budgets.store'
+import { USER_SETTABLE_BUDGET_STATUSES } from '@/lib/budget-api'
 
 beforeAll(async () => {
   await i18n.changeLanguage('es')
@@ -13,6 +15,15 @@ beforeAll(async () => {
 
 const canMock = vi.fn()
 const downloadBudgetPdfMock = vi.fn()
+const apiUpdateBudgetMock = vi.fn()
+
+vi.mock('@/lib/budget-api', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/budget-api')>('@/lib/budget-api')
+  return {
+    ...actual,
+    updateBudget: (id: string, data: unknown) => apiUpdateBudgetMock(id, data),
+  }
+})
 
 vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: () => ({
@@ -311,5 +322,111 @@ describe('BudgetCard', () => {
       expect(screen.getByText(`Item ${i}`)).toBeInTheDocument()
     }
     expect(screen.getByText(/Ver 2 más/)).toBeInTheDocument()
+  })
+})
+
+// Reads the budget from the store like the real list does, so the card shows
+// whatever the server returned after a status change.
+function StoreBackedCard({ id }: { id: string }) {
+  const budget = useBudgetsStore((s) => s.budgets.find((b) => b.id === id))!
+  return <BudgetCard budget={budget} patientId="patient-1" onDelete={vi.fn()} />
+}
+
+function renderStoreBacked(budget: Budget) {
+  useBudgetsStore.setState({ budgets: [budget], currentBudget: null })
+  return render(
+    <MemoryRouter>
+      <StoreBackedCard id={budget.id} />
+    </MemoryRouter>
+  )
+}
+
+function statusSelect() {
+  return screen.getByLabelText('Estado') as HTMLSelectElement
+}
+
+function optionValues(select: HTMLSelectElement) {
+  return Array.from(select.options).map((o) => o.value)
+}
+
+describe('BudgetCard status control (#606)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    canMock.mockReturnValue(true)
+  })
+
+  it('sends the chosen status to the API as the PATCH body', async () => {
+    const b = makeBudget({ id: 'budget-7', status: 'DRAFT' })
+    apiUpdateBudgetMock.mockResolvedValue({ ...b, status: 'CANCELLED' })
+    renderStoreBacked(b)
+    fireEvent.change(statusSelect(), { target: { value: 'CANCELLED' } })
+    await waitFor(() => expect(apiUpdateBudgetMock).toHaveBeenCalledTimes(1))
+    expect(apiUpdateBudgetMock).toHaveBeenCalledWith('budget-7', { status: 'CANCELLED' })
+  })
+
+  it('offers DRAFT, APPROVED and CANCELLED', () => {
+    renderCard(makeBudget({ status: 'DRAFT' }))
+    expect(optionValues(statusSelect())).toEqual(['DRAFT', 'APPROVED', 'CANCELLED'])
+  })
+
+  it('does not offer PARTIAL', () => {
+    renderCard(makeBudget({ status: 'DRAFT' }))
+    expect(optionValues(statusSelect())).not.toContain('PARTIAL')
+  })
+
+  it('does not offer COMPLETED', () => {
+    renderCard(makeBudget({ status: 'DRAFT' }))
+    expect(optionValues(statusSelect())).not.toContain('COMPLETED')
+  })
+
+  it('shows a derived current status as a disabled option, not as a settable one', () => {
+    renderCard(makeBudget({ status: 'PARTIAL' }))
+    const sel = statusSelect()
+    expect(sel).toHaveValue('PARTIAL')
+    const partial = Array.from(sel.options).find((o) => o.value === 'PARTIAL')!
+    expect(partial.disabled).toBe(true)
+  })
+
+  it('offers exactly the shared settable list, in its order', () => {
+    renderCard(makeBudget({ status: 'DRAFT' }))
+    expect(optionValues(statusSelect())).toEqual([...USER_SETTABLE_BUDGET_STATUSES])
+  })
+
+  it('shows the status the server returned (COMPLETED), not the one chosen (APPROVED)', async () => {
+    const executed = makeBudget({
+      id: 'budget-9',
+      status: 'DRAFT',
+      items: [makeItem({ id: 'e1', status: 'EXECUTED' })],
+    })
+    apiUpdateBudgetMock.mockResolvedValue({ ...executed, status: 'COMPLETED' })
+    renderStoreBacked(executed)
+    fireEvent.change(statusSelect(), { target: { value: 'APPROVED' } })
+    await waitFor(() => expect(statusSelect()).toHaveValue('COMPLETED'))
+    expect(apiUpdateBudgetMock).toHaveBeenCalledWith('budget-9', { status: 'APPROVED' })
+    expect(statusSelect()).not.toHaveValue('APPROVED')
+  })
+
+  it('hides the status control but keeps the other actions without BUDGETS_UPDATE', () => {
+    canMock.mockImplementation((p) => p !== Permission.BUDGETS_UPDATE)
+    renderCard(makeBudget({ status: 'APPROVED' }))
+    expect(screen.queryByLabelText('Estado')).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+    expect(screen.getByText('Aprobado')).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('Actions'))
+    expect(screen.getByText('Ver detalle')).toBeInTheDocument()
+    expect(screen.getByText('Descargar PDF')).toBeInTheDocument()
+    expect(screen.getByText('Eliminar presupuesto')).toBeInTheDocument()
+  })
+
+  it('leaves the total and the item progress unchanged after a status change', async () => {
+    const b = makeBudget({ id: 'budget-3', status: 'DRAFT' })
+    apiUpdateBudgetMock.mockResolvedValue({ ...b, status: 'APPROVED' })
+    renderStoreBacked(b)
+    expect(screen.getByText(/250\.5/)).toBeInTheDocument()
+    expect(screen.getByText(/1.*de.*2/i)).toBeInTheDocument()
+    fireEvent.change(statusSelect(), { target: { value: 'APPROVED' } })
+    await waitFor(() => expect(statusSelect()).toHaveValue('APPROVED'))
+    expect(screen.getByText(/250\.5/)).toBeInTheDocument()
+    expect(screen.getByText(/1.*de.*2/i)).toBeInTheDocument()
   })
 })

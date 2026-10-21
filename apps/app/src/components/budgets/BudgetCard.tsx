@@ -19,7 +19,8 @@ import {
 import { useTranslation } from 'react-i18next'
 import { Permission } from '@dental/shared'
 import type { Budget, BudgetItemStatus, BudgetStatus } from '@/lib/budget-api'
-import { getExecutedItemsCount } from '@/lib/budget-api'
+import { getExecutedItemsCount, USER_SETTABLE_BUDGET_STATUSES } from '@/lib/budget-api'
+import { useBudgetsStore } from '@/stores/budgets.store'
 import { downloadBudgetPdf } from '@/lib/pdf-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAuthStore } from '@/stores/auth.store'
@@ -65,6 +66,8 @@ export function BudgetCard({ budget, patientId, onDelete }: BudgetCardProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
   const [showAllItems, setShowAllItems] = useState(false)
+  const [isSavingStatus, setIsSavingStatus] = useState(false)
+  const updateBudget = useBudgetsStore((s) => s.updateBudget)
   const menuRef = useRef<HTMLDivElement>(null)
 
   const { executed, total: totalItems } = getExecutedItemsCount(budget)
@@ -86,6 +89,20 @@ export function BudgetCard({ budget, patientId, onDelete }: BudgetCardProps) {
   }, [menuOpen])
 
   const canDelete = can(Permission.BUDGETS_DELETE)
+  const canUpdate = can(Permission.BUDGETS_UPDATE)
+
+  // The store replaces the budget with the server's response, which may
+  // differ from the value chosen (APPROVED can come back as COMPLETED).
+  const handleStatusChange = async (status: BudgetStatus) => {
+    setIsSavingStatus(true)
+    try {
+      await updateBudget(budget.id, { status })
+    } catch (error) {
+      console.error('Failed to update budget status', error)
+    } finally {
+      setIsSavingStatus(false)
+    }
+  }
 
   const handleDownloadPdf = async () => {
     setIsDownloadingPdf(true)
@@ -112,11 +129,33 @@ export function BudgetCard({ budget, patientId, onDelete }: BudgetCardProps) {
                 <h3 className="text-base font-semibold text-gray-900 truncate">
                   {formatCurrency(Number(budget.totalAmount), currency)}
                 </h3>
-                <span
-                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[budget.status]}`}
-                >
-                  {t(`budgets.status.${budget.status}`)}
-                </span>
+                {!canUpdate && (
+                  <span
+                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[budget.status]}`}
+                  >
+                    {t(`budgets.status.${budget.status}`)}
+                  </span>
+                )}
+                {canUpdate && (
+                  <select
+                    aria-label={t('common.status')}
+                    value={budget.status}
+                    disabled={isSavingStatus}
+                    onChange={(e) => handleStatusChange(e.target.value as BudgetStatus)}
+                    className={`rounded-full border px-2 py-0.5 text-xs font-medium disabled:opacity-50 ${STATUS_STYLES[budget.status]}`}
+                  >
+                    {!USER_SETTABLE_BUDGET_STATUSES.includes(budget.status) && (
+                      <option value={budget.status} disabled>
+                        {t(`budgets.status.${budget.status}`)}
+                      </option>
+                    )}
+                    {USER_SETTABLE_BUDGET_STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {t(`budgets.status.${s}`)}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
                 {t('budgets.createdOn', { date: formatShortDate(budget.createdAt, i18n.language) })}

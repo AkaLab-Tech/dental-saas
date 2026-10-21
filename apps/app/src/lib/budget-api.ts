@@ -6,6 +6,15 @@ import { apiClient } from './api'
 
 export type BudgetStatus = 'DRAFT' | 'APPROVED' | 'PARTIAL' | 'COMPLETED' | 'CANCELLED'
 
+// `PARTIAL` and `COMPLETED` are derived by the backend from item states
+// (see `deriveBudgetStatus` in `budget.service.ts`) and are normalized on
+// every write, so they must not appear as user-selectable options.
+export const USER_SETTABLE_BUDGET_STATUSES: BudgetStatus[] = [
+  'DRAFT',
+  'APPROVED',
+  'CANCELLED',
+]
+
 export type BudgetItemStatus =
   | 'PENDING'
   | 'SCHEDULED'

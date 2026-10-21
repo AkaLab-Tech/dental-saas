@@ -7,7 +7,7 @@ import { useBudgetsStore } from '@/stores/budgets.store'
 import { useAuthStore } from '@/stores/auth.store'
 import { usePermissions } from '@/hooks/usePermissions'
 import { downloadBudgetPdf } from '@/lib/pdf-api'
-import { shareBudget } from '@/lib/budget-api'
+import { shareBudget, USER_SETTABLE_BUDGET_STATUSES } from '@/lib/budget-api'
 import type { Budget } from '@/lib/budget-api'
 
 // Mock react-i18next — return the key so assertions are stable regardless of locale
@@ -194,5 +194,59 @@ describe('BudgetDetailPage — PDF download & share gating', () => {
     fireEvent.click(screen.getByText('budgets.share.button'))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('network down')
+  })
+})
+
+describe('BudgetDetailPage — metadata card (#606)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockStore(makeBudget())
+    mockAuth()
+    ;(usePermissions as unknown as Mock).mockReturnValue({
+      can: () => true,
+      canAny: () => true,
+      canAll: () => true,
+    })
+  })
+
+  function budgetStatusSelect(): HTMLSelectElement {
+    const sel = screen
+      .getAllByRole('combobox')
+      .find((el) =>
+        Array.from((el as HTMLSelectElement).options).some((o) => o.value === 'APPROVED')
+      )
+    return sel as HTMLSelectElement
+  }
+
+  it('offers DRAFT, APPROVED and CANCELLED', () => {
+    renderPage()
+    const values = Array.from(budgetStatusSelect().options).map((o) => o.value)
+    expect(values).toEqual(['DRAFT', 'APPROVED', 'CANCELLED'])
+  })
+
+  it('offers the same status set as the shared settable list', () => {
+    renderPage()
+    const values = Array.from(budgetStatusSelect().options).map((o) => o.value)
+    expect(values).toEqual([...USER_SETTABLE_BUDGET_STATUSES])
+  })
+
+  it('does not offer PARTIAL or COMPLETED', () => {
+    renderPage()
+    const values = Array.from(budgetStatusSelect().options).map((o) => o.value)
+    expect(values).not.toContain('PARTIAL')
+    expect(values).not.toContain('COMPLETED')
+  })
+
+  it('titles the metadata card with the details heading, not the notes label', () => {
+    renderPage()
+    const heading = screen.getByRole('heading', { name: 'budgets.details' })
+    expect(heading).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'budgets.notes' })).not.toBeInTheDocument()
+  })
+
+  it('still labels the notes field with the notes label', () => {
+    renderPage()
+    const label = screen.getByText('budgets.notes')
+    expect(label.tagName).toBe('LABEL')
   })
 })

@@ -23,7 +23,11 @@ import type {
   BudgetStatus,
   BudgetItemStatus,
 } from '@/lib/budget-api'
-import { getExecutedItemsCount, shareBudget } from '@/lib/budget-api'
+import {
+  getExecutedItemsCount,
+  shareBudget,
+  USER_SETTABLE_BUDGET_STATUSES,
+} from '@/lib/budget-api'
 import { downloadBudgetPdf } from '@/lib/pdf-api'
 import { useBudgetsStore } from '@/stores/budgets.store'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -45,15 +49,6 @@ const ITEM_STATUS_OPTIONS: BudgetItemStatus[] = [
   'SCHEDULED',
   'IN_PROGRESS',
   'EXECUTED',
-  'CANCELLED',
-]
-
-// `PARTIAL` and `COMPLETED` are derived by the backend from item states
-// (see `deriveBudgetStatus` in `budget.service.ts`) and are normalized on
-// every write, so they must not appear as user-selectable options.
-const USER_SETTABLE_BUDGET_STATUSES: BudgetStatus[] = [
-  'DRAFT',
-  'APPROVED',
   'CANCELLED',
 ]
 
@@ -406,7 +401,7 @@ export default function BudgetDetailPage() {
       {/* Metadata card */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">
-          {t('budgets.notes')}
+          {t('budgets.details')}
         </h2>
         <div className="space-y-4">
           <div>
@@ -425,7 +420,7 @@ export default function BudgetDetailPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t('common.status') /* fallback; we use budget status next */}
+              {t('common.status')}
             </label>
             <select
               value={metadataDraft.status}
