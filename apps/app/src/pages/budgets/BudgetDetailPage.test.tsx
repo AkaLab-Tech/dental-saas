@@ -8,7 +8,7 @@ import { useAuthStore } from '@/stores/auth.store'
 import { usePermissions } from '@/hooks/usePermissions'
 import { downloadBudgetPdf } from '@/lib/pdf-api'
 import { shareBudget, USER_SETTABLE_BUDGET_STATUSES } from '@/lib/budget-api'
-import type { Budget } from '@/lib/budget-api'
+import type { Budget, BudgetItem } from '@/lib/budget-api'
 
 // Mock react-i18next — return the key so assertions are stable regardless of locale
 vi.mock('react-i18next', () => ({
@@ -66,6 +66,10 @@ function makeBudget(overrides: Partial<Budget> = {}): Budget {
     ],
     ...overrides,
   }
+}
+
+function makeItem(overrides: Partial<BudgetItem> = {}): BudgetItem {
+  return { ...makeBudget().items[0], ...overrides }
 }
 
 function mockStore(budget: Budget) {
@@ -213,7 +217,7 @@ describe('BudgetDetailPage — metadata card (#606)', () => {
     const sel = screen
       .getAllByRole('combobox')
       .find((el) =>
-        Array.from((el as HTMLSelectElement).options).some((o) => o.value === 'APPROVED')
+        Array.from((el as HTMLSelectElement).options).some((o) => o.value === 'CANCELLED')
       )
     return sel as HTMLSelectElement
   }
@@ -222,6 +226,24 @@ describe('BudgetDetailPage — metadata card (#606)', () => {
     renderPage()
     const values = Array.from(budgetStatusSelect().options).map((o) => o.value)
     expect(values).toEqual(['DRAFT', 'APPROVED', 'CANCELLED'])
+  })
+
+  it('does not offer APPROVED when some but not all active lines are EXECUTED', () => {
+    mockStore(
+      makeBudget({
+        items: [makeItem({ id: 'e1', status: 'EXECUTED' }), makeItem({ id: 'p1', status: 'PENDING' })],
+      })
+    )
+    renderPage()
+    const values = Array.from(budgetStatusSelect().options).map((o) => o.value)
+    expect(values).toEqual(['DRAFT', 'CANCELLED'])
+  })
+
+  it('offers APPROVED when no active line is EXECUTED', () => {
+    mockStore(makeBudget({ items: [makeItem({ id: 'p1', status: 'PENDING' })] }))
+    renderPage()
+    const values = Array.from(budgetStatusSelect().options).map((o) => o.value)
+    expect(values).toContain('APPROVED')
   })
 
   it('offers the same status set as the shared settable list', () => {

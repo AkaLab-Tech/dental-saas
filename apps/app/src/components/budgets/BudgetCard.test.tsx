@@ -365,7 +365,7 @@ describe('BudgetCard status control (#606)', () => {
   })
 
   it('offers DRAFT, APPROVED and CANCELLED', () => {
-    renderCard(makeBudget({ status: 'DRAFT' }))
+    renderCard(makeBudget({ status: 'DRAFT', items: [makeItem({ id: 'p1', status: 'PENDING' })] }))
     expect(optionValues(statusSelect())).toEqual(['DRAFT', 'APPROVED', 'CANCELLED'])
   })
 
@@ -387,8 +387,8 @@ describe('BudgetCard status control (#606)', () => {
     expect(partial.disabled).toBe(true)
   })
 
-  it('offers exactly the shared settable list, in its order', () => {
-    renderCard(makeBudget({ status: 'DRAFT' }))
+  it('offers exactly the shared settable list, in its order, when no active line is EXECUTED', () => {
+    renderCard(makeBudget({ status: 'DRAFT', items: [makeItem({ id: 'p1', status: 'PENDING' })] }))
     expect(optionValues(statusSelect())).toEqual([...USER_SETTABLE_BUDGET_STATUSES])
   })
 
@@ -402,11 +402,21 @@ describe('BudgetCard status control (#606)', () => {
     expect(optionValues(statusSelect())).toEqual(['DRAFT', 'CANCELLED'])
   })
 
-  it('offers APPROVED when at least one active line is not EXECUTED', () => {
+  it('does not offer APPROVED when some but not all active lines are EXECUTED', () => {
     renderCard(
       makeBudget({
         status: 'DRAFT',
         items: [makeItem({ id: 'e1', status: 'EXECUTED' }), makeItem({ id: 'p1', status: 'PENDING' })],
+      })
+    )
+    expect(optionValues(statusSelect())).toEqual(['DRAFT', 'CANCELLED'])
+  })
+
+  it('offers APPROVED when no active line is EXECUTED (PENDING and SCHEDULED)', () => {
+    renderCard(
+      makeBudget({
+        status: 'DRAFT',
+        items: [makeItem({ id: 'p1', status: 'PENDING' }), makeItem({ id: 's1', status: 'SCHEDULED' })],
       })
     )
     expect(optionValues(statusSelect())).toContain('APPROVED')

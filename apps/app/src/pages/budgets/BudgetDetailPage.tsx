@@ -26,7 +26,7 @@ import type {
 import {
   getExecutedItemsCount,
   shareBudget,
-  USER_SETTABLE_BUDGET_STATUSES,
+  getSettableBudgetStatuses,
 } from '@/lib/budget-api'
 import { downloadBudgetPdf } from '@/lib/pdf-api'
 import { useBudgetsStore } from '@/stores/budgets.store'
@@ -142,6 +142,7 @@ export default function BudgetDetailPage() {
   }
 
   const { executed, total: totalItems } = getExecutedItemsCount(currentBudget)
+  const settableStatuses = getSettableBudgetStatuses(currentBudget)
 
   const metadataDirty =
     metadataDraft.notes !== (currentBudget.notes ?? '') ||
@@ -433,12 +434,12 @@ export default function BudgetDetailPage() {
               }
               className="w-full sm:w-auto rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-500"
             >
-              {!(USER_SETTABLE_BUDGET_STATUSES as readonly BudgetStatus[]).includes(currentBudget.status) && (
+              {!settableStatuses.includes(currentBudget.status) && (
                 <option value={currentBudget.status} disabled>
                   {t(`budgets.status.${currentBudget.status}`)}
                 </option>
               )}
-              {USER_SETTABLE_BUDGET_STATUSES.map((s) => (
+              {settableStatuses.map((s) => (
                 <option key={s} value={s}>
                   {t(`budgets.status.${s}`)}
                 </option>

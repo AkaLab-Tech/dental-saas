@@ -82,4 +82,42 @@ test('budget status: create with non-default status, change from the card, detai
   await expect(page.getByRole('heading', { name: 'Detalles del presupuesto', level: 2 })).toBeVisible()
   await expect(page.getByText('Notas', { exact: true })).toBeVisible()
   await page.screenshot({ path: `${SHOTS}/606-detail-metadata-card.png`, fullPage: true })
+
+  // No executed lines: the detail page's status select offers APPROVED (and
+  // DRAFT/CANCELLED, never PARTIAL/COMPLETED). The select is unlabelled for
+  // the a11y tree, so it is addressed through its field wrapper.
+  const detailSelect = page.locator('div').filter({ has: page.locator('> label', { hasText: /^Estado$/ }) }).locator('> select')
+  await expect(detailSelect).toHaveCount(1)
+  await expect(detailSelect).toHaveValue('CANCELLED')
+  const values = await detailSelect.locator('option:not([disabled])').evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value))
+  expect(values).toContain('APPROVED')
+  expect(values).toContain('DRAFT')
+  expect(values).not.toContain('PARTIAL')
+  expect(values).not.toContain('COMPLETED')
+  await page.screenshot({ path: `${SHOTS}/606-detail-select-offers-approved.png`, fullPage: true })
+})
+
+test('budget status: detail select hides APPROVED once a line is executed (#606)', async ({ authedPage: page }) => {
+  const lastName = `EstadoEjec${Date.now()}`
+  const created = await api('POST', '/patients', { firstName: 'E2E', lastName })
+  const patientId: string = created.id ?? created.data?.id ?? created.patient?.id
+  expect(patientId).toBeTruthy()
+  const b = await api('POST', `/patients/${patientId}/budgets`, {
+    status: 'DRAFT',
+    items: [{ description: 'Linea ejecutada 606', quantity: 1, unitPrice: 500 }],
+  })
+  const budget = b.data ?? b
+  const budgetId: string = budget.id
+  const itemId: string = budget.items[0].id
+  await api('PATCH', `/budgets/${budgetId}/items/${itemId}`, { status: 'EXECUTED' })
+
+  await page.goto(`/patients/${patientId}/budgets/${budgetId}`)
+  await expect(page.getByRole('heading', { name: 'Detalles del presupuesto', level: 2 })).toBeVisible()
+  const detailSelect = page.locator('div').filter({ has: page.locator('> label', { hasText: /^Estado$/ }) }).locator('> select')
+  await expect(detailSelect).toHaveCount(1)
+  const values = await detailSelect.locator('option:not([disabled])').evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value))
+  expect(values).not.toContain('APPROVED')
+  expect(values).toContain('DRAFT')
+  expect(values).toContain('CANCELLED')
+  await page.screenshot({ path: `${SHOTS}/606-detail-select-hides-approved-executed.png`, fullPage: true })
 })
