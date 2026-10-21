@@ -7,9 +7,14 @@ on:
     branches: [main]
 
 jobs:
+  # Runner images are pinned deliberately. ubuntu-latest now resolves to
+  # ubuntu-26.04, for which Playwright ships no chromium build, so
+  # `playwright install --with-deps chromium` fails outright and every e2e
+  # spec dies with a missing executable. Bump this once Playwright supports
+  # whatever ubuntu-latest points at; do not simply restore ubuntu-latest.
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -43,7 +48,7 @@ jobs:
 
   test-backend:
     name: Test Backend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: public.ecr.aws/docker/library/postgres:16-alpine
@@ -128,7 +133,7 @@ jobs:
 
   test-frontend:
     name: Test Frontend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -169,7 +174,7 @@ jobs:
 
   test-e2e:
     name: Test E2E
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: public.ecr.aws/docker/library/postgres:16-alpine
@@ -296,7 +301,7 @@ jobs:
 
   build:
     name: Build All Apps
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [lint, test-backend, test-frontend]
     steps:
       - name: Checkout code
