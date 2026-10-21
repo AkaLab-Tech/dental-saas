@@ -433,7 +433,7 @@ export default function BudgetDetailPage() {
               }
               className="w-full sm:w-auto rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-500"
             >
-              {!USER_SETTABLE_BUDGET_STATUSES.includes(currentBudget.status) && (
+              {!(USER_SETTABLE_BUDGET_STATUSES as readonly BudgetStatus[]).includes(currentBudget.status) && (
                 <option value={currentBudget.status} disabled>
                   {t(`budgets.status.${currentBudget.status}`)}
                 </option>

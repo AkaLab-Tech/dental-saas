@@ -392,18 +392,59 @@ describe('BudgetCard status control (#606)', () => {
     expect(optionValues(statusSelect())).toEqual([...USER_SETTABLE_BUDGET_STATUSES])
   })
 
-  it('shows the status the server returned (COMPLETED), not the one chosen (APPROVED)', async () => {
-    const executed = makeBudget({
-      id: 'budget-9',
-      status: 'DRAFT',
-      items: [makeItem({ id: 'e1', status: 'EXECUTED' })],
-    })
-    apiUpdateBudgetMock.mockResolvedValue({ ...executed, status: 'COMPLETED' })
-    renderStoreBacked(executed)
-    fireEvent.change(statusSelect(), { target: { value: 'APPROVED' } })
-    await waitFor(() => expect(statusSelect()).toHaveValue('COMPLETED'))
-    expect(apiUpdateBudgetMock).toHaveBeenCalledWith('budget-9', { status: 'APPROVED' })
-    expect(statusSelect()).not.toHaveValue('APPROVED')
+  it('does not offer APPROVED when every active line is EXECUTED', () => {
+    renderCard(
+      makeBudget({
+        status: 'DRAFT',
+        items: [makeItem({ id: 'e1', status: 'EXECUTED' }), makeItem({ id: 'e2', status: 'EXECUTED' })],
+      })
+    )
+    expect(optionValues(statusSelect())).toEqual(['DRAFT', 'CANCELLED'])
+  })
+
+  it('offers APPROVED when at least one active line is not EXECUTED', () => {
+    renderCard(
+      makeBudget({
+        status: 'DRAFT',
+        items: [makeItem({ id: 'e1', status: 'EXECUTED' }), makeItem({ id: 'p1', status: 'PENDING' })],
+      })
+    )
+    expect(optionValues(statusSelect())).toContain('APPROVED')
+  })
+
+  it('does not offer APPROVED for one EXECUTED line plus one CANCELLED line', () => {
+    renderCard(
+      makeBudget({
+        status: 'DRAFT',
+        items: [makeItem({ id: 'e1', status: 'EXECUTED' }), makeItem({ id: 'c1', status: 'CANCELLED' })],
+      })
+    )
+    expect(optionValues(statusSelect())).not.toContain('APPROVED')
+  })
+
+  it('offers APPROVED when there are no active lines (all cancelled)', () => {
+    renderCard(
+      makeBudget({
+        status: 'DRAFT',
+        items: [makeItem({ id: 'c1', status: 'CANCELLED' }), makeItem({ id: 'c2', status: 'CANCELLED' })],
+      })
+    )
+    expect(optionValues(statusSelect())).toContain('APPROVED')
+  })
+
+  it('offers APPROVED when the budget has no lines at all', () => {
+    renderCard(makeBudget({ status: 'DRAFT', items: [] }))
+    expect(optionValues(statusSelect())).toContain('APPROVED')
+  })
+
+  it('keeps a current APPROVED status visible as a disabled option when all lines are EXECUTED', () => {
+    renderCard(
+      makeBudget({ status: 'APPROVED', items: [makeItem({ id: 'e1', status: 'EXECUTED' })] })
+    )
+    const sel = statusSelect()
+    expect(sel).toHaveValue('APPROVED')
+    const approved = Array.from(sel.options).find((o) => o.value === 'APPROVED')!
+    expect(approved.disabled).toBe(true)
   })
 
   it('hides the status control but keeps the other actions without BUDGETS_UPDATE', () => {

@@ -19,7 +19,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { Permission } from '@dental/shared'
 import type { Budget, BudgetItemStatus, BudgetStatus } from '@/lib/budget-api'
-import { getExecutedItemsCount, USER_SETTABLE_BUDGET_STATUSES } from '@/lib/budget-api'
+import { getExecutedItemsCount, getSettableBudgetStatuses } from '@/lib/budget-api'
 import { useBudgetsStore } from '@/stores/budgets.store'
 import { downloadBudgetPdf } from '@/lib/pdf-api'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -71,6 +71,7 @@ export function BudgetCard({ budget, patientId, onDelete }: BudgetCardProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
   const { executed, total: totalItems } = getExecutedItemsCount(budget)
+  const settableStatuses = getSettableBudgetStatuses(budget)
   const hiddenItemsCount = totalItems - VISIBLE_ITEMS_LIMIT
   const visibleItems = showAllItems
     ? budget.items
@@ -144,12 +145,12 @@ export function BudgetCard({ budget, patientId, onDelete }: BudgetCardProps) {
                     onChange={(e) => handleStatusChange(e.target.value as BudgetStatus)}
                     className={`rounded-full border px-2 py-0.5 text-xs font-medium disabled:opacity-50 ${STATUS_STYLES[budget.status]}`}
                   >
-                    {!USER_SETTABLE_BUDGET_STATUSES.includes(budget.status) && (
+                    {!settableStatuses.includes(budget.status) && (
                       <option value={budget.status} disabled>
                         {t(`budgets.status.${budget.status}`)}
                       </option>
                     )}
-                    {USER_SETTABLE_BUDGET_STATUSES.map((s) => (
+                    {settableStatuses.map((s) => (
                       <option key={s} value={s}>
                         {t(`budgets.status.${s}`)}
                       </option>

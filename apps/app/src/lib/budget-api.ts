@@ -9,11 +9,11 @@ export type BudgetStatus = 'DRAFT' | 'APPROVED' | 'PARTIAL' | 'COMPLETED' | 'CAN
 // `PARTIAL` and `COMPLETED` are derived by the backend from item states
 // (see `deriveBudgetStatus` in `budget.service.ts`) and are normalized on
 // every write, so they must not appear as user-selectable options.
-export const USER_SETTABLE_BUDGET_STATUSES: BudgetStatus[] = [
+export const USER_SETTABLE_BUDGET_STATUSES = [
   'DRAFT',
   'APPROVED',
   'CANCELLED',
-]
+] as const satisfies readonly BudgetStatus[]
 
 export type BudgetItemStatus =
   | 'PENDING'
@@ -222,6 +222,16 @@ export async function deleteBudgetItem(
  * Returns the amount of items in EXECUTED status vs the total. Useful for
  * progress indicators in list/card views.
  */
+// Statuses the card may offer for this budget. Mirrors `deriveBudgetStatus`:
+// when every non-cancelled line is EXECUTED the backend replaces APPROVED with
+// COMPLETED, so offering it would be a choice that does not persist. With zero
+// active lines the backend keeps the current status, so APPROVED stays offered.
+export function getSettableBudgetStatuses(budget: Pick<Budget, 'items'>): BudgetStatus[] {
+  const active = budget.items.filter((i) => i.status !== 'CANCELLED')
+  const allExecuted = active.length > 0 && active.every((i) => i.status === 'EXECUTED')
+  return USER_SETTABLE_BUDGET_STATUSES.filter((s) => !(allExecuted && s === 'APPROVED'))
+}
+
 export function getExecutedItemsCount(budget: Pick<Budget, 'items'>): {
   executed: number
   total: number

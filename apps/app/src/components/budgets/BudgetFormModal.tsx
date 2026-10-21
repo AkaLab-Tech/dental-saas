@@ -24,7 +24,7 @@ const budgetItemSchema = z.object({
 const budgetFormSchema = z.object({
   notes: z.string().max(2000).optional(),
   validUntil: z.string().optional(),
-  status: z.enum(['DRAFT', 'APPROVED', 'CANCELLED']),
+  status: z.enum(USER_SETTABLE_BUDGET_STATUSES),
   items: z.array(budgetItemSchema).min(1, 'minOneItem'),
 })
 
