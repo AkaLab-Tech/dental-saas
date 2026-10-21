@@ -7,6 +7,11 @@ on:
     branches: [main]
 
 jobs:
+  # Runner images are pinned deliberately. ubuntu-latest now resolves to
+  # ubuntu-26.04, for which Playwright ships no chromium build, so
+  # `playwright install --with-deps chromium` fails outright and every e2e
+  # spec dies with a missing executable. Bump this once Playwright supports
+  # whatever ubuntu-latest points at; do not simply restore ubuntu-latest.
   lint:
     name: Lint
     runs-on: ubuntu-24.04
