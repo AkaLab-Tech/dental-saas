@@ -420,6 +420,7 @@
       "cost": "Cost",
       "paidAmount": "Amount paid",
       "paidAmountHint": "Charged on this appointment and applied to its cost first; only what exceeds that cost goes to the patient's remaining balance.",
+      "costFromItemsHint": "Budget items on this appointment: {{total}}. That is the charge for the visit; you can change it and whatever you type is saved.",
       "alreadyPaidHint": "To reverse the payment, delete the corresponding entry from the payments section.",
       "coveredByBalanceHint": "This appointment is covered by the patient's balance. No consultation payment is recorded, so the amount is still editable.",
       "partialPaymentRecordedHint": "A payment is already recorded for this appointment. To change it, edit it from the payments section.",
@@ -439,8 +440,8 @@
       "executedChargeLoading": "Loading the executed items figure...",
       "executedCharge": "Budget items executed in this appointment: {{count}} · {{total}}",
       "executedChargeStatus": "Covered: {{paid}} · Outstanding: {{outstanding}}",
-      "executedChargeHint": "They are charged separately from the appointment cost. If you also typed them into the cost, clear the cost so they are not charged twice.",
-      "executedChargeUnavailable": "The executed budget items figure could not be loaded for this appointment, so the duplicate-cost check is unavailable here. Check the patient record before saving a cost."
+      "executedChargeHint": "The appointment cost is the charge for this visit: when the appointment has a cost, these items are not charged separately.",
+      "executedChargeUnavailable": "The executed budget items figure could not be loaded for this appointment. The cost you save is the charge for the visit."
     },
     "complete": {
       "title": "Complete appointment",

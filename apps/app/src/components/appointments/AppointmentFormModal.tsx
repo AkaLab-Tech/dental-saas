@@ -190,6 +190,7 @@ export function AppointmentFormModal({
     handleSubmit,
     reset,
     setValue,
+    getValues,
     watch,
     control,
     formState: { errors, isSubmitting, dirtyFields },
@@ -210,12 +211,6 @@ export function AppointmentFormModal({
   })
 
   const watchedPatientId = watch('patientId')
-  // The double charge is only CONFIRMED when a cost has been typed alongside
-  // executed items; the figure on its own is information, not a warning. Only
-  // the confirmed case gets the loud treatment, so the alert keeps meaning
-  // something (the inverted-weight finding from #547's browser pass: the app
-  // used to shout when it did NOT know and whisper when it did).
-  const executedDuplication = !!executedSummary && (Number(watch('cost')) || 0) > 0
   const watchedType = watch('type')
   const watchedStartTime = watch('startTime')
 
@@ -255,6 +250,15 @@ export function AppointmentFormModal({
   // whatever the user already typed/selected (patient, budget items) while
   // the doctors list was still loading.
   const resetIdentityRef = useRef<string | null>(null)
+  // The last cost figure the items prefill proposed (see the effect below).
+  const prefilledCostRef = useRef<string | null>(null)
+  // Armed only by the operator ticking/unticking an item in this session. The
+  // items of an appointment being edited load asynchronously AFTER the reset
+  // below, so a total above zero on its own cannot tell "the operator just
+  // associated items" from "this appointment already had items when it
+  // opened" - and a reopen is neither of task #590's triggers (associating
+  // items, or confirming them executed), so it must propose nothing.
+  const costPrefillArmedRef = useRef(false)
 
   useEffect(() => {
     if (!isOpen) {
@@ -265,6 +269,10 @@ export function AppointmentFormModal({
     const identity = appointment?.id ?? 'new'
     if (resetIdentityRef.current === identity) return
     resetIdentityRef.current = identity
+    // A reset discards whatever the cost prefill proposed for the previous
+    // identity, so its memory of its own proposal has to go with it.
+    prefilledCostRef.current = null
+    costPrefillArmedRef.current = false
 
     if (appointment) {
       const startDate = new Date(appointment.startTime)
@@ -405,7 +413,50 @@ export function AppointmentFormModal({
     }
   }, [isOpen, watchedPatientId, isEditing, appointment])
 
+  // The items this appointment is about to charge: the operator's current
+  // selection plus the ones already confirmed executed here (shown
+  // checked+disabled below). Totalled in cents so a 3-item selection cannot
+  // land a sub-cent residue in the field.
+  const itemsChargeTotal =
+    budgetItems
+      .filter((item) => item.status === 'EXECUTED' || selectedBudgetItemIds.includes(item.id))
+      .reduce((cents, item) => cents + Math.round(Number(item.totalPrice) * 100), 0) / 100
+
+  // Task #590: the appointment's cost is the single charge for the visit, so
+  // associating items (or confirming them executed) PROPOSES their total in
+  // the cost field instead of billing them on their own. Three properties this
+  // effect must keep:
+  //   - it is a prefill, not a write: nothing reaches the appointment row
+  //     until the operator saves;
+  //   - it only ever fills an empty field or replaces its own last proposal,
+  //     so a figure the operator typed is never silently overwritten;
+  //   - a total that falls to 0 (the last item unlinked) leaves the field as
+  //     the operator last saw it — clearing a number someone typed is
+  //     indistinguishable from losing it;
+  //   - it needs an operator gesture (see costPrefillArmedRef): merely opening
+  //     an appointment that already has items proposes nothing, so a
+  //     historically costless visit cannot acquire a cost on an incidental
+  //     save.
+  useEffect(() => {
+    if (!isOpen) {
+      prefilledCostRef.current = null
+      costPrefillArmedRef.current = false
+      return
+    }
+    if (!costPrefillArmedRef.current) return
+    if (itemsChargeTotal <= 0) return
+    // Trailing zeros stripped: the number input shows "2500", not "2500.00".
+    const proposal = String(Number(itemsChargeTotal.toFixed(2)))
+    const current = getValues('cost')
+    if (current !== '' && current !== prefilledCostRef.current) return
+    prefilledCostRef.current = proposal
+    setValue('cost', proposal, { shouldValidate: true })
+  }, [isOpen, itemsChargeTotal, getValues, setValue])
+
   const toggleBudgetItem = (itemId: string) => {
+    // The only gesture that arms the cost prefill. Set before the state update
+    // so the effect keyed on the new total sees it on the very next render.
+    costPrefillArmedRef.current = true
     setSelectedBudgetItemIds((prev) =>
       prev.includes(itemId) ? prev.filter((id) => id !== itemId) : [...prev, itemId]
     )
@@ -674,6 +725,13 @@ export function AppointmentFormModal({
                     placeholder="0.00"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
+                  {itemsChargeTotal > 0 && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {t('appointments.form.costFromItemsHint', {
+                        total: formatCurrency(itemsChargeTotal, currency),
+                      })}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -708,34 +766,27 @@ export function AppointmentFormModal({
                 </div>
               </div>
 
+              {/* Task #590 removed the amber duplication warning that used to
+                  fire here when a cost was typed beside executed items. A
+                  double charge is no longer possible — the appointment's cost
+                  supersedes the items' own charge — so warning about it would
+                  be a false statement on screen, and a banner gets believed.
+                  What is left is the quiet figure, with no alert role. */}
               {executedSummary && (
-                <div
-                  {...(executedDuplication ? { role: 'alert' as const } : {})}
-                  className={
-                    executedDuplication
-                      ? 'rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm'
-                      : 'rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm'
-                  }
-                >
-                  <p className={executedDuplication ? 'font-medium text-amber-900' : 'text-gray-700'}>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+                  <p className="text-gray-700">
                     {t('appointments.budgetItems.executedCharge', {
                       count: executedSummary.count,
                       total: formatCurrency(executedSummary.cost, currency),
                     })}
                   </p>
-                  <p className={executedDuplication ? 'text-xs text-amber-800' : 'text-xs text-gray-500'}>
+                  <p className="text-xs text-gray-500">
                     {t('appointments.budgetItems.executedChargeStatus', {
                       paid: formatCurrency(executedSummary.paidAmount, currency),
                       outstanding: formatCurrency(executedSummary.outstanding, currency),
                     })}
                   </p>
-                  <p
-                    className={
-                      executedDuplication
-                        ? 'mt-1 text-sm font-medium text-amber-900'
-                        : 'mt-1 text-xs text-gray-500'
-                    }
-                  >
+                  <p className="mt-1 text-xs text-gray-500">
                     {t('appointments.budgetItems.executedChargeHint')}
                   </p>
                 </div>
@@ -750,9 +801,10 @@ export function AppointmentFormModal({
                   {t('appointments.budgetItems.executedChargeLoading')}
                 </p>
               )}
-              {/* Uncertainty, not a confirmed double charge: it keeps role="alert"
-                  so a screen reader still hears it, but drops to the quiet
-                  treatment. If everything is amber, nothing is. */}
+              {/* The figure could not be loaded. It keeps role="alert" so a
+                  screen reader hears it, but stays quiet: since #590 the cost
+                  typed here is the charge either way, so not knowing the items'
+                  total costs the operator information, not correctness. */}
               {executedUnavailable && (
                 <p role="alert" className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
                   {t('appointments.budgetItems.executedChargeUnavailable')}
