@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { isBudgetAssociable } from '@dental/shared'
 import { useTranslation } from 'react-i18next'
 import { X, Loader2, Calendar, Clock, User, Stethoscope, AlertCircle, ClipboardList } from 'lucide-react'
 import type {
@@ -181,6 +182,9 @@ export function AppointmentFormModal({
   const [budgetItems, setBudgetItems] = useState<EligibleBudgetItem[]>([])
   const [selectedBudgetItemIds, setSelectedBudgetItemIds] = useState<string[]>([])
   const [loadingBudgetItems, setLoadingBudgetItems] = useState(false)
+  // True when the patient has draft budgets with lines that would otherwise
+  // be offered; drives the on-screen reason they are missing.
+  const [hasHiddenDraftItems, setHasHiddenDraftItems] = useState(false)
   // Tracks the last patientId a fetch ran for, so a same-patient re-render
   // (e.g. options finishing load) doesn't wipe out the user's selection.
   const lastBudgetPatientIdRef = useRef<string | null>(null)
@@ -369,11 +373,26 @@ export function AppointmentFormModal({
         // vanishing once they stop being globally PENDING.
         const associatedIds = new Set(associated.map((item) => item.id))
 
+        // Only budgets the patient accepted (APPROVED/PARTIAL) offer new
+        // lines; a line already linked to this appointment stays visible
+        // wherever it sits, so it can still be unchecked.
+        setHasHiddenDraftItems(
+          budgets.some(
+            (budget) =>
+              budget.status === 'DRAFT' &&
+              budget.items.some((item) => item.status === 'PENDING' && !associatedIds.has(item.id))
+          )
+        )
+
         const eligible: EligibleBudgetItem[] = budgets
           .filter((budget) => budget.status !== 'CANCELLED')
           .flatMap((budget) =>
             budget.items
-              .filter((item) => item.status === 'PENDING' || associatedIds.has(item.id))
+              .filter(
+                (item) =>
+                  associatedIds.has(item.id) ||
+                  (item.status === 'PENDING' && isBudgetAssociable(budget.status))
+              )
               .map((item) => ({
                 id: item.id,
                 budgetId: budget.id,
@@ -398,6 +417,7 @@ export function AppointmentFormModal({
         console.error('Error fetching budget items:', error)
         if (!cancelled) {
           setBudgetItems([])
+          setHasHiddenDraftItems(false)
           if (isNewPatient) setSelectedBudgetItemIds([])
         }
       } finally {
@@ -820,6 +840,9 @@ export function AppointmentFormModal({
                   </label>
                   <p className="text-xs text-gray-500 mb-1">{t('appointments.budgetItems.selectHint')}</p>
                   <p className="text-xs text-gray-400 mb-2">{t('appointments.budgetItems.filterHint')}</p>
+                  {hasHiddenDraftItems && (
+                    <p className="text-xs text-amber-700 mb-2">{t('appointments.budgetItems.draftHint')}</p>
+                  )}
 
                   {loadingBudgetItems ? (
                     <div className="flex items-center gap-2 text-sm text-gray-500 py-2">

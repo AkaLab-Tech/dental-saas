@@ -435,6 +435,7 @@
       "title": "Ítems de presupuesto",
       "selectHint": "Selecciona los ítems del presupuesto que se atenderán en esta cita.",
       "filterHint": "Los ítems ya programados en otra cita o ya ejecutados no se muestran aquí.",
+      "draftHint": "Hay presupuestos en borrador cuyos ítems no se ofrecen aquí: un presupuesto debe estar aprobado para asociarlo a una cita.",
       "empty": "Este paciente no tiene ítems de presupuesto disponibles para asociar.",
       "loading": "Cargando ítems de presupuesto...",
       "executedChargeLoading": "Cargando el monto de los ítems ya ejecutados...",

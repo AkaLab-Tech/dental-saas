@@ -127,6 +127,7 @@ function mapErrorCodeToStatus(code: string): number {
     case 'EXCEEDS_BALANCE':
     case 'PAYMENT_FAILED':
     case 'ITEM_NOT_ELIGIBLE':
+    case 'BUDGET_NOT_ASSOCIABLE':
     case 'ITEM_NOT_ASSOCIATED':
       return 400
     default:

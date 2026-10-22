@@ -130,6 +130,16 @@ describe('budget-appointment.service', () => {
     return { budgetId: budget.id, itemId: item.id }
   }
 
+  /** Like makeBudgetItem, but the budget carries the given status (#602). */
+  async function makeBudgetItemInBudgetStatus(
+    budgetStatus: 'DRAFT' | 'APPROVED' | 'PARTIAL' | 'COMPLETED' | 'CANCELLED',
+    itemStatus: 'PENDING' | 'EXECUTED' = 'PENDING'
+  ) {
+    const made = await makeBudgetItem(itemStatus)
+    await prisma.budget.update({ where: { id: made.budgetId }, data: { status: budgetStatus } })
+    return made
+  }
+
   // ==========================================================================
   // setAppointmentBudgetItems
   // ==========================================================================
@@ -403,6 +413,91 @@ describe('budget-appointment.service', () => {
       expect(result.data).toHaveLength(1)
       expect(result.data[0].id).toBe(itemId)
       expect(result.data[0].roles.slice().sort()).toEqual(['EXECUTED', 'SCHEDULED'])
+    })
+  })
+
+  // ==========================================================================
+  // #602: only an accepted budget (APPROVED / PARTIAL) can be associated
+  // ==========================================================================
+
+  describe('setAppointmentBudgetItems — budget status (#602)', () => {
+    it('rejects a PENDING item of a DRAFT budget with BUDGET_NOT_ASSOCIABLE and links nothing', async () => {
+      const { itemId } = await makeBudgetItemInBudgetStatus('DRAFT')
+
+      const result = await setAppointmentBudgetItems(tenantId, appointmentId, [itemId], userId)
+
+      expect(result).toEqual({ success: false, code: 'BUDGET_NOT_ASSOCIABLE' })
+      const item = await prisma.budgetItem.findUnique({ where: { id: itemId } })
+      expect(item?.status).toBe('PENDING')
+      expect(await prisma.budgetItemAppointment.count({ where: { budgetItemId: itemId } })).toBe(0)
+    })
+
+    it('still associates a PENDING item of an APPROVED budget', async () => {
+      const { itemId } = await makeBudgetItemInBudgetStatus('APPROVED')
+
+      const result = await setAppointmentBudgetItems(tenantId, appointmentId, [itemId], userId)
+
+      expect(result.success).toBe(true)
+      if (!result.success) return
+      expect(result.data.map((i) => i.id)).toEqual([itemId])
+    })
+
+    it('still associates a PENDING item of a PARTIAL budget (a treatment in progress)', async () => {
+      const { itemId } = await makeBudgetItemInBudgetStatus('PARTIAL')
+
+      const result = await setAppointmentBudgetItems(tenantId, appointmentId, [itemId], userId)
+
+      expect(result.success).toBe(true)
+      if (!result.success) return
+      expect(result.data.map((i) => i.id)).toEqual([itemId])
+    })
+
+    it('rejects a PENDING item of a CANCELLED budget with BUDGET_NOT_ASSOCIABLE', async () => {
+      const { itemId } = await makeBudgetItemInBudgetStatus('CANCELLED')
+
+      const result = await setAppointmentBudgetItems(tenantId, appointmentId, [itemId], userId)
+
+      expect(result).toEqual({ success: false, code: 'BUDGET_NOT_ASSOCIABLE' })
+    })
+
+    it('rejects a PENDING item of a COMPLETED budget with BUDGET_NOT_ASSOCIABLE (a finished budget takes no new visits)', async () => {
+      // The line is PENDING on purpose: ITEM_NOT_ELIGIBLE cannot be what rejects it.
+      const { itemId } = await makeBudgetItemInBudgetStatus('COMPLETED', 'PENDING')
+
+      const result = await setAppointmentBudgetItems(tenantId, appointmentId, [itemId], userId)
+
+      expect(result).toEqual({ success: false, code: 'BUDGET_NOT_ASSOCIABLE' })
+    })
+
+    it('a DRAFT budget and an already-EXECUTED line of an APPROVED budget yield different codes', async () => {
+      const draft = await makeBudgetItemInBudgetStatus('DRAFT', 'PENDING')
+      const executed = await makeBudgetItemInBudgetStatus('APPROVED', 'EXECUTED')
+
+      const draftResult = await setAppointmentBudgetItems(tenantId, appointmentId, [draft.itemId], userId)
+      const executedResult = await setAppointmentBudgetItems(tenantId, appointmentId, [executed.itemId], userId)
+
+      expect(draftResult).toEqual({ success: false, code: 'BUDGET_NOT_ASSOCIABLE' })
+      expect(executedResult).toEqual({ success: false, code: 'ITEM_NOT_ELIGIBLE' })
+    })
+
+    it('unassociating a link to a DRAFT budget still works (the exit is not blocked)', async () => {
+      // A record created before the rule shipped: a SCHEDULED link on a DRAFT budget.
+      const { budgetId, itemId } = await makeBudgetItemInBudgetStatus('DRAFT')
+      await prisma.budgetItem.update({ where: { id: itemId }, data: { status: 'SCHEDULED' } })
+      await prisma.budgetItemAppointment.create({
+        data: { budgetItemId: itemId, appointmentId, role: 'SCHEDULED' },
+      })
+
+      const result = await setAppointmentBudgetItems(tenantId, appointmentId, [], userId)
+
+      expect(result.success).toBe(true)
+      if (!result.success) return
+      expect(result.data).toHaveLength(0)
+      expect(await prisma.budgetItemAppointment.count({ where: { budgetItemId: itemId } })).toBe(0)
+      const item = await prisma.budgetItem.findUnique({ where: { id: itemId } })
+      expect(item?.status).toBe('PENDING')
+      const budget = await prisma.budget.findUnique({ where: { id: budgetId } })
+      expect(budget?.status).toBe('DRAFT')
     })
   })
 })
