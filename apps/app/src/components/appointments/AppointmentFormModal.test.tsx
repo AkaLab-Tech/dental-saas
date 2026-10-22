@@ -454,6 +454,92 @@ describe('AppointmentFormModal — budget items association', () => {
     })
   })
 
+  describe('budget status filtering (#602)', () => {
+    const draftHint = () => i18n.t('appointments.budgetItems.draftHint')
+
+    async function openWithApprovedAndDraft() {
+      const approved = makeBudget({
+        id: 'budget-approved',
+        status: 'APPROVED',
+        items: [makeBudgetItem({ id: 'item-approved', description: 'Item Approved Budget', status: 'PENDING' })],
+      })
+      const draft = makeBudget({
+        id: 'budget-draft',
+        status: 'DRAFT',
+        items: [makeBudgetItem({ id: 'item-draft', description: 'Item Draft Budget', status: 'PENDING' })],
+      })
+      listBudgetsByPatientMock.mockResolvedValue({ data: [approved, draft], total: 2 })
+
+      renderModal()
+      await waitForOptionsLoaded()
+      fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+      // The approved budget of the same patient is listed: the assertions
+      // below cannot be satisfied by an empty list.
+      await waitFor(() => expect(screen.getByText('Item Approved Budget')).toBeInTheDocument())
+    }
+
+    it('omits PENDING items of a DRAFT budget while the APPROVED budget of the same patient still lists', async () => {
+      await openWithApprovedAndDraft()
+
+      expect(screen.queryByText('Item Draft Budget')).not.toBeInTheDocument()
+    })
+
+    it('says why the DRAFT budget items are missing (draftHint)', async () => {
+      await openWithApprovedAndDraft()
+
+      expect(draftHint()).not.toBe('appointments.budgetItems.draftHint')
+      expect(screen.getByText(draftHint())).toBeInTheDocument()
+    })
+
+    it('lists PENDING items of a PARTIAL budget', async () => {
+      const partial = makeBudget({
+        id: 'budget-partial',
+        status: 'PARTIAL',
+        items: [makeBudgetItem({ id: 'item-partial', description: 'Item Partial Budget', status: 'PENDING' })],
+      })
+      listBudgetsByPatientMock.mockResolvedValue({ data: [partial], total: 1 })
+
+      renderModal()
+      await waitForOptionsLoaded()
+      fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+
+      await waitFor(() => expect(screen.getByText('Item Partial Budget')).toBeInTheDocument())
+      expect(screen.queryByText(draftHint())).not.toBeInTheDocument()
+    })
+
+    it('shows no draft hint when there are no DRAFT budgets', async () => {
+      const approved = makeBudget({
+        status: 'APPROVED',
+        items: [makeBudgetItem({ id: 'item-a', description: 'Item A', status: 'PENDING' })],
+      })
+      listBudgetsByPatientMock.mockResolvedValue({ data: [approved], total: 1 })
+
+      renderModal()
+      await waitForOptionsLoaded()
+      fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+
+      await waitFor(() => expect(screen.getByText('Item A')).toBeInTheDocument())
+      expect(screen.queryByText(draftHint())).not.toBeInTheDocument()
+    })
+
+    it('keeps an item already linked to this appointment visible on a DRAFT budget, so it can be unchecked', async () => {
+      const draft = makeBudget({
+        id: 'budget-draft',
+        status: 'DRAFT',
+        items: [makeBudgetItem({ id: 'item-linked', description: 'Item Linked Draft', status: 'SCHEDULED' })],
+      })
+      listBudgetsByPatientMock.mockResolvedValue({ data: [draft], total: 1 })
+      getAppointmentBudgetItemsMock.mockResolvedValue([
+        makeAssociatedItem({ id: 'item-linked', budgetId: 'budget-draft', description: 'Item Linked Draft', status: 'SCHEDULED' }),
+      ])
+
+      renderModal({ appointment: makeAppointment() })
+
+      await waitFor(() => expect(screen.getByText('Item Linked Draft')).toBeInTheDocument())
+      expect(getItemCheckbox('Item Linked Draft')).toBeChecked()
+    })
+  })
+
   describe('create submit', () => {
     it('includes selected item ids as budgetItemIds in the create payload', async () => {
       const budget = makeBudget({

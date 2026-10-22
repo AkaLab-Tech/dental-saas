@@ -4120,6 +4120,31 @@ describe('Appointments API', () => {
       expect(res.body.error.code).toBe('ITEM_NOT_ELIGIBLE')
     })
 
+    it('associating a DRAFT budget item via update is rejected (400 BUDGET_NOT_ASSOCIABLE) (#602)', async () => {
+      const budget = await createApprovedBudget(1)
+      const [item] = budget.items
+      await prisma.budget.update({ where: { id: budget.id }, data: { status: 'DRAFT' } })
+      const times = getFutureTime(1)
+      const appt = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: new Date(times.startTime),
+          endTime: new Date(times.endTime),
+          duration: 30,
+        },
+      })
+
+      const res = await api()
+        .put(`/api/appointments/${appt.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ budgetItemIds: [item.id] })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error.code).toBe('BUDGET_NOT_ASSOCIABLE')
+    })
+
     it('associating an item from another tenant is rejected (404 ITEM_NOT_FOUND) and does not partially apply', async () => {
       const budget = await createApprovedBudget(1)
       const [validItem] = budget.items
