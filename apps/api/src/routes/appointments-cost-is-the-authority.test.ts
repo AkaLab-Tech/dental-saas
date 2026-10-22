@@ -620,4 +620,56 @@ describe('Task #590: the appointment cost is the single authority for its visit'
       expect('budgetItems' in agenda[0]).toBe(false)
     })
   })
+
+  // ==========================================================================
+  // Reservation beside a superseded item — pins an operator-accepted behaviour
+  // ==========================================================================
+  // The superseding appointment charge carries no budgetId, so it does not
+  // consume a budget-reserved advance and the open budget keeps holding all of
+  // it. Accepted by the operator (the #626 epic retires the field); this pins
+  // today's figures, it is not a fix.
+  describe('reservation: a budget-reserved advance beside an item superseded by the appointment cost', () => {
+    async function reservedFixture() {
+      const patientId = await newPatient()
+      const itemId = await seedPendingItem(patientId, 2500)
+      const { budgetId } = await prisma.budgetItem.findUniqueOrThrow({
+        where: { id: itemId },
+        select: { budgetId: true },
+      })
+      // A second PENDING item keeps the budget open once the first executes.
+      await prisma.budgetItem.create({
+        data: { budgetId, description: 'item 4000', unitPrice: 4000, totalPrice: 4000, quantity: 1, status: 'PENDING' },
+      })
+      const advance = await post(`/api/patients/${patientId}/payments`, {
+        amount: 9000,
+        date: new Date().toISOString(),
+        budgetId,
+      })
+      expect(advance.status).toBe(201)
+      const appointmentId = await createAppointment(patientId, { cost: 3100 })
+      await executeItems(appointmentId, [itemId])
+      return { patientId, budgetId }
+    }
+
+    it('statement: the 3100 visit stays outstanding and the full 9000 stays held (consumed 0)', async () => {
+      const { patientId, budgetId } = await reservedFixture()
+      const res = await get(`/api/patients/${patientId}/statement`)
+      expect(res.status).toBe(200)
+      expect(res.body.data).toMatchObject({
+        totalBilled: 3100,
+        appointmentsDebt: 3100,
+        advancesCredit: 0,
+        totalPaid: 9000,
+        advancesHeld: 9000,
+        reservedAdvances: [{ budgetId, reserved: 9000, consumed: 0, remaining: 9000, open: true }],
+      })
+    })
+
+    it('balance: outstanding is 3100, not 3100 less the 2500 item subtotal', async () => {
+      const { patientId } = await reservedFixture()
+      const res = await get(`/api/patients/${patientId}/balance`)
+      expect(res.status).toBe(200)
+      expect(res.body.data).toMatchObject({ totalDebt: 3100, totalPaid: 9000, outstanding: 3100 })
+    })
+  })
 })
