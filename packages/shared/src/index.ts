@@ -19,6 +19,9 @@ export type Role = UserRole
 // Re-export permissions
 export * from './permissions.js'
 
+// Budget association rule
+export * from './budget-association.js'
+
 // Medical history (sections, criticality set, line format)
 export * from './medical-history.js'
 

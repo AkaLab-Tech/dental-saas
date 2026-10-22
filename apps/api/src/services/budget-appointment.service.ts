@@ -1,4 +1,5 @@
 import { prisma, Prisma, type BudgetItemAppointmentRole } from '@dental/database'
+import { isBudgetAssociable } from '@dental/shared'
 import { logger } from '../utils/logger.js'
 import { recalculateBudgetAggregates } from './budget.service.js'
 import { recalculatePaidStatus } from './payment.service.js'
@@ -21,6 +22,7 @@ export type BudgetAppointmentErrorCode =
   | 'APPOINTMENT_NOT_FOUND'
   | 'ITEM_NOT_FOUND'
   | 'ITEM_NOT_ELIGIBLE'
+  | 'BUDGET_NOT_ASSOCIABLE'
   | 'ITEM_NOT_ASSOCIATED'
 
 export type AppointmentBudgetItemSummary = Prisma.BudgetItemGetPayload<{
@@ -122,9 +124,12 @@ export async function setAppointmentBudgetItems(
       for (const itemId of toAdd) {
         const item = await tx.budgetItem.findFirst({
           where: { id: itemId, budget: { tenantId, isActive: true } },
-          select: { id: true, budgetId: true, status: true },
+          select: { id: true, budgetId: true, status: true, budget: { select: { status: true } } },
         })
         if (!item) throw new BudgetAppointmentServiceError('ITEM_NOT_FOUND')
+        if (!isBudgetAssociable(item.budget.status)) {
+          throw new BudgetAppointmentServiceError('BUDGET_NOT_ASSOCIABLE')
+        }
         if (item.status !== 'PENDING' && item.status !== 'SCHEDULED') {
           throw new BudgetAppointmentServiceError('ITEM_NOT_ELIGIBLE')
         }
