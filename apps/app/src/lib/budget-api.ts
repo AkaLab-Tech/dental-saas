@@ -38,6 +38,14 @@ export interface BudgetItem {
   updatedAt: string
 }
 
+export interface BudgetMoney {
+  total: number
+  billed: number
+  covered: number
+  remaining: number
+  notBilled: number
+}
+
 export interface Budget {
   id: string
   tenantId: string
@@ -53,6 +61,7 @@ export interface Budget {
   createdAt: string
   updatedAt: string
   items: BudgetItem[]
+  money?: BudgetMoney
 }
 
 export interface BudgetItemInput {

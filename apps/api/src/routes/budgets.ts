@@ -5,7 +5,7 @@ import { requirePermission } from '../middleware/permissions.js'
 import { Permission } from '@dental/shared'
 import { env } from '../config/env.js'
 import {
-  getBudget,
+  getBudgetWithMoney,
   updateBudget,
   deleteBudget,
   addBudgetItem,
@@ -88,7 +88,7 @@ function sendError(
 budgetsRouter.get('/:id', requirePermission(Permission.BUDGETS_VIEW), async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId!
-    const result = await getBudget(tenantId, req.params.id)
+    const result = await getBudgetWithMoney(tenantId, req.params.id)
     if (!result.success) return sendError(res, result.code)
     res.json({ success: true, data: result.data })
   } catch (e) {

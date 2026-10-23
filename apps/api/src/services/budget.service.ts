@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { prisma, Prisma, BudgetStatus, BudgetItemStatus } from '@dental/database'
 import { logger } from '../utils/logger.js'
+import { buildBudgetMoney, getBudgetMoneyBuckets, type BudgetMoney } from './budget-money.service.js'
 
 const BUDGET_ITEM_SELECT = {
   id: true,
@@ -37,6 +38,10 @@ const BUDGET_SELECT = {
     orderBy: { order: 'asc' },
   },
 } as const satisfies Prisma.BudgetSelect
+
+type BudgetWithMoney = Prisma.BudgetGetPayload<{ select: typeof BUDGET_SELECT }> & {
+  money: BudgetMoney
+}
 
 export type BudgetErrorCode =
   | 'NOT_FOUND'
@@ -263,12 +268,30 @@ export async function getBudget(
   return { success: true, data: budget }
 }
 
+export async function getBudgetWithMoney(
+  tenantId: string,
+  budgetId: string
+): Promise<
+  | { success: true; data: BudgetWithMoney }
+  | { success: false; code: BudgetErrorCode }
+> {
+  const result = await getBudget(tenantId, budgetId)
+  if (!result.success) return result
+
+  const budget = result.data
+  const buckets = await getBudgetMoneyBuckets(tenantId, budget.patientId)
+  return {
+    success: true,
+    data: { ...budget, money: buildBudgetMoney(budget.totalAmount, buckets.get(budget.id)) },
+  }
+}
+
 export async function listBudgetsByPatient(
   tenantId: string,
   patientId: string,
   options?: ListBudgetsOptions
 ): Promise<{
-  data: Prisma.BudgetGetPayload<{ select: typeof BUDGET_SELECT }>[]
+  data: BudgetWithMoney[]
   total: number
 }> {
   const where: Prisma.BudgetWhereInput = {
@@ -277,7 +300,7 @@ export async function listBudgetsByPatient(
     ...(options?.includeInactive ? {} : { isActive: true }),
   }
 
-  const [data, total] = await Promise.all([
+  const [budgets, total, buckets] = await Promise.all([
     prisma.budget.findMany({
       where,
       select: BUDGET_SELECT,
@@ -286,7 +309,13 @@ export async function listBudgetsByPatient(
       skip: options?.offset ?? 0,
     }),
     prisma.budget.count({ where }),
+    getBudgetMoneyBuckets(tenantId, patientId),
   ])
+
+  const data = budgets.map((budget) => ({
+    ...budget,
+    money: buildBudgetMoney(budget.totalAmount, buckets.get(budget.id)),
+  }))
 
   return { data, total }
 }
