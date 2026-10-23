@@ -5,7 +5,10 @@ import i18n from 'i18next'
 import '@/i18n'
 import { AppointmentFormModal } from './AppointmentFormModal'
 import type { Appointment, AppointmentBudgetItemSummary } from '../../lib/appointment-api'
-import type { Budget, BudgetItem } from '../../lib/budget-api'
+import type { Budget, BudgetItem, CreateBudgetData } from '../../lib/budget-api'
+import enLocale from '../../i18n/locales/en.json'
+import arLocale from '../../i18n/locales/ar.json'
+import esLocale from '../../i18n/locales/es.json'
 
 beforeAll(async () => {
   await i18n.changeLanguage('es')
@@ -18,6 +21,7 @@ beforeAll(async () => {
 const getDoctorsMock = vi.fn()
 const getPatientsMock = vi.fn()
 const listBudgetsByPatientMock = vi.fn()
+const createBudgetMock = vi.fn()
 const getAppointmentBudgetItemsMock = vi.fn()
 const getAppointmentByIdMock = vi.fn()
 
@@ -34,6 +38,7 @@ vi.mock('../../lib/budget-api', async () => {
   return {
     ...actual,
     listBudgetsByPatient: (...args: unknown[]) => listBudgetsByPatientMock(...args),
+    createBudget: (...args: unknown[]) => createBudgetMock(...args),
   }
 })
 
@@ -2459,5 +2464,196 @@ describe('AppointmentFormModal — cost prefilled from associated budget items (
 
     fireEvent.click(getItemCheckbox(ITEM_2500))
     await waitFor(() => expect(hint()).not.toBeInTheDocument())
+  })
+})
+
+describe('AppointmentFormModal — create a budget from the picker (#628)', () => {
+  const CREATE_BTN = 'Crear presupuesto'
+  const NOTES_PLACEHOLDER = () => i18n.t('appointments.form.notesPlaceholder')
+
+  // The shape the real API answers with: the budget list reflects whatever
+  // createBudget was last given, so the picker can only see what the nested
+  // form really sent.
+  let created: { patientId: string; data: CreateBudgetData } | null
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    created = null
+    getDoctorsMock.mockResolvedValue([mockDoctor])
+    getPatientsMock.mockResolvedValue([mockPatientRecord])
+    getAppointmentBudgetItemsMock.mockResolvedValue([])
+    createBudgetMock.mockImplementation(async (patientId: string, data: CreateBudgetData) => {
+      created = { patientId, data }
+      return makeBudget({ patientId })
+    })
+    listBudgetsByPatientMock.mockImplementation(async () => {
+      if (!created) return { data: [], total: 0 }
+      return {
+        data: [
+          makeBudget({
+            id: 'budget-new',
+            status: created.data.status as Budget['status'],
+            items: created.data.items.map((it, i) =>
+              makeBudgetItem({ id: `new-${i}`, budgetId: 'budget-new', description: it.description, status: 'PENDING' })
+            ),
+          }),
+        ],
+        total: 1,
+      }
+    })
+  })
+
+  afterEach(async () => {
+    await i18n.changeLanguage('es')
+  })
+
+  async function pickAna() {
+    await waitForOptionsLoaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+    await waitFor(() => expect(screen.getByText(TITLE)).toBeInTheDocument())
+  }
+
+  // The nested form is a sibling of the appointment <form>; locate it through
+  // its own description field.
+  function nestedForm() {
+    const field = screen.getByPlaceholderText(i18n.t('budgets.items.descriptionPlaceholder'))
+    return within(field.closest('form') as HTMLElement)
+  }
+
+  async function createThroughNestedForm(description = 'Endodoncia molar') {
+    fireEvent.click(screen.getByRole('button', { name: CREATE_BTN }))
+    fireEvent.change(screen.getByPlaceholderText(i18n.t('budgets.items.descriptionPlaceholder')), {
+      target: { value: description },
+    })
+    // The item labels are not bound to their inputs: quantity, then unit price.
+    const [, unitPrice] = nestedForm().getAllByRole('spinbutton')
+    fireEvent.change(unitPrice, { target: { value: '250' } })
+    fireEvent.click(nestedForm().getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(createBudgetMock).toHaveBeenCalledTimes(1))
+  }
+
+  // Guard 1
+  it('offers the creation affordance when the patient has no budget', async () => {
+    renderModal()
+    await pickAna()
+    await waitFor(() => expect(screen.getByText(EMPTY_MSG)).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: CREATE_BTN })).toBeInTheDocument()
+  })
+
+  // Guard 1 control + acceptance 5
+  it('does not offer it, and lists the items as before, for a patient with associable items', async () => {
+    listBudgetsByPatientMock.mockImplementation(async () => ({
+      data: [
+        makeBudget({
+          status: 'APPROVED',
+          items: [makeBudgetItem({ id: 'item-a', description: 'Item A', status: 'PENDING' })],
+        }),
+      ],
+      total: 1,
+    }))
+    renderModal()
+    await pickAna()
+    await waitFor(() => expect(screen.getByText('Item A')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: CREATE_BTN })).not.toBeInTheDocument()
+    expect(screen.queryByText(EMPTY_MSG)).not.toBeInTheDocument()
+    expect(screen.queryByPlaceholderText(i18n.t('budgets.items.descriptionPlaceholder'))).not.toBeInTheDocument()
+  })
+
+  it('offers it when only a DRAFT budget exists, since the picker has nothing to list', async () => {
+    listBudgetsByPatientMock.mockImplementation(async () => ({
+      data: [
+        makeBudget({
+          status: 'DRAFT',
+          items: [makeBudgetItem({ id: 'item-d', description: 'Item Draft', status: 'PENDING' })],
+        }),
+      ],
+      total: 1,
+    }))
+    renderModal()
+    await pickAna()
+    await waitFor(() => expect(screen.getByText(EMPTY_MSG)).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: CREATE_BTN })).toBeInTheDocument()
+    expect(screen.queryByText('Item Draft')).not.toBeInTheDocument()
+  })
+
+  // Guard 2
+  it('keeps what the user typed in the appointment form across the detour', async () => {
+    renderModal()
+    await pickAna()
+    const typed = 'Paciente con alergia a la penicilina'
+    fireEvent.change(screen.getByPlaceholderText(NOTES_PLACEHOLDER()), { target: { value: typed } })
+    await waitFor(() => expect(screen.getByText(EMPTY_MSG)).toBeInTheDocument())
+
+    await createThroughNestedForm()
+    await waitFor(() => expect(screen.getByText('Endodoncia molar')).toBeInTheDocument())
+
+    expect(screen.getByPlaceholderText(NOTES_PLACEHOLDER())).toHaveValue(typed)
+    expect(screen.getByTestId('selected-patient')).toHaveTextContent('Ana Gomez')
+  })
+
+  // Guards 3 and 4
+  it('sends the budget for the selected patient as APPROVED and lists its items without a reload', async () => {
+    renderModal()
+    await pickAna()
+    await waitFor(() => expect(screen.getByText(EMPTY_MSG)).toBeInTheDocument())
+    expect(screen.queryByText('Endodoncia molar')).not.toBeInTheDocument()
+
+    await createThroughNestedForm()
+
+    expect(created?.patientId).toBe('patient-1')
+    expect(created?.data.status).toBe('APPROVED')
+    expect(created?.data.items.map((i) => i.description)).toEqual(['Endodoncia molar'])
+
+    // Picker repopulated with the real isBudgetAssociable filter in force.
+    await waitFor(() => expect(screen.getByText('Endodoncia molar')).toBeInTheDocument())
+    expect(getItemCheckbox('Endodoncia molar')).not.toBeChecked()
+    expect(screen.queryByText(EMPTY_MSG)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: CREATE_BTN })).not.toBeInTheDocument()
+    // Nested form closed.
+    expect(screen.queryByPlaceholderText(i18n.t('budgets.items.descriptionPlaceholder'))).not.toBeInTheDocument()
+  })
+
+  it('keeps the nested form open with the error and creates nothing in the picker when createBudget fails', async () => {
+    createBudgetMock.mockRejectedValueOnce(new Error('boom'))
+    renderModal()
+    await pickAna()
+    await waitFor(() => expect(screen.getByText(EMPTY_MSG)).toBeInTheDocument())
+    await createThroughNestedForm()
+    await waitFor(() => expect(screen.getByText('boom')).toBeInTheDocument())
+    expect(screen.getByPlaceholderText(i18n.t('budgets.items.descriptionPlaceholder'))).toBeInTheDocument()
+    expect(screen.getByText(EMPTY_MSG)).toBeInTheDocument()
+  })
+
+  // Guard 5
+  describe('locales (guard 5)', () => {
+    const KEY = 'appointments.budgetItems.createBudget'
+    const get = (o: unknown) =>
+      KEY.split('.').reduce<unknown>((acc, k) => (acc as Record<string, unknown> | undefined)?.[k], o)
+
+    it('defines the key in es, en and ar JSON, each with its own text', () => {
+      expect(get(esLocale)).toBe('Crear presupuesto')
+      expect(get(enLocale)).toBe('Create budget')
+      expect(get(arLocale)).toBe('إنشاء ميزانية')
+    })
+
+    it('resolves in en without falling back to es', () => {
+      expect(i18n.t(KEY, { lng: 'en', fallbackLng: false })).toBe('Create budget')
+    })
+
+    it('resolves in ar without falling back to es', () => {
+      expect(i18n.t(KEY, { lng: 'ar', fallbackLng: false })).toBe('إنشاء ميزانية')
+    })
+
+    it.each([
+      ['en', 'Create budget'],
+      ['ar', 'إنشاء ميزانية'],
+    ])('renders the button in %s, not the key', async (lng, label) => {
+      await i18n.changeLanguage(lng)
+      renderModal()
+      // waitForOptionsLoaded finds the doctor field by its Spanish label.
+      fireEvent.click(await screen.findByText('Select Ana'))
+      await waitFor(() => expect(screen.getByRole('button', { name: label })).toBeInTheDocument())
+      expect(screen.queryByText(KEY)).not.toBeInTheDocument()
+    })
   })
 })
