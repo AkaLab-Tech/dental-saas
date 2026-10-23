@@ -834,6 +834,13 @@
     "moneyCovered": "Abonado",
     "moneyRemaining": "Pendiente de pago",
     "moneyNotBilled": "Sin ejecutar",
+    "paymentsTitle": "Pagos",
+    "paymentsDate": "Fecha",
+    "paymentsWhat": "Qué se hizo",
+    "paymentsNotes": "Notas",
+    "paymentsCharged": "Cobrado",
+    "paymentsCovered": "Abonado",
+    "paymentsEmpty": "Aún no hay visitas con cobro en este presupuesto.",
     "createdOn": "Creado el {{date}}",
     "status": {
       "DRAFT": "Borrador",

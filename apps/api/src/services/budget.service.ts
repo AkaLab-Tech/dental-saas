@@ -1,7 +1,13 @@
 import crypto from 'crypto'
 import { prisma, Prisma, BudgetStatus, BudgetItemStatus } from '@dental/database'
 import { logger } from '../utils/logger.js'
-import { buildBudgetMoney, getBudgetMoneyBuckets, type BudgetMoney } from './budget-money.service.js'
+import {
+  buildBudgetMoney,
+  getBudgetMoneyBuckets,
+  getBudgetMoneyDetail,
+  type BudgetMoney,
+  type BudgetVisit,
+} from './budget-money.service.js'
 
 const BUDGET_ITEM_SELECT = {
   id: true,
@@ -272,26 +278,21 @@ export async function getBudgetWithMoney(
   tenantId: string,
   budgetId: string
 ): Promise<
-  | { success: true; data: BudgetWithMoney }
+  | { success: true; data: BudgetWithMoney & { visits: BudgetVisit[] } }
   | { success: false; code: BudgetErrorCode }
 > {
   const result = await getBudget(tenantId, budgetId)
   if (!result.success) return result
 
-  const budget = result.data
-  const buckets = await getBudgetMoneyBuckets(tenantId, budget.patientId)
-  return {
-    success: true,
-    data: { ...budget, money: buildBudgetMoney(budget.totalAmount, buckets.get(budget.id)) },
-  }
+  return { success: true, data: await attachBudgetMoney(tenantId, result.data) }
 }
 
 export async function attachBudgetMoney<T extends { id: string; patientId: string; totalAmount: Parameters<typeof buildBudgetMoney>[0] }>(
   tenantId: string,
   budget: T
-): Promise<T & { money: BudgetMoney }> {
-  const buckets = await getBudgetMoneyBuckets(tenantId, budget.patientId)
-  return { ...budget, money: buildBudgetMoney(budget.totalAmount, buckets.get(budget.id)) }
+): Promise<T & { money: BudgetMoney; visits: BudgetVisit[] }> {
+  const { bucket, visits } = await getBudgetMoneyDetail(tenantId, budget.patientId, budget.id)
+  return { ...budget, money: buildBudgetMoney(budget.totalAmount, bucket), visits }
 }
 
 export async function listBudgetsByPatient(

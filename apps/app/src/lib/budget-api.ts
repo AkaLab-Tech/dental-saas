@@ -64,6 +64,19 @@ export interface Budget {
   money: BudgetMoney
 }
 
+export interface BudgetVisit {
+  appointmentId: string
+  date: string
+  lines: { budgetItemId: string; description: string; notes: string | null }[]
+  charged: number
+  covered: number
+}
+
+/** Single-budget shape; the list route returns plain `Budget`. */
+export interface BudgetWithVisits extends Budget {
+  visits: BudgetVisit[]
+}
+
 export interface BudgetItemInput {
   description: string
   toothNumber?: string | null
@@ -132,16 +145,16 @@ export async function listBudgetsByPatient(
   }
 }
 
-export async function getBudget(budgetId: string): Promise<Budget> {
-  const response = await apiClient.get<ApiResponse<Budget>>(`/budgets/${budgetId}`)
+export async function getBudget(budgetId: string): Promise<BudgetWithVisits> {
+  const response = await apiClient.get<ApiResponse<BudgetWithVisits>>(`/budgets/${budgetId}`)
   return response.data.data
 }
 
 export async function createBudget(
   patientId: string,
   data: CreateBudgetData
-): Promise<Budget> {
-  const response = await apiClient.post<ApiResponse<Budget>>(
+): Promise<BudgetWithVisits> {
+  const response = await apiClient.post<ApiResponse<BudgetWithVisits>>(
     `/patients/${patientId}/budgets`,
     data
   )
@@ -151,13 +164,13 @@ export async function createBudget(
 export async function updateBudget(
   budgetId: string,
   data: UpdateBudgetData
-): Promise<Budget> {
-  const response = await apiClient.patch<ApiResponse<Budget>>(`/budgets/${budgetId}`, data)
+): Promise<BudgetWithVisits> {
+  const response = await apiClient.patch<ApiResponse<BudgetWithVisits>>(`/budgets/${budgetId}`, data)
   return response.data.data
 }
 
-export async function deleteBudget(budgetId: string): Promise<Budget> {
-  const response = await apiClient.delete<ApiResponse<Budget>>(`/budgets/${budgetId}`)
+export async function deleteBudget(budgetId: string): Promise<BudgetWithVisits> {
+  const response = await apiClient.delete<ApiResponse<BudgetWithVisits>>(`/budgets/${budgetId}`)
   return response.data.data
 }
 
@@ -193,8 +206,8 @@ export async function shareBudget(
 export async function addBudgetItem(
   budgetId: string,
   item: BudgetItemInput
-): Promise<Budget> {
-  const response = await apiClient.post<ApiResponse<Budget>>(
+): Promise<BudgetWithVisits> {
+  const response = await apiClient.post<ApiResponse<BudgetWithVisits>>(
     `/budgets/${budgetId}/items`,
     item
   )
@@ -205,8 +218,8 @@ export async function updateBudgetItem(
   budgetId: string,
   itemId: string,
   data: UpdateBudgetItemData
-): Promise<Budget> {
-  const response = await apiClient.patch<ApiResponse<Budget>>(
+): Promise<BudgetWithVisits> {
+  const response = await apiClient.patch<ApiResponse<BudgetWithVisits>>(
     `/budgets/${budgetId}/items/${itemId}`,
     data
   )
@@ -216,8 +229,8 @@ export async function updateBudgetItem(
 export async function deleteBudgetItem(
   budgetId: string,
   itemId: string
-): Promise<Budget> {
-  const response = await apiClient.delete<ApiResponse<Budget>>(
+): Promise<BudgetWithVisits> {
+  const response = await apiClient.delete<ApiResponse<BudgetWithVisits>>(
     `/budgets/${budgetId}/items/${itemId}`
   )
   return response.data.data

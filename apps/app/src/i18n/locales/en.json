@@ -834,6 +834,13 @@
     "moneyCovered": "Paid",
     "moneyRemaining": "Pending payment",
     "moneyNotBilled": "Not yet executed",
+    "paymentsTitle": "Payments",
+    "paymentsDate": "Date",
+    "paymentsWhat": "What was done",
+    "paymentsNotes": "Notes",
+    "paymentsCharged": "Charged",
+    "paymentsCovered": "Covered",
+    "paymentsEmpty": "No billed visits in this budget yet.",
     "createdOn": "Created on {{date}}",
     "status": {
       "DRAFT": "Draft",

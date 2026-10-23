@@ -986,6 +986,182 @@ describe('Budgets routes', () => {
     })
   })
 
+  describe('Task #613: visits (payments table rows) on every route that returns ONE budget', () => {
+    let doctorId: string
+    let firstApptId: string
+    let secondApptId: string
+
+    // Two executed visits of different amounts on different dates; the 30 advance
+    // covers part of the first. Line B (2 x 50 = 100) is executed on the 2nd visit.
+    const EXPECTED_VISITS = (descriptionOfFirst = 'A') => [
+      {
+        appointmentId: expect.any(String),
+        date: '2026-01-10T10:00:00.000Z',
+        lines: [{ budgetItemId: expect.any(String), description: descriptionOfFirst, notes: 'LINK-A' }],
+        charged: 80,
+        covered: 30,
+      },
+      {
+        appointmentId: expect.any(String),
+        date: '2026-02-20T10:00:00.000Z',
+        lines: [{ budgetItemId: expect.any(String), description: 'B', notes: 'LINK-B' }],
+        charged: 100,
+        covered: 0,
+      },
+    ]
+
+    beforeAll(async () => {
+      doctorId = (
+        await prisma.doctor.create({
+          data: {
+            tenantId,
+            firstName: 'Dr. Visits',
+            lastName: 'Route',
+            email: `doctor-visits-${suffix}@budgets-test.com`,
+            specialty: 'General Dentistry',
+          },
+        })
+      ).id
+    })
+
+    afterEach(async () => {
+      await prisma.patientPayment.deleteMany({ where: { tenantId } })
+      await prisma.appointment.deleteMany({ where: { tenantId } })
+    })
+
+    afterAll(async () => {
+      await prisma.patientPayment.deleteMany({ where: { tenantId } })
+      await prisma.appointment.deleteMany({ where: { tenantId } })
+      await prisma.doctor.deleteMany({ where: { tenantId } })
+    })
+
+    async function seedTwoVisitBudget() {
+      const budget = await prisma.budget.create({
+        data: {
+          tenantId,
+          patientId,
+          status: 'APPROVED',
+          totalAmount: 180,
+          items: {
+            create: [
+              { description: 'A', quantity: 1, unitPrice: 80, totalPrice: 80, order: 0, notes: 'ITEM-A' },
+              { description: 'B', quantity: 2, unitPrice: 50, totalPrice: 100, order: 1, notes: 'ITEM-B' },
+            ],
+          },
+        },
+        include: { items: { orderBy: { order: 'asc' } } },
+      })
+      const mk = (iso: string) => {
+        const start = new Date(iso)
+        return prisma.appointment.create({
+          data: {
+            tenantId,
+            patientId,
+            doctorId,
+            startTime: start,
+            endTime: new Date(start.getTime() + 30 * 60_000),
+            duration: 30,
+            cost: null,
+          },
+        })
+      }
+      const first = await mk('2026-01-10T10:00:00Z')
+      const second = await mk('2026-02-20T10:00:00Z')
+      firstApptId = first.id
+      secondApptId = second.id
+      await prisma.budgetItemAppointment.create({
+        data: { budgetItemId: budget.items[0].id, appointmentId: first.id, role: 'EXECUTED', notes: 'LINK-A' },
+      })
+      await prisma.budgetItemAppointment.create({
+        data: { budgetItemId: budget.items[1].id, appointmentId: second.id, role: 'EXECUTED', notes: 'LINK-B' },
+      })
+      await prisma.patientPayment.create({
+        data: { tenantId, patientId, amount: 30, date: new Date('2026-01-05T10:00:00Z'), kind: 'ADVANCE' },
+      })
+      return budget
+    }
+
+    it('GET /api/budgets/:id carries visits', async () => {
+      const budget = await seedTwoVisitBudget()
+      const res = await api()
+        .get(`/api/budgets/${budget.id}`)
+        .set('Authorization', `Bearer ${staffToken}`)
+      expect(res.status).toBe(200)
+      expect(res.body.data.visits).toEqual(EXPECTED_VISITS())
+      expect(res.body.data.visits.map((v: { appointmentId: string }) => v.appointmentId)).toEqual([
+        firstApptId,
+        secondApptId,
+      ])
+    })
+
+    it('PATCH /api/budgets/:id carries visits', async () => {
+      const budget = await seedTwoVisitBudget()
+      const res = await api()
+        .patch(`/api/budgets/${budget.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ notes: 'touched' })
+      expect(res.status).toBe(200)
+      expect(res.body.data.visits).toEqual(EXPECTED_VISITS())
+    })
+
+    it('DELETE /api/budgets/:id carries visits', async () => {
+      const budget = await seedTwoVisitBudget()
+      const res = await api()
+        .delete(`/api/budgets/${budget.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+      expect(res.status).toBe(200)
+      expect(res.body.data.visits).toBeInstanceOf(Array)
+    })
+
+    it('POST /api/budgets/:id/items carries visits', async () => {
+      const budget = await seedTwoVisitBudget()
+      const res = await api()
+        .post(`/api/budgets/${budget.id}/items`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ description: 'C', quantity: 1, unitPrice: 20 })
+      expect(res.status).toBe(201)
+      expect(res.body.data.visits).toEqual(EXPECTED_VISITS())
+    })
+
+    it('PATCH /api/budgets/:id/items/:itemId carries visits', async () => {
+      const budget = await seedTwoVisitBudget()
+      const res = await api()
+        .patch(`/api/budgets/${budget.id}/items/${budget.items[0].id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ description: 'A renamed' })
+      expect(res.status).toBe(200)
+      expect(res.body.data.visits).toEqual(EXPECTED_VISITS('A renamed'))
+    })
+
+    it('DELETE /api/budgets/:id/items/:itemId carries visits (the removed line leaves no row)', async () => {
+      const budget = await seedTwoVisitBudget()
+      const res = await api()
+        .delete(`/api/budgets/${budget.id}/items/${budget.items[1].id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+      expect(res.status).toBe(200)
+      expect(res.body.data.visits).toEqual([EXPECTED_VISITS()[0]])
+    })
+
+    it('POST /api/patients/:id/budgets carries visits (a new budget has none: an empty array, not absent)', async () => {
+      const res = await api()
+        .post(`/api/patients/${patientId}/budgets`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ items: [{ description: 'Cleaning', quantity: 1, unitPrice: 80 }] })
+      expect(res.status).toBe(201)
+      expect(res.body.data.visits).toEqual([])
+    })
+
+    it('GET /api/patients/:id/budgets does NOT carry visits on its entries', async () => {
+      const budget = await seedTwoVisitBudget()
+      const res = await api()
+        .get(`/api/patients/${patientId}/budgets`)
+        .set('Authorization', `Bearer ${staffToken}`)
+      const entry = res.body.data.find((b: { id: string }) => b.id === budget.id)
+      expect(entry).toBeDefined()
+      expect(entry).not.toHaveProperty('visits')
+    })
+  })
+
   // --------------------------------------------------------------------------
   // Auth
   // --------------------------------------------------------------------------

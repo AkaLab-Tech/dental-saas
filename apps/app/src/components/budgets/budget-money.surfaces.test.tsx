@@ -158,7 +158,7 @@ const surfaces: Surface[] = [
   {
     name: 'BudgetDetailPage',
     show: async (budget) => {
-      getBudgetMock.mockResolvedValue(budget)
+      getBudgetMock.mockResolvedValue({ ...budget, visits: [] })
       render(
         <MemoryRouter initialEntries={['/patients/patient-1/budgets/budget-1']}>
           <Routes>
@@ -169,7 +169,7 @@ const surfaces: Surface[] = [
       await screen.findByText(LABELS.covered, { selector: 'dt' })
     },
     update: async (budget) => {
-      act(() => useBudgetsStore.setState({ currentBudget: budget }))
+      act(() => useBudgetsStore.setState({ currentBudget: { ...budget, visits: [] } }))
     },
     write: async () => {
       await act(async () => {
@@ -250,7 +250,7 @@ describe.each(surfaces)('budget money on $name', (surface) => {
   // Guard 6: a write moves the figures (neither blanks nor freezes them)
   describe('after a write that changes the figures', () => {
     beforeEach(() => {
-      addBudgetItemMock.mockResolvedValue(afterAddingItem())
+      addBudgetItemMock.mockResolvedValue({ ...afterAddingItem(), visits: [] })
     })
 
     it('shows the new total', async () => {
