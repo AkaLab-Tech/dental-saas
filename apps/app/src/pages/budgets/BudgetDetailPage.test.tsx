@@ -8,7 +8,7 @@ import { useAuthStore } from '@/stores/auth.store'
 import { usePermissions } from '@/hooks/usePermissions'
 import { downloadBudgetPdf } from '@/lib/pdf-api'
 import { shareBudget, USER_SETTABLE_BUDGET_STATUSES } from '@/lib/budget-api'
-import type { Budget, BudgetItem } from '@/lib/budget-api'
+import type { BudgetWithVisits as Budget, BudgetItem } from '@/lib/budget-api'
 
 // Mock react-i18next — return the key so assertions are stable regardless of locale
 vi.mock('react-i18next', () => ({
@@ -43,6 +43,7 @@ function makeBudget(overrides: Partial<Budget> = {}): Budget {
     validUntil: null,
     totalAmount: '180',
     money: { total: 100, billed: 50, covered: 30, remaining: 20, notBilled: 50 },
+    visits: [],
     publicToken: null,
     publicTokenExpiresAt: null,
     isActive: true,

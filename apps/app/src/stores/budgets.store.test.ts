@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useBudgetsStore } from './budgets.store'
-import type { Budget, BudgetItem } from '../lib/budget-api'
+import type { BudgetWithVisits as Budget, BudgetItem } from '../lib/budget-api'
 
 vi.mock('../lib/budget-api', () => ({
   listBudgetsByPatient: vi.fn(),
@@ -60,6 +60,7 @@ function makeBudget(overrides: Partial<Budget> = {}): Budget {
     createdAt: '2026-04-23T00:00:00Z',
     updatedAt: '2026-04-23T00:00:00Z',
     items: [makeItem()],
+    visits: [],
     ...overrides,
   }
 }

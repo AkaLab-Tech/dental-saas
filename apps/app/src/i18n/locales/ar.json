@@ -834,6 +834,13 @@
     "moneyCovered": "المدفوع",
     "moneyRemaining": "بانتظار الدفع",
     "moneyNotBilled": "غير منفذ بعد",
+    "paymentsTitle": "المدفوعات",
+    "paymentsDate": "التاريخ",
+    "paymentsWhat": "ما تم تنفيذه",
+    "paymentsNotes": "ملاحظات",
+    "paymentsCharged": "المحاسب",
+    "paymentsCovered": "المسدد",
+    "paymentsEmpty": "لا توجد زيارات محاسَبة في هذه الميزانية بعد.",
     "createdOn": "أُنشئت في {{date}}",
     "status": {
       "DRAFT": "مسودة",

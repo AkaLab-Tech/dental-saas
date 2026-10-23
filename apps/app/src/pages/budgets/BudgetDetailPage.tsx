@@ -35,6 +35,7 @@ import { useAuthStore } from '@/stores/auth.store'
 import { formatCurrency } from '@/lib/format'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Can } from '@/components/auth'
+import { BudgetPaymentsTable } from '@/components/budgets/BudgetPaymentsTable'
 
 const STATUS_STYLES: Record<BudgetStatus, string> = {
   DRAFT: 'bg-gray-100 text-gray-700 border-gray-200',
@@ -494,6 +495,8 @@ export default function BudgetDetailPage() {
           )}
         </div>
       </div>
+
+      <BudgetPaymentsTable visits={currentBudget.visits} currency={currency} />
 
       {/* Items card */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">

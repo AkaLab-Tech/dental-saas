@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type {
   Budget,
+  BudgetWithVisits,
   CreateBudgetData,
   UpdateBudgetData,
   BudgetItemInput,
@@ -24,7 +25,7 @@ interface BudgetsState {
   total: number
 
   // Detail view
-  currentBudget: Budget | null
+  currentBudget: BudgetWithVisits | null
 
   // UI state
   loading: boolean
@@ -32,13 +33,13 @@ interface BudgetsState {
 
   // Actions
   fetchBudgetsByPatient: (patientId: string) => Promise<void>
-  fetchBudget: (budgetId: string) => Promise<Budget>
-  createBudget: (patientId: string, data: CreateBudgetData) => Promise<Budget>
-  updateBudget: (budgetId: string, data: UpdateBudgetData) => Promise<Budget>
+  fetchBudget: (budgetId: string) => Promise<BudgetWithVisits>
+  createBudget: (patientId: string, data: CreateBudgetData) => Promise<BudgetWithVisits>
+  updateBudget: (budgetId: string, data: UpdateBudgetData) => Promise<BudgetWithVisits>
   deleteBudget: (budgetId: string) => Promise<void>
-  addItem: (budgetId: string, item: BudgetItemInput) => Promise<Budget>
-  updateItem: (budgetId: string, itemId: string, data: UpdateBudgetItemData) => Promise<Budget>
-  deleteItem: (budgetId: string, itemId: string) => Promise<Budget>
+  addItem: (budgetId: string, item: BudgetItemInput) => Promise<BudgetWithVisits>
+  updateItem: (budgetId: string, itemId: string, data: UpdateBudgetItemData) => Promise<BudgetWithVisits>
+  deleteItem: (budgetId: string, itemId: string) => Promise<BudgetWithVisits>
   clearError: () => void
   reset: () => void
 }
