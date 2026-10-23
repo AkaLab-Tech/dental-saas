@@ -300,6 +300,20 @@ export default function BudgetDetailPage() {
               <p className="text-sm text-gray-600 mt-0.5">
                 {t('budgets.itemsProgress', { executed, total: totalItems })}
               </p>
+              <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                {(
+                  [
+                    ['budgets.moneyCovered', currentBudget.money.covered],
+                    ['budgets.moneyRemaining', currentBudget.money.remaining],
+                    ['budgets.moneyNotBilled', currentBudget.money.notBilled],
+                  ] as const
+                ).map(([key, amount]) => (
+                  <div key={key} className="flex items-baseline gap-1.5">
+                    <dt className="text-gray-500">{t(key)}</dt>
+                    <dd className="font-medium text-gray-900">{formatCurrency(amount, currency)}</dd>
+                  </div>
+                ))}
+              </dl>
             </div>
           </div>
           <span

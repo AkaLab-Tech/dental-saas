@@ -53,6 +53,7 @@ function makeBudget(overrides: Partial<Budget> = {}): Budget {
     notes: null,
     validUntil: null,
     totalAmount: '100',
+    money: { total: 100, billed: 50, covered: 30, remaining: 20, notBilled: 50 },
     publicToken: null,
     publicTokenExpiresAt: null,
     isActive: true,
@@ -183,5 +184,52 @@ describe('budgets.store', () => {
     await useBudgetsStore.getState().deleteItem('budget-1', 'item-1')
     expect(useBudgetsStore.getState().currentBudget?.items).toHaveLength(1)
     expect(useBudgetsStore.getState().currentBudget?.items[0].id).toBe('item-2')
+  })
+
+  // Task #612: the money the API returns with a write replaces the stored money,
+  // in the list and in currentBudget alike (neither blanked nor frozen).
+  describe('a write replaces the stored money with the response money', () => {
+    const BEFORE = { total: 100, billed: 40, covered: 25, remaining: 15, notBilled: 60 }
+    const AFTER = { total: 150, billed: 40, covered: 25, remaining: 15, notBilled: 110 }
+
+    async function seed() {
+      const before = makeBudget({ money: BEFORE })
+      vi.mocked(listBudgetsByPatient).mockResolvedValue({ data: [before], total: 1 })
+      vi.mocked(getBudget).mockResolvedValue(before)
+      await useBudgetsStore.getState().fetchBudgetsByPatient('patient-1')
+      await useBudgetsStore.getState().fetchBudget('budget-1')
+    }
+
+    it('addItem: currentBudget carries the response money', async () => {
+      await seed()
+      vi.mocked(apiAddBudgetItem).mockResolvedValue(makeBudget({ totalAmount: '150', money: AFTER }))
+      await useBudgetsStore
+        .getState()
+        .addItem('budget-1', { description: 'Y', quantity: 1, unitPrice: 50 })
+      expect(useBudgetsStore.getState().currentBudget?.money).toEqual(AFTER)
+    })
+
+    it('addItem: the list entry carries the response money', async () => {
+      await seed()
+      vi.mocked(apiAddBudgetItem).mockResolvedValue(makeBudget({ totalAmount: '150', money: AFTER }))
+      await useBudgetsStore
+        .getState()
+        .addItem('budget-1', { description: 'Y', quantity: 1, unitPrice: 50 })
+      expect(useBudgetsStore.getState().budgets[0].money).toEqual(AFTER)
+    })
+
+    it('deleteItem: currentBudget carries the response money', async () => {
+      await seed()
+      vi.mocked(apiDeleteBudgetItem).mockResolvedValue(makeBudget({ money: AFTER }))
+      await useBudgetsStore.getState().deleteItem('budget-1', 'item-1')
+      expect(useBudgetsStore.getState().currentBudget?.money).toEqual(AFTER)
+    })
+
+    it('updateBudget: the list entry carries the response money', async () => {
+      await seed()
+      vi.mocked(apiUpdateBudget).mockResolvedValue(makeBudget({ money: AFTER }))
+      await useBudgetsStore.getState().updateBudget('budget-1', { notes: 'n' })
+      expect(useBudgetsStore.getState().budgets[0].money).toEqual(AFTER)
+    })
   })
 })

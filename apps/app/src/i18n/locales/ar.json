@@ -831,6 +831,9 @@
     "itemsCount_one": "{{count}} عنصر",
     "itemsCount_other": "{{count}} عناصر",
     "itemsProgress": "{{executed}} من {{total}} منفذة",
+    "moneyCovered": "المدفوع",
+    "moneyRemaining": "بانتظار الدفع",
+    "moneyNotBilled": "غير منفذ بعد",
     "createdOn": "أُنشئت في {{date}}",
     "status": {
       "DRAFT": "مسودة",

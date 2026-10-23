@@ -31,7 +31,7 @@ import {
   getPatientAccountStatement,
   listDebtors,
 } from '../services/payment.service.js'
-import { createBudget, listBudgetsByPatient } from '../services/budget.service.js'
+import { attachBudgetMoney, createBudget, listBudgetsByPatient } from '../services/budget.service.js'
 import { createBudgetSchema } from './budgets.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { Permission } from '@dental/shared'
@@ -1185,7 +1185,7 @@ patientsRouter.post(
         return
       }
 
-      res.status(201).json({ success: true, data: result.data })
+      res.status(201).json({ success: true, data: await attachBudgetMoney(tenantId, result.data) })
     } catch (e) {
       next(e)
     }

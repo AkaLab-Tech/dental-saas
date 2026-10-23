@@ -286,6 +286,14 @@ export async function getBudgetWithMoney(
   }
 }
 
+export async function attachBudgetMoney<T extends { id: string; patientId: string; totalAmount: Parameters<typeof buildBudgetMoney>[0] }>(
+  tenantId: string,
+  budget: T
+): Promise<T & { money: BudgetMoney }> {
+  const buckets = await getBudgetMoneyBuckets(tenantId, budget.patientId)
+  return { ...budget, money: buildBudgetMoney(budget.totalAmount, buckets.get(budget.id)) }
+}
+
 export async function listBudgetsByPatient(
   tenantId: string,
   patientId: string,

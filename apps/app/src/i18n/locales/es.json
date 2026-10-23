@@ -831,6 +831,9 @@
     "itemsCount_one": "{{count}} ítem",
     "itemsCount_other": "{{count}} ítems",
     "itemsProgress": "{{executed}} de {{total}} ejecutados",
+    "moneyCovered": "Abonado",
+    "moneyRemaining": "Pendiente de pago",
+    "moneyNotBilled": "Sin ejecutar",
     "createdOn": "Creado el {{date}}",
     "status": {
       "DRAFT": "Borrador",
