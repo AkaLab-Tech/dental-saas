@@ -61,7 +61,7 @@ export interface Budget {
   createdAt: string
   updatedAt: string
   items: BudgetItem[]
-  money?: BudgetMoney
+  money: BudgetMoney
 }
 
 export interface BudgetItemInput {

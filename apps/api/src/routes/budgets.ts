@@ -6,6 +6,7 @@ import { Permission } from '@dental/shared'
 import { env } from '../config/env.js'
 import {
   getBudgetWithMoney,
+  attachBudgetMoney,
   updateBudget,
   deleteBudget,
   addBudgetItem,
@@ -188,7 +189,7 @@ budgetsRouter.patch('/:id', requirePermission(Permission.BUDGETS_UPDATE), async 
     })
 
     if (!result.success) return sendError(res, result.code)
-    res.json({ success: true, data: result.data })
+    res.json({ success: true, data: await attachBudgetMoney(tenantId, result.data) })
   } catch (e) {
     next(e)
   }
@@ -203,7 +204,7 @@ budgetsRouter.delete('/:id', requirePermission(Permission.BUDGETS_DELETE), async
     const tenantId = req.user!.tenantId!
     const result = await deleteBudget(tenantId, req.params.id)
     if (!result.success) return sendError(res, result.code)
-    res.json({ success: true, data: result.data })
+    res.json({ success: true, data: await attachBudgetMoney(tenantId, result.data) })
   } catch (e) {
     next(e)
   }
@@ -227,7 +228,7 @@ budgetsRouter.post('/:id/items', requirePermission(Permission.BUDGETS_UPDATE), a
 
     const result = await addBudgetItem(tenantId, req.params.id, parsed.data)
     if (!result.success) return sendError(res, result.code)
-    res.status(201).json({ success: true, data: result.data })
+    res.status(201).json({ success: true, data: await attachBudgetMoney(tenantId, result.data) })
   } catch (e) {
     next(e)
   }
@@ -259,7 +260,7 @@ budgetsRouter.patch(
         parsed.data
       )
       if (!result.success) return sendError(res, result.code)
-      res.json({ success: true, data: result.data })
+      res.json({ success: true, data: await attachBudgetMoney(tenantId, result.data) })
     } catch (e) {
       next(e)
     }
@@ -277,7 +278,7 @@ budgetsRouter.delete(
       const tenantId = req.user!.tenantId!
       const result = await deleteBudgetItem(tenantId, req.params.id, req.params.itemId)
       if (!result.success) return sendError(res, result.code)
-      res.json({ success: true, data: result.data })
+      res.json({ success: true, data: await attachBudgetMoney(tenantId, result.data) })
     } catch (e) {
       next(e)
     }

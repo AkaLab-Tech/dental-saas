@@ -42,6 +42,7 @@ function makeBudget(overrides: Partial<Budget> = {}): Budget {
     notes: null,
     validUntil: null,
     totalAmount: '180',
+    money: { total: 100, billed: 50, covered: 30, remaining: 20, notBilled: 50 },
     publicToken: null,
     publicTokenExpiresAt: null,
     isActive: true,

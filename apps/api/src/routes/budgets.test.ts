@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
 import { api } from '../test/http.js'
 import { prisma } from '@dental/database'
 import { hashPassword } from '../services/auth.service.js'
@@ -826,6 +826,163 @@ describe('Budgets routes', () => {
       const publicRes = await api().get(`/api/public/budgets/${shareRes.body.data.token}`)
       expect(publicRes.status).toBe(200)
       expect(publicRes.body.data.id).toBe(budget.id)
+    })
+  })
+
+  // --------------------------------------------------------------------------
+  // Task #612: every route that returns a budget carries `money`
+  // One test per route, each with its own assertion, so a route that drops
+  // `money` is named by the failing test and never hidden behind another.
+  // --------------------------------------------------------------------------
+  describe('Task #612: money on every route that returns a budget', () => {
+    let doctorId: string
+
+    // Item A (80) is executed and billed; item B (2 x 50 = 100) is not. A 30 advance
+    // covers part of A. The four buckets are mutually different on purpose:
+    // total 180, billed 80, covered 30, remaining 50, notBilled 100.
+    const PARTIAL_MONEY = { total: 180, billed: 80, covered: 30, remaining: 50, notBilled: 100 }
+    const MONEY_KEYS = ['billed', 'covered', 'notBilled', 'remaining', 'total']
+
+    beforeAll(async () => {
+      doctorId = (
+        await prisma.doctor.create({
+          data: {
+            tenantId,
+            firstName: 'Dr. Money',
+            lastName: 'Route',
+            email: `doctor-money-${suffix}@budgets-test.com`,
+            specialty: 'General Dentistry',
+          },
+        })
+      ).id
+    })
+
+    afterEach(async () => {
+      await prisma.patientPayment.deleteMany({ where: { tenantId } })
+      await prisma.appointment.deleteMany({ where: { tenantId } })
+    })
+
+    afterAll(async () => {
+      await prisma.patientPayment.deleteMany({ where: { tenantId } })
+      await prisma.appointment.deleteMany({ where: { tenantId } })
+      await prisma.doctor.deleteMany({ where: { tenantId } })
+    })
+
+    async function seedPartiallyCoveredBudget() {
+      const budget = await prisma.budget.create({
+        data: {
+          tenantId,
+          patientId,
+          status: 'APPROVED',
+          totalAmount: 180,
+          items: {
+            create: [
+              { description: 'A', quantity: 1, unitPrice: 80, totalPrice: 80, order: 0 },
+              { description: 'B', quantity: 2, unitPrice: 50, totalPrice: 100, order: 1 },
+            ],
+          },
+        },
+        include: { items: { orderBy: { order: 'asc' } } },
+      })
+      const start = new Date('2026-01-10T10:00:00Z')
+      const appointment = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: start,
+          endTime: new Date(start.getTime() + 30 * 60_000),
+          duration: 30,
+          cost: null,
+        },
+      })
+      await prisma.budgetItemAppointment.create({
+        data: { budgetItemId: budget.items[0].id, appointmentId: appointment.id, role: 'EXECUTED' },
+      })
+      await prisma.patientPayment.create({
+        data: { tenantId, patientId, amount: 30, date: new Date('2026-01-05T10:00:00Z'), kind: 'ADVANCE' },
+      })
+      return budget
+    }
+
+    it('GET /api/budgets/:id carries money', async () => {
+      const budget = await seedPartiallyCoveredBudget()
+      const res = await api()
+        .get(`/api/budgets/${budget.id}`)
+        .set('Authorization', `Bearer ${staffToken}`)
+      expect(res.body.data.money).toEqual(PARTIAL_MONEY)
+    })
+
+    it('GET /api/patients/:id/budgets carries money on each entry', async () => {
+      const budget = await seedPartiallyCoveredBudget()
+      const res = await api()
+        .get(`/api/patients/${patientId}/budgets`)
+        .set('Authorization', `Bearer ${staffToken}`)
+      const entry = res.body.data.find((b: { id: string }) => b.id === budget.id)
+      expect(entry.money).toEqual(PARTIAL_MONEY)
+    })
+
+    it('PATCH /api/budgets/:id carries money', async () => {
+      const budget = await seedPartiallyCoveredBudget()
+      const res = await api()
+        .patch(`/api/budgets/${budget.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ notes: 'touched' })
+      expect(res.status).toBe(200)
+      expect(res.body.data.money).toEqual(PARTIAL_MONEY)
+    })
+
+    it('POST /api/budgets/:id/items carries money, with the new item moving total and notBilled', async () => {
+      const budget = await seedPartiallyCoveredBudget()
+      const res = await api()
+        .post(`/api/budgets/${budget.id}/items`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ description: 'C', quantity: 1, unitPrice: 20 })
+      expect(res.status).toBe(201)
+      expect(res.body.data.money).toEqual({ total: 200, billed: 80, covered: 30, remaining: 50, notBilled: 120 })
+    })
+
+    it('PATCH /api/budgets/:id/items/:itemId carries money, with the edited price moving total and notBilled', async () => {
+      const budget = await seedPartiallyCoveredBudget()
+      const res = await api()
+        .patch(`/api/budgets/${budget.id}/items/${budget.items[1].id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ unitPrice: 30 })
+      expect(res.status).toBe(200)
+      expect(res.body.data.money).toEqual({ total: 140, billed: 80, covered: 30, remaining: 50, notBilled: 60 })
+    })
+
+    it('DELETE /api/budgets/:id/items/:itemId carries money, with the removed item moving total and notBilled', async () => {
+      const budget = await seedPartiallyCoveredBudget()
+      const res = await api()
+        .delete(`/api/budgets/${budget.id}/items/${budget.items[1].id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+      expect(res.status).toBe(200)
+      expect(res.body.data.money).toEqual({ total: 80, billed: 80, covered: 30, remaining: 50, notBilled: 0 })
+    })
+
+    it('DELETE /api/budgets/:id carries money (full shape, total as stored)', async () => {
+      const budget = await seedPartiallyCoveredBudget()
+      const res = await api()
+        .delete(`/api/budgets/${budget.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+      expect(res.status).toBe(200)
+      expect(Object.keys(res.body.data.money ?? {}).sort()).toEqual(MONEY_KEYS)
+      expect(res.body.data.money?.total).toBe(180)
+    })
+
+    it('POST /api/patients/:id/budgets carries money (nothing billed yet: whole total is notBilled)', async () => {
+      const res = await api()
+        .post(`/api/patients/${patientId}/budgets`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          items: [
+            { description: 'Cleaning', quantity: 1, unitPrice: 80 },
+            { description: 'Filling 16', toothNumber: '16', quantity: 2, unitPrice: 50 },
+          ],
+        })
+      expect(res.status).toBe(201)
+      expect(res.body.data.money).toEqual({ total: 180, billed: 0, covered: 0, remaining: 0, notBilled: 180 })
     })
   })
 

@@ -229,6 +229,21 @@ export function BudgetCard({ budget, patientId, onDelete }: BudgetCardProps) {
           )}
         </div>
 
+        <dl className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          {(
+            [
+              ['budgets.moneyCovered', budget.money.covered],
+              ['budgets.moneyRemaining', budget.money.remaining],
+              ['budgets.moneyNotBilled', budget.money.notBilled],
+            ] as const
+          ).map(([key, amount]) => (
+            <div key={key} className="flex items-baseline gap-1.5">
+              <dt className="text-gray-500">{t(key)}</dt>
+              <dd className="font-medium text-gray-900">{formatCurrency(amount, currency)}</dd>
+            </div>
+          ))}
+        </dl>
+
         {totalItems > 0 && (
           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
             <div
