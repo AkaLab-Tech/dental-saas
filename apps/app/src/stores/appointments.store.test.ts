@@ -1067,3 +1067,122 @@ describe('appointments.store', () => {
     })
   })
 })
+
+// ============================================================================
+// Task #619 guard 6 (client half): the executed-items figure survives an edit
+// ============================================================================
+//
+// #619 taught the agenda to show what a visit bills when the charge comes from
+// executed budget items. Guard 1 (the card renders it) is satisfiable by the
+// first render alone, because this store REPLACES the cached row with the write
+// response wholesale:
+//
+//   appointments.map((a) => (a.id === id ? updatedAppointment : a))
+//
+// so any field the write response omits is dropped from the row the agenda is
+// already showing. The server half — PUT /:id and PUT /:id/mark-done returning
+// `budgetItems` — is asserted in
+// apps/api/src/routes/appointments-agenda-executed-items-amount.test.ts; this
+// half pins the store behaviour that makes it load-bearing, in both directions:
+// carried when the response has it, lost when it does not.
+describe('appointments.store — the executed-items figure across a write (#619)', () => {
+  const itemsAggregate = { count: 2, cost: 4000, paidAmount: 0, outstanding: 4000 }
+
+  // A costless agenda row whose whole charge is 2 executed items of 4000.
+  const itemsBilledAppointment: Appointment = {
+    ...mockAppointment,
+    cost: null,
+    budgetItems: itemsAggregate,
+  }
+
+  beforeEach(() => {
+    useAppointmentsStore.setState({
+      appointments: [itemsBilledAppointment],
+      calendarAppointments: [itemsBilledAppointment],
+      selectedAppointment: null,
+      listTotal: 1,
+      isLoading: false,
+      error: null,
+    })
+    vi.clearAllMocks()
+    ;(getAppointmentStats as Mock).mockResolvedValue(mockStats)
+  })
+
+  it('editAppointment keeps the 2-items/4000 aggregate on the row when the response carries it', async () => {
+    ;(updateAppointment as Mock).mockResolvedValue({
+      ...itemsBilledAppointment,
+      notes: 'edited note',
+      budgetItems: itemsAggregate,
+    })
+
+    await useAppointmentsStore.getState().editAppointment('appointment-123', { notes: 'edited note' })
+
+    const row = useAppointmentsStore.getState().appointments[0]
+    expect(row.notes).toBe('edited note')
+    expect(row.budgetItems).toEqual({ count: 2, cost: 4000, paidAmount: 0, outstanding: 4000 })
+  })
+
+  it('editAppointment keeps it on the calendar row too', async () => {
+    ;(updateAppointment as Mock).mockResolvedValue({
+      ...itemsBilledAppointment,
+      notes: 'edited note',
+      budgetItems: itemsAggregate,
+    })
+
+    await useAppointmentsStore.getState().editAppointment('appointment-123', { notes: 'edited note' })
+
+    expect(useAppointmentsStore.getState().calendarAppointments[0].budgetItems).toEqual({
+      count: 2,
+      cost: 4000,
+      paidAmount: 0,
+      outstanding: 4000,
+    })
+  })
+
+  /**
+   * The swap is wholesale, so this is NOT a merge: a write response without
+   * `budgetItems` blanks the amount the agenda was showing a moment earlier.
+   * This is why the server half of guard 6 exists — pinned here so that a
+   * future "the store merges the response into the row" change cannot silently
+   * make the server half unnecessary-looking while this file still claims it.
+   */
+  it('editAppointment DROPS the aggregate when the write response omits it (the swap is wholesale)', async () => {
+    const { budgetItems: _omitted, ...withoutAggregate } = itemsBilledAppointment
+    ;(updateAppointment as Mock).mockResolvedValue({ ...withoutAggregate, notes: 'edited note' })
+
+    await useAppointmentsStore.getState().editAppointment('appointment-123', { notes: 'edited note' })
+
+    expect(useAppointmentsStore.getState().appointments[0].budgetItems).toBeUndefined()
+  })
+
+  it('completeAppointment keeps the 2-items/4000 aggregate when the mark-done response carries it', async () => {
+    ;(markAppointmentDone as Mock).mockResolvedValue({
+      ...itemsBilledAppointment,
+      status: 'COMPLETED',
+      budgetItems: itemsAggregate,
+    })
+
+    await useAppointmentsStore.getState().completeAppointment('appointment-123')
+
+    const row = useAppointmentsStore.getState().appointments[0]
+    expect(row.status).toBe('COMPLETED')
+    expect(row.budgetItems).toEqual({ count: 2, cost: 4000, paidAmount: 0, outstanding: 4000 })
+  })
+
+  it('restoreDeletedAppointment keeps the 2-items/4000 aggregate when the response carries it', async () => {
+    ;(restoreAppointment as Mock).mockResolvedValue({
+      ...itemsBilledAppointment,
+      isActive: true,
+      budgetItems: itemsAggregate,
+    })
+
+    await useAppointmentsStore.getState().restoreDeletedAppointment('appointment-123')
+
+    expect(useAppointmentsStore.getState().appointments[0].budgetItems).toEqual({
+      count: 2,
+      cost: 4000,
+      paidAmount: 0,
+      outstanding: 4000,
+    })
+  })
+})

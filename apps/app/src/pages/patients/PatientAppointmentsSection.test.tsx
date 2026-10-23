@@ -1427,3 +1427,45 @@ describe('PatientAppointmentsSection — appointment cost is the single charge (
     expect(screen.queryByText('$100')).not.toBeInTheDocument()
   })
 })
+
+// ============================================================================
+// Task #619 guard 4 (client half): the patient record's own figure
+// ============================================================================
+//
+// #619 taught the day's agenda to show what a visit bills when the charge comes
+// from executed budget items. Guard 4 asks the agenda card and the patient
+// record to AGREE for one fixture — a costless visit with 2 executed items
+// totalling 4000 — with each surface stated on its own, so that both being
+// wrong in the same way cannot satisfy it.
+//
+// This is the patient-record side. The agenda side is in
+// apps/app/src/components/appointments/AppointmentCard.test.tsx ("guard 4: for
+// the 2-items/4000 fixture…"), and the two server reads that feed them in
+// apps/api/src/routes/appointments-agenda-executed-items-amount.test.ts.
+// Nothing here is compared to another surface's output.
+describe('PatientAppointmentsSection — #619: the patient record\'s own figure for the 2-items/4000 fixture', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCanPermission = true
+    mockCanDeletePayments = true
+    localStorage.clear()
+    localStorage.setItem('patient-appointments-collapsed', 'false')
+  })
+
+  it('states 2 executed items and a 4000 total (t() and formatCurrency are mocked here)', async () => {
+    mockGetAppointmentsByPatient.mockResolvedValue([
+      {
+        ...upcomingAppointment,
+        cost: null,
+        budgetItems: { count: 2, cost: 4000, paidAmount: 0, outstanding: 4000 },
+      },
+    ])
+    renderSection()
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('appointments.budgetItems.executedCharge:{"count":2,"total":"$4000"}')
+      ).toBeInTheDocument()
+    })
+  })
+})

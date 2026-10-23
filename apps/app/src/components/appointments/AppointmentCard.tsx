@@ -107,11 +107,29 @@ export function AppointmentCard({
             <p className="mt-2 text-sm text-gray-500 line-clamp-1">{appointment.notes}</p>
           )}
 
-          {/* Cost */}
-          {appointment.cost !== null && (
-            <div className="mt-2 flex items-center gap-2 text-sm">
-              <span className="text-gray-700">{formatCurrency(appointment.cost!, currency)}</span>
-              <PaidStatusBadge isPaid={appointment.isPaid} cost={appointment.cost!} />
+          {/* What the visit bills, by whichever authority applies: the
+              appointment's own cost, or the budget items executed in it. The
+              figures come from the server (the same source the patient record
+              reads); the card formats them and derives nothing. Both blocks can
+              show at once — a cost of 0 is not an authority, so the server may
+              legitimately send it alongside executed items. */}
+          {(appointment.cost !== null || appointment.budgetItems) && (
+            <div data-testid="appointment-amount">
+              {appointment.cost !== null && (
+                <div className="mt-2 flex items-center gap-2 text-sm">
+                  <span className="text-gray-700">{formatCurrency(appointment.cost!, currency)}</span>
+                  <PaidStatusBadge isPaid={appointment.isPaid} cost={appointment.cost!} />
+                </div>
+              )}
+
+              {appointment.budgetItems && (
+                <div className="mt-2 text-xs text-gray-700">
+                  {t('appointments.budgetItems.executedCharge', {
+                    count: appointment.budgetItems.count,
+                    total: formatCurrency(appointment.budgetItems.cost, currency),
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
