@@ -347,14 +347,17 @@ test.describe('Appointment cost is the single authority (#590)', () => {
     await expect(header).toContainText(money(2500))
     await page.screenshot({ path: `${SHOTS}/590-08-control-statement-2500.png`, fullPage: true })
 
-    // Surface 3: the agenda card carries no cost figure of its own — the visit
-    // has no cost, and the agenda never showed the items' charge.
+    // Surface 3: the visit has no typed cost, so the agenda bills it by its
+    // executed items, agreeing with the statement (2,500).
     await page.goto('/appointments')
     await expect(page.getByRole('heading', { name: /citas/i, level: 1 })).toBeVisible()
     const agendaCard = todayAgendaCard(page, lastName)
     await expect(agendaCard).toBeVisible()
     console.log(`CONTROL_SURFACE_3_AGENDA: ${(await agendaCard.innerText()).replace(/\n/g, ' | ')}`)
-    await expect(agendaCard).not.toContainText(money(2500))
+    const agendaExecutedLine = agendaCard.getByText(/Ítems de presupuesto ejecutados en esta cita/)
+    await expect(agendaExecutedLine).toBeVisible()
+    await expect(agendaExecutedLine).toContainText('2')
+    await expect(agendaExecutedLine).toContainText(money(2500))
     await page.screenshot({ path: `${SHOTS}/590-09-control-agenda-no-cost.png`, fullPage: true })
   })
 })

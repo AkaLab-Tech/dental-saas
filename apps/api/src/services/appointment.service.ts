@@ -69,8 +69,10 @@ export type SafeAppointment = {
   createdBy: string | null
   createdAt: Date
   updatedAt: Date
-  // FIFO breakdown — present only on endpoints that compute it per patient
-  // (getAppointmentsByPatient, getAppointmentById). undefined elsewhere.
+  // FIFO breakdown — present only on endpoints that compute the allocation for
+  // the appointment's patient (getAppointmentsByPatient, getAppointmentById,
+  // the write paths, and on the appointment list for the patients that have an
+  // executed budget item on the page). undefined elsewhere.
   paidAmount?: number
   outstanding?: number
   /**
@@ -305,7 +307,17 @@ export async function listAppointments(
     orderBy: { startTime: 'asc' },
   })
 
-  return attachRecordedPayments(tenantId, appointments as SafeAppointment[])
+  // Task #619: the agenda must show what a visit bills even when the charge
+  // comes from executed budget items instead of the appointment's own cost.
+  // Only the patients that actually have such an item on this page pay for a
+  // FIFO run; the rest of the rows stay exactly as they were.
+  const fifoPatientIds = await findPatientsBillingByExecutedItems(appointments.map((a) => a.id))
+  const maps = await buildAllocationMapsForPatients(tenantId, fifoPatientIds)
+  const merged = (appointments as SafeAppointment[]).map((a) =>
+    fifoPatientIds.has(a.patientId) ? mergeAllocation(a, maps) : a
+  )
+
+  return attachRecordedPayments(tenantId, merged)
 }
 
 /**
@@ -401,6 +413,54 @@ async function buildPatientAllocationMap(
     // labwork allocations are intentionally not surfaced per appointment.
   }
   return { appointments, budgetItems }
+}
+
+/**
+ * The response shape a write path returns: the appointment with its patient's
+ * FIFO allocation (paidAmount/outstanding/budgetItems) and its recorded
+ * payments. The store swaps a write response into the list wholesale, so a
+ * write that skipped this would drop the figures from the row it replaces.
+ */
+async function withAllocationAndPayments(
+  tenantId: string,
+  appointment: SafeAppointment
+): Promise<SafeAppointment> {
+  const maps = await buildPatientAllocationMap(tenantId, appointment.patientId)
+  return (await attachRecordedPayments(tenantId, [mergeAllocation(appointment, maps)]))[0]
+}
+
+/**
+ * Which of the given appointments' patients have an EXECUTED budget item on
+ * this page. A filter on who needs the FIFO run, not a second derivation of
+ * the amount: the figure itself still comes from buildPatientAllocationMap.
+ * The ids are already tenant-scoped by the caller's query.
+ */
+async function findPatientsBillingByExecutedItems(
+  appointmentIds: string[]
+): Promise<Set<string>> {
+  if (appointmentIds.length === 0) return new Set()
+  const links = await prisma.budgetItemAppointment.findMany({
+    where: { role: 'EXECUTED', appointmentId: { in: appointmentIds } },
+    select: { appointment: { select: { patientId: true } } },
+  })
+  return new Set(links.map((l) => l.appointment.patientId))
+}
+
+/**
+ * The allocation maps of several patients, merged. One FIFO run per distinct
+ * patient — the same run the account statement uses.
+ */
+async function buildAllocationMapsForPatients(
+  tenantId: string,
+  patientIds: Iterable<string>
+): Promise<AllocationMaps> {
+  const merged: AllocationMaps = { appointments: new Map(), budgetItems: new Map() }
+  for (const patientId of patientIds) {
+    const maps = await buildPatientAllocationMap(tenantId, patientId)
+    for (const [id, value] of maps.appointments) merged.appointments.set(id, value)
+    for (const [id, value] of maps.budgetItems) merged.budgetItems.set(id, value)
+  }
+  return merged
 }
 
 type AllocationMaps = {
@@ -607,7 +667,7 @@ export async function createAppointment(
   }
 
   logger.info(`Appointment created: ${appointment.id} for tenant ${tenantId}`)
-  return { appointment: (await attachRecordedPayments(tenantId, [appointment as SafeAppointment]))[0] }
+  return { appointment: await withAllocationAndPayments(tenantId, appointment as SafeAppointment) }
 }
 
 // Legacy isPaid:true (no paidAmount sent) is interpreted as paidAmount = cost.
@@ -887,7 +947,7 @@ export async function updateAppointment(
   }
 
   logger.info(`Appointment updated: ${id}`)
-  return { appointment: (await attachRecordedPayments(tenantId, [appointment as SafeAppointment]))[0] }
+  return { appointment: await withAllocationAndPayments(tenantId, appointment as SafeAppointment) }
 }
 
 /**
@@ -1032,7 +1092,7 @@ export async function markAppointmentDone(
   })
 
   logger.info(`Appointment marked as done: ${id}`)
-  return { appointment: appointment as SafeAppointment }
+  return { appointment: await withAllocationAndPayments(tenantId, appointment as SafeAppointment) }
 }
 
 /**
