@@ -65,4 +65,14 @@ describe('BudgetFormModal status (#606)', () => {
     )
     expect(values).toEqual([...USER_SETTABLE_BUDGET_STATUSES])
   })
+
+  it('opens on the status given by defaultStatus and submits it (#628)', async () => {
+    render(<BudgetFormModal isOpen onClose={vi.fn()} onSubmit={onSubmit} defaultStatus="APPROVED" />)
+    fireEvent.change(screen.getByPlaceholderText(i18n.t('budgets.items.descriptionPlaceholder')), {
+      target: { value: 'Limpieza' },
+    })
+    expect(screen.getByLabelText('Estado')).toHaveValue('APPROVED')
+    const payload = await submit()
+    expect(payload.status).toBe('APPROVED')
+  })
 })

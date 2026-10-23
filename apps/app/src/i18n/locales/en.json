@@ -437,6 +437,7 @@
       "filterHint": "Items already scheduled into another appointment or already executed are not shown here.",
       "draftHint": "Some draft budgets have items that are not offered here: a budget must be approved before it can be associated to an appointment.",
       "empty": "This patient has no budget items available to associate.",
+      "createBudget": "Create budget",
       "loading": "Loading budget items...",
       "executedChargeLoading": "Loading the executed items figure...",
       "executedCharge": "Budget items executed in this appointment: {{count}} · {{total}}",

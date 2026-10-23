@@ -40,6 +40,8 @@ interface BudgetFormModalProps {
   onSubmit: (data: CreateBudgetData) => Promise<void>
   isLoading?: boolean
   error?: string | null
+  /** Status the form opens with; callers that know better than DRAFT pass it. */
+  defaultStatus?: BudgetFormData['status']
 }
 
 const EMPTY_ITEM = { description: '', toothNumber: '', quantity: 1, unitPrice: 0, notes: '' }
@@ -50,6 +52,7 @@ export function BudgetFormModal({
   onSubmit,
   isLoading = false,
   error = null,
+  defaultStatus = 'DRAFT',
 }: BudgetFormModalProps) {
   const { t } = useTranslation()
   const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'
@@ -66,7 +69,7 @@ export function BudgetFormModal({
     defaultValues: {
       notes: '',
       validUntil: '',
-      status: 'DRAFT',
+      status: defaultStatus,
       items: [EMPTY_ITEM],
     },
   })
@@ -76,9 +79,9 @@ export function BudgetFormModal({
   // Reset to a clean state every time the modal opens (create-only)
   useEffect(() => {
     if (isOpen) {
-      reset({ notes: '', validUntil: '', status: 'DRAFT', items: [EMPTY_ITEM] })
+      reset({ notes: '', validUntil: '', status: defaultStatus, items: [EMPTY_ITEM] })
     }
-  }, [isOpen, reset])
+  }, [isOpen, reset, defaultStatus])
 
   // Live total for the footer
   const watchedItems = watch('items')

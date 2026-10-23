@@ -15,7 +15,8 @@ import type {
 import { getStatusLabel, getAppointmentBudgetItems, getAppointmentById } from '../../lib/appointment-api'
 import * as patientApi from '../../lib/patient-api'
 import * as doctorApi from '../../lib/doctor-api'
-import { listBudgetsByPatient, type BudgetItemStatus } from '../../lib/budget-api'
+import { listBudgetsByPatient, createBudget, type BudgetItemStatus, type CreateBudgetData } from '../../lib/budget-api'
+import { BudgetFormModal } from '../budgets/BudgetFormModal'
 import { formatDateForInput, formatCurrency } from '../../lib/format'
 import { PatientSearchCombobox, type PatientOption } from '../ui/PatientSearchCombobox'
 import { DatePicker } from '../ui/DatePicker'
@@ -188,6 +189,13 @@ export function AppointmentFormModal({
   // Tracks the last patientId a fetch ran for, so a same-patient re-render
   // (e.g. options finishing load) doesn't wipe out the user's selection.
   const lastBudgetPatientIdRef = useRef<string | null>(null)
+  // Nested budget creation. It renders over this form instead of navigating
+  // away, so everything typed here stays mounted; bumping the reload key
+  // re-runs the budget-items effect (same patient, so the selection is kept).
+  const [isBudgetFormOpen, setIsBudgetFormOpen] = useState(false)
+  const [budgetFormError, setBudgetFormError] = useState<string | null>(null)
+  const [isCreatingBudget, setIsCreatingBudget] = useState(false)
+  const [budgetsReloadKey, setBudgetsReloadKey] = useState(0)
 
   const {
     register,
@@ -431,7 +439,7 @@ export function AppointmentFormModal({
     return () => {
       cancelled = true
     }
-  }, [isOpen, watchedPatientId, isEditing, appointment])
+  }, [isOpen, watchedPatientId, isEditing, appointment, budgetsReloadKey])
 
   // The items this appointment is about to charge: the operator's current
   // selection plus the ones already confirmed executed here (shown
@@ -485,13 +493,29 @@ export function AppointmentFormModal({
   // Handle Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      // While the nested budget form is open, Escape belongs to it.
+      if (e.key === 'Escape' && isOpen && !isBudgetFormOpen) {
         onClose()
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
+  }, [isOpen, onClose, isBudgetFormOpen])
+
+  const handleCreateBudget = async (data: CreateBudgetData) => {
+    if (!watchedPatientId) return
+    setIsCreatingBudget(true)
+    setBudgetFormError(null)
+    try {
+      await createBudget(watchedPatientId, data)
+      setIsBudgetFormOpen(false)
+      setBudgetsReloadKey((key) => key + 1)
+    } catch (e) {
+      setBudgetFormError(e instanceof Error ? e.message : t('budgets.errors.createFailed'))
+    } finally {
+      setIsCreatingBudget(false)
+    }
+  }
 
   if (!isOpen) return null
 
@@ -850,7 +874,19 @@ export function AppointmentFormModal({
                       {t('appointments.budgetItems.loading')}
                     </div>
                   ) : budgetItems.length === 0 ? (
-                    <p className="text-sm text-gray-500 italic py-1">{t('appointments.budgetItems.empty')}</p>
+                    <div className="py-1">
+                      <p className="text-sm text-gray-500 italic">{t('appointments.budgetItems.empty')}</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBudgetFormError(null)
+                          setIsBudgetFormOpen(true)
+                        }}
+                        className="mt-1 text-sm font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        {t('appointments.budgetItems.createBudget')}
+                      </button>
+                    </div>
                   ) : (
                     <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-48 overflow-y-auto">
                       {budgetItems.map((item) => {
@@ -927,6 +963,19 @@ export function AppointmentFormModal({
           </form>
         </div>
       </div>
+
+      {/* Sibling of the appointment <form> (forms cannot nest). Decision: the
+          budget is created APPROVED, not DRAFT. The picker above only offers
+          items of APPROVED/PARTIAL budgets (isBudgetAssociable), so a DRAFT
+          created here would be invisible to the very picker that asked for it. */}
+      <BudgetFormModal
+        isOpen={isBudgetFormOpen}
+        onClose={() => setIsBudgetFormOpen(false)}
+        onSubmit={handleCreateBudget}
+        isLoading={isCreatingBudget}
+        error={budgetFormError}
+        defaultStatus="APPROVED"
+      />
     </div>
   )
 }
