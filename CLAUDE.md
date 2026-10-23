@@ -86,6 +86,7 @@ dental-saas/
 │   │       └── schema.prisma
 │   └── shared/           # Shared TypeScript types
 ├── CLAUDE.md             # Project setup and architecture
+├── AGENTS.md             # Symlink to CLAUDE.md — do not turn it back into a copy
 ├── ROADMAP.md            # Full backlog and future epics
 ├── IN_PROGRESS.md        # Active tasks for current cycle
 └── turbo.json
