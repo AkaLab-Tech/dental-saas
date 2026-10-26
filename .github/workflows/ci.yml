@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-24.04
     services:
       postgres:
-        image: public.ecr.aws/docker/library/postgres:16-alpine
+        image: postgres:16-alpine
         env:
           POSTGRES_USER: dental_test
           POSTGRES_PASSWORD: test_password
@@ -65,7 +65,7 @@ jobs:
           - 5432:5432
 
       redis:
-        image: public.ecr.aws/docker/library/redis:7-alpine
+        image: redis:7-alpine
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
@@ -177,7 +177,7 @@ jobs:
     runs-on: ubuntu-24.04
     services:
       postgres:
-        image: public.ecr.aws/docker/library/postgres:16-alpine
+        image: postgres:16-alpine
         env:
           POSTGRES_USER: dental_test
           POSTGRES_PASSWORD: test_password
@@ -191,7 +191,7 @@ jobs:
           - 5432:5432
 
       redis:
-        image: public.ecr.aws/docker/library/redis:7-alpine
+        image: redis:7-alpine
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
