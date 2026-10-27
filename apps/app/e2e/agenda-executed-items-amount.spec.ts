@@ -148,3 +148,106 @@ test('agenda card shows executed-items amount, typed cost, or no money region (#
   await cardB.screenshot({ path: `${SHOTS}/619-03-card-typed-cost.png` })
   await cardC.screenshot({ path: `${SHOTS}/619-04-card-no-amount.png` })
 })
+
+/**
+ * Task #642: the amount must land on the card from the completion itself.
+ *
+ * `PUT /appointments/:id/mark-done` used to build its response before
+ * `confirmExecutedBudgetItems` wrote the EXECUTED join rows, so `budgetItems`
+ * came back undefined for exactly the items that request had just confirmed.
+ * `completeAppointment` swaps the write response into the row wholesale and
+ * never refetches, so the card went back to showing no amount at all.
+ *
+ * The axis no unit or integration test can own is that the figure is on the
+ * card afterwards — and it only discriminates while the page is NOT reloaded
+ * and NOT navigated, because either one triggers the list refetch that masks
+ * the bug. Both are therefore asserted, not merely avoided: a `window`
+ * sentinel set before the click would be wiped by a reload or a remount, and
+ * the URL is compared before and after.
+ */
+test('completing a visit from the agenda puts the executed-items amount on its own card, with no navigation and no reload (#642)', async ({
+  authedPage: page,
+}) => {
+  const tag = `${Date.now()}`
+  const doctor = await api('POST', '/doctors', {
+    firstName: 'E2E',
+    lastName: `Doc${tag}`,
+    workingDays: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'],
+  })
+
+  // A visit whose only charge authority is its executed items: no typed cost,
+  // so the money region exists if and only if the server sent `budgetItems`.
+  const last = `Completada${tag}`
+  const patient = await api('POST', '/patients', { firstName: 'E2E', lastName: last })
+  const budget = await api('POST', `/patients/${patient.id}/budgets`, {
+    status: 'APPROVED',
+    items: [1200, 800].map((unitPrice, i) => ({
+      description: `ItemC${i}${tag}`,
+      quantity: 1,
+      unitPrice,
+    })),
+  })
+  const itemIds = (budget.items as { id: string }[]).map((i) => i.id)
+  await api('POST', '/appointments', {
+    patientId: patient.id,
+    doctorId: doctor.id,
+    ...slot(13),
+    budgetItemIds: itemIds,
+  })
+
+  await page.goto('/appointments')
+  await expect(page.getByRole('heading', { name: /citas/i, level: 1 })).toBeVisible({
+    timeout: 90_000,
+  })
+
+  const card = todayAgendaCard(page, last)
+  await expect(card).toBeVisible()
+
+  // Precondition: the items are only SCHEDULED, so nothing bills yet. This is
+  // also the state the bug left behind after completing, which is why the
+  // post-completion assertion below discriminates.
+  await expect(card.getByTestId('appointment-amount')).toHaveCount(0)
+  await page.screenshot({ path: `${SHOTS}/642-01-card-before-completing.png`, fullPage: true })
+
+  const urlBefore = page.url()
+  await page.evaluate(() => {
+    ;(window as unknown as Record<string, string>).__e2e642Sentinel = 'same-document'
+  })
+
+  await card.getByRole('button', { name: /^más opciones$/i }).click()
+  await card.getByRole('button', { name: /^marcar completada$/i }).click()
+
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByRole('heading', { name: /^completar cita$/i, level: 2 })).toBeVisible()
+  // Both associated items default to executed; the doctor opts out, not in.
+  const itemBoxes = dialog.getByRole('checkbox')
+  await expect(itemBoxes).toHaveCount(itemIds.length)
+  for (const box of await itemBoxes.all()) await expect(box).toBeChecked()
+  await dialog.screenshot({ path: `${SHOTS}/642-02-complete-modal-items-checked.png` })
+
+  await dialog.getByRole('button', { name: /^marcar completada$/i }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.getByText(/cita marcada como completada/i)).toBeVisible()
+
+  // The fix: the write response already carries the EXECUTED links, so the row
+  // the store swapped in renders the charge with no further request.
+  const amount = card.getByTestId('appointment-amount')
+  await expect(amount).toHaveCount(1)
+  await expect(amount).toContainText(/Ítems de presupuesto ejecutados en esta cita/)
+  await expect(amount).toContainText(String(itemIds.length))
+  await expect(amount).toContainText(money(2000))
+  await expect(card).toContainText(/completada/i)
+  console.log(`CARD_642: ${(await card.innerText()).replace(/\n/g, ' | ')}`)
+
+  // Proof the figure above was not produced by a refetch: same URL, same
+  // document (the sentinel survives only if the page was never reloaded).
+  expect(page.url()).toBe(urlBefore)
+  expect(
+    await page.evaluate(
+      () => (window as unknown as Record<string, string>).__e2e642Sentinel
+    )
+  ).toBe('same-document')
+
+  await page.screenshot({ path: `${SHOTS}/642-03-agenda-after-completing.png`, fullPage: true })
+  await card.screenshot({ path: `${SHOTS}/642-04-card-after-completing.png` })
+})
