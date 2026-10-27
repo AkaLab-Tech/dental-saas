@@ -67,6 +67,14 @@ const BUDGET_ERROR_MAP: Record<BudgetErrorCode, { status: number; message: strin
   NOT_FOUND: { status: 404, message: 'Budget not found' },
   PATIENT_NOT_FOUND: { status: 404, message: 'Patient not found' },
   ALREADY_INACTIVE: { status: 400, message: 'Budget is already deleted' },
+  HAS_BILLED_ITEMS: {
+    status: 409,
+    message: 'Budget has executed items; cancel the budget instead of deleting it',
+  },
+  HAS_RESERVED_ADVANCE: {
+    status: 409,
+    message: 'Budget has a reserved advance; cancel the budget instead of deleting it',
+  },
   ITEM_NOT_FOUND: { status: 404, message: 'Budget item not found' },
   INVALID_STATUS_TRANSITION: { status: 400, message: 'Invalid status transition' },
 }

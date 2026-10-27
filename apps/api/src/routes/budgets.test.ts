@@ -471,6 +471,213 @@ describe('Budgets routes', () => {
   })
 
   // --------------------------------------------------------------------------
+  // Task #639: a delete that would move the patient's money is refused.
+  //
+  // A soft delete used to take the budget's EXECUTED charges out of the
+  // patient's debt (getBillableItems filters the budget on isActive) while
+  // every payment survived, and to release the whole reserved advance back
+  // into the FIFO pool (getBudgetReservations' `open`). Both checks assert the
+  // PERSISTED isActive after the call, never just the status code.
+  // --------------------------------------------------------------------------
+  describe('Task #639: DELETE /api/budgets/:id refuses to move money', () => {
+    // Byte-identical to BUDGET_ERROR_MAP in routes/budgets.ts and to the keys
+    // of DELETE_REFUSAL_KEYS in apps/app/src/stores/budgets.store.ts, which
+    // the store test pins with the same literals: a drift on either side
+    // turns one of the two suites red.
+    const BILLED_MESSAGE = 'Budget has executed items; cancel the budget instead of deleting it'
+    const RESERVED_MESSAGE =
+      'Budget has a reserved advance; cancel the budget instead of deleting it'
+
+    let doctorId: string
+
+    beforeAll(async () => {
+      doctorId = (
+        await prisma.doctor.create({
+          data: {
+            tenantId,
+            firstName: 'Dr. Delete',
+            lastName: 'Guard',
+            email: `doctor-delete-guard-${suffix}@budgets-test.com`,
+            specialty: 'General Dentistry',
+          },
+        })
+      ).id
+    })
+
+    afterEach(async () => {
+      await prisma.patientPayment.deleteMany({ where: { tenantId } })
+      await prisma.appointment.deleteMany({ where: { tenantId } })
+    })
+
+    afterAll(async () => {
+      await prisma.patientPayment.deleteMany({ where: { tenantId } })
+      await prisma.appointment.deleteMany({ where: { tenantId } })
+      await prisma.doctor.deleteMany({ where: { tenantId } })
+    })
+
+    // Two lines of different prices (80 and 2 x 50), so a swap cannot hide.
+    async function seedBudget(isActive = true) {
+      return prisma.budget.create({
+        data: {
+          tenantId,
+          patientId,
+          status: 'APPROVED',
+          totalAmount: 180,
+          isActive,
+          items: {
+            create: [
+              { description: 'A', quantity: 1, unitPrice: 80, totalPrice: 80, order: 0 },
+              { description: 'B', quantity: 2, unitPrice: 50, totalPrice: 100, order: 1 },
+            ],
+          },
+        },
+        include: { items: { orderBy: { order: 'asc' } } },
+      })
+    }
+
+    async function seedAppointment(isActive: boolean) {
+      const start = new Date('2026-05-11T10:00:00Z')
+      return prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: start,
+          endTime: new Date(start.getTime() + 30 * 60_000),
+          duration: 30,
+          cost: null,
+          isActive,
+        },
+      })
+    }
+
+    const del = (budgetId: string) =>
+      api().delete(`/api/budgets/${budgetId}`).set('Authorization', `Bearer ${adminToken}`)
+
+    it('G1 - an EXECUTED link on an ACTIVE appointment: 409 HAS_BILLED_ITEMS and the budget is still active in the database', async () => {
+      const budget = await seedBudget()
+      const appointment = await seedAppointment(true)
+      expect(appointment.isActive).toBe(true)
+      await prisma.budgetItemAppointment.create({
+        data: { budgetItemId: budget.items[0].id, appointmentId: appointment.id, role: 'EXECUTED' },
+      })
+
+      const res = await del(budget.id)
+
+      expect(res.status).toBe(409)
+      expect(res.body.error).toBe(BILLED_MESSAGE)
+      const after = await prisma.budget.findUniqueOrThrow({ where: { id: budget.id } })
+      expect(after.isActive).toBe(true)
+    })
+
+    it('G2 - the only EXECUTED link sits on a SOFT-DELETED appointment: still 409 and still active (restore re-arms the link)', async () => {
+      const budget = await seedBudget()
+      const appointment = await seedAppointment(false)
+      // The fixture really is the soft-deleted case, not the G1 one.
+      expect(appointment.isActive).toBe(false)
+      await prisma.budgetItemAppointment.create({
+        data: { budgetItemId: budget.items[0].id, appointmentId: appointment.id, role: 'EXECUTED' },
+      })
+      const liveLinks = await prisma.budgetItemAppointment.count({
+        where: { budgetItem: { budgetId: budget.id }, appointment: { isActive: true } },
+      })
+      expect(liveLinks).toBe(0)
+
+      const res = await del(budget.id)
+
+      expect(res.status).toBe(409)
+      expect(res.body.error).toBe(BILLED_MESSAGE)
+      const after = await prisma.budget.findUniqueOrThrow({ where: { id: budget.id } })
+      expect(after.isActive).toBe(true)
+    })
+
+    it('G3a - discrimination: a SCHEDULED-only link is not a charge, so the delete succeeds and the budget is inactive in the database', async () => {
+      const budget = await seedBudget()
+      const appointment = await seedAppointment(true)
+      await prisma.budgetItemAppointment.create({
+        data: {
+          budgetItemId: budget.items[0].id,
+          appointmentId: appointment.id,
+          role: 'SCHEDULED',
+        },
+      })
+      // The link really exists: this is discrimination, not vacuity.
+      const roles = await prisma.budgetItemAppointment.findMany({
+        where: { budgetItem: { budgetId: budget.id } },
+        select: { role: true },
+      })
+      expect(roles).toEqual([{ role: 'SCHEDULED' }])
+
+      const res = await del(budget.id)
+
+      expect(res.status).toBe(200)
+      const after = await prisma.budget.findUniqueOrThrow({ where: { id: budget.id } })
+      expect(after.isActive).toBe(false)
+    })
+
+    it('G3b - vacuity: items but no appointment link at all still soft-deletes, exactly as before', async () => {
+      const budget = await seedBudget()
+      const links = await prisma.budgetItemAppointment.count({
+        where: { budgetItem: { budgetId: budget.id } },
+      })
+      expect(links).toBe(0)
+
+      const res = await del(budget.id)
+
+      expect(res.status).toBe(200)
+      const after = await prisma.budget.findUniqueOrThrow({ where: { id: budget.id } })
+      expect(after.isActive).toBe(false)
+    })
+
+    it('G4 - an active reserved advance with no EXECUTED link anywhere: 409 HAS_RESERVED_ADVANCE and the budget is still active in the database', async () => {
+      const budget = await seedBudget()
+      await prisma.patientPayment.create({
+        data: {
+          tenantId,
+          patientId,
+          amount: 50,
+          date: new Date('2026-05-01T10:00:00Z'),
+          kind: 'ADVANCE',
+          budgetId: budget.id,
+        },
+      })
+      // Check 2 in isolation: check 1 has nothing to fire on.
+      const links = await prisma.budgetItemAppointment.count({
+        where: { budgetItem: { budgetId: budget.id } },
+      })
+      expect(links).toBe(0)
+
+      const res = await del(budget.id)
+
+      expect(res.status).toBe(409)
+      expect(res.body.error).toBe(RESERVED_MESSAGE)
+      const after = await prisma.budget.findUniqueOrThrow({ where: { id: budget.id } })
+      expect(after.isActive).toBe(true)
+    })
+
+    it('ordering is unchanged: an unknown id is still 404 Budget not found, ahead of both new checks', async () => {
+      const res = await del('does-not-exist')
+      expect(res.status).toBe(404)
+      expect(res.body.error).toBe('Budget not found')
+    })
+
+    it('ordering is unchanged: an already-inactive budget that ALSO holds an EXECUTED link is still 400 Budget is already deleted, not 409', async () => {
+      const budget = await seedBudget(false)
+      const appointment = await seedAppointment(true)
+      await prisma.budgetItemAppointment.create({
+        data: { budgetItemId: budget.items[0].id, appointmentId: appointment.id, role: 'EXECUTED' },
+      })
+
+      const res = await del(budget.id)
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('Budget is already deleted')
+      const after = await prisma.budget.findUniqueOrThrow({ where: { id: budget.id } })
+      expect(after.isActive).toBe(false)
+    })
+  })
+
+  // --------------------------------------------------------------------------
   // POST /api/budgets/:id/items
   // --------------------------------------------------------------------------
   describe('POST /api/budgets/:id/items', () => {
@@ -961,14 +1168,49 @@ describe('Budgets routes', () => {
       expect(res.body.data.money).toEqual({ total: 80, billed: 80, covered: 30, remaining: 50, notBilled: 0 })
     })
 
+    /**
+     * Task #639 narrowed what this route can ever answer. The delete guard
+     * refuses any budget with an executed item or a reserved advance, so a
+     * budget that CAN be deleted never has either — its money block can only
+     * be the zero shape. The fixture above is deliberately not reused here
+     * (it is shared with the GET/PATCH/POST cases, which still need its
+     * EXECUTED link): this case gets its own link-free, advance-free budget.
+     * The contract kept is "the key is present and the full five-bucket shape
+     * is well-formed", asserted as an exact object so a missing or null
+     * `money` cannot satisfy it.
+     */
+    async function seedDeletableBudget() {
+      return prisma.budget.create({
+        data: {
+          tenantId,
+          patientId,
+          status: 'APPROVED',
+          totalAmount: 180,
+          items: {
+            create: [
+              { description: 'A', quantity: 1, unitPrice: 80, totalPrice: 80, order: 0 },
+              { description: 'B', quantity: 2, unitPrice: 50, totalPrice: 100, order: 1 },
+            ],
+          },
+        },
+        include: { items: { orderBy: { order: 'asc' } } },
+      })
+    }
+
     it('DELETE /api/budgets/:id carries money (full shape, total as stored)', async () => {
-      const budget = await seedPartiallyCoveredBudget()
+      const budget = await seedDeletableBudget()
       const res = await api()
         .delete(`/api/budgets/${budget.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
       expect(res.status).toBe(200)
       expect(Object.keys(res.body.data.money ?? {}).sort()).toEqual(MONEY_KEYS)
-      expect(res.body.data.money?.total).toBe(180)
+      expect(res.body.data.money).toEqual({
+        total: 180,
+        billed: 0,
+        covered: 0,
+        remaining: 0,
+        notBilled: 180,
+      })
     })
 
     it('POST /api/patients/:id/budgets carries money (nothing billed yet: whole total is notBilled)', async () => {
@@ -1104,13 +1346,39 @@ describe('Budgets routes', () => {
       expect(res.body.data.visits).toEqual(EXPECTED_VISITS())
     })
 
+    /**
+     * Task #639: as for `money` above, a deletable budget can no longer hold
+     * an executed visit, so the only visits array this route can ever answer
+     * is the empty one. seedTwoVisitBudget is left untouched for the GET /
+     * PATCH / POST cases that still need its two EXECUTED links. `toEqual([])`
+     * is not vacuous: it fails on an absent key and on `null` alike.
+     */
+    async function seedDeletableBudget() {
+      return prisma.budget.create({
+        data: {
+          tenantId,
+          patientId,
+          status: 'APPROVED',
+          totalAmount: 180,
+          items: {
+            create: [
+              { description: 'A', quantity: 1, unitPrice: 80, totalPrice: 80, order: 0, notes: 'ITEM-A' },
+              { description: 'B', quantity: 2, unitPrice: 50, totalPrice: 100, order: 1, notes: 'ITEM-B' },
+            ],
+          },
+        },
+        include: { items: { orderBy: { order: 'asc' } } },
+      })
+    }
+
     it('DELETE /api/budgets/:id carries visits', async () => {
-      const budget = await seedTwoVisitBudget()
+      const budget = await seedDeletableBudget()
       const res = await api()
         .delete(`/api/budgets/${budget.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
       expect(res.status).toBe(200)
-      expect(res.body.data.visits).toBeInstanceOf(Array)
+      expect(res.body.data).toHaveProperty('visits')
+      expect(res.body.data.visits).toEqual([])
     })
 
     it('POST /api/budgets/:id/items carries visits', async () => {
