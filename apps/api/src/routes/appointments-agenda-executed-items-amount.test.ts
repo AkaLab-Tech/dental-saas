@@ -397,15 +397,23 @@ describe('Task #619: the agenda shows the amount of a visit billed by executed b
     })
 
     /**
-     * MEASURED LIMIT OF THIS GUARD. The mark-done call that *creates* the
-     * EXECUTED links cannot carry the aggregate: the route validates up front,
-     * calls markAppointmentDone (which builds the response, including the FIFO
-     * merge), and only then calls confirmExecutedBudgetItems. At response time
-     * the links do not exist yet, so that first response has
-     * budgetItems: undefined — measured on this worktree, with the agenda read
-     * immediately after returning {count: 2, cost: 4000, paidAmount: 0,
-     * outstanding: 4000}. This guard therefore pins the later mark-done, on an
-     * appointment whose items were already confirmed.
+     * LIMIT OF THIS GUARD. The mark-done exercised here is a later, notes-only
+     * one (no executedBudgetItemIds), so the route answers with the object
+     * markAppointmentDone built, and that object's FIFO merge already sees the
+     * EXECUTED links — the fixture's own earlier confirming call created them.
+     * This guard therefore pins only that branch of PUT /:id/mark-done: the one
+     * that returns markAppointmentDone's own response, with no re-read.
+     *
+     * The other branch — the mark-done that *creates* the EXECUTED links — used
+     * to be unable to carry the aggregate at all: the route validated up front,
+     * called markAppointmentDone (which builds the response, including the FIFO
+     * merge), and only then confirmExecutedBudgetItems, so at response time the
+     * links did not exist yet and budgetItems came back undefined. Task #642
+     * fixed that: after a successful confirmation the route re-reads through
+     * getAppointmentById, so a confirming response now does carry budgetItems
+     * describing the items it just confirmed. That branch is pinned by
+     * apps/api/src/routes/appointments-mark-done-confirmed-items.test.ts, not
+     * here.
      */
     it('PUT /api/appointments/:id/mark-done returns the 2 items / 4000 aggregate for already-executed items', async () => {
       const { appointmentId } = await costlessVisitWithTwoExecutedItems()

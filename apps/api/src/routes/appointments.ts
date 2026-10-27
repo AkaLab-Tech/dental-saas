@@ -578,6 +578,11 @@ appointmentsRouter.put('/:id/mark-done', requireMinRole('CLINIC_ADMIN'), async (
         userId
       )
       if (!confirmResult.success) return sendBudgetItemsError(res, confirmResult.code)
+
+      // Re-read so budgetItems (and the paidAmount/outstanding/isPaid the same
+      // FIFO run derives) describe the EXECUTED links this request just created.
+      const confirmed = await getAppointmentById(tenantId, id)
+      if (confirmed) return res.json({ success: true, data: confirmed })
     }
 
     res.json({ success: true, data: result.appointment })

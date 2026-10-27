@@ -1169,6 +1169,32 @@ describe('appointments.store — the executed-items figure across a write (#619)
     expect(row.budgetItems).toEqual({ count: 2, cost: 4000, paidAmount: 0, outstanding: 4000 })
   })
 
+  /**
+   * Task #642, guard 2 (client half). The negative twin of the case above, and
+   * the mirror of `editAppointment DROPS the aggregate…`: the swap in
+   * completeAppointment is WHOLESALE, so a mark-done response that omits
+   * `budgetItems` blanks the amount the agenda row was showing a moment
+   * earlier. That is the whole reason the server half of #642 exists — the
+   * route must re-read after confirming the executed items, because the store
+   * will not merge anything in on its behalf.
+   *
+   * MEASURED: changing the store to merge the response into the row
+   * (`{ ...a, ...completedAppointment }`) instead of replacing it turns this
+   * case red — the stale aggregate survives and the field is no longer
+   * undefined.
+   */
+  it('completeAppointment DROPS the aggregate when the mark-done response omits it (the swap is wholesale)', async () => {
+    const { budgetItems: _omitted, ...withoutAggregate } = itemsBilledAppointment
+    ;(markAppointmentDone as Mock).mockResolvedValue({ ...withoutAggregate, status: 'COMPLETED' })
+
+    await useAppointmentsStore.getState().completeAppointment('appointment-123')
+
+    const row = useAppointmentsStore.getState().appointments[0]
+    expect(row.status).toBe('COMPLETED')
+    expect(row.budgetItems).toBeUndefined()
+    expect(useAppointmentsStore.getState().calendarAppointments[0].budgetItems).toBeUndefined()
+  })
+
   it('restoreDeletedAppointment keeps the 2-items/4000 aggregate when the response carries it', async () => {
     ;(restoreAppointment as Mock).mockResolvedValue({
       ...itemsBilledAppointment,
