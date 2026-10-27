@@ -18,6 +18,11 @@ vi.mock('react-i18next', () => ({
       return key
     },
   }),
+  // Task #639: budgets.store now imports '@/i18n' (it translates the API's
+  // delete refusal), and vi.mock of the store still evaluates the module, so
+  // i18n/index.ts runs `.use(initReactI18next)` against this mock. Same stub
+  // the other page tests that mock react-i18next already carry.
+  initReactI18next: { type: '3rdParty', init: () => {} },
 }))
 
 vi.mock('@/stores/budgets.store')

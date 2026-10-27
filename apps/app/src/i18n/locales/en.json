@@ -898,7 +898,9 @@
       "quantityInvalid": "Quantity must be at least 1",
       "unitPriceInvalid": "Unit price must be greater than or equal to 0",
       "pdfDownloadFailed": "Couldn't download the PDF",
-      "shareFailed": "Couldn't generate the share link"
+      "shareFailed": "Couldn't generate the share link",
+      "hasBilledItems": "Can't delete: the budget has executed items that are already billed. Cancel the budget instead of deleting it.",
+      "hasReservedAdvance": "Can't delete: the budget has a reserved advance payment. Cancel the budget instead of deleting it."
     }
   },
   "expenses": {

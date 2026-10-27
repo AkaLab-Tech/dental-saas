@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { prisma } from '@dental/database'
-import { getPatientAccountStatement } from './payment.service.js'
+import { getPatientAccountStatement, getPatientBalance } from './payment.service.js'
 import { confirmExecutedBudgetItems, setAppointmentBudgetItems } from './budget-appointment.service.js'
 import { getBudgetMoneyBuckets, buildBudgetMoney } from './budget-money.service.js'
-import { getBudgetWithMoney, listBudgetsByPatient } from './budget.service.js'
+import { getBudgetWithMoney, listBudgetsByPatient, deleteBudget } from './budget.service.js'
 
 /**
  * Task #611: a covered/remaining aggregate per budget.
@@ -275,5 +275,168 @@ describe('budget covered/remaining aggregate (#611)', () => {
     expect(statement.success).toBe(true)
     if (!statement.success) return
     expect(statement.data.appointmentsDebt).toBe(2200)
+  })
+})
+
+/**
+ * Task #639: a refused delete must leave the patient's money exactly as it was.
+ *
+ * G1-G4 (routes/budgets.test.ts) assert the budget row survived. These two
+ * assert the CONSEQUENCE the row's survival exists for, on fixtures where the
+ * right and the wrong answer are different non-zero numbers — a no-payment,
+ * no-charge fixture would report 0 either way and stay green against the
+ * broken derivation.
+ */
+describe('a refused budget delete moves no money (#639)', () => {
+  let tenantId: string
+  let doctorId: string
+  const suffix = Date.now()
+  let seq = 0
+
+  beforeAll(async () => {
+    let freePlan = await prisma.plan.findUnique({ where: { name: 'free' } })
+    if (!freePlan) {
+      freePlan = await prisma.plan.create({
+        data: { name: 'free', displayName: 'Free', price: 0, maxAdmins: 1, maxDoctors: 3, maxPatients: 50 },
+      })
+    }
+    const tenant = await prisma.tenant.create({
+      data: { name: 'Budget Delete Money', slug: `budget-delete-money-${suffix}` },
+    })
+    tenantId = tenant.id
+    await prisma.subscription.create({
+      data: {
+        tenantId,
+        planId: freePlan.id,
+        status: 'ACTIVE',
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: new Date(Date.now() + 30 * DAY),
+      },
+    })
+    doctorId = (
+      await prisma.doctor.create({
+        data: {
+          tenantId,
+          firstName: 'Delete',
+          lastName: 'Doctor',
+          email: `delete-money-doc-${suffix}@test.com`,
+        },
+      })
+    ).id
+  })
+
+  afterAll(async () => {
+    await prisma.patientPayment.deleteMany({ where: { tenantId } })
+    await prisma.appointment.deleteMany({ where: { tenantId } })
+    await prisma.budget.deleteMany({ where: { tenantId } })
+    await prisma.patient.deleteMany({ where: { tenantId } })
+    await prisma.doctor.deleteMany({ where: { tenantId } })
+    await prisma.subscription.deleteMany({ where: { tenantId } })
+    await prisma.tenant.delete({ where: { id: tenantId } })
+  })
+
+  async function newPatient(label: string) {
+    seq += 1
+    return (await prisma.patient.create({ data: { tenantId, firstName: label, lastName: `D${seq}` } })).id
+  }
+
+  function appointment(patientId: string, cost: number | null, days: number) {
+    return prisma.appointment.create({
+      data: {
+        tenantId,
+        patientId,
+        doctorId,
+        startTime: at(days),
+        endTime: new Date(at(days).getTime() + 30 * 60_000),
+        duration: 30,
+        cost,
+      },
+    })
+  }
+
+  it('G5 - a reserved advance of 5000 stays held: the account statement is identical before and after the refused delete', async () => {
+    const patientId = await newPatient('Reserved')
+    // An open budget holding a 5000 advance reserved to it, and NO executed
+    // line, so check 1 has nothing to fire on and check 2 is isolated.
+    const budget = await prisma.budget.create({
+      data: { tenantId, patientId, status: 'APPROVED', totalAmount: 5000 },
+    })
+    await prisma.budgetItem.create({
+      data: {
+        budgetId: budget.id,
+        description: 'planned 5000',
+        unitPrice: 5000,
+        totalPrice: 5000,
+        status: 'PENDING',
+      },
+    })
+    await prisma.patientPayment.create({
+      data: { tenantId, patientId, amount: 5000, date: at(-30), kind: 'ADVANCE', budgetId: budget.id },
+    })
+    // A separate ordinary charge of 7000 >= 5000: the released advance would
+    // have somewhere to go, so the two answers differ by the whole 5000.
+    await appointment(patientId, 7000, -5)
+
+    const before = await getPatientAccountStatement(tenantId, patientId)
+    expect(before.success).toBe(true)
+    if (!before.success) return
+    // Stated as literals, so this is not a before === after tautology.
+    expect(before.data.appointmentsDebt).toBe(7000)
+    expect(before.data.advancesCredit).toBe(0)
+    expect(before.data.advancesHeld).toBe(5000)
+    expect(before.data.reservedAdvances).toEqual([
+      { budgetId: budget.id, reserved: 5000, consumed: 0, remaining: 5000, open: true },
+    ])
+
+    const refused = await deleteBudget(tenantId, budget.id)
+    expect(refused).toEqual({ success: false, code: 'HAS_RESERVED_ADVANCE' })
+    expect((await prisma.budget.findUniqueOrThrow({ where: { id: budget.id } })).isActive).toBe(true)
+
+    const after = await getPatientAccountStatement(tenantId, patientId)
+    expect(after.success).toBe(true)
+    if (!after.success) return
+    expect(after.data.appointmentsDebt).toBe(7000)
+    expect(after.data.advancesCredit).toBe(0)
+    expect(after.data.advancesHeld).toBe(5000)
+    expect(after.data.reservedAdvances).toEqual(before.data.reservedAdvances)
+  })
+
+  it('G6 - an executed charge of 6300 stays in the debt: getPatientBalance().totalDebt is identical before and after the refused delete', async () => {
+    const patientId = await newPatient('Executed')
+    const budget = await prisma.budget.create({
+      data: { tenantId, patientId, status: 'APPROVED', totalAmount: 6300 },
+    })
+    const line = await prisma.budgetItem.create({
+      data: {
+        budgetId: budget.id,
+        description: 'executed 6300',
+        unitPrice: 6300,
+        totalPrice: 6300,
+        status: 'PENDING',
+      },
+    })
+    const appt = await appointment(patientId, null, 0)
+    // The real path: schedule the line onto the visit, then confirm it as
+    // executed (assertItemsExecutable requires the SCHEDULED link first).
+    const scheduled = await setAppointmentBudgetItems(tenantId, appt.id, [line.id], null)
+    expect(scheduled.success).toBe(true)
+    const confirmed = await confirmExecutedBudgetItems(tenantId, appt.id, [line.id], null)
+    expect(confirmed.success).toBe(true)
+
+    const before = await getPatientBalance(tenantId, patientId)
+    expect(before.success).toBe(true)
+    if (!before.success) return
+    expect(before.data.totalDebt).toBe(6300)
+    expect(before.data.outstanding).toBe(6300)
+
+    const refused = await deleteBudget(tenantId, budget.id)
+    expect(refused).toEqual({ success: false, code: 'HAS_BILLED_ITEMS' })
+    expect((await prisma.budget.findUniqueOrThrow({ where: { id: budget.id } })).isActive).toBe(true)
+
+    const after = await getPatientBalance(tenantId, patientId)
+    expect(after.success).toBe(true)
+    if (!after.success) return
+    expect(after.data.totalDebt).toBe(6300)
+    expect(after.data.outstanding).toBe(6300)
   })
 })

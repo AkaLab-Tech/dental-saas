@@ -53,6 +53,8 @@ export type BudgetErrorCode =
   | 'NOT_FOUND'
   | 'PATIENT_NOT_FOUND'
   | 'ALREADY_INACTIVE'
+  | 'HAS_BILLED_ITEMS'
+  | 'HAS_RESERVED_ADVANCE'
   | 'ITEM_NOT_FOUND'
   | 'INVALID_STATUS_TRANSITION'
 
@@ -379,6 +381,26 @@ export async function deleteBudget(
 
   if (!existing) return { success: false, code: 'NOT_FOUND' }
   if (!existing.isActive) return { success: false, code: 'ALREADY_INACTIVE' }
+
+  // #639: a soft delete takes the budget's EXECUTED charges out of the patient's
+  // debt while every payment survives, and releases the whole reserved advance
+  // back into the FIFO pool. Refuse instead; CANCELLED is the escape hatch,
+  // since the billing path reads only the budget's isActive, never its status.
+  //
+  // The appointment's own isActive is deliberately NOT part of this predicate:
+  // in production every offending link sits on a soft-deleted appointment, and
+  // `PUT /api/appointments/:id/restore` re-arms it. Guard G2 covers that case.
+  const billedLink = await prisma.budgetItemAppointment.findFirst({
+    where: { role: 'EXECUTED', budgetItem: { budgetId } },
+    select: { id: true },
+  })
+  if (billedLink) return { success: false, code: 'HAS_BILLED_ITEMS' }
+
+  const reservedAdvance = await prisma.patientPayment.findFirst({
+    where: { budgetId, isActive: true, amount: { gt: 0 } },
+    select: { id: true },
+  })
+  if (reservedAdvance) return { success: false, code: 'HAS_RESERVED_ADVANCE' }
 
   const updated = await prisma.budget.update({
     where: { id: budgetId },

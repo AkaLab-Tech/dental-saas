@@ -17,6 +17,18 @@ import {
   updateBudgetItem as apiUpdateBudgetItem,
   deleteBudgetItem as apiDeleteBudgetItem,
 } from '../lib/budget-api'
+import i18n from '@/i18n'
+
+// #639: the API refuses a soft delete that would move money with 409 and a
+// fixed English message. The budgets section renders this store's `error`
+// verbatim, so the message has to be translated here or the operator reads
+// axios' "Request failed with status code 409".
+const DELETE_REFUSAL_KEYS: Record<string, string> = {
+  'Budget has executed items; cancel the budget instead of deleting it':
+    'budgets.errors.hasBilledItems',
+  'Budget has a reserved advance; cancel the budget instead of deleting it':
+    'budgets.errors.hasReservedAdvance',
+}
 
 interface BudgetsState {
   // List scoped to a patient
@@ -136,8 +148,16 @@ export const useBudgetsStore = create<BudgetsState>((set) => ({
         loading: false,
       }))
     } catch (error) {
+      const refusal = (error as { response?: { status?: number; data?: { error?: string } } })
+        .response
+      const refusalKey =
+        refusal?.status === 409 ? DELETE_REFUSAL_KEYS[refusal.data?.error ?? ''] : undefined
       set({
-        error: error instanceof Error ? error.message : 'Error al eliminar el presupuesto',
+        error: refusalKey
+          ? i18n.t(refusalKey)
+          : error instanceof Error
+            ? error.message
+            : 'Error al eliminar el presupuesto',
         loading: false,
       })
       throw error

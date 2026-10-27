@@ -898,7 +898,9 @@
       "quantityInvalid": "La cantidad debe ser al menos 1",
       "unitPriceInvalid": "El precio unitario debe ser mayor o igual a 0",
       "pdfDownloadFailed": "No se pudo descargar el PDF",
-      "shareFailed": "No se pudo generar el enlace para compartir"
+      "shareFailed": "No se pudo generar el enlace para compartir",
+      "hasBilledItems": "No se puede eliminar: el presupuesto tiene ítems ejecutados que ya se cobran. Cancela el presupuesto en lugar de eliminarlo.",
+      "hasReservedAdvance": "No se puede eliminar: el presupuesto tiene una entrega reservada. Cancela el presupuesto en lugar de eliminarlo."
     }
   },
   "expenses": {

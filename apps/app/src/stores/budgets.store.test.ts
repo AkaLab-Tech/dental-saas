@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import i18n from 'i18next'
+import '@/i18n'
 import { useBudgetsStore } from './budgets.store'
 import type { BudgetWithVisits as Budget, BudgetItem } from '../lib/budget-api'
 
@@ -231,6 +233,108 @@ describe('budgets.store', () => {
       vi.mocked(apiUpdateBudget).mockResolvedValue(makeBudget({ money: AFTER }))
       await useBudgetsStore.getState().updateBudget('budget-1', { notes: 'n' })
       expect(useBudgetsStore.getState().budgets[0].money).toEqual(AFTER)
+    })
+  })
+
+  // Task #639: the API refuses a delete that would move money with 409 and a
+  // fixed English message; the budgets section renders this store's `error`
+  // verbatim, so the store is where the translation has to happen.
+  describe('a refused delete (#639): the operator reads a translated remedy, and nothing is removed', () => {
+    // Byte-identical to BUDGET_ERROR_MAP in apps/api/src/routes/budgets.ts,
+    // pinned with the same literals in apps/api/src/routes/budgets.test.ts:
+    // a drift on either side turns one of the two suites red.
+    const BILLED_MESSAGE = 'Budget has executed items; cancel the budget instead of deleting it'
+    const RESERVED_MESSAGE =
+      'Budget has a reserved advance; cancel the budget instead of deleting it'
+
+    const ES_BILLED =
+      'No se puede eliminar: el presupuesto tiene ítems ejecutados que ya se cobran. Cancela el presupuesto en lugar de eliminarlo.'
+    const ES_RESERVED =
+      'No se puede eliminar: el presupuesto tiene una entrega reservada. Cancela el presupuesto en lugar de eliminarlo.'
+    const EN_BILLED =
+      "Can't delete: the budget has executed items that are already billed. Cancel the budget instead of deleting it."
+    const AR_BILLED =
+      'لا يمكن الحذف: الميزانية تحتوي على بنود منفذة تم احتسابها بالفعل. ألغِ الميزانية بدلاً من حذفها.'
+
+    function refusal(message: string, status = 409) {
+      // Shaped like the axios error the api client throws: `message` is the
+      // generic axios text the store must NOT surface for a known refusal.
+      const error = new Error(`Request failed with status code ${status}`)
+      return Object.assign(error, { response: { status, data: { success: false, error: message } } })
+    }
+
+    async function seedOneBudget() {
+      const b = makeBudget()
+      vi.mocked(listBudgetsByPatient).mockResolvedValue({ data: [b], total: 1 })
+      await useBudgetsStore.getState().fetchBudgetsByPatient('patient-1')
+      vi.mocked(getBudget).mockResolvedValue(b)
+      await useBudgetsStore.getState().fetchBudget('budget-1')
+      return b
+    }
+
+    async function attemptDelete(message: string, status = 409) {
+      vi.mocked(apiDeleteBudget).mockRejectedValue(refusal(message, status))
+      await expect(useBudgetsStore.getState().deleteBudget('budget-1')).rejects.toThrow()
+    }
+
+    beforeEach(async () => {
+      await i18n.changeLanguage('es')
+    })
+
+    it('G7 - HAS_BILLED_ITEMS in es: the error names cancelling as the remedy, not the axios status text', async () => {
+      await seedOneBudget()
+      await attemptDelete(BILLED_MESSAGE)
+      expect(useBudgetsStore.getState().error).toBe(ES_BILLED)
+    })
+
+    it('G7b - HAS_RESERVED_ADVANCE in es: its own message, not the billed-items one', async () => {
+      await seedOneBudget()
+      await attemptDelete(RESERVED_MESSAGE)
+      expect(useBudgetsStore.getState().error).toBe(ES_RESERVED)
+    })
+
+    it('G7c - HAS_BILLED_ITEMS in en', async () => {
+      await i18n.changeLanguage('en')
+      await seedOneBudget()
+      await attemptDelete(BILLED_MESSAGE)
+      expect(useBudgetsStore.getState().error).toBe(EN_BILLED)
+    })
+
+    it('G7d - HAS_BILLED_ITEMS in ar', async () => {
+      await i18n.changeLanguage('ar')
+      await seedOneBudget()
+      await attemptDelete(BILLED_MESSAGE)
+      expect(useBudgetsStore.getState().error).toBe(AR_BILLED)
+    })
+
+    it('G7e - discrimination: a 409 carrying some other message keeps the plain error message', async () => {
+      await seedOneBudget()
+      await attemptDelete('Some other conflict')
+      expect(useBudgetsStore.getState().error).toBe('Request failed with status code 409')
+    })
+
+    it('G7f - discrimination: the same refusal text on a non-409 status is not translated', async () => {
+      await seedOneBudget()
+      await attemptDelete(BILLED_MESSAGE, 500)
+      expect(useBudgetsStore.getState().error).toBe('Request failed with status code 500')
+    })
+
+    it('G8 - the budget is still in the list after a refused delete', async () => {
+      const b = await seedOneBudget()
+      await attemptDelete(BILLED_MESSAGE)
+      expect(useBudgetsStore.getState().budgets).toEqual([b])
+    })
+
+    it('G8b - total is unchanged after a refused delete', async () => {
+      await seedOneBudget()
+      await attemptDelete(BILLED_MESSAGE)
+      expect(useBudgetsStore.getState().total).toBe(1)
+    })
+
+    it('G8c - currentBudget is not cleared after a refused delete', async () => {
+      const b = await seedOneBudget()
+      await attemptDelete(BILLED_MESSAGE)
+      expect(useBudgetsStore.getState().currentBudget).toEqual(b)
     })
   })
 })
