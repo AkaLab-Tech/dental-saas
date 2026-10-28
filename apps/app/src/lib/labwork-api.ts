@@ -1,4 +1,5 @@
 import { apiClient } from './api'
+import { formatCalendarDay } from './format'
 
 // ============================================================================
 // Types
@@ -228,11 +229,7 @@ export async function exportLabworks(params?: LabworkListParams): Promise<void> 
 // ============================================================================
 
 export function formatLabworkDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('es-ES', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+  return formatCalendarDay(dateStr, 'es-ES')
 }
 
 /**

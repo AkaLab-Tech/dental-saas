@@ -25,7 +25,7 @@ import type { Labwork, LabworkStatus } from '@/lib/labwork-api'
 import { getLabworkStatusBadge, formatLabworkDoctors, isPaidManagedByPayments } from '@/lib/labwork-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAuthStore } from '@/stores/auth.store'
-import { formatCurrency } from '@/lib/format'
+import { formatCalendarDay, formatCurrency } from '@/lib/format'
 import { downloadLabworkPdf } from '@/lib/pdf-api'
 import { PaidStatusBadge } from '@/components/payments/PaidStatusBadge'
 import { ImageUpload } from '@/components/ui/ImageUpload'
@@ -70,11 +70,7 @@ export function LabworkCard({
   }
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('es-ES', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    })
+    return formatCalendarDay(dateStr, 'es-ES')
   }
 
   return (

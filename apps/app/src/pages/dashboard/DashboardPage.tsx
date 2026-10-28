@@ -27,7 +27,7 @@ import { useStatsStore } from '@/stores/stats.store'
 import { useAuthStore } from '@/stores/auth.store'
 import { useLockStore } from '@/stores/lock.store'
 import { UserRole } from '@dental/shared'
-import { formatCurrency } from '@/lib/format'
+import { formatCalendarDay, formatCurrency } from '@/lib/format'
 import DoctorDashboard from './DoctorDashboard'
 
 // ============================================================================
@@ -134,7 +134,7 @@ export default function DashboardPage() {
 
   // Prepare chart data for appointments by day
   const appointmentChartData = appointmentStats?.byDay.slice(-14).map(item => ({
-    date: new Date(item.date).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }),
+    date: formatCalendarDay(item.date, 'es-MX', { day: '2-digit', month: 'short' }),
     citas: item.count,
   })) || []
 

@@ -4,6 +4,7 @@ import { Link } from 'react-router'
 import { ExternalLink, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import type { Patient } from '@/lib/patient-api'
 import { calculateAge, getPatientInitials } from '@/lib/patient-api'
+import { formatCalendarDay } from '@/lib/format'
 import { SortableHeader, useSortState } from '@/components/list/SortableHeader'
 
 const GENDER_LABEL_KEYS: Record<string, string> = {
@@ -154,7 +155,7 @@ export function PatientsListView({ patients, onEdit, onDelete, onRestore }: Pati
                   </td>
                   <td className="px-4 py-3 text-start text-gray-600 whitespace-nowrap">
                     {patient.dob
-                      ? new Date(patient.dob).toLocaleDateString(i18n.language, { day: '2-digit', month: 'short', year: 'numeric' })
+                      ? formatCalendarDay(patient.dob, i18n.language, { day: '2-digit', month: 'short', year: 'numeric' })
                       : '—'}
                   </td>
                   <td className="px-4 py-3 text-start text-gray-600">
