@@ -24,7 +24,7 @@ import { useBudgetsStore } from '@/stores/budgets.store'
 import { downloadBudgetPdf } from '@/lib/pdf-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAuthStore } from '@/stores/auth.store'
-import { formatCurrency, formatShortDate } from '@/lib/format'
+import { formatCalendarDay, formatCurrency, formatShortDate } from '@/lib/format'
 import { Can } from '@/components/auth'
 
 interface BudgetCardProps {
@@ -224,7 +224,7 @@ export function BudgetCard({ budget, patientId, onDelete }: BudgetCardProps) {
             <span className="inline-flex items-center gap-1">
               <Calendar className="h-3.5 w-3.5" />
               {t('budgets.validUntil')}:{' '}
-              {formatShortDate(budget.validUntil, i18n.language)}
+              {formatCalendarDay(budget.validUntil, i18n.language)}
             </span>
           )}
         </div>

@@ -19,7 +19,7 @@ import type { Expense } from '@/lib/expense-api'
 import { getExpenseStatusBadge } from '@/lib/expense-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAuthStore } from '@/stores/auth.store'
-import { formatCurrency } from '@/lib/format'
+import { formatCalendarDay, formatCurrency } from '@/lib/format'
 import { ImageUpload } from '@/components/ui/ImageUpload'
 import { ImageGallery } from '@/components/ui/ImageGallery'
 
@@ -47,11 +47,7 @@ export function ExpenseCard({
   const isDeleted = !!expense.deletedAt
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('es-ES', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    })
+    return formatCalendarDay(dateStr, 'es-ES')
   }
 
   return (

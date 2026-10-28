@@ -1,4 +1,5 @@
 import { apiClient } from './api'
+import { formatCalendarDay, formatShortDate } from './format'
 
 // ============================================================================
 // Types
@@ -33,6 +34,16 @@ export interface Payment {
   appointmentId: string | null
   createdAt: string
   updatedAt: string
+}
+
+/**
+ * PatientPayment.date is a calendar day for a payment entered by hand (stored
+ * as UTC midnight of the picked day) but an instant for one that originates
+ * from an appointment (its startTime), including a payment converted to an
+ * advance when the appointment was cancelled. appointmentId tells them apart.
+ */
+export function formatPaymentDate(date: string, appointmentId: string | null, locale: string): string {
+  return appointmentId ? formatShortDate(date, locale) : formatCalendarDay(date, locale)
 }
 
 export interface PatientBalance {

@@ -35,7 +35,7 @@ import {
 } from '@/lib/patient-api'
 import { downloadPatientHistoryPdf } from '@/lib/pdf-api'
 import { getAccountStatement, type AccountStatement } from '@/lib/payment-api'
-import { formatCurrency } from '@/lib/format'
+import { formatCalendarDay, formatCurrency } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth.store'
 import { AttachmentModule, Permission, ToothStatus, type ToothData } from '@dental/shared'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -750,11 +750,7 @@ export default function PatientDetailPage() {
                   <div className="flex items-center gap-3 text-gray-600 bg-gray-50 rounded-lg px-3 py-2.5">
                     <Calendar className="h-5 w-5 text-gray-400 shrink-0" />
                     <span className="text-sm truncate">
-                      {new Date(patient.dob).toLocaleDateString('es-MX', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      })}
+                      {formatCalendarDay(patient.dob, 'es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}
                     </span>
                   </div>
                 )}

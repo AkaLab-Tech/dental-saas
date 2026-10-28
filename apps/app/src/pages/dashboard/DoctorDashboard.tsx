@@ -19,7 +19,7 @@ import {
 } from 'recharts'
 import { useStatsStore } from '@/stores/stats.store'
 import { useAuthStore } from '@/stores/auth.store'
-import { formatCurrency } from '@/lib/format'
+import { formatCalendarDay, formatCurrency } from '@/lib/format'
 import { useTranslation } from 'react-i18next'
 
 // ============================================================================
@@ -139,7 +139,7 @@ export default function DoctorDashboard() {
 
   // Chart data
   const appointmentChartData = appointmentStats?.byDay.slice(-14).map(item => ({
-    date: new Date(item.date).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }),
+    date: formatCalendarDay(item.date, 'es-MX', { day: '2-digit', month: 'short' }),
     citas: item.count,
   })) || []
 

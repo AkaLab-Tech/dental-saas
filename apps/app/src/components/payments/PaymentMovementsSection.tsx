@@ -2,9 +2,10 @@ import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { History, Loader2, AlertCircle, DollarSign, Undo2, ArrowRightLeft, RotateCcw } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth.store'
-import { formatCurrency } from '@/lib/format'
+import { formatCurrency, formatShortDate } from '@/lib/format'
 import {
   getPatientPaymentMovements,
+  formatPaymentDate,
   type PaymentMovement,
   type PaymentMovementType,
 } from '@/lib/payment-api'
@@ -62,14 +63,15 @@ export function PaymentMovementsSection({ patientId, refreshKey = 0 }: PaymentMo
   const [error, setError] = useState<string | null>(null)
 
   const fmtCurrency = useCallback((amount: number) => formatCurrency(amount, currency), [currency])
-  const fmtDate = useCallback(
-    (value: string) =>
-      new Date(value).toLocaleDateString(i18n.language, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      }),
-    [i18n.language]
+  // Every ledger date is an instant except a RECEIVED row, which carries the
+  // payment's own date (see formatPaymentDate).
+  const fmtDate = useCallback((value: string) => formatShortDate(value, i18n.language), [i18n.language])
+  const fmtMovementDate = useCallback(
+    (movement: PaymentMovement) =>
+      movement.type === 'RECEIVED'
+        ? formatPaymentDate(movement.at, movement.appointmentId, i18n.language)
+        : fmtDate(movement.at),
+    [i18n.language, fmtDate]
   )
 
   const fetchData = useCallback(async () => {
@@ -171,7 +173,7 @@ export function PaymentMovementsSection({ patientId, refreshKey = 0 }: PaymentMo
                   <p className="text-sm font-semibold text-gray-900 truncate">
                     {t(`payments.movements.types.${movement.type}`)} · {fmtCurrency(movement.amount)}
                   </p>
-                  <p className="text-xs text-gray-500">{fmtDate(movement.at)}</p>
+                  <p className="text-xs text-gray-500">{fmtMovementDate(movement)}</p>
                   {originText && <p className="text-xs text-gray-400">{originText}</p>}
                   {movement.reason && <p className="text-xs text-gray-400 truncate">{movement.reason}</p>}
                   {actorText && <p className="text-xs text-gray-400">{actorText}</p>}

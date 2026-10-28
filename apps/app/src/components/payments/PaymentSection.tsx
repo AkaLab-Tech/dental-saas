@@ -10,6 +10,7 @@ import {
   createPayment,
   getPaymentApiErrorMessage,
   deletePayment,
+  formatPaymentDate,
   type Payment,
   type AccountStatement as AccountStatementData,
   type CreatePaymentData,
@@ -270,11 +271,7 @@ export function PaymentSection({
                     </p>
                   )}
                   <p className="text-xs text-gray-500">
-                    {new Date(payment.date).toLocaleDateString(i18n.language, {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
+                    {formatPaymentDate(payment.date, payment.appointmentId, i18n.language)}
                   </p>
                   {payment.note && (
                     <p className="text-xs text-gray-400 truncate">{payment.note}</p>
