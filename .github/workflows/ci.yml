@@ -46,6 +46,80 @@ jobs:
       - name: Run linter
         run: pnpm lint
 
+  # Until this job existed the typecheck gate was local only: `safe-commit` runs
+  # `pnpm run typecheck` before a commit, but nothing in CI did, so a type error in
+  # a test file reached main by any path that skipped the hook — a push from a
+  # checkout without it, or a branch cut before the typecheck scripts landed.
+  #
+  # It is a job of its own rather than a step inside `Build All Apps` because that
+  # job is the repo's production-code type gate: a red tick there has to keep
+  # meaning "src does not compile". It is deliberately absent from `build`'s
+  # `needs:`, so the two stay independent signals.
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @dental/database db:generate
+        env:
+          DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
+
+      - name: Build shared package
+        run: pnpm --filter @dental/shared build
+
+      - name: Run typecheck
+        run: pnpm typecheck
+
+      # The typecheck leg does not subsume the build, for two reasons — and NOT for
+      # the one this comment used to give. The retracted claim: that the wider
+      # `types` of `tsconfig.typecheck.json` (["vite/client", "node"], against
+      # `tsconfig.app.json`'s ["vite/client"]) makes the typecheck strictly more
+      # permissive than `tsc -b` for the files in both configs. Measured false on
+      # 2026-10-27: vite's own `dist/node/index.d.ts` opens with
+      # `/// <reference types="node" />`, so @types/node reaches the app program
+      # either way. `export const x = process.env.X` in `src/lib/constants.ts`
+      # leaves `tsc -b --force` at exit 0, while `const y: number = "x"` in the same
+      # file fails it with TS2322 — so that exit 0 is a reading, not blindness.
+      #
+      # What does hold: turbo's `typecheck.dependsOn: ["^build"]` is topological, so
+      # it builds upstream packages and never `apps/app` itself; and `Build All Apps`
+      # declares `needs: [lint, test-backend, test-frontend]`, so it is skipped
+      # whenever any of those fail, leaving this job's own build step as the only
+      # build gate in exactly the case where one is most wanted. Separate steps, so a
+      # red names which leg broke.
+      - name: Run build
+        run: pnpm build
+        env:
+          VITE_API_URL: https://api.example.com
+          DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
+
   test-backend:
     name: Test Backend
     runs-on: ubuntu-24.04

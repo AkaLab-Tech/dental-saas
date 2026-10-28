@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
+import type { DetectorOptions } from 'i18next-browser-languagedetector'
 import i18n, { languages, defaultLanguage, resources, i18nReady } from './index'
 
 describe('i18n configuration', () => {
@@ -75,7 +76,16 @@ describe('i18n configuration', () => {
     it('should prefer the saved app preference over the browser language', () => {
       // localStorage (saved preference) must come before navigator so the
       // browser locale only applies on first visit.
-      const order = i18n.options.detection?.order ?? []
+      // i18next itself declares `detection` only as `object`; the shape with
+      // `order` comes from the detector's `declare module 'i18next'`. That
+      // augmentation lands on whichever i18next instance pnpm hoisted, and this
+      // repo legitimately installs two (apps/web pins TypeScript ~5.6.2,
+      // apps/app ~5.9.3, so the store keys one copy per peer version). When the
+      // hoisted copy is not the one typing apps/app, the narrowing never reaches
+      // here and reading `.order` is TS2339 — same bytes, green in one tree and
+      // red in another. Casting to the detector's own exported type compiles
+      // under either hoist, so it does not depend on install order.
+      const order = (i18n.options.detection as DetectorOptions | undefined)?.order ?? []
       expect(order.indexOf('localStorage')).toBeLessThan(
         order.indexOf('navigator')
       )
