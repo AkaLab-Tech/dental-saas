@@ -122,6 +122,15 @@ function formatDate(value: string, language: Language): string {
   }).format(new Date(value));
 }
 
+function formatCalendarDay(value: string, language: Language): string {
+  return new Intl.DateTimeFormat(localeFor(language), {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(value));
+}
+
 type PageState =
   | { kind: "loading" }
   | { kind: "not-found" }
@@ -285,7 +294,7 @@ function BudgetView({ data }: { data: PublicBudgetData }) {
           {data.validUntil && (
             <div>
               <p className="text-gray-500">{t.validUntil}</p>
-              <p className="font-medium text-gray-900">{formatDate(data.validUntil, language)}</p>
+              <p className="font-medium text-gray-900">{formatCalendarDay(data.validUntil, language)}</p>
             </div>
           )}
         </div>

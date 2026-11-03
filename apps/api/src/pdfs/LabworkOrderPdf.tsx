@@ -1,6 +1,12 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import type { LabworkOrderData } from '../services/pdf.service.js'
-import { t, formatDate as formatDateI18n, formatTime as formatTimeI18n, type Language } from '@dental/shared'
+import {
+  t,
+  formatDate as formatDateI18n,
+  formatCalendarDay as formatCalendarDayI18n,
+  formatTime as formatTimeI18n,
+  type Language,
+} from '@dental/shared'
 
 const styles = StyleSheet.create({
   page: { flexDirection: 'column', backgroundColor: '#ffffff', padding: 40, fontFamily: 'Helvetica' },
@@ -69,7 +75,7 @@ export function LabworkOrderPdf({ data }: LabworkOrderPdfProps) {
           )}
           <View style={styles.row}>
             <Text style={styles.label}>{t(language, 'pdf.appointment.date')}:</Text>
-            <Text style={styles.value}>{formatDateI18n(labwork.date, language, timezone)}</Text>
+            <Text style={styles.value}>{formatCalendarDayI18n(labwork.date, language)}</Text>
           </View>
           <View style={styles.row}>
             <Text style={styles.label}>{t(language, 'pdf.labwork.assignedDoctors')}:</Text>

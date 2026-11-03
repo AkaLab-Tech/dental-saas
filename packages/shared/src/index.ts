@@ -29,6 +29,7 @@ export * from './medical-history.js'
 export {
   t,
   formatDate,
+  formatCalendarDay,
   formatTime,
   formatDateTime,
   translateStatus,

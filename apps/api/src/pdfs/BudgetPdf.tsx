@@ -1,6 +1,11 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import type { BudgetPdfData, BudgetItemStatus } from '../services/pdf.service.js'
-import { t, formatDate as formatDateI18n, type Language } from '@dental/shared'
+import {
+  t,
+  formatDate as formatDateI18n,
+  formatCalendarDay as formatCalendarDayI18n,
+  type Language,
+} from '@dental/shared'
 
 // Create styles
 const styles = StyleSheet.create({
@@ -251,7 +256,7 @@ export function BudgetPdf({ data }: BudgetPdfProps) {
           {budget.validUntil && (
             <View style={styles.row}>
               <Text style={styles.label}>{t(language, 'pdf.budget.validUntil')}:</Text>
-              <Text style={styles.value}>{formatDateI18n(budget.validUntil, language, timezone)}</Text>
+              <Text style={styles.value}>{formatCalendarDayI18n(budget.validUntil, language)}</Text>
             </View>
           )}
           <View style={styles.row}>
