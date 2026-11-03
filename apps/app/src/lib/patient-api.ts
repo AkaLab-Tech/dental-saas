@@ -180,22 +180,31 @@ export async function getConvenioNames(): Promise<string[]> {
 }
 
 /**
- * Calculate patient age from date of birth
- * Returns null for invalid dates or dates in the future
+ * Calculate patient age from date of birth.
+ *
+ * Calendar arithmetic over two Y/M/D triples. `dob` is a CALENDAR DAY stored
+ * at UTC midnight, so it is read with the UTC getters: the day that comes back
+ * is the day that was entered. "Today" is the VIEWER's calendar day (the
+ * browser's zone): the tenant's timezone is not loaded on the pages that call
+ * this. That is right for staff browsing from the clinic at any hour; for a
+ * tenant configured in a zone other than the viewer's the age can still be off
+ * by one for part of a day. Do not "fix" this toward the tenant zone by guess,
+ * and do not use UTC getters on both sides: that moves the wrong window to the
+ * 21:00-24:00 local band instead of closing it.
+ *
+ * Returns null for a missing or invalid date and for a date in the future.
  */
 export function calculateAge(dob: string | null): number | null {
   if (!dob) return null
   const birthDate = new Date(dob)
   if (isNaN(birthDate.getTime())) return null
   const today = new Date()
-  // Return null for future dates
-  if (birthDate > today) return null
-  let age = today.getFullYear() - birthDate.getFullYear()
-  const monthDiff = today.getMonth() - birthDate.getMonth()
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+  let age = today.getFullYear() - birthDate.getUTCFullYear()
+  const monthDiff = today.getMonth() - birthDate.getUTCMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getUTCDate())) {
     age--
   }
-  return age
+  return age < 0 ? null : age
 }
 
 /**
