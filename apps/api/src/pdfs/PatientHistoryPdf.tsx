@@ -3,6 +3,7 @@ import type { PatientHistoryData, AppointmentStatus } from '../services/pdf.serv
 import {
   t,
   formatDate as formatDateI18n,
+  formatCalendarDay as formatCalendarDayI18n,
   formatDateTime as formatDateTimeI18n,
   translateStatus,
   translateGender,
@@ -209,11 +210,20 @@ function getStatusStyle(status: AppointmentStatus) {
   }
 }
 
-function calculateAge(dob: Date): number {
-  const today = new Date()
-  let age = today.getFullYear() - dob.getFullYear()
-  const monthDiff = today.getMonth() - dob.getMonth()
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+export function calculateAge(dob: Date, timezone: string): number {
+  // dob is a calendar day (UTC midnight); "today" is the tenant's day, not the host's.
+  const [ty, tm, td] = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+    .format(new Date())
+    .split('-')
+    .map(Number)
+  let age = ty - dob.getUTCFullYear()
+  const monthDiff = tm - (dob.getUTCMonth() + 1)
+  if (monthDiff < 0 || (monthDiff === 0 && td < dob.getUTCDate())) {
     age--
   }
   return age
@@ -263,12 +273,12 @@ export function PatientHistoryPdf({ data }: PatientHistoryPdfProps) {
             <>
               <View style={styles.row}>
                 <Text style={styles.label}>{t(language, 'pdf.patient.dateOfBirth')}:</Text>
-                <Text style={styles.value}>{formatDateI18n(patient.dob, language, timezone)}</Text>
+                <Text style={styles.value}>{formatCalendarDayI18n(patient.dob, language)}</Text>
               </View>
               <View style={styles.row}>
                 <Text style={styles.label}>{t(language, 'pdf.patient.age')}:</Text>
                 <Text style={styles.value}>
-                  {calculateAge(patient.dob)} {t(language, 'pdf.patient.years')}
+                  {calculateAge(patient.dob, timezone)} {t(language, 'pdf.patient.years')}
                 </Text>
               </View>
             </>

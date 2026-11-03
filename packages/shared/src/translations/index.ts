@@ -72,6 +72,32 @@ export function formatDate(
   })
 }
 
+/**
+ * Format a CALENDAR DAY (date stored at UTC midnight, e.g. DOB, labwork date, validUntil)
+ * in the requested language. Pins timeZone: 'UTC' so the day rendered is the day entered,
+ * regardless of tenant timezone or host location.
+ *
+ * CALENDAR DAYS ONLY. Real instants (appointment startTime, createdAt, generatedAt) must
+ * continue to use formatDate with the tenant's timezone.
+ */
+export function formatCalendarDay(
+  date: Date,
+  language: Language,
+  style: 'long' | 'short' = 'long'
+): string {
+  const localeMap: Record<Language, string> = {
+    es: 'es-ES',
+    en: 'en-US',
+    ar: 'ar-SA',
+  }
+  return date.toLocaleDateString(localeMap[language], {
+    year: 'numeric',
+    month: style,
+    day: 'numeric',
+    timeZone: 'UTC',
+  })
+}
+
 // Format time based on language
 export function formatTime(date: Date, language: Language, timezone: string): string {
   const localeMap: Record<Language, string> = {
