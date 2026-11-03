@@ -60,13 +60,26 @@ const PRIMARY_TEETH_AGE_THRESHOLD = 12
 
 /**
  * Returns true if the given date of birth places the person strictly under
- * PRIMARY_TEETH_AGE_THRESHOLD at the current moment.
+ * PRIMARY_TEETH_AGE_THRESHOLD on the tenant's current calendar day.
+ *
+ * Every `dob` is a calendar day stored at UTC midnight, so it is read with the
+ * UTC getters; "today" is read in the tenant's timezone. Comparing the two as
+ * calendar days keeps a patient from being treated as older the day before the
+ * birthday, whatever the host zone or the hour.
  */
-function isUnderPrimaryTeethAge(dob: Date): boolean {
-  const now = new Date()
-  let age = now.getFullYear() - dob.getFullYear()
-  const m = now.getMonth() - dob.getMonth()
-  if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) {
+export function isUnderPrimaryTeethAge(dob: Date, timezone: string): boolean {
+  const [y, m, d] = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+    .format(new Date())
+    .split('-')
+    .map(Number)
+  let age = y - dob.getUTCFullYear()
+  const dm = m - (dob.getUTCMonth() + 1)
+  if (dm < 0 || (dm === 0 && d < dob.getUTCDate())) {
     age--
   }
   return age < PRIMARY_TEETH_AGE_THRESHOLD
@@ -212,7 +225,14 @@ export async function createPatient(
     dobValue = typeof dob === 'string' ? new Date(dob) : dob
   }
 
-  const showPrimaryTeeth = dobValue ? isUnderPrimaryTeethAge(dobValue) : false
+  let showPrimaryTeeth = false
+  if (dobValue) {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { timezone: true },
+    })
+    showPrimaryTeeth = isUnderPrimaryTeethAge(dobValue, tenant?.timezone || 'UTC')
+  }
 
   const patient = await prisma.patient.create({
     data: {
