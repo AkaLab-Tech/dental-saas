@@ -1,6 +1,7 @@
 import { prisma } from '@dental/database'
 import { logger } from '../utils/logger.js'
 import { getCashCollectedBetween, getTenantOutstandingTotal } from './payment.service.js'
+import { zonedDayKey, zonedMonthRange } from '../utils/zoned-day.js'
 
 // ============================================================================
 // Types
@@ -233,11 +234,22 @@ export async function getOverviewStats(tenantId: string, doctorId?: string): Pro
  */
 export async function getAppointmentStatsForPeriod(
   tenantId: string,
-  startDate: Date,
-  endDate: Date,
+  startDate?: Date,
+  endDate?: Date,
   doctorId?: string
 ): Promise<AppointmentStats> {
   logger.debug({ tenantId, startDate, endDate, doctorId }, 'Fetching appointment stats')
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { timezone: true },
+  })
+  const timezone = tenant?.timezone || 'UTC'
+
+  const { start, end } =
+    startDate && endDate
+      ? { start: startDate, end: endDate }
+      : zonedMonthRange(new Date(), timezone)
 
   // Get appointments in range
   const appointments = await prisma.appointment.findMany({
@@ -245,7 +257,7 @@ export async function getAppointmentStatsForPeriod(
       tenantId,
       isActive: true,
       ...(doctorId ? { doctorId } : {}),
-      startTime: { gte: startDate, lte: endDate },
+      startTime: { gte: start, lte: end },
     },
     select: {
       status: true,
@@ -262,7 +274,7 @@ export async function getAppointmentStatsForPeriod(
     byStatus[apt.status] = (byStatus[apt.status] || 0) + 1
 
     // Day count
-    const dayKey = apt.startTime.toISOString().split('T')[0]
+    const dayKey = zonedDayKey(apt.startTime, timezone)
     byDayMap[dayKey] = (byDayMap[dayKey] || 0) + 1
   }
 
