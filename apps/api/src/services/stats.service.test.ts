@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock prisma — getDoctorPerformanceStats only touches doctor/appointment/labwork.
+// GAP: there is no `tenant` here. getAppointmentStatsForPeriod calls
+// prisma.tenant.findUnique for the tenant timezone, so a test of it added to this file
+// would throw on an undefined mock; use a DB-backed sibling file instead (see
+// stats.service.zone.test.ts).
 vi.mock('@dental/database', () => ({
   prisma: {
     doctor: {

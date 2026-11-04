@@ -146,17 +146,11 @@ statsRouter.get('/appointments', async (req, res, next) => {
       })
     }
 
-    // Default to current month
-    const now = new Date()
-    const startDate = parseResult.data.startDate
-      ? new Date(parseResult.data.startDate)
-      : new Date(now.getFullYear(), now.getMonth(), 1)
-    const endDate = parseResult.data.endDate
-      ? new Date(parseResult.data.endDate)
-      : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+    // Absent bounds default to the tenant's current month, resolved in the service
+    const startDate = parseResult.data.startDate ? new Date(parseResult.data.startDate) : undefined
+    const endDate = parseResult.data.endDate ? new Date(parseResult.data.endDate) : undefined
 
-    // Validate date range
-    if (startDate > endDate) {
+    if (startDate && endDate && startDate > endDate) {
       return res.status(400).json({
         success: false,
         error: { message: 'startDate must be before or equal to endDate' },
