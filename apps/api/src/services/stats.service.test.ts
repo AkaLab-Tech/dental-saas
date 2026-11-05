@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Mock prisma — getDoctorPerformanceStats only touches doctor/appointment/labwork.
-// GAP: there is no `tenant` here. getAppointmentStatsForPeriod calls
-// prisma.tenant.findUnique for the tenant timezone, so a test of it added to this file
-// would throw on an undefined mock; use a DB-backed sibling file instead (see
-// stats.service.zone.test.ts).
+// Mock prisma — getDoctorPerformanceStats touches doctor/appointment/labwork, plus
+// tenant.findUnique for the tenant timezone its default month range is read in (#661).
 vi.mock('@dental/database', () => ({
   prisma: {
+    tenant: {
+      findUnique: vi.fn(),
+    },
     doctor: {
       findMany: vi.fn(),
     },
@@ -42,6 +42,7 @@ function fakeDecimal(value: number) {
 describe('stats.service — getDoctorPerformanceStats', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(prisma.tenant.findUnique).mockResolvedValue({ timezone: 'UTC' } as never)
   })
 
   it('returns [] without querying appointments/labworks when the tenant has no active doctors', async () => {
@@ -158,9 +159,13 @@ describe('stats.service — getDoctorPerformanceStats', () => {
 
     await getDoctorPerformanceStats('tenant-1')
 
+    // The mocked tenant sits in UTC, so the expected edges are UTC month edges — stated
+    // without host-zone Date arithmetic, which is the bug #661 fixed.
     const now = new Date()
-    const expectedStart = new Date(now.getFullYear(), now.getMonth(), 1)
-    const expectedEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+    const expectedStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+    const expectedEnd = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1) - 1
+    )
 
     const appointmentWhere = vi.mocked(prisma.appointment.findMany).mock.calls[0][0]!.where as {
       startTime: { gte: Date; lte: Date }
