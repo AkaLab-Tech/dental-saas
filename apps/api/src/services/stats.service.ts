@@ -1,7 +1,8 @@
 import { prisma } from '@dental/database'
 import { logger } from '../utils/logger.js'
 import { getCashCollectedBetween, getTenantOutstandingTotal } from './payment.service.js'
-import { zonedDayKey, zonedMonthRange } from '../utils/zoned-day.js'
+import { zonedDayKey, zonedMonthKey, zonedMonthRange } from '../utils/zoned-day.js'
+import { getTenantTimezone } from './tenant-timezone.service.js'
 
 // ============================================================================
 // Types
@@ -95,28 +96,6 @@ export interface AppointmentTypeCount {
 }
 
 // ============================================================================
-// Helper Functions
-// ============================================================================
-
-function getMonthStart(date: Date = new Date()): Date {
-  return new Date(date.getFullYear(), date.getMonth(), 1)
-}
-
-function getMonthEnd(date: Date = new Date()): Date {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999)
-}
-
-function getLastMonthStart(): Date {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth() - 1, 1)
-}
-
-function getLastMonthEnd(): Date {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
-}
-
-// ============================================================================
 // Stats Service Functions
 // ============================================================================
 
@@ -126,8 +105,8 @@ function getLastMonthEnd(): Date {
 export async function getOverviewStats(tenantId: string, doctorId?: string): Promise<OverviewStats> {
   logger.debug({ tenantId, doctorId }, 'Fetching overview stats')
 
-  const monthStart = getMonthStart()
-  const monthEnd = getMonthEnd()
+  const timezone = await getTenantTimezone(tenantId)
+  const { start: monthStart, end: monthEnd } = zonedMonthRange(new Date(), timezone)
 
   // When scoped to a doctor, filter appointments by doctorId
   const appointmentDoctorFilter = doctorId ? { doctorId } : {}
@@ -240,11 +219,7 @@ export async function getAppointmentStatsForPeriod(
 ): Promise<AppointmentStats> {
   logger.debug({ tenantId, startDate, endDate, doctorId }, 'Fetching appointment stats')
 
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { timezone: true },
-  })
-  const timezone = tenant?.timezone || 'UTC'
+  const timezone = await getTenantTimezone(tenantId)
 
   const { start, end } =
     startDate && endDate
@@ -300,8 +275,8 @@ export async function getRevenueStats(
 ): Promise<RevenueStats> {
   logger.debug({ tenantId, monthsBack, doctorId }, 'Fetching revenue stats')
 
-  const now = new Date()
-  const startDate = new Date(now.getFullYear(), now.getMonth() - monthsBack + 1, 1)
+  const timezone = await getTenantTimezone(tenantId)
+  const { start: startDate } = zonedMonthRange(new Date(), timezone, -monthsBack + 1)
 
   // Get all completed appointments in range
   const appointments = await prisma.appointment.findMany({
@@ -335,7 +310,7 @@ export async function getRevenueStats(
     }
 
     // Group by month
-    const monthKey = `${apt.startTime.getFullYear()}-${String(apt.startTime.getMonth() + 1).padStart(2, '0')}`
+    const monthKey = zonedMonthKey(apt.startTime, timezone)
     byMonthMap[monthKey] = (byMonthMap[monthKey] || 0) + cost
   }
 
@@ -360,8 +335,11 @@ export async function getPatientsGrowthStats(
 ): Promise<PatientsGrowthStats> {
   logger.debug({ tenantId, monthsBack }, 'Fetching patients growth stats')
 
+  const timezone = await getTenantTimezone(tenantId)
   const now = new Date()
-  const startDate = new Date(now.getFullYear(), now.getMonth() - monthsBack + 1, 1)
+  const thisMonth = zonedMonthRange(now, timezone)
+  const lastMonth = zonedMonthRange(now, timezone, -1)
+  const { start: startDate } = zonedMonthRange(now, timezone, -monthsBack + 1)
 
   const [totalPatients, patientsThisMonth, patientsLastMonth, patientsByMonth] = await Promise.all([
     // Total active patients
@@ -373,7 +351,7 @@ export async function getPatientsGrowthStats(
       where: {
         tenantId,
         isActive: true,
-        createdAt: { gte: getMonthStart(), lte: getMonthEnd() },
+        createdAt: { gte: thisMonth.start, lte: thisMonth.end },
       },
     }),
     // Patients created last month
@@ -381,7 +359,7 @@ export async function getPatientsGrowthStats(
       where: {
         tenantId,
         isActive: true,
-        createdAt: { gte: getLastMonthStart(), lte: getLastMonthEnd() },
+        createdAt: { gte: lastMonth.start, lte: lastMonth.end },
       },
     }),
     // Patients grouped by creation month
@@ -400,7 +378,7 @@ export async function getPatientsGrowthStats(
   // Group by month
   const byMonthMap: Record<string, number> = {}
   for (const patient of patientsByMonth) {
-    const monthKey = `${patient.createdAt.getFullYear()}-${String(patient.createdAt.getMonth() + 1).padStart(2, '0')}`
+    const monthKey = zonedMonthKey(patient.createdAt, timezone)
     byMonthMap[monthKey] = (byMonthMap[monthKey] || 0) + 1
   }
 
@@ -438,8 +416,15 @@ export async function getDoctorPerformanceStats(
 ): Promise<DoctorPerformanceStats[]> {
   logger.debug({ tenantId }, 'Fetching doctor performance stats')
 
-  const rangeStart = startDate ?? getMonthStart()
-  const rangeEnd = endDate ?? getMonthEnd()
+  // Explicitly-passed bounds are instants the caller already chose; only a defaulted bound is
+  // a calendar-month edge, and the calendar is the tenant's.
+  let rangeStart = startDate
+  let rangeEnd = endDate
+  if (!rangeStart || !rangeEnd) {
+    const month = zonedMonthRange(new Date(), await getTenantTimezone(tenantId))
+    rangeStart ??= month.start
+    rangeEnd ??= month.end
+  }
 
   // Get all active doctors
   const doctors = await prisma.doctor.findMany({
@@ -580,8 +565,8 @@ export async function getAppointmentTypeStats(
   tenantId: string,
   doctorId: string
 ): Promise<AppointmentTypeCount[]> {
-  const monthStart = getMonthStart()
-  const monthEnd = getMonthEnd()
+  const timezone = await getTenantTimezone(tenantId)
+  const { start: monthStart, end: monthEnd } = zonedMonthRange(new Date(), timezone)
 
   const appointments = await prisma.appointment.findMany({
     where: {

@@ -13,6 +13,8 @@ import {
   restoreAppointmentPaymentsFromAdvance,
   type PaymentErrorCode,
 } from './payment.service.js'
+import { getTenantTimezone } from './tenant-timezone.service.js'
+import { zonedDayRange, zonedWeekRange } from '../utils/zoned-day.js'
 
 // Fields to include in appointment responses
 const APPOINTMENT_SELECT = {
@@ -1131,12 +1133,12 @@ export async function getAppointmentStats(
     prisma.appointment.count({ where: { ...baseWhere, status: 'NO_SHOW' } }),
   ])
 
-  // Today and week counts
+  // Today and week counts, rolling over at the tenant's midnight. The helpers also replace
+  // fixed 24h/7-day arithmetic, which is wrong across a DST transition.
   const now = new Date()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
-  const weekStart = new Date(todayStart.getTime() - todayStart.getDay() * 24 * 60 * 60 * 1000)
-  const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000)
+  const timezone = await getTenantTimezone(tenantId)
+  const { start: todayStart, end: todayEnd } = zonedDayRange(now, timezone)
+  const { start: weekStart, end: weekEnd } = zonedWeekRange(now, timezone)
 
   const [todayCount, weekCount] = await Promise.all([
     prisma.appointment.count({
@@ -1144,7 +1146,7 @@ export async function getAppointmentStats(
         tenantId,
         isActive: true,
         ...(doctorId && { doctorId }),
-        startTime: { gte: todayStart, lt: todayEnd },
+        startTime: { gte: todayStart, lte: todayEnd },
       },
     }),
     prisma.appointment.count({
@@ -1152,7 +1154,7 @@ export async function getAppointmentStats(
         tenantId,
         isActive: true,
         ...(doctorId && { doctorId }),
-        startTime: { gte: weekStart, lt: weekEnd },
+        startTime: { gte: weekStart, lte: weekEnd },
       },
     }),
   ])
