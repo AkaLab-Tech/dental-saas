@@ -899,6 +899,7 @@
       "unitPriceInvalid": "El precio unitario debe ser mayor o igual a 0",
       "pdfDownloadFailed": "No se pudo descargar el PDF",
       "shareFailed": "No se pudo generar el enlace para compartir",
+      "hasExecutedItems": "No se puede volver a borrador: el presupuesto tiene ítems ejecutados. Cancela el presupuesto en su lugar.",
       "hasBilledItems": "No se puede eliminar: el presupuesto tiene ítems ejecutados que ya se cobran. Cancela el presupuesto en lugar de eliminarlo.",
       "hasReservedAdvance": "No se puede eliminar: el presupuesto tiene una entrega reservada. Cancela el presupuesto en lugar de eliminarlo."
     }

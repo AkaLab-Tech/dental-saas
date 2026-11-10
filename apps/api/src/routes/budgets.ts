@@ -71,6 +71,10 @@ const BUDGET_ERROR_MAP: Record<BudgetErrorCode, { status: number; message: strin
     status: 409,
     message: 'Budget has executed items; cancel the budget instead of deleting it',
   },
+  HAS_EXECUTED_ITEMS: {
+    status: 409,
+    message: 'Budget has executed items; cancel the budget instead of moving it back to draft',
+  },
   HAS_RESERVED_ADVANCE: {
     status: 409,
     message: 'Budget has a reserved advance; cancel the budget instead of deleting it',
@@ -84,7 +88,7 @@ function sendError(
   code: BudgetErrorCode
 ): void {
   const mapped = BUDGET_ERROR_MAP[code]
-  res.status(mapped.status).json({ success: false, error: mapped.message })
+  res.status(mapped.status).json({ success: false, error: mapped.message, code })
 }
 
 // ============================================================================

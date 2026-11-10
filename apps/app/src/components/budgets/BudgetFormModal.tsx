@@ -40,7 +40,7 @@ interface BudgetFormModalProps {
   onSubmit: (data: CreateBudgetData) => Promise<void>
   isLoading?: boolean
   error?: string | null
-  /** Status the form opens with; callers that know better than DRAFT pass it. */
+  /** Status the form opens with; a budget is born active; pass DRAFT for a quote not yet shown. */
   defaultStatus?: BudgetFormData['status']
 }
 
@@ -52,7 +52,7 @@ export function BudgetFormModal({
   onSubmit,
   isLoading = false,
   error = null,
-  defaultStatus = 'DRAFT',
+  defaultStatus = 'APPROVED',
 }: BudgetFormModalProps) {
   const { t } = useTranslation()
   const currency = useAuthStore((s) => s.user?.tenant?.currency) || 'USD'

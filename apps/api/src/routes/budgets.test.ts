@@ -170,7 +170,7 @@ describe('Budgets routes', () => {
       expect(res.status).toBe(201)
       expect(res.body.success).toBe(true)
       expect(res.body.data.patientId).toBe(patientId)
-      expect(res.body.data.status).toBe('DRAFT')
+      expect(res.body.data.status).toBe('APPROVED') // #667: no status means APPROVED
       expect(Number(res.body.data.totalAmount)).toBe(180) // 80 + 2*50
       expect(res.body.data.items).toHaveLength(2)
       expect(Number(res.body.data.items[0].totalPrice)).toBe(80)
@@ -678,6 +678,186 @@ describe('Budgets routes', () => {
   })
 
   // --------------------------------------------------------------------------
+  // Task #667: APPROVED default on create + no revert to DRAFT once charged
+  // (guards numbered G1-G7 inside this block only; #639 has its own G1-G4)
+  // --------------------------------------------------------------------------
+  describe('Task #667: APPROVED default and the revert-to-DRAFT refusal', () => {
+    const EXECUTED_DRAFT_MESSAGE =
+      'Budget has executed items; cancel the budget instead of moving it back to draft'
+    let doctorId: string
+
+    beforeAll(async () => {
+      doctorId = (
+        await prisma.doctor.create({
+          data: {
+            tenantId,
+            firstName: 'Dr. Revert',
+            lastName: 'Guard',
+            email: `doctor-revert-guard-${suffix}@budgets-test.com`,
+            specialty: 'General Dentistry',
+          },
+        })
+      ).id
+    })
+
+    afterEach(async () => {
+      await prisma.appointment.deleteMany({ where: { tenantId } })
+    })
+
+    afterAll(async () => {
+      await prisma.appointment.deleteMany({ where: { tenantId } })
+      await prisma.doctor.deleteMany({ where: { tenantId } })
+    })
+
+    const items = [
+      { description: 'A', quantity: 1, unitPrice: 80 },
+      { description: 'B', quantity: 2, unitPrice: 50 },
+    ]
+
+    const post = (body: Record<string, unknown>) =>
+      api()
+        .post(`/api/patients/${patientId}/budgets`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send(body)
+
+    const patchBudget = (budgetId: string, body: Record<string, unknown>) =>
+      api()
+        .patch(`/api/budgets/${budgetId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send(body)
+
+    async function seedApproved() {
+      return prisma.budget.create({
+        data: {
+          tenantId,
+          patientId,
+          status: 'APPROVED',
+          totalAmount: 180,
+          items: {
+            create: [
+              { description: 'A', quantity: 1, unitPrice: 80, totalPrice: 80, order: 0 },
+              { description: 'B', quantity: 2, unitPrice: 50, totalPrice: 100, order: 1 },
+            ],
+          },
+        },
+        include: { items: { orderBy: { order: 'asc' } } },
+      })
+    }
+
+    async function seedAppointment(isActive: boolean) {
+      const start = new Date('2026-05-11T10:00:00Z')
+      return prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId,
+          startTime: start,
+          endTime: new Date(start.getTime() + 30 * 60_000),
+          duration: 30,
+          cost: null,
+          isActive,
+        },
+      })
+    }
+
+    async function link(budgetItemId: string, appointmentId: string, role: 'EXECUTED' | 'SCHEDULED') {
+      await prisma.budgetItemAppointment.create({ data: { budgetItemId, appointmentId, role } })
+    }
+
+    const statusInDb = async (budgetId: string) =>
+      (await prisma.budget.findUniqueOrThrow({ where: { id: budgetId } })).status
+
+    it('G1 - a budget created with no status is APPROVED (red if createBudget reverts to ?? DRAFT)', async () => {
+      const res = await post({ items })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.status).toBe('APPROVED')
+      expect(await statusInDb(res.body.data.id)).toBe('APPROVED')
+    })
+
+    it('G2 - an explicit DRAFT on create survives (red if the ?? is dropped for a hard-coded APPROVED)', async () => {
+      const res = await post({ status: 'DRAFT', items })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.status).toBe('DRAFT')
+      expect(await statusInDb(res.body.data.id)).toBe('DRAFT')
+    })
+
+    it('G3 - an EXECUTED link on an ACTIVE appointment: PATCH DRAFT is 409 HAS_EXECUTED_ITEMS and the status is unchanged (red if the guard is removed)', async () => {
+      const budget = await seedApproved()
+      const appointment = await seedAppointment(true)
+      expect(appointment.isActive).toBe(true)
+      await link(budget.items[0].id, appointment.id, 'EXECUTED')
+
+      const res = await patchBudget(budget.id, { status: 'DRAFT' })
+
+      expect(res.status).toBe(409)
+      expect(res.body.code).toBe('HAS_EXECUTED_ITEMS')
+      expect(res.body.error).toBe(EXECUTED_DRAFT_MESSAGE)
+      expect(await statusInDb(budget.id)).toBe('APPROVED')
+    })
+
+    it('G4 - the only EXECUTED link is on a SOFT-DELETED appointment: still 409 (red if the predicate adds appointment.isActive)', async () => {
+      const budget = await seedApproved()
+      const appointment = await seedAppointment(false)
+      expect(appointment.isActive).toBe(false)
+      await link(budget.items[0].id, appointment.id, 'EXECUTED')
+
+      const res = await patchBudget(budget.id, { status: 'DRAFT' })
+
+      expect(res.status).toBe(409)
+      expect(res.body.code).toBe('HAS_EXECUTED_ITEMS')
+      expect(await statusInDb(budget.id)).toBe('APPROVED')
+    })
+
+    it('G5 - vacuity control: items but no link at all, PATCH DRAFT succeeds (red if the guard rejects every DRAFT target)', async () => {
+      const budget = await seedApproved()
+
+      const res = await patchBudget(budget.id, { status: 'DRAFT' })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.status).toBe('DRAFT')
+      expect(await statusInDb(budget.id)).toBe('DRAFT')
+    })
+
+    it('G6 - the target is part of the predicate: the same executed-link budget can be CANCELLED (red if the guard ignores the requested status)', async () => {
+      const budget = await seedApproved()
+      const appointment = await seedAppointment(true)
+      await link(budget.items[0].id, appointment.id, 'EXECUTED')
+
+      const res = await patchBudget(budget.id, { status: 'CANCELLED' })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.status).toBe('CANCELLED')
+      expect(await statusInDb(budget.id)).toBe('CANCELLED')
+    })
+
+    it('G7 - the predicate is the link, not the item status: item EXECUTED with only a SCHEDULED link still allows DRAFT (red if the predicate moves onto BudgetItem.status)', async () => {
+      const budget = await seedApproved()
+      // Reached through the real route (PATCH item), not a direct write: the
+      // item PATCH sets the item EXECUTED without requiring any link.
+      const itemRes = await api()
+        .patch(`/api/budgets/${budget.id}/items/${budget.items[0].id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'EXECUTED' })
+      expect(itemRes.status).toBe(200)
+      const appointment = await seedAppointment(true)
+      await link(budget.items[0].id, appointment.id, 'SCHEDULED')
+      const item = await prisma.budgetItem.findUniqueOrThrow({ where: { id: budget.items[0].id } })
+      expect(item.status).toBe('EXECUTED')
+      // The item PATCH may auto-derive the budget status; put it back on APPROVED
+      // so the DRAFT target below is a real transition.
+      await prisma.budget.update({ where: { id: budget.id }, data: { status: 'APPROVED' } })
+
+      const res = await patchBudget(budget.id, { status: 'DRAFT' })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.status).toBe('DRAFT')
+      expect(await statusInDb(budget.id)).toBe('DRAFT')
+    })
+  })
+
+  // --------------------------------------------------------------------------
   // POST /api/budgets/:id/items
   // --------------------------------------------------------------------------
   describe('POST /api/budgets/:id/items', () => {
@@ -802,6 +982,7 @@ describe('Budgets routes', () => {
         .post(`/api/patients/${patientId}/budgets`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
+          status: 'DRAFT', // the precondition of this test; #667 made APPROVED the default
           items: [{ description: 'A', quantity: 1, unitPrice: 100 }],
         })
       expect(created.body.data.status).toBe('DRAFT')
