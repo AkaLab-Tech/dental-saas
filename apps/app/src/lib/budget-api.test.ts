@@ -9,6 +9,7 @@ import {
   updateBudgetItem,
   deleteBudgetItem,
   getExecutedItemsCount,
+  getSettableBudgetStatuses,
   shareBudget,
   type Budget,
   type BudgetItem,
@@ -205,6 +206,30 @@ describe('budget-api', () => {
 
     it('returns zeros on empty items', () => {
       expect(getExecutedItemsCount({ items: [] })).toEqual({ executed: 0, total: 0 })
+    })
+  })
+
+  describe('getSettableBudgetStatuses (#667)', () => {
+    it('G8 - omits DRAFT (and APPROVED) when a line is EXECUTED', () => {
+      const budget = makeBudget({
+        items: [makeItem({ id: 'a', status: 'EXECUTED' }), makeItem({ id: 'b', status: 'PENDING' })],
+      })
+      const offered = getSettableBudgetStatuses(budget)
+      expect(offered).not.toContain('DRAFT')
+      expect(offered).not.toContain('APPROVED')
+      expect(offered).toContain('CANCELLED')
+    })
+
+    it('G8 vacuity control - still offers DRAFT when no line is executed', () => {
+      const budget = makeBudget({
+        items: [makeItem({ id: 'a', status: 'PENDING' }), makeItem({ id: 'b', status: 'SCHEDULED' })],
+      })
+      expect(getSettableBudgetStatuses(budget)).toContain('DRAFT')
+    })
+
+    it('G8 - a CANCELLED executed line does not count: DRAFT is still offered', () => {
+      const budget = makeBudget({ items: [makeItem({ id: 'a', status: 'CANCELLED' })] })
+      expect(getSettableBudgetStatuses(budget)).toContain('DRAFT')
     })
   })
 })

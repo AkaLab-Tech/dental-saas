@@ -33,13 +33,17 @@ test('budget status: create with non-default status, change from the card, detai
   await expect(page.getByRole('heading', { name: new RegExp(lastName), level: 1 })).toBeVisible()
   await page.getByRole('navigation', { name: 'Tabs' }).getByRole('button', { name: 'Presupuestos' }).click()
 
-  // Create with a non-default status (APPROVED); capture the POST to pin the budget id.
+  // Create form defaults to APPROVED (#667). The select must still be operable, so
+  // an explicit DRAFT is chosen and then APPROVED again; the POST pins the budget id.
   await page.getByRole('button', { name: /nuevo presupuesto/i }).first().click()
   const dialog = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Nuevo Presupuesto', level: 2 }) })
   await expect(dialog).toBeVisible()
   const statusSelect = dialog.getByLabel('Estado')
+  await expect(statusSelect).toHaveValue('APPROVED')
+  await statusSelect.selectOption('DRAFT')
   await expect(statusSelect).toHaveValue('DRAFT')
   await statusSelect.selectOption('APPROVED')
+  await expect(statusSelect).toHaveValue('APPROVED')
   await dialog.locator('input[name="items.0.description"]').fill('Tratamiento sintetico 606')
   await dialog.locator('input[name="items.0.unitPrice"]').fill('500')
 
@@ -97,11 +101,12 @@ test('budget status: create with non-default status, change from the card, detai
   await page.screenshot({ path: `${SHOTS}/606-detail-select-offers-approved.png`, fullPage: true })
 })
 
-test('budget status: detail select hides APPROVED once a line is executed (#606)', async ({ authedPage: page }) => {
+test('budget status: detail select hides APPROVED and DRAFT once a line is executed (#606, #667)', async ({ authedPage: page }) => {
   const lastName = `EstadoEjec${Date.now()}`
   const created = await api('POST', '/patients', { firstName: 'E2E', lastName })
   const patientId: string = created.id ?? created.data?.id ?? created.patient?.id
   expect(patientId).toBeTruthy()
+  // Explicit DRAFT: the precondition no longer comes from the create default (#667).
   const b = await api('POST', `/patients/${patientId}/budgets`, {
     status: 'DRAFT',
     items: [{ description: 'Linea ejecutada 606', quantity: 1, unitPrice: 500 }],
@@ -117,7 +122,8 @@ test('budget status: detail select hides APPROVED once a line is executed (#606)
   await expect(detailSelect).toHaveCount(1)
   const values = await detailSelect.locator('option:not([disabled])').evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value))
   expect(values).not.toContain('APPROVED')
-  expect(values).toContain('DRAFT')
+  // #667: reverting a budget with an executed line to DRAFT is refused, so the picker omits it.
+  expect(values).not.toContain('DRAFT')
   expect(values).toContain('CANCELLED')
   await page.screenshot({ path: `${SHOTS}/606-detail-select-hides-approved-executed.png`, fullPage: true })
 })

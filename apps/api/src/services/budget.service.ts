@@ -54,6 +54,7 @@ export type BudgetErrorCode =
   | 'PATIENT_NOT_FOUND'
   | 'ALREADY_INACTIVE'
   | 'HAS_BILLED_ITEMS'
+  | 'HAS_EXECUTED_ITEMS'
   | 'HAS_RESERVED_ADVANCE'
   | 'ITEM_NOT_FOUND'
   | 'INVALID_STATUS_TRANSITION'
@@ -221,7 +222,7 @@ export async function createBudget(
         tenantId,
         patientId,
         createdById: input.createdById ?? null,
-        status: input.status ?? 'DRAFT',
+        status: input.status ?? 'APPROVED',
         notes: input.notes ?? null,
         validUntil: input.validUntil ?? null,
         totalAmount: 0,
@@ -331,6 +332,16 @@ export async function listBudgetsByPatient(
   return { data, total }
 }
 
+// The EXECUTED join row is the money authority (BUDGET_ITEM_BILLABLE_AUTHORITY).
+// Shared by the delete and the revert-to-DRAFT guards so they cannot drift.
+async function hasExecutedLink(budgetId: string): Promise<boolean> {
+  const link = await prisma.budgetItemAppointment.findFirst({
+    where: { role: 'EXECUTED', budgetItem: { budgetId } },
+    select: { id: true },
+  })
+  return link !== null
+}
+
 export async function updateBudget(
   tenantId: string,
   budgetId: string,
@@ -346,6 +357,10 @@ export async function updateBudget(
 
   if (!existing || !existing.isActive) {
     return { success: false, code: 'NOT_FOUND' }
+  }
+
+  if (input.status === 'DRAFT' && (await hasExecutedLink(budgetId))) {
+    return { success: false, code: 'HAS_EXECUTED_ITEMS' }
   }
 
   const data: Prisma.BudgetUpdateInput = {}
@@ -390,11 +405,7 @@ export async function deleteBudget(
   // The appointment's own isActive is deliberately NOT part of this predicate:
   // in production every offending link sits on a soft-deleted appointment, and
   // `PUT /api/appointments/:id/restore` re-arms it. Guard G2 covers that case.
-  const billedLink = await prisma.budgetItemAppointment.findFirst({
-    where: { role: 'EXECUTED', budgetItem: { budgetId } },
-    select: { id: true },
-  })
-  if (billedLink) return { success: false, code: 'HAS_BILLED_ITEMS' }
+  if (await hasExecutedLink(budgetId)) return { success: false, code: 'HAS_BILLED_ITEMS' }
 
   const reservedAdvance = await prisma.patientPayment.findFirst({
     where: { budgetId, isActive: true, amount: { gt: 0 } },

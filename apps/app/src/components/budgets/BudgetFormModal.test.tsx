@@ -51,8 +51,18 @@ describe('BudgetFormModal status (#606)', () => {
     expect(payload.status).toBe('CANCELLED')
   })
 
-  it('defaults to DRAFT in the payload when nothing is chosen', async () => {
+  it('defaults to APPROVED in the payload when nothing is chosen (#667)', async () => {
     openForm()
+    expect(screen.getByLabelText('Estado')).toHaveValue('APPROVED')
+    const payload = await submit()
+    expect(payload.status).toBe('APPROVED')
+  })
+
+  it('an explicit defaultStatus of DRAFT still wins over the APPROVED default (#667)', async () => {
+    render(<BudgetFormModal isOpen onClose={vi.fn()} onSubmit={onSubmit} defaultStatus="DRAFT" />)
+    fireEvent.change(screen.getByPlaceholderText(i18n.t('budgets.items.descriptionPlaceholder')), {
+      target: { value: 'Limpieza' },
+    })
     expect(screen.getByLabelText('Estado')).toHaveValue('DRAFT')
     const payload = await submit()
     expect(payload.status).toBe('DRAFT')

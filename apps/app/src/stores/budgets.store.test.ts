@@ -239,6 +239,62 @@ describe('budgets.store', () => {
   // Task #639: the API refuses a delete that would move money with 409 and a
   // fixed English message; the budgets section renders this store's `error`
   // verbatim, so the store is where the translation has to happen.
+  describe('a refused revert to DRAFT (#667): the operator reads a translated remedy', () => {
+    const ES = 'No se puede volver a borrador: el presupuesto tiene ítems ejecutados. Cancela el presupuesto en su lugar.'
+
+    function conflict(data: Record<string, unknown>, status = 409) {
+      const error = new Error(`Request failed with status code ${status}`)
+      return Object.assign(error, { response: { status, data: { success: false, ...data } } })
+    }
+
+    beforeEach(async () => {
+      await i18n.changeLanguage('es')
+    })
+
+    it('G9 - 409 with code HAS_EXECUTED_ITEMS sets the translated error, whatever the prose says', async () => {
+      // Deliberately DIFFERENT prose than the API sends: the store must key on the code.
+      vi.mocked(apiUpdateBudget).mockRejectedValue(
+        conflict({ error: 'some reworded server sentence', code: 'HAS_EXECUTED_ITEMS' })
+      )
+      await expect(
+        useBudgetsStore.getState().updateBudget('budget-1', { status: 'DRAFT' })
+      ).rejects.toThrow()
+      expect(useBudgetsStore.getState().error).toBe(ES)
+    })
+
+    it('G9 discrimination - the API prose without the code is not translated', async () => {
+      vi.mocked(apiUpdateBudget).mockRejectedValue(
+        conflict({
+          error: 'Budget has executed items; cancel the budget instead of moving it back to draft',
+        })
+      )
+      await expect(
+        useBudgetsStore.getState().updateBudget('budget-1', { status: 'DRAFT' })
+      ).rejects.toThrow()
+      expect(useBudgetsStore.getState().error).toBe('Request failed with status code 409')
+    })
+
+    it('G9 - the prose-keyed HAS_BILLED_ITEMS delete refusal still translates', async () => {
+      vi.mocked(apiDeleteBudget).mockRejectedValue(
+        conflict({ error: 'Budget has executed items; cancel the budget instead of deleting it' })
+      )
+      await expect(useBudgetsStore.getState().deleteBudget('budget-1')).rejects.toThrow()
+      expect(useBudgetsStore.getState().error).toBe(
+        'No se puede eliminar: el presupuesto tiene ítems ejecutados que ya se cobran. Cancela el presupuesto en lugar de eliminarlo.'
+      )
+    })
+
+    it('G9 - the prose-keyed HAS_RESERVED_ADVANCE delete refusal still translates', async () => {
+      vi.mocked(apiDeleteBudget).mockRejectedValue(
+        conflict({ error: 'Budget has a reserved advance; cancel the budget instead of deleting it' })
+      )
+      await expect(useBudgetsStore.getState().deleteBudget('budget-1')).rejects.toThrow()
+      expect(useBudgetsStore.getState().error).toBe(
+        'No se puede eliminar: el presupuesto tiene una entrega reservada. Cancela el presupuesto en lugar de eliminarlo.'
+      )
+    })
+  })
+
   describe('a refused delete (#639): the operator reads a translated remedy, and nothing is removed', () => {
     // Byte-identical to BUDGET_ERROR_MAP in apps/api/src/routes/budgets.ts,
     // pinned with the same literals in apps/api/src/routes/budgets.test.ts:
