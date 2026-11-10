@@ -34,9 +34,13 @@ export default defineConfig({
   // Two servers: `pnpm dev` run from this package's cwd only resolves to
   // this package's own "dev" script (vite), not the turbo root pipeline —
   // the API needs its own entry or it never boots for global-setup to hit.
+  // That entry is "dev:e2e" rather than "dev" because "dev" reads the
+  // operator's own (gitignored) root environment file, which does not exist in
+  // a task worktree — the API then exits 9 and the whole run dies before the
+  // first test. "dev:e2e" reads the committed e2e.env instead.
   webServer: [
     {
-      command: 'pnpm --filter @dental/api dev',
+      command: 'pnpm --filter @dental/api dev:e2e',
       url: `${API_URL}/api/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
