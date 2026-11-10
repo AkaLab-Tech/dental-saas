@@ -30,6 +30,13 @@ const dateRangeSchema = z.object({
   doctorId: z.string().optional(),
 })
 
+const DATE_RANGE_PAIRING_MESSAGE = 'startDate and endDate must be supplied together'
+
+// XOR over presence, not truthiness: an empty-string bound is a format error
+// caught by the schema above, never a pairing error.
+const isSingleBoundedRange = (startDate?: Date, endDate?: Date): boolean =>
+  (startDate === undefined) !== (endDate === undefined)
+
 const monthsBackSchema = z.object({
   months: z
     .string()
@@ -133,6 +140,7 @@ statsRouter.get('/overview', async (req, res, next) => {
  * GET /api/stats/appointments
  * Get appointment statistics for a period
  * Query params: startDate, endDate (ISO format), doctorId (optional)
+ * startDate and endDate are all-or-nothing: supplying exactly one is a 400
  */
 statsRouter.get('/appointments', async (req, res, next) => {
   try {
@@ -149,6 +157,13 @@ statsRouter.get('/appointments', async (req, res, next) => {
     // Absent bounds default to the tenant's current month, resolved in the service
     const startDate = parseResult.data.startDate ? new Date(parseResult.data.startDate) : undefined
     const endDate = parseResult.data.endDate ? new Date(parseResult.data.endDate) : undefined
+
+    if (isSingleBoundedRange(startDate, endDate)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: DATE_RANGE_PAIRING_MESSAGE },
+      })
+    }
 
     if (startDate && endDate && startDate > endDate) {
       return res.status(400).json({
@@ -241,7 +256,8 @@ statsRouter.get('/patients-growth', async (req, res, next) => {
 /**
  * GET /api/stats/doctors-performance
  * Get doctor performance statistics (including commission earned), defaulting
- * to the current month. Query params: startDate, endDate (ISO, optional).
+ * to the current month. Query params: startDate, endDate (ISO, optional) —
+ * all-or-nothing: supplying exactly one of them is a 400.
  * Access: CLINIC_ADMIN and above
  */
 statsRouter.get('/doctors-performance', requireMinRole('CLINIC_ADMIN'), async (req, res, next) => {
@@ -258,6 +274,13 @@ statsRouter.get('/doctors-performance', requireMinRole('CLINIC_ADMIN'), async (r
 
     const startDate = parseResult.data.startDate ? new Date(parseResult.data.startDate) : undefined
     const endDate = parseResult.data.endDate ? new Date(parseResult.data.endDate) : undefined
+
+    if (isSingleBoundedRange(startDate, endDate)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: DATE_RANGE_PAIRING_MESSAGE },
+      })
+    }
 
     const stats = await getDoctorPerformanceStats(tenantId, startDate, endDate)
 
