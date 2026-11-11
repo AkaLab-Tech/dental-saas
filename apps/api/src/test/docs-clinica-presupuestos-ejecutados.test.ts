@@ -4,6 +4,8 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /**
+ * Tasks #675 (AC5, AC7) and #680: the procedure #675 published was wrong and
+ * is withdrawn, so the document is now asserted to carry no procedure at all.
  * Task #675, AC5 and AC7: the clinic-facing procedure is a deliverable of this
  * task, so it is asserted like any other.
  *
@@ -43,36 +45,75 @@ describe('docs/clinica/presupuestos-ejecutados-sin-cargo.md (#675 AC5)', () => {
     }
   })
 
-  it('carries exactly four numbered steps, numbered 1 to 4', () => {
-    const steps = stepLines()
-    expect(steps).toHaveLength(4)
-    expect(steps.map((line) => line.match(/^(\d+)\. /)![1])).toEqual(['1', '2', '3', '4'])
+  it('carries no numbered procedure: the step count is zero', () => {
+    // The old document had exactly four "1. ".."4. " lines, so this filter is a
+    // known positive against it; the count is asserted apart from any content.
+    expect(stepLines()).toHaveLength(0)
   })
 
-  it('step 1 sets the line back to Pendiente', () => {
-    expect(stepLines()[0]).toMatch(/Pendiente/)
+  // One assertion per phrase: a second expect after a failing one in the same
+  // it() is unreachable, so grouped phrases could not each be watched failing.
+  // Scoped to the instructions: the new prose still mentions Borrador, Ejecutado
+  // and Pendiente descriptively, so a bare keyword ban would be wrong.
+  it('no longer tells the clinic to set the line back to Pendiente', () => {
+    expect(doc()).not.toMatch(/volvé su estado a \*\*Pendiente\*\*/)
   })
 
-  it('step 2 moves the budget from Borrador to Aprobado', () => {
-    expect(stepLines()[1]).toMatch(/Borrador/)
-    expect(stepLines()[1]).toMatch(/Aprobado/)
+  it('no longer tells the clinic to change the budget status', () => {
+    expect(doc()).not.toMatch(/Cambiá el estado del presupuesto/)
   })
 
-  it('step 3 associates the line to the appointment', () => {
-    expect(stepLines()[2]).toMatch(/cita/)
+  it('no longer says a step creates the charge', () => {
+    expect(doc()).not.toMatch(/Ese paso crea el cargo/)
   })
 
-  it('step 4 confirms the execution, which is what creates the charge', () => {
-    expect(stepLines()[3]).toMatch(/ejecutó/)
-    expect(stepLines()[3]).toMatch(/cargo/)
+  it('states the retraction: the earlier instruction must not be applied', () => {
+    expect(doc()).toMatch(/no hay que aplicarlo/i)
   })
 
-  it('says the order is mandatory', () => {
-    expect(doc()).toMatch(/el orden es obligatorio/i)
+  it('no longer carries a section headed as the procedure', () => {
+    expect(doc()).not.toMatch(/^#+ El procedimiento/m)
   })
 
-  it('says Cancelado is not the step to take', () => {
-    expect(doc()).toMatch(/Cancelado no es el paso/i)
+  it('still calls the withdrawn instruction a procedure', () => {
+    // Only meaningful with the retraction above: it names what was withdrawn.
+    expect(doc()).toMatch(
+      /procedimiento[\s\S]{0,200}no hay que aplicarlo|no hay que aplicarlo[\s\S]{0,200}procedimiento/i
+    )
+  })
+
+  it('names the one action: report the record', () => {
+    expect(doc()).toMatch(/avisá/i)
+  })
+
+  it('names the one action: change nothing', () => {
+    expect(doc()).toMatch(/no cambies nada/i)
+  })
+
+  it('carries the measured figure 48 (records)', () => {
+    expect(doc()).toMatch(/\b48\b/)
+  })
+
+  it('carries the measured figure 41 (already charged)', () => {
+    expect(doc()).toMatch(/\b41\b/)
+  })
+
+  it('carries the measured figure 7 (appointment cancelled)', () => {
+    expect(doc()).toMatch(/\b7\b/)
+  })
+
+  it('no longer closes with the old check that the patient credit goes down', () => {
+    expect(doc()).not.toMatch(/el saldo a\s+favor del paciente baja/)
+  })
+
+  it('no longer tells the clinic to repeat step 4', () => {
+    expect(doc()).not.toMatch(/repetí el paso 4/i)
+  })
+
+  it('says not to cancel the budget, because that takes the work off the account', () => {
+    // One assertion, the two phrases within one passage: "saca el trabajo de la
+    // cuenta" alone was already in the old prose and would pin nothing.
+    expect(doc()).toMatch(/No canceles el presupuesto[\s\S]{0,300}saca el trabajo de la cuenta/i)
   })
 
   it('warns that deleting and re-entering the record does not fix it and can strip correct charges', () => {
@@ -82,10 +123,12 @@ describe('docs/clinica/presupuestos-ejecutados-sin-cargo.md (#675 AC5)', () => {
     expect(text).toMatch(/cobros que ya estaban bien/i)
   })
 
-  it('tells the clinic to reload rather than repeat a step when the displayed status disagrees', () => {
-    const text = doc()
-    expect(text).toMatch(/Recargá el\s+presupuesto/i)
-    expect(text).toMatch(/No repitas el paso/i)
+  it('no longer tells the clinic to reload the budget when the displayed status disagrees', () => {
+    expect(doc()).not.toMatch(/Recargá el\s+presupuesto/i)
+  })
+
+  it('no longer tells the clinic "do not repeat the step" (the reload advice is withdrawn)', () => {
+    expect(doc()).not.toMatch(/No repitas el\s+paso/i)
   })
 
   it('names no patient: the prose carries figures, dates and ids only', () => {
