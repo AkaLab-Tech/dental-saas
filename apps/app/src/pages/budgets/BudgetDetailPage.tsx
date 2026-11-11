@@ -27,6 +27,7 @@ import {
   getExecutedItemsCount,
   shareBudget,
   getSettableBudgetStatuses,
+  getSettableItemStatuses,
 } from '@/lib/budget-api'
 import { downloadBudgetPdf } from '@/lib/pdf-api'
 import { useBudgetsStore } from '@/stores/budgets.store'
@@ -44,15 +45,6 @@ const STATUS_STYLES: Record<BudgetStatus, string> = {
   COMPLETED: 'bg-green-100 text-green-700 border-green-200',
   CANCELLED: 'bg-red-100 text-red-700 border-red-200',
 }
-
-// EXECUTED is deliberately absent: an item only becomes executed through an appointment,
-// which is what creates the charge. The API refuses the transition from here (#675).
-const ITEM_STATUS_OPTIONS: BudgetItemStatus[] = [
-  'PENDING',
-  'SCHEDULED',
-  'IN_PROGRESS',
-  'CANCELLED',
-]
 
 const EMPTY_ITEM_INPUT: BudgetItemInput = {
   description: '',
@@ -580,7 +572,7 @@ export default function BudgetDetailPage() {
                       }
                       className="rounded-md border border-gray-300 px-2.5 py-1 text-sm"
                     >
-                      {ITEM_STATUS_OPTIONS.map((s) => (
+                      {getSettableItemStatuses(item).map((s) => (
                         <option key={s} value={s}>
                           {t(`budgets.itemStatus.${s}`)}
                         </option>

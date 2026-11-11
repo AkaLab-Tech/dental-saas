@@ -251,6 +251,28 @@ export function getSettableBudgetStatuses(budget: Pick<Budget, 'items'>): Budget
   return USER_SETTABLE_BUDGET_STATUSES.filter((s) => !(anyExecuted && (s === 'APPROVED' || s === 'DRAFT')))
 }
 
+// Full lifecycle, in the declaration order of BudgetItemStatus.
+const ITEM_STATUS_LIFECYCLE = [
+  'PENDING',
+  'SCHEDULED',
+  'IN_PROGRESS',
+  'EXECUTED',
+  'CANCELLED',
+] as const satisfies readonly BudgetItemStatus[]
+
+/**
+ * Statuses a user may pick for this item. EXECUTED is never offered as a
+ * *transition* — an item only becomes executed through an appointment, which is
+ * what creates the charge, and the API refuses the transition (#675). It is
+ * offered only when the item already is EXECUTED, so the control shows its own
+ * status instead of rendering blank (#677).
+ */
+export function getSettableItemStatuses(
+  item: Pick<BudgetItem, 'status'>
+): BudgetItemStatus[] {
+  return ITEM_STATUS_LIFECYCLE.filter((s) => s !== 'EXECUTED' || item.status === 'EXECUTED')
+}
+
 /**
  * Returns the amount of items in EXECUTED status vs the total. Useful for
  * progress indicators in list/card views.
