@@ -202,8 +202,14 @@ export const useBudgetsStore = create<BudgetsState>((set) => ({
       }))
       return updated
     } catch (error) {
+      const code = (error as { response?: { data?: { code?: string } } }).response?.data?.code
       set({
-        error: error instanceof Error ? error.message : 'Error al actualizar el ítem',
+        error:
+          code === 'ITEM_EXECUTED_REQUIRES_LINK'
+            ? i18n.t('budgets.errors.itemExecutedRequiresLink')
+            : error instanceof Error
+              ? error.message
+              : 'Error al actualizar el ítem',
         loading: false,
       })
       throw error

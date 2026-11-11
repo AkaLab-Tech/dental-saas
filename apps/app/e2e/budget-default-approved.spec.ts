@@ -1,11 +1,11 @@
-import { readFileSync } from 'fs'
-import { resolve } from 'path'
 import { test, expect } from './fixtures/authed'
-import { AUTH_STATE_PATH } from './global-setup'
-
-const API_URL = process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:5001'
-// Worktree-root .task-log (this package's cwd is apps/app).
-const SHOTS = resolve(process.cwd(), '../../.task-log/screenshots')
+import {
+  SHOTS,
+  budgetStatusSelect,
+  budgetWithExecutedLink,
+  newPatient,
+  readOptionValues,
+} from './fixtures/budgets'
 
 /**
  * #667: a budget is created APPROVED by default, and moving a budget with an
@@ -13,57 +13,10 @@ const SHOTS = resolve(process.cwd(), '../../.task-log/screenshots')
  * HAS_EXECUTED_ITEMS rendered as a translated message).
  * Each patient is synthetic with a unique name, opened by id; the budget is
  * pinned by its own id. No list position is used.
+ *
+ * `budgetWithExecutedLink` (shared with budget-status.spec.ts) executes the line
+ * through a real appointment, the only route the server accepts since #675.
  */
-async function api(method: string, route: string, body?: unknown) {
-  const { accessToken } = JSON.parse(readFileSync(AUTH_STATE_PATH, 'utf-8'))
-  const res = await fetch(`${API_URL}/api${route}`, {
-    method,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`${method} ${route} failed (${res.status}): ${await res.text()}`)
-  return res.json()
-}
-
-async function newPatient(prefix: string) {
-  const lastName = `${prefix}${Date.now()}`
-  const created = await api('POST', '/patients', { firstName: 'E2E', lastName })
-  const patientId: string = created.id ?? created.data?.id ?? created.patient?.id
-  expect(patientId).toBeTruthy()
-  return { patientId, lastName }
-}
-
-/** Budget with one line executed through a REAL appointment link (the server guard's authority). */
-async function budgetWithExecutedLink(patientId: string, execute: boolean) {
-  const tag = `${Date.now()}`
-  const doctor = await api('POST', '/doctors', {
-    firstName: 'E2E',
-    lastName: `Doc${tag}`,
-    workingDays: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'],
-  })
-  const b = await api('POST', `/patients/${patientId}/budgets`, {
-    items: [{ description: `Linea 667 ${tag}`, quantity: 1, unitPrice: 500 }],
-  })
-  const budget = b.data ?? b
-  expect(budget.status).toBe('APPROVED') // API default with no status sent
-  const itemIds = (budget.items as { id: string }[]).map((i) => i.id)
-  const start = new Date()
-  start.setHours(9, 0, 0, 0)
-  const appt = await api('POST', '/appointments', {
-    patientId,
-    doctorId: (doctor.data ?? doctor).id,
-    startTime: start.toISOString(),
-    endTime: new Date(start.getTime() + 30 * 60_000).toISOString(),
-    budgetItemIds: itemIds,
-  })
-  const apptId = (appt.data ?? appt).id
-  const markDone = () => api('PUT', `/appointments/${apptId}/mark-done`, { executedBudgetItemIds: itemIds })
-  if (execute) await markDone()
-  return { budget, markDone }
-}
-
-const detailSelect = (page: import('@playwright/test').Page) =>
-  page.locator('div').filter({ has: page.locator('> label', { hasText: /^Estado$/ }) }).locator('> select')
 
 test('budget create form defaults to APPROVED and persists APPROVED (#667)', async ({ authedPage: page }) => {
   const { patientId, lastName } = await newPatient('DefAprob')
@@ -99,9 +52,9 @@ test('budget with an executed line: detail picker omits DRAFT, CANCELLED stays (
 
   await page.goto(`/patients/${patientId}/budgets/${budget.id}`)
   await expect(page.getByRole('heading', { name: 'Detalles del presupuesto', level: 2 })).toBeVisible()
-  const sel = detailSelect(page)
+  const sel = budgetStatusSelect(page)
   await expect(sel).toHaveCount(1)
-  const values = await sel.locator('option:not([disabled])').evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value))
+  const values = await readOptionValues(sel)
   expect(values).not.toContain('DRAFT')
   expect(values).toContain('CANCELLED')
   await page.screenshot({ path: `${SHOTS}/667-detail-picker-omits-draft-executed.png`, fullPage: true })

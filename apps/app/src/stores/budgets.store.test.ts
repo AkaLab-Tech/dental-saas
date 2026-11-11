@@ -393,4 +393,66 @@ describe('budgets.store', () => {
       expect(useBudgetsStore.getState().currentBudget).toEqual(b)
     })
   })
+
+  // Task #675: the API refuses marking an item EXECUTED without an executed
+  // appointment link, with 409 and code ITEM_EXECUTED_REQUIRES_LINK. The
+  // budgets section renders this store's `error` verbatim, so the translation
+  // has to happen here; the axios error the client throws says only
+  // "Request failed with status code 409".
+  describe("a refused item EXECUTED (#675): the clinic reads the remedy, not axios' prose", () => {
+    const ES =
+      'No se puede marcar el ítem como ejecutado desde el presupuesto: agendá el ítem en una cita y confirmá ahí que se ejecutó.'
+    const EN =
+      "Can't mark the item executed from the budget: schedule it in an appointment and confirm the execution there."
+
+    function conflict(data: Record<string, unknown>, status = 409) {
+      const error = new Error(`Request failed with status code ${status}`)
+      return Object.assign(error, { response: { status, data: { success: false, ...data } } })
+    }
+
+    beforeEach(async () => {
+      await i18n.changeLanguage('es')
+    })
+
+    async function attemptExecute() {
+      await expect(
+        useBudgetsStore.getState().updateItem('budget-1', 'item-1', { status: 'EXECUTED' })
+      ).rejects.toThrow()
+    }
+
+    it('G6 - 409 with code ITEM_EXECUTED_REQUIRES_LINK sets the translated error, whatever the prose says', async () => {
+      // Deliberately DIFFERENT prose than the API sends: the store must key on the code.
+      vi.mocked(apiUpdateBudgetItem).mockRejectedValue(
+        conflict({ error: 'some reworded server sentence', code: 'ITEM_EXECUTED_REQUIRES_LINK' })
+      )
+      await attemptExecute()
+      expect(useBudgetsStore.getState().error).toBe(ES)
+    })
+
+    it('G6 - the same refusal in English is the English key', async () => {
+      await i18n.changeLanguage('en')
+      vi.mocked(apiUpdateBudgetItem).mockRejectedValue(
+        conflict({ code: 'ITEM_EXECUTED_REQUIRES_LINK' })
+      )
+      await attemptExecute()
+      expect(useBudgetsStore.getState().error).toBe(EN)
+    })
+
+    it('G6 discrimination - the API prose without the code is not translated', async () => {
+      vi.mocked(apiUpdateBudgetItem).mockRejectedValue(
+        conflict({
+          error:
+            'Budget item cannot be marked executed without an executed appointment link; schedule it in an appointment and confirm the execution there',
+        })
+      )
+      await attemptExecute()
+      expect(useBudgetsStore.getState().error).toBe('Request failed with status code 409')
+    })
+
+    it('G6 discrimination - another item refusal code is not translated to this message', async () => {
+      vi.mocked(apiUpdateBudgetItem).mockRejectedValue(conflict({ code: 'ITEM_NOT_FOUND' }, 404))
+      await attemptExecute()
+      expect(useBudgetsStore.getState().error).toBe('Request failed with status code 404')
+    })
+  })
 })

@@ -279,3 +279,102 @@ describe('BudgetDetailPage — metadata card (#606)', () => {
     expect(label.tagName).toBe('LABEL')
   })
 })
+
+/**
+ * Task #675. Two guards live here, both about the item-edit card:
+ *
+ *   G5  the status select no longer offers EXECUTED — an item reaches EXECUTED
+ *       through an appointment, which is what creates the charge.
+ *   G6  (component half) when the store refuses the write, the page shows the
+ *       store's localised `error`, not the axios message. The store's own half
+ *       — turning the 409 code into the localised sentence — is pinned in
+ *       stores/budgets.store.test.ts; here the store is mocked, so the message
+ *       it exposes is used verbatim as the thing the page must prefer.
+ */
+describe('BudgetDetailPage — the item-edit card (#675)', () => {
+  const STORE_ERROR =
+    'No se puede marcar el ítem como ejecutado desde el presupuesto: agendá el ítem en una cita y confirmá ahí que se ejecutó.'
+  const AXIOS_MESSAGE = 'Request failed with status code 409'
+
+  function mockStoreWith(overrides: Record<string, unknown>, storeError: string | null = null) {
+    const state = {
+      currentBudget: makeBudget(),
+      loading: false,
+      error: storeError,
+      fetchBudget: vi.fn().mockResolvedValue(makeBudget()),
+      updateBudget: vi.fn(),
+      addItem: vi.fn(),
+      updateItem: vi.fn(),
+      deleteItem: vi.fn(),
+      clearError: vi.fn(),
+      ...overrides,
+    }
+    ;(useBudgetsStore as unknown as Mock).mockReturnValue(state)
+    ;(useBudgetsStore as unknown as { getState: Mock }).getState = vi.fn().mockReturnValue(state)
+    return state
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockStoreWith({})
+    mockAuth()
+    ;(usePermissions as unknown as Mock).mockReturnValue({
+      can: () => true,
+      canAny: () => true,
+      canAll: () => true,
+    })
+  })
+
+  function openItemEditor() {
+    fireEvent.click(screen.getByLabelText('common.edit'))
+  }
+
+  function itemStatusSelect(): HTMLSelectElement {
+    const sel = screen
+      .getAllByRole('combobox')
+      .find((el) =>
+        Array.from((el as HTMLSelectElement).options).some((o) => o.value === 'PENDING')
+      )
+    return sel as HTMLSelectElement
+  }
+
+  it('G5 - the item status select offers exactly PENDING, SCHEDULED, IN_PROGRESS and CANCELLED', () => {
+    renderPage()
+    openItemEditor()
+    expect(Array.from(itemStatusSelect().options).map((o) => o.value)).toEqual([
+      'PENDING',
+      'SCHEDULED',
+      'IN_PROGRESS',
+      'CANCELLED',
+    ])
+  })
+
+  it('G5 - EXECUTED is not among the item status options', () => {
+    renderPage()
+    openItemEditor()
+    expect(Array.from(itemStatusSelect().options).map((o) => o.value)).not.toContain('EXECUTED')
+  })
+
+  it('G6 - a refused item save shows the store error, not the axios message', async () => {
+    mockStoreWith(
+      { updateItem: vi.fn().mockRejectedValue(new Error(AXIOS_MESSAGE)) },
+      STORE_ERROR
+    )
+    renderPage()
+    openItemEditor()
+    fireEvent.click(screen.getByText('common.save'))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(STORE_ERROR)
+    expect(alert).not.toHaveTextContent(AXIOS_MESSAGE)
+  })
+
+  it('G6 discrimination - with no store error the axios message is still surfaced', async () => {
+    mockStoreWith({ updateItem: vi.fn().mockRejectedValue(new Error('network down')) }, null)
+    renderPage()
+    openItemEditor()
+    fireEvent.click(screen.getByText('common.save'))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('network down')
+  })
+})

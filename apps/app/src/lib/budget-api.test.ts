@@ -145,10 +145,14 @@ describe('budget-api', () => {
   it('updateBudgetItem patches the item sub-endpoint', async () => {
     const b = makeBudget()
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { success: true, data: b } })
-    await updateBudgetItem('budget-1', 'item-1', { status: 'EXECUTED' })
+    // The sample payload is SCHEDULED, not EXECUTED: #675 made the server refuse
+    // a transition to EXECUTED on an item with no executed appointment link, and
+    // this layer's HTTP call is mocked, so an EXECUTED payload here would stay
+    // green while documenting a request the API answers with 409.
+    await updateBudgetItem('budget-1', 'item-1', { status: 'SCHEDULED' })
     expect(apiClient.patch).toHaveBeenCalledWith(
       '/budgets/budget-1/items/item-1',
-      { status: 'EXECUTED' }
+      { status: 'SCHEDULED' }
     )
   })
 

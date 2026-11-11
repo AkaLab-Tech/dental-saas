@@ -27,3 +27,9 @@ with this rule, while older history is mixed.
 Do not "repair" either direction: do not re-add trailers to new commits, and do not rewrite old
 ones. In particular, `pr-author` must not re-derive this from `git log` — the 126 older commits
 make it easy to conclude the trailer went missing by mistake.
+
+### Language
+
+Documents under `docs/clinica/` are written in Spanish, because their only reader is the clinic's
+assistant; every other deliverable (commits, PR text, code, comments, the rest of `docs/`) follows
+`deliverableLanguage`, which is English by its absence from `.atelier.json`.

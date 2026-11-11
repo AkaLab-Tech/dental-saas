@@ -45,11 +45,12 @@ const STATUS_STYLES: Record<BudgetStatus, string> = {
   CANCELLED: 'bg-red-100 text-red-700 border-red-200',
 }
 
+// EXECUTED is deliberately absent: an item only becomes executed through an appointment,
+// which is what creates the charge. The API refuses the transition from here (#675).
 const ITEM_STATUS_OPTIONS: BudgetItemStatus[] = [
   'PENDING',
   'SCHEDULED',
   'IN_PROGRESS',
-  'EXECUTED',
   'CANCELLED',
 ]
 
@@ -199,8 +200,11 @@ export default function BudgetDetailPage() {
       })
       cancelEditItem()
     } catch (e) {
+      // The store localises the server's refusal code; the error it rethrows is the raw axios
+      // one, whose message is only "Request failed with status code 409".
+      const storeError = useBudgetsStore.getState().error
       setActionError(
-        e instanceof Error ? e.message : t('budgets.errors.itemUpdateFailed')
+        storeError ?? (e instanceof Error ? e.message : t('budgets.errors.itemUpdateFailed'))
       )
     } finally {
       setActionLoading(false)
