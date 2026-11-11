@@ -80,6 +80,11 @@ const BUDGET_ERROR_MAP: Record<BudgetErrorCode, { status: number; message: strin
     message: 'Budget has a reserved advance; cancel the budget instead of deleting it',
   },
   ITEM_NOT_FOUND: { status: 404, message: 'Budget item not found' },
+  ITEM_EXECUTED_REQUIRES_LINK: {
+    status: 409,
+    message:
+      'Budget item cannot be marked executed without an executed appointment link; schedule it in an appointment and confirm the execution there',
+  },
   INVALID_STATUS_TRANSITION: { status: 400, message: 'Invalid status transition' },
 }
 

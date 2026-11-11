@@ -57,6 +57,7 @@ export type BudgetErrorCode =
   | 'HAS_EXECUTED_ITEMS'
   | 'HAS_RESERVED_ADVANCE'
   | 'ITEM_NOT_FOUND'
+  | 'ITEM_EXECUTED_REQUIRES_LINK'
   | 'INVALID_STATUS_TRANSITION'
 
 export interface BudgetItemInput {
@@ -486,10 +487,23 @@ export async function updateBudgetItem(
       id: true,
       quantity: true,
       unitPrice: true,
+      status: true,
+      appointments: { where: { role: 'EXECUTED' }, select: { id: true }, take: 1 },
     },
   })
 
   if (!item) return { success: false, code: 'ITEM_NOT_FOUND' }
+
+  // An item only becomes EXECUTED through an appointment, which is what creates the charge.
+  // Items already EXECUTED are exempt: production holds rows that reached that status before
+  // this guard existed, and the clinic must stay able to correct their description or price.
+  if (
+    input.status === 'EXECUTED' &&
+    item.status !== 'EXECUTED' &&
+    item.appointments.length === 0
+  ) {
+    return { success: false, code: 'ITEM_EXECUTED_REQUIRES_LINK' }
+  }
 
   const nextQuantity = input.quantity ?? item.quantity
   const nextUnitPrice =

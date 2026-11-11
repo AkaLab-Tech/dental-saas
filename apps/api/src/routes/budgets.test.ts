@@ -834,20 +834,22 @@ describe('Budgets routes', () => {
 
     it('G7 - the predicate is the link, not the item status: item EXECUTED with only a SCHEDULED link still allows DRAFT (red if the predicate moves onto BudgetItem.status)', async () => {
       const budget = await seedApproved()
-      // Reached through the real route (PATCH item), not a direct write: the
-      // item PATCH sets the item EXECUTED without requiring any link.
-      const itemRes = await api()
-        .patch(`/api/budgets/${budget.id}/items/${budget.items[0].id}`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({ status: 'EXECUTED' })
-      expect(itemRes.status).toBe(200)
+      // Written DIRECTLY, not through the item PATCH: #675 closed that route for
+      // an item with no EXECUTED link, and the state under test here is exactly
+      // that one — item.status EXECUTED with only a SCHEDULED link. The subject
+      // of this test is that the DRAFT refusal keys on the link, so the state has
+      // to be built by whatever means still produces it.
+      await prisma.budgetItem.update({
+        where: { id: budget.items[0].id },
+        data: { status: 'EXECUTED' },
+      })
       const appointment = await seedAppointment(true)
       await link(budget.items[0].id, appointment.id, 'SCHEDULED')
       const item = await prisma.budgetItem.findUniqueOrThrow({ where: { id: budget.items[0].id } })
       expect(item.status).toBe('EXECUTED')
-      // The item PATCH may auto-derive the budget status; put it back on APPROVED
-      // so the DRAFT target below is a real transition.
-      await prisma.budget.update({ where: { id: budget.id }, data: { status: 'APPROVED' } })
+      // A direct item write derives nothing, so the budget is still APPROVED and
+      // the DRAFT target below is a real transition.
+      expect(await statusInDb(budget.id)).toBe('APPROVED')
 
       const res = await patchBudget(budget.id, { status: 'DRAFT' })
 
@@ -897,6 +899,57 @@ describe('Budgets routes', () => {
   // PATCH /api/budgets/:id/items/:itemId
   // --------------------------------------------------------------------------
   describe('PATCH /api/budgets/:id/items/:itemId', () => {
+    let itemLinkDoctorId: string
+
+    beforeAll(async () => {
+      itemLinkDoctorId = (
+        await prisma.doctor.create({
+          data: {
+            tenantId,
+            firstName: 'Dr. Item',
+            lastName: 'Link',
+            email: `doctor-item-link-${suffix}@budgets-test.com`,
+            specialty: 'General Dentistry',
+          },
+        })
+      ).id
+    })
+
+    afterEach(async () => {
+      await prisma.appointment.deleteMany({ where: { tenantId } })
+    })
+
+    afterAll(async () => {
+      await prisma.appointment.deleteMany({ where: { tenantId } })
+      await prisma.doctor.deleteMany({ where: { id: itemLinkDoctorId } })
+    })
+
+    /**
+     * Task #675: an item only reaches EXECUTED through an appointment link, so
+     * every test below that drives `status: 'EXECUTED'` through the route has to
+     * create the link first. Each of these tests is about `deriveBudgetStatus`
+     * and keeps exercising it through the route, which is AC3's allowed path.
+     */
+    async function linkExecuted(budgetItemId: string) {
+      const start = new Date('2026-05-11T10:00:00Z')
+      const appointment = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId: itemLinkDoctorId,
+          startTime: start,
+          endTime: new Date(start.getTime() + 30 * 60_000),
+          duration: 30,
+          cost: null,
+          isActive: true,
+        },
+      })
+      await prisma.budgetItemAppointment.create({
+        data: { budgetItemId, appointmentId: appointment.id, role: 'EXECUTED' },
+      })
+      return appointment
+    }
+
     async function createBudgetWithTwoItems() {
       const res = await api()
         .post(`/api/patients/${patientId}/budgets`)
@@ -934,6 +987,7 @@ describe('Budgets routes', () => {
     it('transitions APPROVED -> PARTIAL when one item becomes EXECUTED', async () => {
       const budget = await createBudgetWithTwoItems()
       const itemA = budget.items.find((i) => i.description === 'A')!
+      await linkExecuted(itemA.id)
 
       const res = await api()
         .patch(`/api/budgets/${budget.id}/items/${itemA.id}`)
@@ -948,10 +1002,12 @@ describe('Budgets routes', () => {
       const budget = await createBudgetWithTwoItems()
 
       for (const item of budget.items) {
-        await api()
+        await linkExecuted(item.id)
+        const patched = await api()
           .patch(`/api/budgets/${budget.id}/items/${item.id}`)
           .set('Authorization', `Bearer ${adminToken}`)
           .send({ status: 'EXECUTED' })
+        expect(patched.status).toBe(200)
       }
 
       const res = await api()
@@ -963,17 +1019,24 @@ describe('Budgets routes', () => {
     it('reverts PARTIAL -> APPROVED when the executed item goes back to PENDING', async () => {
       const budget = await createBudgetWithTwoItems()
       const itemA = budget.items.find((i) => i.description === 'A')!
+      await linkExecuted(itemA.id)
 
-      await api()
+      const executed = await api()
         .patch(`/api/budgets/${budget.id}/items/${itemA.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ status: 'EXECUTED' })
+      // Asserted, not assumed: a refused first PATCH would leave the item PENDING
+      // and the budget APPROVED, and the final assertion below would then hold
+      // for the wrong reason.
+      expect(executed.status).toBe(200)
+      expect(executed.body.data.status).toBe('PARTIAL')
 
       const res = await api()
         .patch(`/api/budgets/${budget.id}/items/${itemA.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ status: 'PENDING' })
 
+      expect(res.status).toBe(200)
       expect(res.body.data.status).toBe('APPROVED')
     })
 
@@ -988,11 +1051,13 @@ describe('Budgets routes', () => {
       expect(created.body.data.status).toBe('DRAFT')
 
       const itemA = created.body.data.items[0]
+      await linkExecuted(itemA.id)
       const res = await api()
         .patch(`/api/budgets/${created.body.data.id}/items/${itemA.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ status: 'EXECUTED' })
 
+      expect(res.status).toBe(200)
       expect(res.body.data.status).toBe('DRAFT')
     })
 
@@ -1008,12 +1073,14 @@ describe('Budgets routes', () => {
         },
         include: { items: true },
       })
+      await linkExecuted(budget.items[0].id)
 
       const res = await api()
         .patch(`/api/budgets/${budget.id}/items/${budget.items[0].id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ status: 'EXECUTED' })
 
+      expect(res.status).toBe(200)
       expect(res.body.data.status).toBe('CANCELLED')
     })
 
@@ -1025,6 +1092,91 @@ describe('Budgets routes', () => {
         .send({ quantity: 2 })
 
       expect(res.status).toBe(404)
+    })
+
+    /**
+     * Task #675: 48 production budgets hold an item at EXECUTED with no
+     * EXECUTED appointment link, so the work can never be charged — the charge
+     * is created by the appointment, not by the budget. The route now refuses
+     * that transition. Both escape clauses of the guard are load-bearing and
+     * each is pinned by its own test:
+     *
+     *   G1  no link, not already EXECUTED        -> 409 ITEM_EXECUTED_REQUIRES_LINK
+     *   G2  no link, ALREADY EXECUTED            -> 200 (the 48 records stay editable)
+     *   G3  an EXECUTED link                     -> 200
+     *   G4  vacuity: no link, PENDING -> SCHEDULED -> 200 (the guard is not "refuse every change")
+     */
+    describe('Task #675: an item only becomes EXECUTED through an appointment link', () => {
+      const REFUSAL_MESSAGE =
+        'Budget item cannot be marked executed without an executed appointment link; schedule it in an appointment and confirm the execution there'
+
+      const patchItem = (budgetId: string, itemId: string, body: Record<string, unknown>) =>
+        api()
+          .patch(`/api/budgets/${budgetId}/items/${itemId}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send(body)
+
+      const itemInDb = (itemId: string) =>
+        prisma.budgetItem.findUniqueOrThrow({ where: { id: itemId } })
+
+      it('G1 - a linkless PENDING item is refused with 409 ITEM_EXECUTED_REQUIRES_LINK and stays PENDING', async () => {
+        const budget = await createBudgetWithTwoItems()
+        const itemA = budget.items.find((i) => i.description === 'A')!
+        expect((await itemInDb(itemA.id)).status).toBe('PENDING')
+
+        const res = await patchItem(budget.id, itemA.id, { status: 'EXECUTED' })
+
+        expect(res.status).toBe(409)
+        expect(res.body.code).toBe('ITEM_EXECUTED_REQUIRES_LINK')
+        expect(res.body.error).toBe(REFUSAL_MESSAGE)
+        expect((await itemInDb(itemA.id)).status).toBe('PENDING')
+      })
+
+      it('G2 - an item ALREADY EXECUTED with no link accepts a resent EXECUTED with a changed description and price', async () => {
+        const budget = await createBudgetWithTwoItems()
+        const itemA = budget.items.find((i) => i.description === 'A')!
+        // The production shape this task exists for: EXECUTED, no link. It can
+        // no longer be reached through the route, so it is written directly.
+        await prisma.budgetItem.update({ where: { id: itemA.id }, data: { status: 'EXECUTED' } })
+        expect(
+          await prisma.budgetItemAppointment.count({ where: { budgetItemId: itemA.id } })
+        ).toBe(0)
+
+        // The edit form resends the item's current status on every save, so the
+        // payload carries EXECUTED even when only the description changed.
+        const res = await patchItem(budget.id, itemA.id, {
+          description: 'A corregida',
+          unitPrice: 120,
+          status: 'EXECUTED',
+        })
+
+        expect(res.status).toBe(200)
+        const stored = await itemInDb(itemA.id)
+        expect(stored.description).toBe('A corregida')
+        expect(Number(stored.unitPrice)).toBe(120)
+        expect(stored.status).toBe('EXECUTED')
+      })
+
+      it('G3 - an item that holds an EXECUTED link accepts status EXECUTED', async () => {
+        const budget = await createBudgetWithTwoItems()
+        const itemA = budget.items.find((i) => i.description === 'A')!
+        await linkExecuted(itemA.id)
+
+        const res = await patchItem(budget.id, itemA.id, { status: 'EXECUTED' })
+
+        expect(res.status).toBe(200)
+        expect((await itemInDb(itemA.id)).status).toBe('EXECUTED')
+      })
+
+      it('G4 - vacuity control: a linkless PENDING item still accepts SCHEDULED', async () => {
+        const budget = await createBudgetWithTwoItems()
+        const itemA = budget.items.find((i) => i.description === 'A')!
+
+        const res = await patchItem(budget.id, itemA.id, { status: 'SCHEDULED' })
+
+        expect(res.status).toBe(200)
+        expect((await itemInDb(itemA.id)).status).toBe('SCHEDULED')
+      })
     })
   })
 

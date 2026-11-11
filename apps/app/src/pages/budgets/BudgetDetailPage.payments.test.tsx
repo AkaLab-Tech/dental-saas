@@ -1,12 +1,21 @@
 /**
  * Task #613 guard 7 - a write that creates a payments row leaves the row
  * rendered. The REAL budgets store and the REAL detail page run; only the
- * HTTP-facing budget-api module is mocked. Marking a line EXECUTED answers with
- * a budget that has one more visit, and the page must show N+1 rows with the new
+ * HTTP-facing budget-api module is mocked. A write that answers with a budget
+ * carrying one more visit must leave the page showing N+1 rows with the new
  * row's date and amount (a store that kept the previous `visits` stays at N).
+ *
+ * The write used to be driven through the item-edit select, setting the line to
+ * EXECUTED. Task #675 removed EXECUTED from that select (an item only becomes
+ * executed through an appointment), and jsdom will not select a value with no
+ * matching <option>: the fireEvent became a no-op, which left one of these
+ * tests red and the other GREEN FOR THE WRONG REASON — the mock answered two
+ * visits whatever the payload was. Both now call the store directly, the way
+ * the third test in this file already did, so the subject is again the
+ * re-render and not the select.
  */
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
-import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, within, act } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router'
 import i18n from 'i18next'
 import '@/i18n'
@@ -124,25 +133,33 @@ describe('BudgetDetailPage payments table (#613)', () => {
     expect(paymentsRows()).toHaveLength(1)
   })
 
-  it('GUARD 7 - marking a line EXECUTED takes the table from 1 row to 2', async () => {
+  // The write under test, issued through the real store exactly as the page's
+  // own save handler issues it. `act` is what flushes the resulting re-render.
+  async function saveItemExecuted() {
+    await act(async () => {
+      await useBudgetsStore.getState().updateItem('budget-1', 'item-2', {
+        description: 'Corona',
+        toothNumber: null,
+        quantity: 1,
+        unitPrice: 250,
+        status: 'EXECUTED',
+      })
+    })
+  }
+
+  it('GUARD 7 - a write that answers with a new visit takes the table from 1 row to 2', async () => {
     getBudgetMock.mockResolvedValue(makeBudget([FIRST_VISIT], 'PENDING'))
     updateBudgetItemMock.mockResolvedValue(makeBudget([FIRST_VISIT, NEW_VISIT], 'EXECUTED'))
     renderPage()
     await screen.findByRole('heading', { name: 'Pagos' })
     expect(paymentsRows()).toHaveLength(1)
 
-    // Edit the second line (Corona), set it EXECUTED, save.
-    const editButtons = await screen.findAllByRole('button', { name: 'Editar' })
-    fireEvent.click(editButtons[1])
-    const statusSelect = screen
-      .getAllByRole('combobox')
-      .find((el) => (el as HTMLSelectElement).value === 'PENDING') as HTMLSelectElement
-    fireEvent.change(statusSelect, { target: { value: 'EXECUTED' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+    await saveItemExecuted()
 
     await waitFor(() => expect(paymentsRows()).toHaveLength(2))
     expect(updateBudgetItemMock).toHaveBeenCalledTimes(1)
-    expect(updateBudgetItemMock.mock.calls[0][2]).toMatchObject({ status: 'EXECUTED' })
+    expect(updateBudgetItemMock.mock.calls[0][0]).toBe('budget-1')
+    expect(updateBudgetItemMock.mock.calls[0][1]).toBe('item-2')
   })
 
   it('GUARD 7 - after that write the NEW row shows its own date (14/3/2026) and amount (USD 250.00)', async () => {
@@ -150,14 +167,9 @@ describe('BudgetDetailPage payments table (#613)', () => {
     updateBudgetItemMock.mockResolvedValue(makeBudget([FIRST_VISIT, NEW_VISIT], 'EXECUTED'))
     renderPage()
     await screen.findByRole('heading', { name: 'Pagos' })
+    expect(paymentsRows()).toHaveLength(1)
 
-    const editButtons = await screen.findAllByRole('button', { name: 'Editar' })
-    fireEvent.click(editButtons[1])
-    const statusSelect = screen
-      .getAllByRole('combobox')
-      .find((el) => (el as HTMLSelectElement).value === 'PENDING') as HTMLSelectElement
-    fireEvent.change(statusSelect, { target: { value: 'EXECUTED' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+    await saveItemExecuted()
 
     await waitFor(() => expect(paymentsRows()).toHaveLength(2))
     const cells = Array.from(paymentsRows()[1].querySelectorAll('td')).map((td) => norm(td.textContent))

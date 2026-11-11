@@ -900,6 +900,7 @@
       "pdfDownloadFailed": "Couldn't download the PDF",
       "shareFailed": "Couldn't generate the share link",
       "hasExecutedItems": "Can't move to draft: the budget has executed items. Cancel the budget instead.",
+      "itemExecutedRequiresLink": "Can't mark the item executed from the budget: schedule it in an appointment and confirm the execution there.",
       "hasBilledItems": "Can't delete: the budget has executed items that are already billed. Cancel the budget instead of deleting it.",
       "hasReservedAdvance": "Can't delete: the budget has a reserved advance payment. Cancel the budget instead of deleting it."
     }
