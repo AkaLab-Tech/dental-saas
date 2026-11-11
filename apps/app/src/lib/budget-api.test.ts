@@ -10,6 +10,7 @@ import {
   deleteBudgetItem,
   getExecutedItemsCount,
   getSettableBudgetStatuses,
+  getSettableItemStatuses,
   shareBudget,
   type Budget,
   type BudgetItem,
@@ -235,5 +236,29 @@ describe('budget-api', () => {
       const budget = makeBudget({ items: [makeItem({ id: 'a', status: 'CANCELLED' })] })
       expect(getSettableBudgetStatuses(budget)).toContain('DRAFT')
     })
+  })
+
+  describe('getSettableItemStatuses (#677)', () => {
+    it('G6 - an EXECUTED item is offered all five statuses in lifecycle order', () => {
+      expect(getSettableItemStatuses({ status: 'EXECUTED' })).toEqual([
+        'PENDING',
+        'SCHEDULED',
+        'IN_PROGRESS',
+        'EXECUTED',
+        'CANCELLED',
+      ])
+    })
+
+    it.each(['PENDING', 'SCHEDULED', 'IN_PROGRESS', 'CANCELLED'] as const)(
+      'G6 - a %s item is offered the base four, never EXECUTED',
+      (status) => {
+        expect(getSettableItemStatuses({ status })).toEqual([
+          'PENDING',
+          'SCHEDULED',
+          'IN_PROGRESS',
+          'CANCELLED',
+        ])
+      }
+    )
   })
 })

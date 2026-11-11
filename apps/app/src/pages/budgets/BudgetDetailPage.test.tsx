@@ -355,6 +355,74 @@ describe('BudgetDetailPage — the item-edit card (#675)', () => {
     expect(Array.from(itemStatusSelect().options).map((o) => o.value)).not.toContain('EXECUTED')
   })
 
+  const optionValues = (sel: HTMLSelectElement) => Array.from(sel.options).map((o) => o.value)
+  const BASE_FOUR = ['PENDING', 'SCHEDULED', 'IN_PROGRESS', 'CANCELLED']
+
+  function openExecutedItemEditor() {
+    const updateItem = vi.fn().mockResolvedValue(undefined)
+    mockStoreWith({
+      currentBudget: makeBudget({ items: [makeItem({ status: 'EXECUTED' })] }),
+      updateItem,
+    })
+    renderPage()
+    openItemEditor()
+    return updateItem
+  }
+
+  it('#677 G1 - an EXECUTED item editor shows EXECUTED selected, with the full lifecycle in order', () => {
+    openExecutedItemEditor()
+    const sel = itemStatusSelect()
+    expect(sel.value).toBe('EXECUTED')
+    expect(optionValues(sel)).toEqual([
+      'PENDING',
+      'SCHEDULED',
+      'IN_PROGRESS',
+      'EXECUTED',
+      'CANCELLED',
+    ])
+  })
+
+  it.each(['SCHEDULED', 'IN_PROGRESS', 'CANCELLED'] as const)(
+    '#677 G3 - a %s item does not offer EXECUTED',
+    (status) => {
+      mockStoreWith({ currentBudget: makeBudget({ items: [makeItem({ status })] }) })
+      renderPage()
+      openItemEditor()
+      const sel = itemStatusSelect()
+      expect(optionValues(sel)).not.toContain('EXECUTED')
+      expect(optionValues(sel)).toEqual(BASE_FOUR)
+      expect(sel.value).toBe(status)
+    }
+  )
+
+  it('#677 G4 - saving an EXECUTED item without touching the status keeps EXECUTED', async () => {
+    const updateItem = openExecutedItemEditor()
+    fireEvent.change(screen.getByDisplayValue('Cleaning'), { target: { value: 'Cleaning x2' } })
+    fireEvent.click(screen.getByText('common.save'))
+
+    await waitFor(() => expect(updateItem).toHaveBeenCalledTimes(1))
+    expect(updateItem.mock.calls[0][2]).toMatchObject({
+      description: 'Cleaning x2',
+      status: 'EXECUTED',
+    })
+  })
+
+  it('#677 G5 - an EXECUTED item can go to PENDING and back to EXECUTED within one session', async () => {
+    const updateItem = openExecutedItemEditor()
+    const sel = itemStatusSelect()
+
+    fireEvent.change(sel, { target: { value: 'PENDING' } })
+    expect(itemStatusSelect().value).toBe('PENDING')
+    expect(optionValues(itemStatusSelect())).toContain('EXECUTED')
+
+    fireEvent.change(itemStatusSelect(), { target: { value: 'EXECUTED' } })
+    expect(itemStatusSelect().value).toBe('EXECUTED')
+    fireEvent.click(screen.getByText('common.save'))
+
+    await waitFor(() => expect(updateItem).toHaveBeenCalledTimes(1))
+    expect(updateItem.mock.calls[0][2]).toMatchObject({ status: 'EXECUTED' })
+  })
+
   it('G6 - a refused item save shows the store error, not the axios message', async () => {
     mockStoreWith(
       { updateItem: vi.fn().mockRejectedValue(new Error(AXIOS_MESSAGE)) },
