@@ -874,11 +874,39 @@ export async function getPatientAccountStatement(
       where: { tenantId, patientId, isActive: true, kind: 'ADVANCE' },
       _sum: { amount: true },
     }),
-    // Single grouped aggregate over the join: bounded query count regardless
-    // of how many budgets the patient has.
+    // BUDGET_ITEM_PROJECTION_COMPLEMENTS_BILLING: the projection of pending
+    // budget work excludes exactly what BUDGET_ITEM_BILLABLE_AUTHORITY (see
+    // getBillableItems) charges, so an item is never billed and projected at
+    // once. The signal is the EXECUTED link on a live, non-superseded
+    // appointment, never BudgetItem.status: an item can leave EXECUTED while
+    // its link stays, and the link is what bills.
+    //   - role 'EXECUTED' + appointment.isActive: the where of the link query
+    //     in getBillableItems. Drop isActive and an item whose link sits on an
+    //     inactive appointment (not billed) vanishes from both figures.
+    //   - NOT_SUPERSEDED_BY_APPOINTMENT_COST: the per-link #590 skip. Drop it
+    //     and an item whose only link sits on a costed visit (the visit's own
+    //     cost is the charge, the item is not billed) is excluded here while
+    //     nobody bills it.
+    // Deliberately absent:
+    //   - appointment.status != CANCELLED. That filter belongs only to the
+    //     appointments-as-charges query; the link query has none, and CANCELLED
+    //     is a member of NOT_SUPERSEDED_BY_APPOINTMENT_COST, so a link on a
+    //     cancelled-but-active appointment DOES bill. Adding it would
+    //     reintroduce the double count for cancelled visits.
+    //   - the JS `cost <= 0` skip: such an item is not billed and is excluded
+    //     here, but it contributes 0 to either figure, so it is unobservable.
+    // Still a single grouped aggregate: a relation filter adds no query, so
+    // the query count stays bounded regardless of how many budgets the
+    // patient has.
     prisma.budgetItem.aggregate({
       where: {
         status: { notIn: ['EXECUTED', 'CANCELLED'] },
+        appointments: {
+          none: {
+            role: 'EXECUTED',
+            appointment: { isActive: true, ...NOT_SUPERSEDED_BY_APPOINTMENT_COST },
+          },
+        },
         budget: {
           tenantId,
           patientId,
