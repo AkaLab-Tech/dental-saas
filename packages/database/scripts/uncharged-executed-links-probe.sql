@@ -118,7 +118,8 @@ ORDER BY 1, 2, 3;
 \echo
 \echo '####  (1c) CONTROLS for (1) and (2)  ####'
 \echo 'all_buckets must equal draft_live in (C); exec_links must equal items (more = BUDGET_ITEM_ONCE_PER_ITEM broken by the join);'
-\echo 'scheduled_links should be 48 (0 = the role join is wrong, not that links are missing);'
+\echo 'scheduled_links must be 41, which is 48 - 7: none of the seven stranded items retains its SCHEDULED link (#681).'
+\echo '0 = the role join is wrong, not that links are missing;'
 \echo 'inactive_appt_statuses_db = 1 means the group-by cannot tell statuses apart and the 2/5 split proves nothing'
 WITH live_drafts AS (
   SELECT b."id" FROM "budgets" b WHERE b."status" = 'DRAFT' AND b."isActive" = true
