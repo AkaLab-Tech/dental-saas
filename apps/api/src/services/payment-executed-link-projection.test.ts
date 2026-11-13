@@ -7,6 +7,7 @@ import {
   type PatientAccountStatement,
 } from './payment.service.js'
 import { createBudget, updateBudgetItem } from './budget.service.js'
+import { restoreAppointment } from './appointment.service.js'
 import { confirmExecutedBudgetItems, setAppointmentBudgetItems } from './budget-appointment.service.js'
 
 /**
@@ -313,6 +314,137 @@ describe('remainingBudgetProjection excludes exactly what the EXECUTED link bill
 
     it('projection half: the item is projected again — 1300 + 2400 = 3700', async () => {
       expect((await statement(fixture.patientId)).remainingBudgetProjection).toBe(3700)
+    })
+  })
+
+  // ------------------------------------------------------------------
+  // G2-R / G2-R-COST - THE INVERSE OF G2 (#685). Start from G2's state (item
+  // PENDING, live EXECUTED link, appointment soft-deleted), then restore the
+  // appointment through the real restoreAppointment (writes isActive true,
+  // status SCHEDULED). The two cases differ on ONE axis: the typed
+  // appointment cost. Everything else, including the order of operations, is
+  // identical.
+  // ------------------------------------------------------------------
+  async function buildSoftDeletedThenRestored(opts: {
+    label: string
+    linkedPrice: number
+    unlinkedPrice: number
+    appointmentCost: number | null
+  }) {
+    const fixture = await buildExecutedThenPendingCase(opts)
+    // G2's state: only the appointment moves, the item keeps status and link.
+    // Every fixture seeds at(0) for the one shared doctor, and restoring runs
+    // checkTimeConflict against the other cases' active visits, so this
+    // appointment gets a slot of its own first (a slot is not an axis here).
+    seq += 1
+    const slot = at(100 + seq)
+    await prisma.appointment.update({
+      where: { id: fixture.appointmentId },
+      data: { isActive: false, startTime: slot, endTime: new Date(slot.getTime() + 30 * 60_000) },
+    })
+    expect(await listBillableItems(tenantId, fixture.patientId)).toEqual([])
+
+    const restored = await restoreAppointment(tenantId, fixture.appointmentId, null)
+    if (restored.error) throw new Error(`fixture: restoreAppointment failed: ${restored.error.code}`)
+
+    const appointment = await prisma.appointment.findUniqueOrThrow({
+      where: { id: fixture.appointmentId },
+      select: { isActive: true, status: true, cost: true },
+    })
+    expect(appointment.isActive).toBe(true)
+    expect(appointment.status).toBe('SCHEDULED')
+    expect(appointment.cost?.toNumber() ?? null).toBe(opts.appointmentCost)
+    // The item itself was not touched by the restore.
+    expect(await executedLinkCount(fixture.linkedItemId)).toBe(1)
+    expect(
+      (
+        await prisma.budgetItem.findUniqueOrThrow({
+          where: { id: fixture.linkedItemId },
+          select: { status: true },
+        })
+      ).status
+    ).toBe('PENDING')
+    return fixture
+  }
+
+  describe('G2-R: restoring the soft-deleted appointment moves the item from the projection into totalBilled', () => {
+    let fixture: Awaited<ReturnType<typeof buildExecutedThenPendingCase>>
+
+    beforeAll(async () => {
+      fixture = await buildSoftDeletedThenRestored({
+        label: 'G2-R',
+        linkedPrice: 1700,
+        unlinkedPrice: 2300,
+        appointmentCost: null,
+      })
+    })
+
+    it('billing half: the item bills 1700 again through its EXECUTED link', async () => {
+      const billable = await listBillableItems(tenantId, fixture.patientId)
+      expect(billable).toHaveLength(1)
+      expect(billable[0]).toMatchObject({
+        id: fixture.linkedItemId,
+        type: 'budgetItem',
+        cost: 1700,
+        appointmentId: fixture.appointmentId,
+      })
+      expect(await balance(fixture.patientId)).toEqual({
+        totalDebt: 1700,
+        totalPaid: 0,
+        outstanding: 1700,
+        credit: 0,
+      })
+    })
+
+    it('projection half: the item leaves the projection, which is exactly the unlinked 2300', async () => {
+      expect((await statement(fixture.patientId)).remainingBudgetProjection).toBe(2300)
+    })
+
+    it('the statement moves 1700 into totalBilled and never counts it on both sides', async () => {
+      const data = await statement(fixture.patientId)
+      expect(data.totalBilled).toBe(1700)
+      expect(data.totalBilled + data.remainingBudgetProjection).toBe(4000)
+    })
+  })
+
+  describe('G2-R-COST: restoring with a typed appointment cost bills the visit, not the item (#590)', () => {
+    let fixture: Awaited<ReturnType<typeof buildExecutedThenPendingCase>>
+
+    beforeAll(async () => {
+      fixture = await buildSoftDeletedThenRestored({
+        label: 'G2-R-COST',
+        linkedPrice: 1700,
+        unlinkedPrice: 2300,
+        appointmentCost: 1500,
+      })
+    })
+
+    it("billing half: the visit's own 1500 bills, as an appointment", async () => {
+      const billable = await listBillableItems(tenantId, fixture.patientId)
+      expect(billable).toHaveLength(1)
+      expect(billable[0]).toMatchObject({
+        id: fixture.appointmentId,
+        type: 'appointment',
+        cost: 1500,
+      })
+      expect(await balance(fixture.patientId)).toEqual({
+        totalDebt: 1500,
+        totalPaid: 0,
+        outstanding: 1500,
+        credit: 0,
+      })
+    })
+
+    it('billing half: the item does not bill, superseded by the typed cost', async () => {
+      const billable = await listBillableItems(tenantId, fixture.patientId)
+      expect(billable.map((i) => i.id)).not.toContain(fixture.linkedItemId)
+      expect(billable.filter((i) => i.type === 'budgetItem')).toEqual([])
+    })
+
+    it('projection half: the item stays projected — 1700 + 2300 = 4000 — while totalBilled is 1500', async () => {
+      const data = await statement(fixture.patientId)
+      expect(data.remainingBudgetProjection).toBe(4000)
+      expect(data.totalBilled).toBe(1500)
     })
   })
 

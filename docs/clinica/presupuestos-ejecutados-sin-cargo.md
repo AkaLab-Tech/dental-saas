@@ -1,4 +1,4 @@
-# Presupuestos en Borrador con una línea Ejecutada: no los toques
+# Presupuestos en Borrador con una línea Ejecutada: no los toques, salvo el grupo de 7
 
 ## Corrección
 
@@ -22,8 +22,13 @@ suposición:
 
 ## Qué hacer
 
-Una sola cosa: avisá cuál es el registro y no cambies nada. Con el aviso alcanza; no hay nada que
-corregir en pantalla.
+Para los 41 que ya están cobrados, una sola cosa: avisá cuál es el registro y no cambies nada. Con
+el aviso alcanza; no hay nada que corregir en pantalla.
+
+Para el grupo de 7, el de la cita dada de baja, **ahora sí hay un procedimiento** y es tuyo:
+[Recuperar las citas borradas que se habían llevado el cobro de un
+trabajo](recuperar-citas-borradas-con-trabajo-ejecutado.md). Seguilo solo con la lista aprobada en
+la mano, y solo para las citas que estén en esa lista.
 
 ## Lo que no hay que hacer
 
@@ -37,6 +42,14 @@ corregir en pantalla.
 
 ## Lo que queda abierto
 
-El grupo chico de 7, el de la cita cancelada, puede tener trabajo sin cobrar y se lo está mirando.
-Por ahora no hay nada que hacer con ellos en el escritorio: avisá si te cruzás con uno y no
-cambies nada.
+El grupo chico de 7, el de la cita dada de baja, ya se midió: esos 7 **sí** tienen trabajo sin
+cobrar, y la causa es que la cita a la que estaba asociado el trabajo fue borrada; al borrarse se
+llevó el cobro. Eso ya no está en estudio y ya tiene procedimiento: se arregla restaurando la cita
+desde la pantalla de Citas, que es algo que podés hacer vos.
+
+El cómo está en [Recuperar las citas borradas que se habían llevado el cobro de un
+trabajo](recuperar-citas-borradas-con-trabajo-ejecutado.md), que además explica por qué esto
+reemplaza el "esas 7 las arreglo yo, no toques nada" del 12 de noviembre.
+
+Lo único que queda abierto es cuáles son las citas exactas: no se aplica nada antes de que te
+llegue la lista aprobada.
