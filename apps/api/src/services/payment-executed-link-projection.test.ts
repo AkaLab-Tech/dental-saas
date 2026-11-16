@@ -10,8 +10,10 @@ import {
 import { createBudget, updateBudgetItem } from './budget.service.js'
 import {
   deleteAppointment,
+  getAppointmentById,
   restoreAppointment,
   updateAppointment,
+  type UpdateAppointmentInput,
 } from './appointment.service.js'
 import { confirmExecutedBudgetItems, setAppointmentBudgetItems } from './budget-appointment.service.js'
 
@@ -1384,6 +1386,639 @@ describe('remainingBudgetProjection excludes exactly what the EXECUTED link bill
           outstanding: 8300,
           credit: 0,
         })
+      })
+    })
+  })
+
+  // ==================================================================
+  // #685 PART 3. G7 — THE SCREEN'S OWN PAYLOAD, not `{ cost: null }`.
+  //
+  // Part 2 left plan G7 unwritten and said so above: it was gated on a
+  // production dry-run this chain could not run. The dry-run has now run
+  // (part 2, `6b40c30`), and record 2 of the recovery is a stranded
+  // EXECUTED item (3000) on a soft-deleted appointment that carries a
+  // typed cost of 1500 AND is isPaid. Step 3 of its recovery is "clear
+  // the Costo field", and the clinic does that from
+  // AppointmentFormModal, which does NOT send `{ cost: null }`: it sends
+  // the whole form. G13-A measured the cost-only payload. G7 measures
+  // what the screen sends.
+  //
+  // The modal's handleFormSubmit is the specification of EDIT_MODAL_PAYLOAD
+  // below: patientId, doctorId, startTime, endTime, type, notes, cost,
+  // status and budgetItemIds always; paidAmount only when the operator
+  // typed one; isPaid NEVER — the field does not exist in the form. The
+  // route (PUT /api/appointments/:id) then runs updateAppointment first
+  // and setAppointmentBudgetItems after, and that ordering is reproduced
+  // by routePutAppointment, because a half-applied record (cost cleared,
+  // link write refused) would only appear in that order.
+  //
+  // Axes varied SEPARATELY, each watched failing on its own variant:
+  //   (a) payload shape:      full modal payload (G7-A) vs cost-only (G7-B)
+  //   (b) isPaid:             true (G7-A) vs false with a payment present (G7-C)
+  //   (c) budgetItemIds `[]`: no SCHEDULED link to lose (G7-A) vs a live
+  //                           SCHEDULED link on the other item, which the
+  //                           replace-set DOES remove (G7-D) — the known
+  //                           positive without which G7-A's `[]` is vacuous
+  //   (d) status:             SCHEDULED (G7-A) vs CANCELLED (G7-E), the
+  //                           route's release branch
+  //   plus the paidAmount axis: absent (G7-F) vs typed (G7-G), measured on a
+  //   record whose hasRecordedPayment is FALSE — which is record 2's own
+  //   shape in production (its APPOINTMENT-kind payment is inactive /
+  //   REVERSED), so the Pagado field is EDITABLE there and "leave it empty"
+  //   is a load-bearing instruction rather than something the UI enforces.
+  //   `register()`'s `disabled` is keyed on hasRecordedPayment, never on
+  //   isAlreadyPaid, so an isPaid record does not lock that field by itself.
+  //
+  // G7-H is the vacuity control: with the clearing write OMITTED, the
+  // "the item bills 3000" assertion of G7-A reads 0 instead.
+  //
+  // FALSIFIER: if the full payload is refused, or the cost survives, or any
+  // payment moves, deactivates, changes amount or reverts to ADVANCE on the
+  // SCHEDULED write, then the clinic cannot perform step 3 on record 2 and
+  // record 2 leaves this task. That is reported, never relaxed here.
+  // ==================================================================
+
+  /** Record 2's two figures. The item is what must end up billing. */
+  const RECORD_2_ITEM_PRICE = 3000
+  const RECORD_2_TYPED_COST = 1500
+
+  type EditModalPayload = UpdateAppointmentInput & { budgetItemIds?: string[] }
+
+  async function scheduledLinkCount(itemId: string): Promise<number> {
+    return prisma.budgetItemAppointment.count({
+      where: { budgetItemId: itemId, role: 'SCHEDULED' },
+    })
+  }
+
+  /** What listBillableItems charges for ONE item, 0 when it charges nothing. */
+  async function itemChargeFor(patientId: string, itemId: string): Promise<number> {
+    const billable = await listBillableItems(tenantId, patientId)
+    const charge = billable.find((i) => i.type === 'budgetItem' && i.id === itemId)
+    return charge ? charge.cost : 0
+  }
+
+  async function paymentIdentityFor(appointmentId: string) {
+    return prisma.patientPayment.findFirst({
+      where: { tenantId, appointmentId },
+      select: { id: true, createdAt: true },
+    })
+  }
+
+  /**
+   * The payload AppointmentFormModal sends for an edit whose Costo field was
+   * emptied. Built from the row itself because the form is pre-filled from it:
+   * the modal always re-sends patient, doctor and the time window, so
+   * updateAppointment's checkTimeConflict runs on this write too.
+   *
+   * No `isPaid` key: the form has no such field. `paidAmount` only when
+   * `typedPaidAmount` is given, because `data.paidAmount ? parseFloat(...) :
+   * undefined` drops an empty field.
+   */
+  async function editModalPayload(opts: {
+    appointmentId: string
+    status: 'SCHEDULED' | 'CANCELLED'
+    budgetItemIds: string[]
+    typedPaidAmount?: number
+  }): Promise<EditModalPayload> {
+    const row = await prisma.appointment.findUniqueOrThrow({
+      where: { id: opts.appointmentId },
+      select: { patientId: true, startTime: true, endTime: true },
+    })
+    const payload: EditModalPayload = {
+      patientId: row.patientId,
+      doctorId,
+      startTime: row.startTime,
+      endTime: row.endTime,
+      type: 'Control',
+      notes: 'Costo corregido',
+      cost: null,
+      status: opts.status,
+      budgetItemIds: opts.budgetItemIds,
+    }
+    if (opts.typedPaidAmount !== undefined) payload.paidAmount = opts.typedPaidAmount
+    expect('isPaid' in payload).toBe(false)
+    return payload
+  }
+
+  /**
+   * PUT /api/appointments/:id, in the route's own order: updateAppointment,
+   * then the budgetItemIds replace-set, then — only for a CANCELLED status —
+   * the release set. Returns the refusal code instead of throwing, because
+   * "the write is not refused" is one of G7's assertions.
+   */
+  async function routePutAppointment(
+    appointmentId: string,
+    payload: EditModalPayload
+  ): Promise<{ refused: string | null }> {
+    const { budgetItemIds, ...appointmentData } = payload
+    const result = await updateAppointment(tenantId, appointmentId, appointmentData, null)
+    if (result.error) return { refused: result.error.code }
+    if (budgetItemIds !== undefined) {
+      const linkResult = await setAppointmentBudgetItems(
+        tenantId,
+        appointmentId,
+        budgetItemIds,
+        null
+      )
+      if (!linkResult.success) return { refused: linkResult.code }
+    }
+    if (appointmentData.status === 'CANCELLED') {
+      const releaseResult = await setAppointmentBudgetItems(tenantId, appointmentId, [], null)
+      if (!releaseResult.success) return { refused: releaseResult.code }
+    }
+    return { refused: null }
+  }
+
+  /**
+   * Record 2's shape, reached through the real services only.
+   *
+   * The delete half is the ROUTE's delete, not just the service's:
+   * DELETE /api/appointments/:id runs deleteAppointment and then
+   * setAppointmentBudgetItems(id, []), and that release is why the seven
+   * stranded items of #681 hold no SCHEDULED link today
+   * (scheduled_links = 41 = 48 - 7). Without it the fixture would keep a
+   * SCHEDULED link the production record does not have, and axis (c) would
+   * measure the wrong state.
+   */
+  async function buildRecord2Shape(opts: {
+    label: string
+    unlinkedPrice: number
+    /** null: no payment at all, so hasRecordedPayment is false. */
+    paidAmount: number | null
+    /** Gives the OTHER item a live SCHEDULED link for axis (c)/(d). */
+    scheduleUnlinkedItem: boolean
+  }) {
+    const fixture = await buildExecutedThenPendingCase({
+      label: opts.label,
+      linkedPrice: RECORD_2_ITEM_PRICE,
+      unlinkedPrice: opts.unlinkedPrice,
+      appointmentCost: RECORD_2_TYPED_COST,
+    })
+    seq += 1
+    const slot = at(600 + seq)
+    await moveAppointment(fixture.appointmentId, slot)
+
+    if (opts.paidAmount !== null) {
+      const paid = await updateAppointment(
+        tenantId,
+        fixture.appointmentId,
+        { paidAmount: opts.paidAmount },
+        null
+      )
+      if (paid.error) throw new Error(`fixture: updateAppointment failed: ${paid.error.code}`)
+    }
+
+    const deleted = await deleteAppointment(tenantId, fixture.appointmentId, null)
+    if (deleted.error) throw new Error(`fixture: deleteAppointment failed: ${deleted.error.code}`)
+    const released = await setAppointmentBudgetItems(tenantId, fixture.appointmentId, [], null)
+    if (!released.success) throw new Error(`fixture: release failed: ${released.code}`)
+    // Record 2's shape: the EXECUTED link survived the release, the SCHEDULED
+    // one did not, and the item is PENDING (asserted by the inner builder).
+    expect(await executedLinkCount(fixture.linkedItemId)).toBe(1)
+    expect(await scheduledLinkCount(fixture.linkedItemId)).toBe(0)
+
+    const restored = await restoreAppointment(tenantId, fixture.appointmentId, null)
+    if (restored.error) throw new Error(`fixture: restoreAppointment failed: ${restored.error.code}`)
+
+    if (opts.scheduleUnlinkedItem) {
+      // A live SCHEDULED link that a replace-set is able to destroy. It sits
+      // on the OTHER item of the same budget, which is the shape the clinic
+      // would face with a second planned line on the same budget.
+      const scheduled = await setAppointmentBudgetItems(
+        tenantId,
+        fixture.appointmentId,
+        [fixture.unlinkedItemId],
+        null
+      )
+      if (!scheduled.success) throw new Error(`fixture: schedule failed: ${scheduled.code}`)
+      expect(await scheduledLinkCount(fixture.unlinkedItemId)).toBe(1)
+      expect(await scheduledLinkCount(fixture.linkedItemId)).toBe(0)
+      expect(await executedLinkCount(fixture.linkedItemId)).toBe(1)
+    }
+
+    const before = await prisma.appointment.findUniqueOrThrow({
+      where: { id: fixture.appointmentId },
+      select: { isActive: true, status: true, cost: true, isPaid: true },
+    })
+    expect(before.isActive).toBe(true)
+    // The precondition of updateAppointment's `restoredNow` branch, measured
+    // rather than assumed: it needs existing.status === 'CANCELLED', and after
+    // the restore the row is SCHEDULED, so the only money-moving branch
+    // reachable without a paidAmount cannot fire on the clearing write.
+    expect(before.status).toBe('SCHEDULED')
+    expect(before.cost?.toNumber()).toBe(RECORD_2_TYPED_COST)
+
+    // Read BEFORE the clearing write, because every G7 case runs that write in
+    // its own beforeAll: a test body can only ever see the after-state.
+    const itemChargeBefore = await itemChargeFor(fixture.patientId, fixture.linkedItemId)
+    const recorded = await getAppointmentById(tenantId, fixture.appointmentId)
+    const paymentBefore = await paymentIdentityFor(fixture.appointmentId)
+    const eventsBefore = paymentBefore
+      ? await prisma.patientPaymentEvent.count({ where: { paymentId: paymentBefore.id } })
+      : 0
+    const paymentCountBefore = await prisma.patientPayment.count({
+      where: { tenantId, patientId: fixture.patientId },
+    })
+
+    return {
+      ...fixture,
+      isPaidBefore: before.isPaid,
+      itemChargeBefore,
+      hasRecordedPaymentBefore: !!recorded?.hasRecordedPayment,
+      paymentBefore,
+      eventsBefore,
+      paymentCountBefore,
+    }
+  }
+
+  type Record2Fixture = Awaited<ReturnType<typeof buildRecord2Shape>>
+
+  /** The falsifier, as assertions: nothing about the payment may have moved. */
+  async function expectPaymentUntouched(fixture: Record2Fixture, expectedAmount: number | null) {
+    const row = await paymentRowFor(fixture.appointmentId)
+    if (expectedAmount === null) {
+      expect(row).toBeNull()
+    } else {
+      expect(row).toEqual({
+        kind: 'APPOINTMENT',
+        isActive: true,
+        amount: expectedAmount,
+        appointmentId: fixture.appointmentId,
+      })
+    }
+    // No payment invented, and none destroyed.
+    expect(
+      await prisma.patientPayment.count({ where: { tenantId, patientId: fixture.patientId } })
+    ).toBe(fixture.paymentCountBefore)
+    // Nothing reverted to ADVANCE: that is what a `cancelledNow` would do, and
+    // it is the money move the SCHEDULED write must not make.
+    expect(
+      await prisma.patientPayment.count({
+        where: { tenantId, patientId: fixture.patientId, kind: 'ADVANCE' },
+      })
+    ).toBe(0)
+    if (fixture.paymentBefore) {
+      // IDENTITY, not field values: a deleted-and-recreated field-identical row
+      // already left this suite green once in this task.
+      const identity = await prisma.patientPayment.findFirstOrThrow({
+        where: { tenantId, appointmentId: fixture.appointmentId },
+        select: { id: true, createdAt: true },
+      })
+      expect(identity.id).toBe(fixture.paymentBefore.id)
+      expect(identity.createdAt.getTime()).toBe(fixture.paymentBefore.createdAt.getTime())
+      expect(fixture.eventsBefore).toBeGreaterThan(0)
+      expect(
+        await prisma.patientPaymentEvent.count({ where: { paymentId: fixture.paymentBefore.id } })
+      ).toBe(fixture.eventsBefore)
+    }
+  }
+
+  /** The cost is gone and the item bills — the two halves of step 3 itself. */
+  async function expectStepThreeApplied(fixture: Record2Fixture) {
+    expect(
+      (
+        await prisma.appointment.findUniqueOrThrow({
+          where: { id: fixture.appointmentId },
+          select: { cost: true },
+        })
+      ).cost
+    ).toBeNull()
+    expect(await itemChargeFor(fixture.patientId, fixture.linkedItemId)).toBe(RECORD_2_ITEM_PRICE)
+    expect(await executedLinkCount(fixture.linkedItemId)).toBe(1)
+  }
+
+  describe('G7-A: the full edit-modal payload clears the Costo of a paid restored visit (record 2)', () => {
+    let fixture: Record2Fixture
+    let refused: string | null
+
+    beforeAll(async () => {
+      fixture = await buildRecord2Shape({
+        label: 'G7-A',
+        unlinkedPrice: 3100,
+        paidAmount: RECORD_2_TYPED_COST,
+        scheduleUnlinkedItem: false,
+      })
+      const payload = await editModalPayload({
+        appointmentId: fixture.appointmentId,
+        status: 'SCHEDULED',
+        budgetItemIds: [],
+      })
+      refused = (await routePutAppointment(fixture.appointmentId, payload)).refused
+    })
+
+    it('BEFORE: the record really is record 2 — isPaid, typed 1500 billing, item at 0', () => {
+      expect(fixture.isPaidBefore).toBe(true)
+      expect(fixture.itemChargeBefore).toBe(0)
+      expect(fixture.paymentCountBefore).toBe(1)
+    })
+
+    it('the full payload is NOT refused: no CANNOT_UNMARK_PAID, no link error', () => {
+      expect(refused).toBeNull()
+    })
+
+    it('the cost is null afterwards and the item bills 3000 through its surviving EXECUTED link', async () => {
+      await expectStepThreeApplied(fixture)
+    })
+
+    it('the paid payment is the SAME ROW, still APPOINTMENT at 1500, with its events intact', async () => {
+      await expectPaymentUntouched(fixture, RECORD_2_TYPED_COST)
+    })
+
+    it('neither money-moving branch fired: the row stayed SCHEDULED and isPaid', async () => {
+      const after = await prisma.appointment.findUniqueOrThrow({
+        where: { id: fixture.appointmentId },
+        select: { status: true, isPaid: true },
+      })
+      // `cancelledNow` would have written isPaid false and an ADVANCE;
+      // `restoredNow` needs a CANCELLED row to start from. Neither can be true
+      // here, and the observable consequences of both are absent.
+      expect(after.status).toBe('SCHEDULED')
+      expect(after.isPaid).toBe(true)
+    })
+
+    it('the balance is the item price against the same 1500 paid: 3000 - 1500 = 1500 outstanding', async () => {
+      expect(await balance(fixture.patientId)).toEqual({
+        totalDebt: RECORD_2_ITEM_PRICE,
+        totalPaid: RECORD_2_TYPED_COST,
+        outstanding: 1500,
+        credit: 0,
+      })
+      const billable = await listBillableItems(tenantId, fixture.patientId)
+      expect(billable).toHaveLength(1)
+      expect(billable[0]).toMatchObject({ id: fixture.linkedItemId, type: 'budgetItem' })
+    })
+  })
+
+  describe('G7-B (axis a): the cost-only payload reaches the same end state', () => {
+    let fixture: Record2Fixture
+    let refused: string | null
+
+    beforeAll(async () => {
+      fixture = await buildRecord2Shape({
+        label: 'G7-B',
+        unlinkedPrice: 3200,
+        paidAmount: RECORD_2_TYPED_COST,
+        scheduleUnlinkedItem: false,
+      })
+      const result = await updateAppointment(
+        tenantId,
+        fixture.appointmentId,
+        { cost: null },
+        null
+      )
+      refused = result.error?.code ?? null
+    })
+
+    it('not refused, cost null, item bills 3000 — the full payload of G7-A is no worse', async () => {
+      expect(refused).toBeNull()
+      await expectStepThreeApplied(fixture)
+    })
+
+    it('and the payment is equally untouched', async () => {
+      await expectPaymentUntouched(fixture, RECORD_2_TYPED_COST)
+    })
+  })
+
+  describe('G7-C (axis b): isPaid FALSE with a payment present — the full payload still applies', () => {
+    let fixture: Record2Fixture
+    let refused: string | null
+
+    beforeAll(async () => {
+      fixture = await buildRecord2Shape({
+        label: 'G7-C',
+        unlinkedPrice: 3300,
+        paidAmount: 500,
+        scheduleUnlinkedItem: false,
+      })
+      const payload = await editModalPayload({
+        appointmentId: fixture.appointmentId,
+        status: 'SCHEDULED',
+        budgetItemIds: [],
+      })
+      refused = (await routePutAppointment(fixture.appointmentId, payload)).refused
+    })
+
+    it('BEFORE: a payment of 500 is present, the record is NOT paid, and the item reads 0', () => {
+      expect(fixture.isPaidBefore).toBe(false)
+      expect(fixture.paymentCountBefore).toBe(1)
+      expect(fixture.itemChargeBefore).toBe(0)
+    })
+
+    it('not refused, cost null, item bills 3000, payment of 500 untouched', async () => {
+      expect(refused).toBeNull()
+      await expectStepThreeApplied(fixture)
+      await expectPaymentUntouched(fixture, 500)
+    })
+
+    it('the balance is 3000 of debt against the 500 paid', async () => {
+      expect(await balance(fixture.patientId)).toEqual({
+        totalDebt: RECORD_2_ITEM_PRICE,
+        totalPaid: 500,
+        outstanding: 2500,
+        credit: 0,
+      })
+    })
+  })
+
+  describe('G7-D (axis c): with a live SCHEDULED link, budgetItemIds [] DOES remove it', () => {
+    let fixture: Record2Fixture
+    let refused: string | null
+
+    beforeAll(async () => {
+      fixture = await buildRecord2Shape({
+        label: 'G7-D',
+        unlinkedPrice: 3400,
+        paidAmount: RECORD_2_TYPED_COST,
+        scheduleUnlinkedItem: true,
+      })
+      const payload = await editModalPayload({
+        appointmentId: fixture.appointmentId,
+        status: 'SCHEDULED',
+        budgetItemIds: [],
+      })
+      refused = (await routePutAppointment(fixture.appointmentId, payload)).refused
+    })
+
+    it('KNOWN POSITIVE: the empty replace-set really is read — the SCHEDULED link is gone and its item is PENDING again', async () => {
+      expect(refused).toBeNull()
+      expect(await scheduledLinkCount(fixture.unlinkedItemId)).toBe(0)
+      expect(
+        (
+          await prisma.budgetItem.findUniqueOrThrow({
+            where: { id: fixture.unlinkedItemId },
+            select: { status: true },
+          })
+        ).status
+      ).toBe('PENDING')
+    })
+
+    it('and the stranded EXECUTED link survives it, so the item still bills 3000', async () => {
+      await expectStepThreeApplied(fixture)
+    })
+
+    it('the payment is untouched by the link write either', async () => {
+      await expectPaymentUntouched(fixture, RECORD_2_TYPED_COST)
+    })
+  })
+
+  describe('G7-E (axis d): status CANCELLED fires the release branch and moves the money', () => {
+    let fixture: Record2Fixture
+    let refused: string | null
+
+    beforeAll(async () => {
+      fixture = await buildRecord2Shape({
+        label: 'G7-E',
+        unlinkedPrice: 3500,
+        paidAmount: RECORD_2_TYPED_COST,
+        scheduleUnlinkedItem: true,
+      })
+      // The set PRESERVES the SCHEDULED link, so anything that removes it
+      // below can only be the route's CANCELLED release branch.
+      const payload = await editModalPayload({
+        appointmentId: fixture.appointmentId,
+        status: 'CANCELLED',
+        budgetItemIds: [fixture.unlinkedItemId],
+      })
+      refused = (await routePutAppointment(fixture.appointmentId, payload)).refused
+    })
+
+    it('the release branch FIRED: the SCHEDULED link the payload asked to keep is gone', async () => {
+      expect(refused).toBeNull()
+      expect(await scheduledLinkCount(fixture.unlinkedItemId)).toBe(0)
+    })
+
+    it('and even so the EXECUTED link survives: the branch touches SCHEDULED links only', async () => {
+      expect(await executedLinkCount(fixture.linkedItemId)).toBe(1)
+    })
+
+    it('THIS is the variant that moves money: the payment reverts to ADVANCE and isPaid is cleared', async () => {
+      const row = await paymentRowFor(fixture.appointmentId)
+      expect(row).toEqual({
+        kind: 'ADVANCE',
+        isActive: true,
+        amount: RECORD_2_TYPED_COST,
+        appointmentId: fixture.appointmentId,
+      })
+      expect(
+        (
+          await prisma.appointment.findUniqueOrThrow({
+            where: { id: fixture.appointmentId },
+            select: { status: true, isPaid: true },
+          })
+        ).isPaid
+      ).toBe(false)
+      // So G7-A's "still APPOINTMENT, still isPaid" assertions are not green
+      // because nothing in this code path can ever change those columns.
+    })
+  })
+
+  describe('G7-F (paidAmount axis, absent): on a record with hasRecordedPayment FALSE, no payment is invented', () => {
+    let fixture: Record2Fixture
+    let refused: string | null
+
+    beforeAll(async () => {
+      fixture = await buildRecord2Shape({
+        label: 'G7-F',
+        unlinkedPrice: 3600,
+        paidAmount: null,
+        scheduleUnlinkedItem: false,
+      })
+      const payload = await editModalPayload({
+        appointmentId: fixture.appointmentId,
+        status: 'SCHEDULED',
+        budgetItemIds: [],
+      })
+      refused = (await routePutAppointment(fixture.appointmentId, payload)).refused
+    })
+
+    it('BEFORE: hasRecordedPayment is false, so the Pagado field is NOT locked by the API', () => {
+      // The input registers { disabled: !!appointment.hasRecordedPayment }.
+      // Record 2's APPOINTMENT-kind payment is inactive/REVERSED in
+      // production, so this is its real state: the field is editable and
+      // leaving it empty is the operator's doing, not the UI's.
+      expect(fixture.hasRecordedPaymentBefore).toBe(false)
+      expect(fixture.paymentCountBefore).toBe(0)
+    })
+
+    it('with the paidAmount key ABSENT the write creates nothing and clears the cost', async () => {
+      expect(refused).toBeNull()
+      await expectStepThreeApplied(fixture)
+      await expectPaymentUntouched(fixture, null)
+    })
+  })
+
+  describe('G7-G (paidAmount axis, typed): a typed Pagado DOES create a payment — the hazard', () => {
+    let fixture: Record2Fixture
+    let refused: string | null
+
+    beforeAll(async () => {
+      fixture = await buildRecord2Shape({
+        label: 'G7-G',
+        unlinkedPrice: 3700,
+        paidAmount: null,
+        scheduleUnlinkedItem: false,
+      })
+      const payload = await editModalPayload({
+        appointmentId: fixture.appointmentId,
+        status: 'SCHEDULED',
+        budgetItemIds: [],
+        typedPaidAmount: 500,
+      })
+      refused = (await routePutAppointment(fixture.appointmentId, payload)).refused
+    })
+
+    it('a payment of 500 appears, which is why the runbook must say to leave the field empty', async () => {
+      expect(refused).toBeNull()
+      expect(
+        await prisma.patientPayment.count({ where: { tenantId, patientId: fixture.patientId } })
+      ).toBe(1)
+      expect(await paymentRowFor(fixture.appointmentId)).toEqual({
+        kind: 'APPOINTMENT',
+        isActive: true,
+        amount: 500,
+        appointmentId: fixture.appointmentId,
+      })
+      // So G7-F's "no payment invented" is not green for want of a code path
+      // that could invent one.
+    })
+
+    it('the cost clearing itself still applies on this variant', async () => {
+      await expectStepThreeApplied(fixture)
+    })
+  })
+
+  describe('G7-H: VACUITY — with the clearing write omitted, the item does not bill 3000', () => {
+    let fixture: Record2Fixture
+
+    beforeAll(async () => {
+      fixture = await buildRecord2Shape({
+        label: 'G7-H',
+        unlinkedPrice: 3800,
+        paidAmount: RECORD_2_TYPED_COST,
+        scheduleUnlinkedItem: false,
+      })
+      // Deliberately NO updateAppointment: only the link half of the route's
+      // sequence runs, so nothing clears the typed cost.
+      const released = await setAppointmentBudgetItems(tenantId, fixture.appointmentId, [], null)
+      expect(released.success).toBe(true)
+    })
+
+    it('the same reader G7-A uses returns 0 for the item, and the typed 1500 is the charge', async () => {
+      expect(await itemChargeFor(fixture.patientId, fixture.linkedItemId)).toBe(0)
+      expect(
+        (
+          await prisma.appointment.findUniqueOrThrow({
+            where: { id: fixture.appointmentId },
+            select: { cost: true },
+          })
+        ).cost?.toNumber()
+      ).toBe(RECORD_2_TYPED_COST)
+      const billable = await listBillableItems(tenantId, fixture.patientId)
+      expect(billable).toHaveLength(1)
+      expect(billable[0]).toMatchObject({
+        id: fixture.appointmentId,
+        type: 'appointment',
+        cost: RECORD_2_TYPED_COST,
       })
     })
   })
