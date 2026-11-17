@@ -34,7 +34,7 @@ Las otras cinco no entran: ésas se resuelven por fuera de la pantalla.
 
 ## Lo que no hay que hacer
 
-- **No vuelvas la línea a Pendiente.**
+- **No vuelvas la línea a Pendiente ni la pongas en Ejecutado a mano.**
 - **No pases el presupuesto de Borrador a Aprobado.**
 - **No canceles el presupuesto.** Cancelarlo no genera ningún cobro y saca el trabajo de la cuenta
   del paciente.

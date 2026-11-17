@@ -1,87 +1,112 @@
-# Dos citas para recuperar, paso a paso
+# Dos citas para recuperar
 
-Esto es lo que se le manda a la asistente de la clínica, tal cual, junto con la
-lista firmada que nombra las dos citas exactas: fecha, hora, doctora, trabajo e
-importe. La lista sale de una medición sobre los datos de producción y se
-revisa antes de mandar nada.
+Esto es el procedimiento que se le manda a la asistente de la clínica. Va
+acompañado de una lista firmada que nombra las dos citas: paciente, fecha, hora,
+doctora, trabajo e importe. Esa lista sale de una medición sobre los datos de
+producción, se revisa antes de mandar nada, y **no se guarda acá**: los nombres
+de pacientes no entran al repositorio. Cuando este texto se manda por WhatsApp,
+los datos de la lista se escriben dentro de cada procedimiento, en lugar de
+«la cita 1» y «la cita 2», para que ella no tenga que cruzar dos mensajes
+mientras opera.
 
-Por qué es tan corto: la versión anterior de este documento traía además el
-historial de las dos correcciones de instrucción, del 12/11 y del 16/11, y el
-porqué de cada regla. Eso se le dice de viva voz al entregarlo. En el papel que
-ella sigue mientras opera, estorbaba. Las reglas que sí quedaron son las que
-nacieron de un error real y se miden en la base: no tocar las casillas de los
-trabajos, no escribir en **Pagado ($)**, restaurar desde **Citas** y no desde la
-ficha, los cuatro pasos seguidos, y el «pará y avisá».
+Por qué es tan corto: la versión anterior traía además el historial de las dos
+correcciones de instrucción, del 12/11 y del 16/11, y el porqué de cada regla.
+Eso se le dice de viva voz al entregarlo. En el papel que ella sigue mientras
+opera, estorbaba.
 
-Cada procedimiento termina con su propio control contra el importe de la lista,
-igual que en el documento viejo. La primera versión corta los había fundido en
-un solo control al final, detrás de las prohibiciones, y eso hacía que un error
-en la primera cita recién se notara con la segunda ya editada.
+Tres cosas que esta versión corrigió y conviene no volver a romper:
+
+- Cada procedimiento termina con su propio control contra el importe esperado.
+  Cuando se fundieron en un solo control al final, un error en la primera cita
+  recién se notaba con la segunda ya editada.
+- Lo común a las dos citas se dice una sola vez, sin etiquetas de cantidad.
+  Rotular una «dos clics» y la otra «cuatro pasos» no la ayudaba a operar, y las
+  etiquetas dejaron de coincidir con sus propias listas en cuanto una cambió.
+- El paso que restaura tiene su propia salida por si la cita gris no aparece.
+  Sin ella, quien no la encuentra queda con la repetida ya cancelada y la
+  original sin restaurar, que es el estado a medio camino que el procedimiento
+  prohíbe.
 
 Tres prohibiciones del documento viejo no están acá: no volver la línea a
-Pendiente, no pasar el presupuesto de Borrador a Aprobado ni cancelarlo, y no
-borrarlo y volver a cargarlo. Sobreviven textuales en
+Pendiente ni ponerla en Ejecutado a mano, no pasar el presupuesto de Borrador a
+Aprobado ni cancelarlo, y no borrarlo y volver a cargarlo. Las tres viven en
 [presupuestos-ejecutados-sin-cargo.md](presupuestos-ejecutados-sin-cargo.md),
-bajo «Lo que no hay que hacer», que es la ficha que ella lee primero.
+bajo «Lo que no hay que hacer», que es la ficha que ella lee primero. Son las
+mismas reglas, no siempre con las mismas palabras: la de Pendiente se completó
+ahí para no perder la mitad del «ni a Ejecutado a mano».
 
 ---
 
-**Dos citas para recuperar, paso a paso**
+**Dos citas para recuperar**
 
-Son **dos citas y nada más que dos**, las que están en la lista que te mando
-aparte. Las otras citas borradas que viste en las listas viejas **no son
-tuyas**, no las toques.
+La lista firmada te dice, de cada una: paciente, fecha, hora, doctora, trabajo e
+importe que tiene que volver a cobrarse. Son esas dos y nada más que esas dos.
 
-**Cita 1, dos clics**
+De las dos, una sola tiene un importe escrito en **Costo** y una cita repetida
+en su mismo horario. La lista te marca cuál es.
 
-1. Citas, andá al mes de esa fecha, **Filtro**, tildá **Mostrar canceladas**.
-   Aparece en gris.
-2. En la tarjeta: **⋮**, **Restaurar**. Acá vuelve la plata.
-3. Otra vez **⋮**, **Marcar completada**. El trabajo ya viene tildado y
-   bloqueado, no tildes nada más y no escribas ningún importe.
+**Para encontrar cualquiera de las dos**
 
-Después de esos pasos mirá la cuenta del paciente: el trabajo tiene que figurar
-cobrado por el importe que dice la lista. Si ves otro número, parás y me avisás
-antes de pasar a la Cita 2.
+Entrá a **Citas**, andá con las flechas hasta el mes de esa fecha, abrí
+**Filtro** y tildá **Mostrar canceladas**. La cita aparece en gris, en su día y
+hora.
 
-**Cita 2, cuatro pasos seguidos, sin dejarla por la mitad**
+Hacelo siempre desde **Citas**. Desde la ficha del paciente las borradas se ven,
+pero no te dan el menú **⋮**.
 
-En esa hora hay otra cita cargada que es la misma visita repetida y está vacía.
-Por eso son cuatro.
+**La primera cita: dos cosas**
 
-1. En la cita duplicada vacía: **⋮**, **Cancelar cita**, botón rojo
-   **Cancelar Cita**.
-2. En la original gris, desde **Citas** y no desde la ficha del paciente:
-   **⋮**, **Restaurar**.
-3. **⋮**, **Editar**, borrá lo que haya en **Costo ($)** hasta dejarlo vacío,
-   **Guardar Cambios**. En esa ventana tocá **sólo** el campo **Costo ($)**: si
-   tocás cualquier casilla de los trabajos del presupuesto, el sistema te vuelve
-   a escribir un importe en Costo y deshace el paso. Y **no escribas nada en
-   Pagado ($)** aunque te deje, porque en esta cita el trabajo lo cobra el
-   presupuesto y cualquier número ahí sería un cobro de más.
-4. **⋮**, **Marcar completada**, sin tildar nada más.
+1. En la tarjeta gris: **⋮**, **Restaurar**. Acá vuelve la plata.
+2. **⋮**, **Marcar completada**. El trabajo ya viene tildado y bloqueado, no
+   tildes nada más y no escribas ningún importe.
 
-Entre el paso 2 y el 3 vas a ver una cifra que no es la correcta. Es normal, se
-arregla en el 3.
+Listo. Entrá a su ficha y fijate que el trabajo figure cobrado por el importe de
+la lista. Si ves otro número, parás y avisás antes de seguir con la segunda.
 
-Después de los cuatro pasos mirá la cuenta del paciente: el trabajo tiene que
-figurar cobrado por el importe que dice la lista. Si ves otro número, parás y me
-avisás.
+**La segunda cita: lo mismo, más dos cosas que la primera no tiene**
 
-**Con estas dos citas**
+En ese horario hay **dos** citas: la gris que vamos a recuperar, y una activa
+que es la misma visita cargada de nuevo y está vacía. Por eso acá el orden
+importa, y los cuatro pasos van seguidos, sin dejarla por la mitad.
 
-- No les cambies el horario ni la fecha.
-- Si en alguno de esos dos horarios aparece una cita más de las que dice la
-  lista, parás y me avisás. No canceles otra cita para hacerle lugar.
+1. **Primero sacá la repetida**, que es la única diferencia real con la primera.
+   En la cita **activa**: **⋮**, **Cancelar cita**, y confirmá con el botón rojo
+   **Cancelar Cita**. Es la que no tiene nada cargado, no se pierde ningún dato.
+2. Ahora sí, en la gris: **⋮**, **Restaurar**. Igual que en la primera. Si no la
+   ves, fijate que **Mostrar canceladas** siga tildado. Si aun así no aparece,
+   parás y avisás sin tocar nada más: la repetida ya está cancelada y eso no
+   rompe nada, pero no sigas sola desde ahí.
+3. **Después vaciá el Costo**, que es la otra diferencia. **⋮**, **Editar**,
+   borrá el importe que la lista te indica del campo **Costo ($)** hasta dejarlo
+   vacío, **Guardar Cambios**. En esa ventana tocá **sólo** ese campo: si tocás
+   una casilla de los trabajos del presupuesto, el sistema te reescribe solo un
+   importe en Costo y te deshace el paso. Y **no escribas nada en Pagado ($)**
+   aunque te deje: en esta cita el trabajo lo cobra el presupuesto, y un número
+   ahí sería un cobro de más.
+4. **⋮**, **Marcar completada**, igual que en la primera.
 
-**Con cualquier otra cita: no la toques**
+Entre el paso 2 y el 3 su cuenta va a mostrar una cifra que no es la correcta.
+Es normal, se arregla en el 3.
 
-- No restaures ninguna otra cita borrada, aunque la veas en gris y se parezca.
-  Las de las listas viejas no son tuyas, ésas las resuelvo yo por fuera de la
-  pantalla.
-- Todo lo demás seguí usándolo como siempre. Las dos advertencias del paso 3
-  valen para esa ventana y nada más: en el resto de las citas el campo
-  **Pagado ($)** se usa con normalidad.
+Al final entrá a su ficha y fijate que el trabajo figure cobrado por el importe
+de la lista. Si ves otro número, parás y avisás.
 
-Cuando termines mandame una línea por cita: fecha, si la hiciste o no, y si no,
+**Con estas dos**
+
+No les cambies el horario ni la fecha. Si en alguno de esos dos horarios aparece
+una cita más de las que dice la lista, parás y avisás. No canceles otra cita
+para hacerle lugar.
+
+**Con todas las demás**
+
+No restaures ninguna otra cita borrada, aunque la veas en gris y se parezca. Las
+de las listas viejas no son tuyas, ésas se resuelven por fuera de la pantalla.
+
+En el resto del sistema seguí trabajando como siempre. Las dos advertencias del
+paso 3 de la segunda cita valen para esa ventana y nada más: el campo
+**Pagado ($)** se usa con normalidad en las demás citas.
+
+Antes de empezar anotá lo que muestran hoy las dos fichas, para comparar después.
+
+Cuando termines mandá una línea por cita: fecha, si la hiciste o no, y si no,
 por qué.
