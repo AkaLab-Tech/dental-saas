@@ -20,7 +20,7 @@ suposición:
   propio importe. En esos casos no falta ningún cargo.
 - 7 tienen la línea asociada solo a una cita cancelada o dada de baja. De esas 7, **dos** se
   recuperan desde la pantalla y son las que van en la lista firmada. Las **cinco** restantes no
-  se pueden recuperar por ese camino y se resuelven por fuera de la pantalla: no son suyas.
+  se pueden recuperar por ese camino y se resuelven por fuera de la pantalla: no son tuyas.
 
 ## Qué hacer
 

@@ -13,6 +13,11 @@ nacieron de un error real y se miden en la base: no tocar las casillas de los
 trabajos, no escribir en **Pagado ($)**, restaurar desde **Citas** y no desde la
 ficha, los cuatro pasos seguidos, y el «pará y avisá».
 
+Cada procedimiento termina con su propio control contra el importe de la lista,
+igual que en el documento viejo. La primera versión corta los había fundido en
+un solo control al final, detrás de las prohibiciones, y eso hacía que un error
+en la primera cita recién se notara con la segunda ya editada.
+
 Tres prohibiciones del documento viejo no están acá: no volver la línea a
 Pendiente, no pasar el presupuesto de Borrador a Aprobado ni cancelarlo, y no
 borrarlo y volver a cargarlo. Sobreviven textuales en
@@ -34,9 +39,10 @@ tuyas**, no las toques.
 2. En la tarjeta: **⋮**, **Restaurar**. Acá vuelve la plata.
 3. Otra vez **⋮**, **Marcar completada**. El trabajo ya viene tildado y
    bloqueado, no tildes nada más y no escribas ningún importe.
-4. Mirá la cuenta del paciente: el trabajo tiene que figurar cobrado por el
-   importe que dice la lista. Si ves otro número, parás y me avisás antes de
-   pasar a la Cita 2.
+
+Después de esos pasos mirá la cuenta del paciente: el trabajo tiene que figurar
+cobrado por el importe que dice la lista. Si ves otro número, parás y me avisás
+antes de pasar a la Cita 2.
 
 **Cita 2, cuatro pasos seguidos, sin dejarla por la mitad**
 
@@ -48,26 +54,34 @@ Por eso son cuatro.
 2. En la original gris, desde **Citas** y no desde la ficha del paciente:
    **⋮**, **Restaurar**.
 3. **⋮**, **Editar**, borrá lo que haya en **Costo ($)** hasta dejarlo vacío,
-   **Guardar Cambios**.
+   **Guardar Cambios**. En esa ventana tocá **sólo** el campo **Costo ($)**: si
+   tocás cualquier casilla de los trabajos del presupuesto, el sistema te vuelve
+   a escribir un importe en Costo y deshace el paso. Y **no escribas nada en
+   Pagado ($)** aunque te deje, porque en esta cita el trabajo lo cobra el
+   presupuesto y cualquier número ahí sería un cobro de más.
 4. **⋮**, **Marcar completada**, sin tildar nada más.
-5. Mirá la cuenta del paciente: el trabajo tiene que figurar cobrado por el
-   importe que dice la lista. Si ves otro número, parás y me avisás.
 
 Entre el paso 2 y el 3 vas a ver una cifra que no es la correcta. Es normal, se
 arregla en el 3.
 
-**Las cuatro que no hay que hacer**
+Después de los cuatro pasos mirá la cuenta del paciente: el trabajo tiene que
+figurar cobrado por el importe que dice la lista. Si ves otro número, parás y me
+avisás.
 
-- En el paso 3 tocá **sólo** el campo **Costo ($)**. Si tocás cualquier casilla
-  de los trabajos del presupuesto, el sistema te vuelve a escribir un importe en
-  Costo y deshace el paso.
-- **No escribas nada en Pagado ($)** aunque te deje. Cualquier número ahí carga
-  un cobro nuevo.
-- No muevas ninguna de las dos de horario ni de fecha.
-- No restaures ninguna cita que no esté en la lista.
+**Con estas dos citas**
 
-Si en alguno de esos horarios aparece una cita más que la lista no menciona,
-parás y me avisás. No canceles otra cita para hacerle lugar.
+- No les cambies el horario ni la fecha.
+- Si en alguno de esos dos horarios aparece una cita más de las que dice la
+  lista, parás y me avisás. No canceles otra cita para hacerle lugar.
+
+**Con cualquier otra cita: no la toques**
+
+- No restaures ninguna otra cita borrada, aunque la veas en gris y se parezca.
+  Las de las listas viejas no son tuyas, ésas las resuelvo yo por fuera de la
+  pantalla.
+- Todo lo demás seguí usándolo como siempre. Las dos advertencias del paso 3
+  valen para esa ventana y nada más: en el resto de las citas el campo
+  **Pagado ($)** se usa con normalidad.
 
 Cuando termines mandame una línea por cita: fecha, si la hiciste o no, y si no,
 por qué.
