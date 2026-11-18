@@ -1,10 +1,30 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useEffect } from 'react'
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, useLocation } from 'react-router'
 import i18n from 'i18next'
 import '@/i18n'
 import { PatientsListView } from './PatientsListView'
 import type { Patient } from '@/lib/patient-api'
+
+// The row handler gets its navigate from the useNavigate export, whereas <Link> uses react-router's
+// internal one. Spying on the export therefore counts ONLY row-handler navigations, which is what
+// exposes a double fire (anchor + row) that a final-location assertion cannot see: React batches
+// both pushes into a single render.
+const rowNavigate = vi.hoisted(() => vi.fn())
+vi.mock('react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-router')>()
+  return {
+    ...actual,
+    useNavigate: () => {
+      const real = actual.useNavigate()
+      return (...args: Parameters<typeof real>) => {
+        rowNavigate(...args)
+        return real(...args)
+      }
+    },
+  }
+})
 
 beforeAll(async () => {
   await i18n.changeLanguage('es')
@@ -62,6 +82,22 @@ const patientCarlos = makePatient({
 
 const patients = [patientCarlos, patientAna, patientBeto]
 
+// Records the pathname after every router navigation, starting with the initial '/'.
+// Counting entries (not just the final path) is what exposes a double navigation.
+let visited: string[] = []
+function LocationProbe() {
+  const location = useLocation()
+  useEffect(() => {
+    visited.push(location.pathname)
+  }, [location.key])
+  return null
+}
+
+beforeEach(() => {
+  visited = []
+  rowNavigate.mockClear()
+})
+
 function renderView(props?: {
   onEdit?: (p: Patient) => void
   onDelete?: (p: Patient) => void
@@ -73,6 +109,7 @@ function renderView(props?: {
   const onRestore = 'onRestore' in (props ?? {}) ? props?.onRestore : vi.fn()
   const utils = render(
     <MemoryRouter>
+      <LocationProbe />
       <PatientsListView
         patients={props?.list ?? patients}
         onEdit={onEdit}
@@ -344,6 +381,129 @@ describe('PatientsListView', () => {
 
       expect(editButton.querySelector('svg')).toBeInTheDocument()
       expect(editButton.textContent).toMatch(/Editar/)
+    })
+  })
+
+  describe('row opens the patient record (#701)', () => {
+    const surfaces = [
+      { label: 'S1 table row', section: desktopSection },
+      { label: 'S2 card row', section: mobileSection },
+    ]
+
+    describe.each(surfaces)('$label', ({ section }) => {
+      // Pin the row by the record's identity (its detail link), never by position.
+      function rowFor(container: HTMLElement, record: Patient) {
+        const link = section(container).querySelector<HTMLElement>(`a[href="/patients/${record.id}"].hover\\:underline`)
+        if (!link) throw new Error(`name link for ${record.id} not found`)
+        const row = link.closest<HTMLElement>('tr, div.cursor-pointer')
+        if (!row) throw new Error(`row for ${record.id} not found`)
+        return { link, row }
+      }
+
+      it('navigates to the detail route of THAT row when the row body is clicked', () => {
+        const { container } = renderView()
+        const { row } = rowFor(container, patientAna)
+
+        expect(row).toHaveClass('cursor-pointer')
+        fireEvent.click(within(row).getByText('+1000000000'))
+
+        expect(rowNavigate).toHaveBeenCalledTimes(1)
+        expect(rowNavigate).toHaveBeenCalledWith('/patients/p-ana')
+        expect(visited).toEqual(['/', '/patients/p-ana'])
+      })
+
+      it('navigates for an inactive row too', () => {
+        const { container } = renderView()
+        const { row } = rowFor(container, patientBeto)
+
+        fireEvent.click(within(row).getByText('+1000000000'))
+
+        expect(rowNavigate).toHaveBeenCalledTimes(1)
+        expect(visited).toEqual(['/', '/patients/p-beto'])
+      })
+
+      it('calls onEdit and does not navigate when Edit is clicked', () => {
+        const { container, onEdit } = renderView()
+        const { row } = rowFor(container, patientAna)
+
+        fireEvent.click(within(row).getByRole('button', { name: 'Editar' }))
+
+        expect(onEdit).toHaveBeenCalledTimes(1)
+        expect(onEdit).toHaveBeenCalledWith(patientAna)
+        expect(visited).toEqual(['/'])
+        expect(rowNavigate).not.toHaveBeenCalled()
+      })
+
+      it('calls onDelete and does not navigate when Delete is clicked', () => {
+        const { container, onDelete } = renderView()
+        const { row } = rowFor(container, patientAna)
+
+        fireEvent.click(within(row).getByRole('button', { name: 'Eliminar' }))
+
+        expect(onDelete).toHaveBeenCalledTimes(1)
+        expect(onDelete).toHaveBeenCalledWith(patientAna)
+        expect(visited).toEqual(['/'])
+        expect(rowNavigate).not.toHaveBeenCalled()
+      })
+
+      it('calls onRestore and does not navigate when Restore is clicked on an inactive row', () => {
+        const { container, onRestore } = renderView()
+        const { row } = rowFor(container, patientBeto)
+
+        fireEvent.click(within(row).getByRole('button', { name: 'Restaurar' }))
+
+        expect(onRestore).toHaveBeenCalledTimes(1)
+        expect(onRestore).toHaveBeenCalledWith(patientBeto)
+        expect(visited).toEqual(['/'])
+        expect(rowNavigate).not.toHaveBeenCalled()
+      })
+
+      it('navigates exactly once when the name is clicked', () => {
+        const { container } = renderView()
+        const { link } = rowFor(container, patientAna)
+
+        fireEvent.click(link)
+
+        // The anchor navigates once; the row handler must not fire on top of it (see rowNavigate above).
+        expect(rowNavigate).not.toHaveBeenCalled()
+        expect(visited).toEqual(['/', '/patients/p-ana'])
+      })
+
+      it('renders the name as an anchor to the detail route', () => {
+        const { container } = renderView()
+        const { link } = rowFor(container, patientAna)
+
+        expect(link.tagName).toBe('A')
+        expect(link).toHaveAttribute('href', '/patients/p-ana')
+        expect(link).toHaveTextContent('Ana Alfa')
+      })
+
+      it('does not make the row focusable or a link', () => {
+        const { container } = renderView()
+        const { row } = rowFor(container, patientAna)
+
+        expect(row).not.toHaveAttribute('tabindex')
+        expect(row).not.toHaveAttribute('role')
+        expect(row).not.toHaveAttribute('onkeydown')
+      })
+
+      it('does not navigate when a text selection is active', () => {
+        const { container } = renderView()
+        const { row } = rowFor(container, patientAna)
+        const spy = vi.spyOn(window, 'getSelection').mockReturnValue({ toString: () => '+1000000000' } as Selection)
+
+        try {
+          fireEvent.click(within(row).getByText('+1000000000'))
+          expect(visited).toEqual(['/'])
+          expect(rowNavigate).not.toHaveBeenCalled()
+        } finally {
+          spy.mockRestore()
+        }
+
+        // Vacuity check: with the selection gone the same click does navigate.
+        fireEvent.click(within(row).getByText('+1000000000'))
+        expect(visited).toEqual(['/', '/patients/p-ana'])
+      })
     })
   })
 })

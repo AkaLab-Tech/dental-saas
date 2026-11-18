@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, type MouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { ExternalLink, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import type { Doctor } from '@/lib/doctor-api'
 import { SortableHeader, useSortState } from '@/components/list/SortableHeader'
@@ -40,6 +40,17 @@ function useSortedDoctors(doctors: Doctor[], sortKey: SortKey, sortDir: SortDir)
       }
     })
   }, [doctors, sortKey, sortDir])
+}
+
+function useOpenRowOnClick() {
+  const navigate = useNavigate()
+  return (to: string) => (e: MouseEvent<HTMLElement>) => {
+    // Links and buttons inside the row handle their own click; the name link must not navigate twice.
+    if ((e.target as HTMLElement).closest('a, button')) return
+    // A drag that ends a text selection (copying a phone or e-mail) also fires a click.
+    if (window.getSelection()?.toString()) return
+    navigate(to)
+  }
 }
 
 function ActionButtons({
@@ -98,6 +109,7 @@ function ActionButtons({
 
 export function DoctorsListView({ doctors, onEdit, onDelete, onRestore }: DoctorsListViewProps) {
   const { t } = useTranslation()
+  const openRowOnClick = useOpenRowOnClick()
   const { sortKey, sortDir, toggleSort } = useSortState<SortKey>('name')
   const sortedDoctors = useSortedDoctors(doctors, sortKey, sortDir)
 
@@ -140,7 +152,11 @@ export function DoctorsListView({ doctors, onEdit, onDelete, onRestore }: Doctor
             {sortedDoctors.map((doctor) => {
               const initials = `${doctor.firstName[0]}${doctor.lastName[0]}`.toUpperCase()
               return (
-                <tr key={doctor.id} className={doctor.isActive ? 'hover:bg-gray-50' : 'bg-orange-50/40 hover:bg-orange-50'}>
+                <tr
+                  key={doctor.id}
+                  onClick={openRowOnClick(`/doctors/${doctor.id}`)}
+                  className={`cursor-pointer ${doctor.isActive ? 'hover:bg-gray-50' : 'bg-orange-50/40 hover:bg-orange-50'}`}
+                >
                   <td className="px-4 py-3 text-start">
                     <div className="flex items-center gap-3">
                       {doctor.avatar ? (
@@ -151,7 +167,9 @@ export function DoctorsListView({ doctors, onEdit, onDelete, onRestore }: Doctor
                         </div>
                       )}
                       <p className="font-medium text-gray-900">
-                        Dr. {doctor.firstName} {doctor.lastName}
+                        <Link to={`/doctors/${doctor.id}`} className="hover:underline">
+                          Dr. {doctor.firstName} {doctor.lastName}
+                        </Link>
                       </p>
                     </div>
                   </td>
@@ -204,8 +222,9 @@ export function DoctorsListView({ doctors, onEdit, onDelete, onRestore }: Doctor
           return (
             <div
               key={doctor.id}
-              className={`bg-white rounded-lg border shadow-sm p-4 ${
-                doctor.isActive ? 'border-gray-200' : 'border-orange-200 bg-orange-50/30'
+              onClick={openRowOnClick(`/doctors/${doctor.id}`)}
+              className={`cursor-pointer bg-white rounded-lg border shadow-sm p-4 ${
+                doctor.isActive ? 'border-gray-200 hover:bg-gray-50' : 'border-orange-200 bg-orange-50/30 hover:bg-orange-50'
               }`}
             >
               <div className="flex items-start gap-3">
@@ -219,7 +238,9 @@ export function DoctorsListView({ doctors, onEdit, onDelete, onRestore }: Doctor
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-medium text-gray-900 truncate">
-                      Dr. {doctor.firstName} {doctor.lastName}
+                      <Link to={`/doctors/${doctor.id}`} className="hover:underline">
+                        Dr. {doctor.firstName} {doctor.lastName}
+                      </Link>
                     </p>
                     {!doctor.isActive && (
                       <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">

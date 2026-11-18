@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, type MouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { ExternalLink, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import type { Patient } from '@/lib/patient-api'
 import { calculateAge, getPatientInitials } from '@/lib/patient-api'
@@ -40,6 +40,17 @@ function useSortedPatients(patients: Patient[], sortKey: SortKey, sortDir: SortD
       }
     })
   }, [patients, sortKey, sortDir])
+}
+
+function useOpenRowOnClick() {
+  const navigate = useNavigate()
+  return (to: string) => (e: MouseEvent<HTMLElement>) => {
+    // Links and buttons inside the row handle their own click; the name link must not navigate twice.
+    if ((e.target as HTMLElement).closest('a, button')) return
+    // A drag that ends a text selection (copying a phone or e-mail) also fires a click.
+    if (window.getSelection()?.toString()) return
+    navigate(to)
+  }
 }
 
 function ActionButtons({
@@ -98,6 +109,7 @@ function ActionButtons({
 
 export function PatientsListView({ patients, onEdit, onDelete, onRestore }: PatientsListViewProps) {
   const { t, i18n } = useTranslation()
+  const openRowOnClick = useOpenRowOnClick()
   const { sortKey, sortDir, toggleSort } = useSortState<SortKey>('name')
   const sortedPatients = useSortedPatients(patients, sortKey, sortDir)
 
@@ -139,14 +151,20 @@ export function PatientsListView({ patients, onEdit, onDelete, onRestore }: Pati
               const age = calculateAge(patient.dob)
               const genderLabel = patient.gender ? t(GENDER_LABEL_KEYS[patient.gender] || patient.gender) : null
               return (
-                <tr key={patient.id} className={patient.isActive ? 'hover:bg-gray-50' : 'bg-orange-50/40 hover:bg-orange-50'}>
+                <tr
+                  key={patient.id}
+                  onClick={openRowOnClick(`/patients/${patient.id}`)}
+                  className={`cursor-pointer ${patient.isActive ? 'hover:bg-gray-50' : 'bg-orange-50/40 hover:bg-orange-50'}`}
+                >
                   <td className="px-4 py-3 text-start">
                     <div className="flex items-center gap-3">
                       <div className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
                         <span className="text-xs font-semibold text-white">{getPatientInitials(patient)}</span>
                       </div>
                       <p className="font-medium text-gray-900">
-                        {patient.firstName} {patient.lastName}
+                        <Link to={`/patients/${patient.id}`} className="hover:underline">
+                          {patient.firstName} {patient.lastName}
+                        </Link>
                       </p>
                     </div>
                   </td>
@@ -193,8 +211,9 @@ export function PatientsListView({ patients, onEdit, onDelete, onRestore }: Pati
           return (
             <div
               key={patient.id}
-              className={`bg-white rounded-lg border shadow-sm p-4 ${
-                patient.isActive ? 'border-gray-200' : 'border-orange-200 bg-orange-50/30'
+              onClick={openRowOnClick(`/patients/${patient.id}`)}
+              className={`cursor-pointer bg-white rounded-lg border shadow-sm p-4 ${
+                patient.isActive ? 'border-gray-200 hover:bg-gray-50' : 'border-orange-200 bg-orange-50/30 hover:bg-orange-50'
               }`}
             >
               <div className="flex items-start gap-3">
@@ -204,7 +223,9 @@ export function PatientsListView({ patients, onEdit, onDelete, onRestore }: Pati
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-medium text-gray-900 truncate">
-                      {patient.firstName} {patient.lastName}
+                      <Link to={`/patients/${patient.id}`} className="hover:underline">
+                        {patient.firstName} {patient.lastName}
+                      </Link>
                     </p>
                     {!patient.isActive && (
                       <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
