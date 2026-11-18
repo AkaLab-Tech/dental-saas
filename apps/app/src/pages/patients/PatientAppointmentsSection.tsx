@@ -433,10 +433,18 @@ export function PatientAppointmentsSection({
     return filterPeriod === 'past' ? dateB - dateA : dateA - dateB
   })
 
-  // Count upcoming for header badge
-  const upcomingCount = appointments.filter(a => {
+  const isVisibleInRecord = (a: Appointment) => a.status !== 'CANCELLED' && a.isActive
+
+  // Task #704: the badge reports the whole record, not the upcoming subset —
+  // a record whose five appointments are all past used to badge nothing and
+  // open on an empty 'upcoming' list, reading as a record with no history.
+  const totalCount = appointments.filter(isVisibleInRecord).length
+
+  // Appointments the 'upcoming' default withholds, counted under the same
+  // cancelled/active predicate as the badge so `showCancelled` never inflates it.
+  const hiddenPastCount = appointments.filter(a => {
     const startTime = new Date(a.startTime)
-    return (startTime >= now || isToday(startTime)) && a.status !== 'CANCELLED' && a.isActive
+    return startTime < now && !isToday(startTime) && isVisibleInRecord(a)
   }).length
 
   // Handle actions
@@ -490,9 +498,13 @@ export function PatientAppointmentsSection({
           <h2 className="text-lg font-semibold text-gray-900">
             {t('patients.appointments.sectionTitle')}
           </h2>
-          {upcomingCount > 0 && (
-            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-              {upcomingCount}
+          {totalCount > 0 && (
+            <span
+              className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+              title={t('patients.appointments.totalBadgeLabel', { count: totalCount })}
+              aria-label={t('patients.appointments.totalBadgeLabel', { count: totalCount })}
+            >
+              {totalCount}
             </span>
           )}
           {isCollapsed ? (
@@ -604,6 +616,21 @@ export function PatientAppointmentsSection({
           {/* Error */}
           {error && (
             <div className="text-sm text-red-600 mb-3">{error}</div>
+          )}
+
+          {/* What the 'upcoming' default withholds. Sibling of the list rather
+              than part of the empty state, so it shows both when the list is
+              empty (past-only record) and when some upcoming cards are shown. */}
+          {!isLoading && filterPeriod === 'upcoming' && hiddenPastCount > 0 && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-gray-600">
+              <span>{t('patients.appointments.hiddenPast', { count: hiddenPastCount })}</span>
+              <button
+                onClick={() => setFilterPeriod('past')}
+                className="text-blue-600 hover:text-blue-800 hover:underline"
+              >
+                {t('patients.appointments.hiddenPastAction')}
+              </button>
+            </div>
           )}
 
           {/* Appointments horizontal scroll */}

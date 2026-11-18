@@ -443,14 +443,19 @@ describe('PatientAppointmentsSection', () => {
       await waitFor(() => {
         expect(screen.getByText('patients.appointments.noUpcoming')).toBeInTheDocument()
       })
+      // #704: the past-only record must not read as empty history
+      expect(
+        screen.getByText('patients.appointments.hiddenPast:{"count":1}')
+      ).toBeInTheDocument()
     })
 
-    it('shows upcoming count badge in header', async () => {
+    it('shows the record total badge in header, labelled with what it counts', async () => {
       renderSection()
 
-      await waitFor(() => {
-        expect(screen.getByText('1')).toBeInTheDocument()
-      })
+      const badge = await screen.findByLabelText(
+        'patients.appointments.totalBadgeLabel:{"count":1}'
+      )
+      expect(badge).toHaveTextContent('1')
     })
   })
 
@@ -1467,5 +1472,136 @@ describe('PatientAppointmentsSection — #619: the patient record\'s own figure 
         screen.getByText('appointments.budgetItems.executedCharge:{"count":2,"total":"$4000"}')
       ).toBeInTheDocument()
     })
+  })
+})
+
+// Task #704: the patient record states what the 'upcoming' default withholds
+// and badges the whole record, not the upcoming subset.
+describe('PatientAppointmentsSection — #704: list states state the population', () => {
+  const BADGE = (n: number) => `patients.appointments.totalBadgeLabel:{"count":${n}}`
+  const HIDDEN = (n: number) => `patients.appointments.hiddenPast:{"count":${n}}`
+  const HIDDEN_RE = /^patients\.appointments\.hiddenPast:/
+
+  const mk = (id: string, startTime: string, extra: Partial<Appointment> = {}): Appointment => ({
+    ...upcomingAppointment,
+    id,
+    startTime,
+    ...extra,
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCanPermission = true
+    mockCanDeletePayments = true
+    localStorage.clear()
+    localStorage.setItem('patient-appointments-collapsed', 'false')
+  })
+
+  it('G1: badge shows the record total (upcoming + past), not the upcoming count', async () => {
+    mockGetAppointmentsByPatient.mockResolvedValue([
+      mk('u1', futureDate(2)),
+      mk('u2', futureDate(3)),
+      mk('p1', pastDate(2), { status: 'COMPLETED' }),
+      mk('p2', pastDate(3), { status: 'COMPLETED' }),
+      mk('p3', pastDate(4), { status: 'COMPLETED' }),
+    ])
+    renderSection()
+
+    const badge = await screen.findByLabelText(BADGE(5))
+    expect(badge).toHaveTextContent('5')
+    expect(badge).toHaveAttribute('title', BADGE(5))
+  })
+
+  it('G2: an all-past record shows the badge and the hidden-past notice under the default view', async () => {
+    mockGetAppointmentsByPatient.mockResolvedValue([
+      mk('p1', pastDate(2), { status: 'COMPLETED' }),
+      mk('p2', pastDate(3), { status: 'COMPLETED' }),
+    ])
+    renderSection()
+
+    expect(await screen.findByText('patients.appointments.noUpcoming')).toBeInTheDocument()
+    expect(screen.getByLabelText(BADGE(2))).toBeInTheDocument()
+    expect(screen.getByText(HIDDEN(2))).toBeInTheDocument()
+  })
+
+  it('G3: a record with zero appointments shows no notice and no badge', async () => {
+    mockGetAppointmentsByPatient.mockResolvedValue([])
+    renderSection()
+
+    expect(await screen.findByText('patients.appointments.noUpcoming')).toBeInTheDocument()
+    expect(screen.queryByText(HIDDEN_RE)).not.toBeInTheDocument()
+    expect(screen.queryByText('patients.appointments.hiddenPastAction')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/^patients\.appointments\.totalBadgeLabel/)).not.toBeInTheDocument()
+  })
+
+  it('G3b: an upcoming-only record shows the badge but no notice', async () => {
+    mockGetAppointmentsByPatient.mockResolvedValue([mk('u1', futureDate(2))])
+    renderSection()
+
+    expect(await screen.findByLabelText(BADGE(1))).toBeInTheDocument()
+    expect(screen.queryByText(HIDDEN_RE)).not.toBeInTheDocument()
+  })
+
+  it.each([1, 4])('G4: the notice states the actual withheld count (%i)', async (n) => {
+    mockGetAppointmentsByPatient.mockResolvedValue([
+      mk('u1', futureDate(2)),
+      ...Array.from({ length: n }, (_, i) => mk(`p${i}`, pastDate(i + 1), { status: 'COMPLETED' })),
+    ])
+    renderSection()
+
+    expect(await screen.findByText(HIDDEN(n))).toBeInTheDocument()
+    expect(screen.getAllByText(HIDDEN_RE)).toHaveLength(1)
+  })
+
+  describe('G5: cancelled and inactive appointments stay out of both figures', () => {
+    beforeEach(() => {
+      mockGetAppointmentsByPatient.mockResolvedValue([
+        mk('u1', futureDate(2)),
+        mk('p1', pastDate(2), { status: 'COMPLETED' }),
+        mk('p2', pastDate(3), { status: 'COMPLETED' }),
+        mk('cx-past', pastDate(4), { status: 'CANCELLED', isActive: false }),
+        mk('cx-future', futureDate(4), { status: 'CANCELLED', isActive: false }),
+        mk('inactive-past', pastDate(5), { status: 'COMPLETED', isActive: false }),
+        mk('inactive-future', futureDate(5), { status: 'SCHEDULED', isActive: false }),
+        mk('cancelled-active-past', pastDate(6), { status: 'CANCELLED', isActive: true }),
+      ])
+    })
+
+    it('badge counts 3 (1 upcoming + 2 past), not the 8 rows', async () => {
+      renderSection()
+      expect(await screen.findByLabelText(BADGE(3))).toBeInTheDocument()
+    })
+
+    it('notice counts 2 withheld past appointments, not the 5 past rows', async () => {
+      renderSection()
+      expect(await screen.findByText(HIDDEN(2))).toBeInTheDocument()
+    })
+
+    it('showCancelled surfaces them in the list without changing either figure', async () => {
+      renderSection()
+      await screen.findByLabelText(BADGE(3))
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'appointments.showCancelled' }))
+
+      expect(screen.getByLabelText(BADGE(3))).toBeInTheDocument()
+      expect(screen.getByText(HIDDEN(2))).toBeInTheDocument()
+    })
+  })
+
+  it('the notice button switches the list to past; clearFilters brings the notice back', async () => {
+    mockGetAppointmentsByPatient.mockResolvedValue([
+      mk('u1', futureDate(2)),
+      mk('p1', pastDate(2), { status: 'COMPLETED' }),
+    ])
+    renderSection()
+
+    fireEvent.click(await screen.findByText('patients.appointments.hiddenPastAction'))
+
+    expect(screen.queryByText(HIDDEN_RE)).not.toBeInTheDocument()
+    expect(screen.queryByText('patients.appointments.hiddenPastAction')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('patients.appointments.clearFilters'))
+
+    expect(await screen.findByText(HIDDEN(1))).toBeInTheDocument()
   })
 })

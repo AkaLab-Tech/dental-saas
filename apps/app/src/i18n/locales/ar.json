@@ -573,7 +573,10 @@
       "dateFrom": "من",
       "dateTo": "إلى",
       "clearFilters": "مسح التصفية",
-      "confirmComplete": "هل أنت متأكد أنك تريد وضع علامة على هذا الموعد كمكتمل؟"
+      "confirmComplete": "هل أنت متأكد أنك تريد وضع علامة على هذا الموعد كمكتمل؟",
+      "totalBadgeLabel": "إجمالي مواعيد هذا الملف: {{count}}",
+      "hiddenPast": "مواعيد سابقة خارج هذه التصفية: {{count}}",
+      "hiddenPastAction": "عرض المواعيد السابقة"
     },
     "labworksSection": {
       "title": "أعمال المختبر",

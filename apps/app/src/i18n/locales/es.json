@@ -573,7 +573,10 @@
       "dateFrom": "Desde",
       "dateTo": "Hasta",
       "clearFilters": "Limpiar filtros",
-      "confirmComplete": "¿Estás seguro de que deseas marcar esta cita como completada?"
+      "confirmComplete": "¿Estás seguro de que deseas marcar esta cita como completada?",
+      "totalBadgeLabel": "Total de citas de la ficha: {{count}}",
+      "hiddenPast": "Citas anteriores fuera de este filtro: {{count}}",
+      "hiddenPastAction": "Ver las anteriores"
     },
     "labworksSection": {
       "title": "Trabajos de laboratorio",

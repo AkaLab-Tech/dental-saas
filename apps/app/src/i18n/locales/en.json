@@ -573,7 +573,10 @@
       "dateFrom": "From",
       "dateTo": "To",
       "clearFilters": "Clear filters",
-      "confirmComplete": "Are you sure you want to mark this appointment as completed?"
+      "confirmComplete": "Are you sure you want to mark this appointment as completed?",
+      "totalBadgeLabel": "Total appointments in this record: {{count}}",
+      "hiddenPast": "Past appointments outside this filter: {{count}}",
+      "hiddenPastAction": "View the past ones"
     },
     "labworksSection": {
       "title": "Lab work",
