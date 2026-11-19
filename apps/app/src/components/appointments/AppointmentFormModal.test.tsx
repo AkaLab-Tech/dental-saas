@@ -3105,3 +3105,86 @@ describe('AppointmentFormModal — withheld lines name their holder (#703)', () 
     expect(screen.queryByText(/appointments\.budgetItems/)).not.toBeInTheDocument()
   })
 })
+
+// ============================================================================
+// G22 (#691) — what the clinic assistant reads on a re-created appointment
+// ============================================================================
+//
+// The API now carries the EXECUTED link of a deleted visit onto its re-created
+// replacement (POST /appointments). The form of that replacement has no new
+// string: the carried line is an ordinary "this appointment's own EXECUTED
+// item", locked checked + disabled with the "Ya ejecutado" badge, beside the
+// quiet figure. G22 pins that rendering on the production shape (a DRAFT
+// budget, which offers no PENDING line) and its complement, the same item NOT
+// associated, where the line is not offered at all.
+//
+// Numbering is per file; this is the frontend half of the series in
+// apps/api/src/routes/appointments-executed-link-carry.test.ts (G14–G21).
+describe('AppointmentFormModal — carried EXECUTED item (G22, #691)', () => {
+  const draftBudgetWithExecutedItem = () =>
+    makeBudget({
+      status: 'DRAFT',
+      items: [
+        makeBudgetItem({
+          id: 'item-carried',
+          description: 'Carried item',
+          status: 'EXECUTED',
+          unitPrice: '5400',
+          totalPrice: '5400',
+        }),
+      ],
+    })
+
+  beforeEach(async () => {
+    // The Spanish is the deliverable: pin it here, because an earlier suite in
+    // this file ends on 'en' (#703) and the order must not decide what is read.
+    await i18n.changeLanguage('es')
+    getDoctorsMock.mockResolvedValue([mockDoctor])
+    getPatientsMock.mockResolvedValue([mockPatientRecord])
+    listBudgetsByPatientMock.mockResolvedValue({ data: [draftBudgetWithExecutedItem()], total: 1 })
+  })
+
+  it('with the carried item associated: the line is listed, checked, disabled and badged "Ya ejecutado" at USD 5,400.00', async () => {
+    getAppointmentBudgetItemsMock.mockResolvedValue([
+      makeAssociatedItem({ id: 'item-carried', status: 'EXECUTED', roles: ['EXECUTED'] }),
+    ])
+    renderModal({
+      appointment: makeAppointment({
+        id: 'apt-recreated',
+        budgetItems: { count: 1, cost: 5400, paidAmount: 0, outstanding: 5400 },
+      }),
+    })
+    await waitForOptionsLoaded()
+    await waitFor(() => expect(screen.getByText('Carried item')).toBeInTheDocument())
+
+    const checkbox = getItemCheckbox('Carried item')
+    expect(checkbox).toBeChecked()
+    expect(checkbox).toBeDisabled()
+    const row = screen.getByText('Carried item').closest('label')!
+    expect(within(row).getByText('Ya ejecutado')).toBeInTheDocument()
+    expect(row).toHaveTextContent('USD 5,400.00')
+    expect(row).toHaveTextContent(/^Carried itemYa ejecutadoUSD 5,400\.00$/)
+
+    // The quiet figure beside the list describes the same single line.
+    const figure = screen.getByText(/Ítems de presupuesto ejecutados en esta cita: 1/)
+    expect(figure).toHaveTextContent('Ítems de presupuesto ejecutados en esta cita: 1 · USD 5,400.00')
+    expect(screen.getByText(/Cubierto: USD 0\.00 · Pendiente: USD 5,400\.00/)).toBeInTheDocument()
+
+    expect(screen.getByText(i18n.t('appointments.budgetItems.executedChargeHint'))).toBeInTheDocument()
+
+    // Clicking the locked checkbox does not release the carried line.
+    fireEvent.click(checkbox)
+    expect(checkbox).toBeChecked()
+  })
+
+  it('complement: with the same item NOT associated the DRAFT budget offers no line and no figure (so the assertions above are not vacuous)', async () => {
+    getAppointmentBudgetItemsMock.mockResolvedValue([])
+    renderModal({ appointment: makeAppointment({ id: 'apt-recreated' }) })
+    await waitForOptionsLoaded()
+    await waitFor(() => expect(getAppointmentBudgetItemsMock).toHaveBeenCalledWith('apt-recreated'))
+
+    expect(screen.queryByText('Carried item')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Ítems de presupuesto ejecutados en esta cita/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Ya ejecutado')).not.toBeInTheDocument()
+  })
+})

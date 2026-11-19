@@ -348,3 +348,73 @@ export async function getAppointmentBudgetItems(
   const data = await loadAppointmentBudgetItems(appointmentId)
   return { success: true, data }
 }
+
+/**
+ * Re-parent the EXECUTED links stranded on a deleted appointment onto its
+ * re-created replacement (same patient, doctor and exact startTime), but only
+ * when the replacement holds no links of its own. The existing rows are moved,
+ * never re-created: the budget may be DRAFT, which an association would reject,
+ * and no item status or budget aggregate changes.
+ *
+ * Boundary: called from POST /appointments after the budgetItemIds step, because
+ * that is when "holds no links of its own" is knowable. A direct
+ * createAppointment() service call never carries.
+ */
+export async function carryExecutedLinksFromReplacedAppointment(
+  tenantId: string,
+  newAppointmentId: string,
+  userId: string | null
+): Promise<{ carried: number; fromAppointmentId: string | null }> {
+  const none = { carried: 0, fromAppointmentId: null }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const created = await tx.appointment.findFirst({
+      where: { id: newAppointmentId, tenantId, isActive: true },
+      select: { patientId: true, doctorId: true, startTime: true },
+    })
+    if (!created) return null
+
+    const ownLinks = await tx.budgetItemAppointment.count({
+      where: { appointmentId: newAppointmentId },
+    })
+    if (ownLinks > 0) return null
+
+    const candidates = await tx.appointment.findMany({
+      where: {
+        tenantId,
+        patientId: created.patientId,
+        doctorId: created.doctorId,
+        startTime: created.startTime,
+        isActive: false,
+        id: { not: newAppointmentId },
+        budgetItemAppointments: { some: { role: 'EXECUTED' } },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    })
+    if (candidates.length === 0) return null
+    if (candidates.length > 1) {
+      logger.warn(
+        { tenantId, newAppointmentId, candidateIds: candidates.map((c) => c.id) },
+        'Several replaced appointments hold EXECUTED links; carrying the most recent only'
+      )
+    }
+
+    const fromAppointmentId = candidates[0].id
+    const moved = await tx.budgetItemAppointment.updateMany({
+      where: { appointmentId: fromAppointmentId, role: 'EXECUTED' },
+      data: { appointmentId: newAppointmentId },
+    })
+    return { carried: moved.count, fromAppointmentId, patientId: created.patientId }
+  })
+
+  if (!result) return none
+
+  // Billability changed (the item bills again): refresh the cached isPaid / FIFO.
+  await recalculatePaidStatus(tenantId, result.patientId)
+  logger.info(
+    { tenantId, newAppointmentId, fromAppointmentId: result.fromAppointmentId, userId },
+    'EXECUTED budget links carried onto re-created appointment'
+  )
+  return { carried: result.carried, fromAppointmentId: result.fromAppointmentId }
+}

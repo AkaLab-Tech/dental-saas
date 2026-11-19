@@ -25,6 +25,7 @@ import {
   confirmExecutedBudgetItems,
   validateExecutableBudgetItems,
   getAppointmentBudgetItems,
+  carryExecutedLinksFromReplacedAppointment,
   type BudgetAppointmentErrorCode,
 } from '../services/budget-appointment.service.js'
 import { PdfService } from '../services/pdf.service.js'
@@ -433,7 +434,18 @@ appointmentsRouter.post('/', requireMinRole('CLINIC_ADMIN'), async (req, res, ne
       if (!linkResult.success) return sendBudgetItemsError(res, linkResult.code)
     }
 
-    res.status(201).json({ success: true, data: result.appointment })
+    // The store appends this body wholesale, so a carried link must ride it.
+    const carry = await carryExecutedLinksFromReplacedAppointment(
+      tenantId,
+      result.appointment!.id,
+      userId
+    )
+    const data =
+      carry.carried > 0
+        ? await getAppointmentById(tenantId, result.appointment!.id)
+        : result.appointment
+
+    res.status(201).json({ success: true, data })
   } catch (e) {
     next(e)
   }
