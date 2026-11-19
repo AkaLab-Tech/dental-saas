@@ -5,6 +5,8 @@ import {
   confirmExecutedBudgetItems,
   getAppointmentBudgetItems,
 } from './budget-appointment.service.js'
+import { deleteAppointment } from './appointment.service.js'
+import { listBudgetsByPatient } from './budget.service.js'
 
 describe('budget-appointment.service', () => {
   let tenantId: string
@@ -498,6 +500,54 @@ describe('budget-appointment.service', () => {
       expect(item?.status).toBe('PENDING')
       const budget = await prisma.budget.findUnique({ where: { id: budgetId } })
       expect(budget?.status).toBe('DRAFT')
+    })
+  })
+
+  // ==========================================================================
+  // What the list payload shows after a delete (#703, G2-api)
+  // ==========================================================================
+
+  describe('list payload after deleteAppointment (#703)', () => {
+    it('keeps the link on the deleted appointment, flagged isActive=false, with the line still non-PENDING', async () => {
+      const { budgetId, itemId } = await makeBudgetItem('PENDING')
+      const { budgetId: otherBudgetId, itemId: pendingItemId } = await makeBudgetItem('PENDING')
+
+      // Built through the real path: associate, then delete. No status written by hand.
+      const linked = await setAppointmentBudgetItems(tenantId, appointmentId, [itemId], userId)
+      expect(linked.success).toBe(true)
+      const deleted = await deleteAppointment(tenantId, appointmentId, userId)
+      expect(deleted.error).toBeUndefined()
+
+      const result = await listBudgetsByPatient(tenantId, patientId)
+
+      const budget = result.data.find((b) => b.id === budgetId)
+      expect(budget?.items).toHaveLength(1)
+      const item = budget!.items[0]
+      expect(item.id).toBe(itemId)
+      // What the delete leaves behind: the line is NOT released ...
+      expect(item.status).toBe('SCHEDULED')
+      // ... and the link survives, pointing at an inactive appointment.
+      expect(item.appointments).toHaveLength(1)
+      expect(item.appointments[0].role).toBe('SCHEDULED')
+      expect(item.appointments[0].appointment.id).toBe(appointmentId)
+      expect(item.appointments[0].appointment.isActive).toBe(false)
+      expect(item.appointments[0].appointment.startTime).toBeInstanceOf(Date)
+
+      // Vacuity control: an unlinked PENDING line of the same patient carries an empty list.
+      const other = result.data.find((b) => b.id === otherBudgetId)
+      expect(other?.items[0].id).toBe(pendingItemId)
+      expect(other?.items[0].appointments).toEqual([])
+    })
+
+    it('a link on a live appointment reads isActive=true, so the two cases are told apart by the payload', async () => {
+      const { budgetId, itemId } = await makeBudgetItem('PENDING')
+      const linked = await setAppointmentBudgetItems(tenantId, appointmentId, [itemId], userId)
+      expect(linked.success).toBe(true)
+
+      const result = await listBudgetsByPatient(tenantId, patientId)
+
+      const item = result.data.find((b) => b.id === budgetId)!.items[0]
+      expect(item.appointments.map((link) => link.appointment.isActive)).toEqual([true])
     })
   })
 })

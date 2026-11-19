@@ -12,7 +12,12 @@ import type {
   AppointmentStatus,
   AppointmentBudgetItemSummary,
 } from '../../lib/appointment-api'
-import { getStatusLabel, getAppointmentBudgetItems, getAppointmentById } from '../../lib/appointment-api'
+import {
+  getStatusLabel,
+  getAppointmentBudgetItems,
+  getAppointmentById,
+  formatAppointmentDateTime,
+} from '../../lib/appointment-api'
 import * as patientApi from '../../lib/patient-api'
 import * as doctorApi from '../../lib/doctor-api'
 import { listBudgetsByPatient, createBudget, type BudgetItemStatus, type CreateBudgetData } from '../../lib/budget-api'
@@ -24,6 +29,14 @@ import { TimePicker } from '../ui/TimePicker'
 import { DoctorPicker, type DoctorOption } from '../ui/DoctorPicker'
 import { useAuthStore } from '../../stores/auth.store'
 import { useSettingsStore } from '../../stores/settings.store'
+
+interface WithheldItem {
+  key: string
+  kind: 'held-live' | 'held-deleted'
+  description: string
+  toothNumber: string | null
+  startTime: string
+}
 
 interface EligibleBudgetItem {
   id: string
@@ -186,6 +199,9 @@ export function AppointmentFormModal({
   // True when the patient has draft budgets with lines that would otherwise
   // be offered; drives the on-screen reason they are missing.
   const [hasHiddenDraftItems, setHasHiddenDraftItems] = useState(false)
+  // Lines withheld because an appointment already holds them, one row per
+  // (line, holding appointment). Names where the work is; says nothing else.
+  const [withheldItems, setWithheldItems] = useState<WithheldItem[]>([])
   // Tracks the last patientId a fetch ran for, so a same-patient re-render
   // (e.g. options finishing load) doesn't wipe out the user's selection.
   const lastBudgetPatientIdRef = useRef<string | null>(null)
@@ -355,6 +371,7 @@ export function AppointmentFormModal({
   useEffect(() => {
     if (!isOpen || !watchedPatientId) {
       setBudgetItems([])
+      setWithheldItems([])
       setSelectedBudgetItemIds([])
       lastBudgetPatientIdRef.current = null
       return
@@ -415,6 +432,33 @@ export function AppointmentFormModal({
 
         setBudgetItems(eligible)
 
+        const withheld: WithheldItem[] = []
+        for (const budget of budgets) {
+          if (budget.status === 'CANCELLED' || !isBudgetAssociable(budget.status)) continue
+          for (const item of budget.items) {
+            if (associatedIds.has(item.id) || item.status === 'PENDING') continue
+            const holders = item.appointments
+              .map((link) => link.appointment)
+              .filter((holder) => holder.id !== appointment?.id)
+            const live = holders.filter((holder) => holder.isActive)
+            const kind: WithheldItem['kind'] = live.length > 0 ? 'held-live' : 'held-deleted'
+            const rows = live.length > 0 ? live : holders.filter((holder) => !holder.isActive)
+            const seen = new Set<string>()
+            for (const holder of [...rows].sort((a, b) => a.startTime.localeCompare(b.startTime))) {
+              if (seen.has(holder.id)) continue
+              seen.add(holder.id)
+              withheld.push({
+                key: `${item.id}:${holder.id}`,
+                kind,
+                description: item.description,
+                toothNumber: item.toothNumber,
+                startTime: holder.startTime,
+              })
+            }
+          }
+        }
+        setWithheldItems(withheld)
+
         if (isNewPatient) {
           const preselected = associated
             .filter((item) => item.roles.includes('SCHEDULED'))
@@ -425,6 +469,7 @@ export function AppointmentFormModal({
         console.error('Error fetching budget items:', error)
         if (!cancelled) {
           setBudgetItems([])
+          setWithheldItems([])
           setHasHiddenDraftItems(false)
           if (isNewPatient) setSelectedBudgetItemIds([])
         }
@@ -867,6 +912,30 @@ export function AppointmentFormModal({
                   {hasHiddenDraftItems && (
                     <p className="text-xs text-amber-700 mb-2">{t('appointments.budgetItems.draftHint')}</p>
                   )}
+                  {(['held-live', 'held-deleted'] as const).map((kind) => {
+                    const rows = withheldItems.filter((row) => row.kind === kind)
+                    if (rows.length === 0) return null
+                    const prefix = kind === 'held-live' ? 'heldElsewhere' : 'heldDeleted'
+                    return (
+                      <div key={kind} className="text-xs text-gray-600 mb-2">
+                        <p className="font-medium">
+                          {t(`appointments.budgetItems.${prefix}Title`, { count: rows.length })}
+                        </p>
+                        <ul className="list-disc ps-4">
+                          {rows.map((row) => (
+                            <li key={row.key}>
+                              {t(`appointments.budgetItems.${prefix}Item`, {
+                                item: row.toothNumber
+                                  ? `${row.description} (${t('budgets.items.toothNumber')}: ${row.toothNumber})`
+                                  : row.description,
+                                datetime: formatAppointmentDateTime(row.startTime),
+                              })}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )
+                  })}
 
                   {loadingBudgetItems ? (
                     <div className="flex items-center gap-2 text-sm text-gray-500 py-2">

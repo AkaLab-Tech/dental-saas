@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { prisma } from '@dental/database'
-import { generateShareToken, getBudgetByPublicToken } from './budget.service.js'
+import { generateShareToken, getBudgetByPublicToken, listBudgetsByPatient } from './budget.service.js'
 
 describe('budget.service — share token', () => {
   let tenantId: string
@@ -241,6 +241,71 @@ describe('budget.service — share token', () => {
 
       const result = await getBudgetByPublicToken(shareResult.data.token)
       expect(result.success).toBe(true)
+    })
+  })
+
+  describe('appointment links on the item payload (#703)', () => {
+    it('list items carry their appointment links, public-share items carry none (G7)', async () => {
+      const doctor = await prisma.doctor.create({
+        data: { tenantId, firstName: 'Link', lastName: 'Doctor', email: `link-doc-${suffix}@test.com` },
+      })
+      const startTime = new Date('2026-03-10T13:00:00.000Z')
+      const appointment = await prisma.appointment.create({
+        data: {
+          tenantId,
+          patientId,
+          doctorId: doctor.id,
+          startTime,
+          endTime: new Date(startTime.getTime() + 30 * 60 * 1000),
+          duration: 30,
+        },
+      })
+      try {
+        const budget = await prisma.budget.create({
+          data: {
+            tenantId,
+            patientId,
+            status: 'APPROVED',
+            items: {
+              create: [
+                {
+                  description: 'Held line',
+                  quantity: 1,
+                  unitPrice: 300,
+                  totalPrice: 300,
+                  order: 0,
+                  status: 'SCHEDULED',
+                  appointments: { create: [{ appointmentId: appointment.id, role: 'SCHEDULED' }] },
+                },
+              ],
+            },
+          },
+        })
+        const shareResult = await generateShareToken(tenantId, budget.id)
+        expect(shareResult.success).toBe(true)
+        if (!shareResult.success) return
+
+        const list = await listBudgetsByPatient(tenantId, patientId)
+        const publicResult = await getBudgetByPublicToken(shareResult.data.token)
+
+        const listItem = list.data.find((b) => b.id === budget.id)!.items[0]
+        expect(listItem.appointments).toEqual([
+          { role: 'SCHEDULED', appointment: { id: appointment.id, startTime, isActive: true } },
+        ])
+
+        expect(publicResult.success).toBe(true)
+        if (!publicResult.success) return
+        // On items[0], not the root: the root-level leak assertions above would
+        // stay green on an items-level leak.
+        expect(publicResult.data.items).toHaveLength(1)
+        expect(publicResult.data.items[0].description).toBe('Held line')
+        expect(publicResult.data.items[0]).not.toHaveProperty('appointments')
+        expect(JSON.stringify(publicResult.data)).not.toContain(appointment.id)
+      } finally {
+        await prisma.budget.deleteMany({ where: { tenantId } })
+        await prisma.appointment.deleteMany({ where: { tenantId } })
+        await prisma.doctor.deleteMany({ where: { id: doctor.id } })
+      }
     })
   })
 })
