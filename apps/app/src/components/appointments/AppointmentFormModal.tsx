@@ -379,6 +379,7 @@ export function AppointmentFormModal({
 
     const isNewPatient = lastBudgetPatientIdRef.current !== watchedPatientId
     let cancelled = false
+    setWithheldItems([])
     setLoadingBudgetItems(true)
 
     const load = async () => {

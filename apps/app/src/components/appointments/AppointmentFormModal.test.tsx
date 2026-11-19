@@ -111,6 +111,14 @@ vi.mock('../ui/PatientSearchCombobox', () => ({
         <button type="button" onClick={onClear}>
           Clear patient
         </button>
+        {/* Direct A -> B switch: the selected patient is replaced without passing
+            through the cleared state (patientId never goes empty). */}
+        <button
+          type="button"
+          onClick={() => onSelect({ id: 'patient-2', firstName: 'Beto', lastName: 'Lopez' })}
+        >
+          Switch to Beto
+        </button>
       </div>
     ) : (
       <div>
@@ -3023,6 +3031,57 @@ describe('AppointmentFormModal — withheld lines name their holder (#703)', () 
     expect(screen.getByText(liveItemText('Ajena', LATER_LIVE_START))).toBeInTheDocument()
     expect(screen.queryByText(liveItemText('Ajena', LIVE_START))).not.toBeInTheDocument()
     expect(screen.queryByText(liveItemText('Propia', LIVE_START))).not.toBeInTheDocument()
+  })
+
+  it('switching A to B with B still loading shows none of patient A withheld rows under the spinner', async () => {
+    const budgetA = makeBudget({
+      patientId: 'patient-1',
+      items: [
+        pendingLine(),
+        makeBudgetItem({
+          id: 'item-a-live',
+          description: 'Corona De Ana',
+          toothNumber: '14',
+          status: 'SCHEDULED',
+          appointments: [holder('apt-a', LIVE_START, true)],
+        }),
+      ],
+    })
+    let settleB: (value: { data: Budget[]; total: number }) => void = () => {}
+    listBudgetsByPatientMock.mockImplementation((patientId: string) => {
+      if (patientId === 'patient-1') return Promise.resolve({ data: [budgetA], total: 1 })
+      return new Promise((resolve) => {
+        settleB = resolve
+      })
+    })
+    renderModal()
+    await waitForOptionsLoaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+
+    const rowA = liveItemText('Corona De Ana (Diente: 14)', LIVE_START)
+    // Vacuity check: A's row really renders before the switch.
+    expect(await screen.findByText(rowA)).toBeInTheDocument()
+    expect(screen.getByText(liveTitleText(1))).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to Beto' }))
+
+    // B's fetch is pending: the spinner is up and A's rows are gone.
+    await waitFor(() =>
+      expect(listBudgetsByPatientMock).toHaveBeenCalledWith('patient-2', { limit: 100 })
+    )
+    expect(screen.getByTestId('selected-patient')).toHaveTextContent('Beto Lopez')
+    expect(screen.getByText('Cargando ítems de presupuesto...')).toBeInTheDocument()
+    expect(screen.queryByText(rowA)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Corona De Ana/)).not.toBeInTheDocument()
+    expect(screen.queryByText(liveTitleText(1))).not.toBeInTheDocument()
+    expect(screen.queryByText(formatAppointmentDateTime(LIVE_START), { exact: false })).not.toBeInTheDocument()
+
+    // Settle B so no pending handle leaks; its own (empty) result replaces the spinner.
+    settleB({ data: [], total: 0 })
+    await waitFor(() =>
+      expect(screen.queryByText('Cargando ítems de presupuesto...')).not.toBeInTheDocument()
+    )
+    expect(screen.queryByText(/Corona De Ana/)).not.toBeInTheDocument()
   })
 
   it('renders in en with the translated strings, not keys', async () => {
