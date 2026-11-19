@@ -45,6 +45,26 @@ const BUDGET_SELECT = {
   },
 } as const satisfies Prisma.BudgetSelect
 
+// List-only: carries each line's appointment links. Never reuse it on the public
+// share-token path, which is unauthenticated and must not expose appointment data.
+const BUDGET_ITEM_WITH_HOLDERS_SELECT = {
+  ...BUDGET_ITEM_SELECT,
+  appointments: {
+    select: {
+      role: true,
+      appointment: { select: { id: true, startTime: true, isActive: true } },
+    },
+  },
+} as const
+
+const BUDGET_LIST_SELECT = {
+  ...BUDGET_SELECT,
+  items: {
+    select: BUDGET_ITEM_WITH_HOLDERS_SELECT,
+    orderBy: { order: 'asc' },
+  },
+} as const satisfies Prisma.BudgetSelect
+
 type BudgetWithMoney = Prisma.BudgetGetPayload<{ select: typeof BUDGET_SELECT }> & {
   money: BudgetMoney
 }
@@ -304,7 +324,9 @@ export async function listBudgetsByPatient(
   patientId: string,
   options?: ListBudgetsOptions
 ): Promise<{
-  data: BudgetWithMoney[]
+  data: (Prisma.BudgetGetPayload<{ select: typeof BUDGET_LIST_SELECT }> & {
+    money: BudgetMoney
+  })[]
   total: number
 }> {
   const where: Prisma.BudgetWhereInput = {
@@ -316,7 +338,7 @@ export async function listBudgetsByPatient(
   const [budgets, total, buckets] = await Promise.all([
     prisma.budget.findMany({
       where,
-      select: BUDGET_SELECT,
+      select: BUDGET_LIST_SELECT,
       orderBy: { createdAt: 'desc' },
       take: options?.limit ?? 50,
       skip: options?.offset ?? 0,

@@ -64,6 +64,20 @@ export interface Budget {
   money: BudgetMoney
 }
 
+export interface BudgetItemHolder {
+  role: 'SCHEDULED' | 'EXECUTED'
+  appointment: { id: string; startTime: string; isActive: boolean }
+}
+
+/** List route only: each line's appointment links. */
+export interface BudgetItemWithHolders extends BudgetItem {
+  appointments: BudgetItemHolder[]
+}
+
+export interface BudgetWithHolders extends Budget {
+  items: BudgetItemWithHolders[]
+}
+
 export interface BudgetVisit {
   appointmentId: string
   date: string
@@ -134,8 +148,8 @@ interface ApiResponse<T> {
 export async function listBudgetsByPatient(
   patientId: string,
   params?: ListBudgetsByPatientParams
-): Promise<{ data: Budget[]; total: number }> {
-  const response = await apiClient.get<ApiResponse<Budget[]>>(
+): Promise<{ data: BudgetWithHolders[]; total: number }> {
+  const response = await apiClient.get<ApiResponse<BudgetWithHolders[]>>(
     `/patients/${patientId}/budgets`,
     { params }
   )

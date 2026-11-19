@@ -2,7 +2,17 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import i18n from 'i18next'
 import '@/i18n'
 import { useBudgetsStore } from './budgets.store'
-import type { BudgetWithVisits as Budget, BudgetItem } from '../lib/budget-api'
+import type {
+  BudgetWithVisits,
+  BudgetWithHolders,
+  BudgetItemWithHolders,
+} from '../lib/budget-api'
+
+// The list route returns lines with their appointment links, the detail route
+// returns visits; the fixture satisfies both. `appointments: []` states "this
+// line holds no links".
+type Budget = BudgetWithVisits & BudgetWithHolders
+type BudgetItem = BudgetItemWithHolders
 
 vi.mock('../lib/budget-api', () => ({
   listBudgetsByPatient: vi.fn(),
@@ -39,6 +49,7 @@ function makeItem(overrides: Partial<BudgetItem> = {}): BudgetItem {
     status: 'PENDING',
     notes: null,
     order: 0,
+    appointments: [],
     createdAt: '2026-04-23T00:00:00Z',
     updatedAt: '2026-04-23T00:00:00Z',
     ...overrides,

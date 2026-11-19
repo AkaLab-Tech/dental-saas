@@ -445,6 +445,12 @@ export function formatAppointmentDate(startTime: string): string {
   })
 }
 
+export function formatAppointmentDateTime(startTime: string): string {
+  const date = new Date(startTime)
+  const time = date.toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' })
+  return `${formatAppointmentDate(startTime)} ${time}`
+}
+
 /**
  * Check if appointment is in the past
  */

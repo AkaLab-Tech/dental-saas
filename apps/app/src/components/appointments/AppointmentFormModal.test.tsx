@@ -5,7 +5,13 @@ import i18n from 'i18next'
 import '@/i18n'
 import { AppointmentFormModal } from './AppointmentFormModal'
 import type { Appointment, AppointmentBudgetItemSummary } from '../../lib/appointment-api'
-import type { Budget, BudgetItem, CreateBudgetData } from '../../lib/budget-api'
+import { formatAppointmentDateTime } from '../../lib/appointment-api'
+import type {
+  BudgetWithHolders as Budget,
+  BudgetItemWithHolders as BudgetItem,
+  BudgetItemHolder,
+  CreateBudgetData,
+} from '../../lib/budget-api'
 import enLocale from '../../i18n/locales/en.json'
 import arLocale from '../../i18n/locales/ar.json'
 import esLocale from '../../i18n/locales/es.json'
@@ -105,6 +111,14 @@ vi.mock('../ui/PatientSearchCombobox', () => ({
         <button type="button" onClick={onClear}>
           Clear patient
         </button>
+        {/* Direct A -> B switch: the selected patient is replaced without passing
+            through the cleared state (patientId never goes empty). */}
+        <button
+          type="button"
+          onClick={() => onSelect({ id: 'patient-2', firstName: 'Beto', lastName: 'Lopez' })}
+        >
+          Switch to Beto
+        </button>
       </div>
     ) : (
       <div>
@@ -149,6 +163,8 @@ function makeBudgetItem(overrides: Partial<BudgetItem> = {}): BudgetItem {
     status: 'PENDING',
     notes: null,
     order: 0,
+    // The list route always carries each line's links; no links by default.
+    appointments: [],
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
     ...overrides,
@@ -2656,5 +2672,436 @@ describe('AppointmentFormModal — create a budget from the picker (#628)', () =
       await waitFor(() => expect(screen.getByRole('button', { name: label })).toBeInTheDocument())
       expect(screen.queryByText(KEY)).not.toBeInTheDocument()
     })
+  })
+})
+
+// ============================================================================
+// #703 — name the appointment holding every line the picker withholds
+// ============================================================================
+
+describe('AppointmentFormModal — withheld lines name their holder (#703)', () => {
+  const KEYS = {
+    liveTitle: 'appointments.budgetItems.heldElsewhereTitle',
+    liveItem: 'appointments.budgetItems.heldElsewhereItem',
+    deletedTitle: 'appointments.budgetItems.heldDeletedTitle',
+    deletedItem: 'appointments.budgetItems.heldDeletedItem',
+  } as const
+
+  const LIVE_START = '2026-03-10T13:00:00.000Z'
+  const LATER_LIVE_START = '2026-05-20T16:45:00.000Z'
+  const DELETED_START = '2026-04-02T15:30:00.000Z'
+
+  function holder(
+    id: string,
+    startTime: string,
+    isActive: boolean,
+    role: BudgetItemHolder['role'] = 'SCHEDULED'
+  ): BudgetItemHolder {
+    return { role, appointment: { id, startTime, isActive } }
+  }
+
+  // The expected texts go through the same formatter the component uses, so the
+  // expectation holds in whatever zone the runner happens to be in.
+  const liveItemText = (item: string, startTime: string) =>
+    i18n.t(KEYS.liveItem, { item, datetime: formatAppointmentDateTime(startTime) })
+  const deletedItemText = (item: string, startTime: string) =>
+    i18n.t(KEYS.deletedItem, { item, datetime: formatAppointmentDateTime(startTime) })
+  const liveTitleText = (count: number) => i18n.t(KEYS.liveTitle, { count })
+  const deletedTitleText = (count: number) => i18n.t(KEYS.deletedTitle, { count })
+  const draftHint = () => i18n.t('appointments.budgetItems.draftHint')
+
+  async function openWith(budgets: Budget[], props: Parameters<typeof renderModal>[0] = {}) {
+    listBudgetsByPatientMock.mockResolvedValue({ data: budgets, total: budgets.length })
+    renderModal(props)
+    await waitForOptionsLoaded()
+    // Edit mode opens with the appointment's patient already selected.
+    if (!props.appointment) fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+  }
+
+  const pendingLine = () =>
+    makeBudgetItem({ id: 'item-pending', description: 'Limpieza Pendiente', status: 'PENDING' })
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    await i18n.changeLanguage('es')
+    getDoctorsMock.mockResolvedValue([mockDoctor])
+    getPatientsMock.mockResolvedValue([mockPatientRecord])
+    getAppointmentBudgetItemsMock.mockResolvedValue([])
+  })
+
+  it('the four keys exist verbatim in es and are translated in en and ar', () => {
+    const read = (locale: unknown, key: string) =>
+      key.split('.').reduce((node, part) => (node as Record<string, unknown>)[part], locale)
+    const names = ['heldElsewhereTitle', 'heldElsewhereItem', 'heldDeletedTitle', 'heldDeletedItem']
+    const es = [
+      'Estos trabajos ya están en otra cita ({{count}}):',
+      '{{item}} · cita del {{datetime}}',
+      'Estos trabajos quedaron en una cita eliminada ({{count}}):',
+      '{{item}} · cita eliminada del {{datetime}}',
+    ]
+    names.forEach((name, index) => {
+      const key = `appointments.budgetItems.${name}`
+      expect(read(esLocale, key)).toBe(es[index])
+      for (const locale of [enLocale, arLocale]) {
+        const text = read(locale, key) as string
+        expect(typeof text).toBe('string')
+        expect(text).not.toBe(es[index])
+        // Same interpolation variables as the source string.
+        expect([...text.matchAll(/{{(\w+)}}/g)].map((m) => m[1]).sort()).toEqual(
+          [...es[index].matchAll(/{{(\w+)}}/g)].map((m) => m[1]).sort()
+        )
+      }
+    })
+  })
+
+  it('G1: a line committed to another live appointment names that appointment date and time', async () => {
+    await openWith([
+      makeBudget({
+        items: [
+          pendingLine(),
+          makeBudgetItem({
+            id: 'item-live',
+            description: 'Corona Viva',
+            toothNumber: '14',
+            status: 'SCHEDULED',
+            appointments: [holder('apt-live', LIVE_START, true)],
+          }),
+        ],
+      }),
+    ])
+
+    const line = liveItemText('Corona Viva (Diente: 14)', LIVE_START)
+    expect(await screen.findByText(line)).toBeInTheDocument()
+    expect(screen.getByText('Estos trabajos ya están en otra cita (1):')).toBeInTheDocument()
+    // The datetime really carries a clock time, not just the date.
+    expect(line).toMatch(/\d{1,2}:\d{2}/)
+    expect(line).toContain(formatAppointmentDateTime(LIVE_START))
+    // Held lines are explained, not offered.
+    expect(screen.queryByRole('checkbox', { name: /Corona Viva/ })).not.toBeInTheDocument()
+  })
+
+  it('G2: a line whose every link sits on a deleted appointment renders the deleted motive, not the live one', async () => {
+    await openWith([
+      makeBudget({
+        items: [
+          pendingLine(),
+          makeBudgetItem({
+            id: 'item-deleted',
+            description: 'Resina Eliminada',
+            status: 'SCHEDULED',
+            appointments: [holder('apt-del', DELETED_START, false)],
+          }),
+        ],
+      }),
+    ])
+
+    expect(
+      await screen.findByText(deletedItemText('Resina Eliminada', DELETED_START))
+    ).toBeInTheDocument()
+    expect(screen.getByText('Estos trabajos quedaron en una cita eliminada (1):')).toBeInTheDocument()
+    // (b) the live motive is absent.
+    expect(screen.queryByText(liveTitleText(1))).not.toBeInTheDocument()
+    expect(screen.queryByText(liveItemText('Resina Eliminada', DELETED_START))).not.toBeInTheDocument()
+  })
+
+  it('G2 (a): the two titles and the two per-line strings are pairwise different, in every locale', () => {
+    for (const lng of ['es', 'en', 'ar']) {
+      const t = (key: string) => i18n.t(key, { lng, fallbackLng: false, count: 2, item: 'X', datetime: 'D' })
+      const texts = [KEYS.liveTitle, KEYS.liveItem, KEYS.deletedTitle, KEYS.deletedItem].map(t)
+      expect(new Set(texts).size).toBe(4)
+      // No key rendered as itself: the resource resolved.
+      texts.forEach((text) => expect(text).not.toContain('appointments.budgetItems'))
+    }
+  })
+
+  it('G3: the same render offers the PENDING line, tickable, next to both motives', async () => {
+    await openWith([
+      makeBudget({
+        items: [
+          pendingLine(),
+          makeBudgetItem({
+            id: 'item-live',
+            description: 'Corona Viva',
+            status: 'SCHEDULED',
+            appointments: [holder('apt-live', LIVE_START, true)],
+          }),
+          makeBudgetItem({
+            id: 'item-deleted',
+            description: 'Resina Eliminada',
+            status: 'SCHEDULED',
+            appointments: [holder('apt-del', DELETED_START, false)],
+          }),
+        ],
+      }),
+    ])
+
+    await screen.findByText(liveItemText('Corona Viva', LIVE_START))
+    expect(screen.getByText(deletedItemText('Resina Eliminada', DELETED_START))).toBeInTheDocument()
+    const checkbox = getItemCheckbox('Limpieza Pendiente')
+    expect(checkbox).toBeEnabled()
+    expect(checkbox).not.toBeChecked()
+    fireEvent.click(checkbox)
+    expect(checkbox).toBeChecked()
+    expect(screen.queryByText(EMPTY_MSG)).not.toBeInTheDocument()
+  })
+
+  it('G4: a DRAFT budget shows the draft hint and neither held motive', async () => {
+    await openWith([
+      makeBudget({
+        id: 'budget-draft',
+        status: 'DRAFT',
+        items: [
+          makeBudgetItem({ id: 'draft-pending', budgetId: 'budget-draft', description: 'Draft Pending', status: 'PENDING' }),
+          makeBudgetItem({
+            id: 'draft-live',
+            budgetId: 'budget-draft',
+            description: 'Draft Live Held',
+            status: 'SCHEDULED',
+            appointments: [holder('apt-live', LIVE_START, true)],
+          }),
+          makeBudgetItem({
+            id: 'draft-deleted',
+            budgetId: 'budget-draft',
+            description: 'Draft Deleted Held',
+            status: 'SCHEDULED',
+            appointments: [holder('apt-del', DELETED_START, false)],
+          }),
+        ],
+      }),
+    ])
+
+    expect(await screen.findByText(draftHint())).toBeInTheDocument()
+    expect(screen.queryByText(liveTitleText(1))).not.toBeInTheDocument()
+    expect(screen.queryByText(deletedTitleText(1))).not.toBeInTheDocument()
+    expect(screen.queryByText(/Draft Live Held/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Draft Deleted Held/)).not.toBeInTheDocument()
+  })
+
+  it('G4: a CANCELLED budget explains nothing either', async () => {
+    await openWith([
+      makeBudget({
+        id: 'budget-cancelled',
+        status: 'CANCELLED',
+        items: [
+          makeBudgetItem({
+            id: 'cancelled-live',
+            description: 'Cancelled Live Held',
+            status: 'SCHEDULED',
+            appointments: [holder('apt-live', LIVE_START, true)],
+          }),
+        ],
+      }),
+    ])
+
+    await screen.findByText(EMPTY_MSG)
+    expect(screen.queryByText(/Cancelled Live Held/)).not.toBeInTheDocument()
+    expect(screen.queryByText(liveTitleText(1))).not.toBeInTheDocument()
+  })
+
+  it('G5: nothing withheld renders no motive block at all', async () => {
+    await openWith([
+      makeBudget({
+        items: [
+          pendingLine(),
+          makeBudgetItem({ id: 'item-two', description: 'Segunda Pendiente', status: 'PENDING' }),
+        ],
+      }),
+    ])
+
+    await screen.findByText('Limpieza Pendiente')
+    expect(screen.getByText('Segunda Pendiente')).toBeInTheDocument()
+    expect(screen.queryByText(/Estos trabajos/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/cita del|cita eliminada del/)).not.toBeInTheDocument()
+    expect(document.querySelector('ul.list-disc')).toBeNull()
+  })
+
+  it('G5: only the block that has rows renders', async () => {
+    await openWith([
+      makeBudget({
+        items: [
+          pendingLine(),
+          makeBudgetItem({
+            id: 'item-live',
+            description: 'Corona Viva',
+            status: 'SCHEDULED',
+            appointments: [holder('apt-live', LIVE_START, true)],
+          }),
+        ],
+      }),
+    ])
+
+    await screen.findByText(liveTitleText(1))
+    expect(screen.queryByText(/Estos trabajos quedaron/)).not.toBeInTheDocument()
+    expect(document.querySelectorAll('ul.list-disc')).toHaveLength(1)
+  })
+
+  it('G6: a withheld line with no links at all gets neither motive', async () => {
+    await openWith([
+      makeBudget({
+        items: [
+          pendingLine(),
+          makeBudgetItem({
+            id: 'item-stranded',
+            description: 'Puente Huerfano',
+            status: 'SCHEDULED',
+            appointments: [],
+          }),
+        ],
+      }),
+    ])
+
+    await screen.findByText('Limpieza Pendiente')
+    expect(screen.queryByText(/Puente Huerfano/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Estos trabajos/)).not.toBeInTheDocument()
+    expect(document.querySelector('ul.list-disc')).toBeNull()
+  })
+
+  it('a line with a live and a deleted holder is named by its live one only', async () => {
+    await openWith([
+      makeBudget({
+        items: [
+          pendingLine(),
+          makeBudgetItem({
+            id: 'item-both',
+            description: 'Mixta',
+            status: 'SCHEDULED',
+            appointments: [holder('apt-del', DELETED_START, false), holder('apt-live', LIVE_START, true)],
+          }),
+        ],
+      }),
+    ])
+
+    expect(await screen.findByText(liveItemText('Mixta', LIVE_START))).toBeInTheDocument()
+    expect(screen.queryByText(deletedTitleText(1))).not.toBeInTheDocument()
+    expect(screen.queryByText(deletedItemText('Mixta', DELETED_START))).not.toBeInTheDocument()
+  })
+
+  it('a line held by two live appointments yields one row each, sorted by start time, counted in the title', async () => {
+    await openWith([
+      makeBudget({
+        items: [
+          pendingLine(),
+          makeBudgetItem({
+            id: 'item-two-holders',
+            description: 'Doble',
+            status: 'EXECUTED',
+            appointments: [
+              holder('apt-later', LATER_LIVE_START, true, 'EXECUTED'),
+              holder('apt-live', LIVE_START, true),
+            ],
+          }),
+        ],
+      }),
+    ])
+
+    expect(await screen.findByText(liveTitleText(2))).toBeInTheDocument()
+    const rows = screen.getAllByRole('listitem').map((li) => li.textContent)
+    expect(rows).toEqual([liveItemText('Doble', LIVE_START), liveItemText('Doble', LATER_LIVE_START)])
+  })
+
+  it('a link to the appointment being edited is not a withheld motive, and the line stays offered', async () => {
+    getAppointmentBudgetItemsMock.mockResolvedValue([
+      makeAssociatedItem({ id: 'item-own', description: 'Propia', status: 'SCHEDULED' }),
+    ])
+    await openWith(
+      [
+        makeBudget({
+          items: [
+            makeBudgetItem({
+              id: 'item-own',
+              description: 'Propia',
+              status: 'SCHEDULED',
+              appointments: [holder('apt-1', LIVE_START, true)],
+            }),
+            makeBudgetItem({
+              id: 'item-other',
+              description: 'Ajena',
+              status: 'SCHEDULED',
+              appointments: [holder('apt-1', LIVE_START, true), holder('apt-live', LATER_LIVE_START, true)],
+            }),
+          ],
+        }),
+      ],
+      { appointment: makeAppointment({ id: 'apt-1' }) }
+    )
+
+    await screen.findByText('Propia')
+    expect(getItemCheckbox('Propia')).toBeChecked()
+    // Only the OTHER appointment is named for the line held in two places.
+    expect(screen.getByText(liveItemText('Ajena', LATER_LIVE_START))).toBeInTheDocument()
+    expect(screen.queryByText(liveItemText('Ajena', LIVE_START))).not.toBeInTheDocument()
+    expect(screen.queryByText(liveItemText('Propia', LIVE_START))).not.toBeInTheDocument()
+  })
+
+  it('switching A to B with B still loading shows none of patient A withheld rows under the spinner', async () => {
+    const budgetA = makeBudget({
+      patientId: 'patient-1',
+      items: [
+        pendingLine(),
+        makeBudgetItem({
+          id: 'item-a-live',
+          description: 'Corona De Ana',
+          toothNumber: '14',
+          status: 'SCHEDULED',
+          appointments: [holder('apt-a', LIVE_START, true)],
+        }),
+      ],
+    })
+    let settleB: (value: { data: Budget[]; total: number }) => void = () => {}
+    listBudgetsByPatientMock.mockImplementation((patientId: string) => {
+      if (patientId === 'patient-1') return Promise.resolve({ data: [budgetA], total: 1 })
+      return new Promise((resolve) => {
+        settleB = resolve
+      })
+    })
+    renderModal()
+    await waitForOptionsLoaded()
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana' }))
+
+    const rowA = liveItemText('Corona De Ana (Diente: 14)', LIVE_START)
+    // Vacuity check: A's row really renders before the switch.
+    expect(await screen.findByText(rowA)).toBeInTheDocument()
+    expect(screen.getByText(liveTitleText(1))).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to Beto' }))
+
+    // B's fetch is pending: the spinner is up and A's rows are gone.
+    await waitFor(() =>
+      expect(listBudgetsByPatientMock).toHaveBeenCalledWith('patient-2', { limit: 100 })
+    )
+    expect(screen.getByTestId('selected-patient')).toHaveTextContent('Beto Lopez')
+    expect(screen.getByText('Cargando ítems de presupuesto...')).toBeInTheDocument()
+    expect(screen.queryByText(rowA)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Corona De Ana/)).not.toBeInTheDocument()
+    expect(screen.queryByText(liveTitleText(1))).not.toBeInTheDocument()
+    expect(screen.queryByText(formatAppointmentDateTime(LIVE_START), { exact: false })).not.toBeInTheDocument()
+
+    // Settle B so no pending handle leaks; its own (empty) result replaces the spinner.
+    settleB({ data: [], total: 0 })
+    await waitFor(() =>
+      expect(screen.queryByText('Cargando ítems de presupuesto...')).not.toBeInTheDocument()
+    )
+    expect(screen.queryByText(/Corona De Ana/)).not.toBeInTheDocument()
+  })
+
+  it('renders in en with the translated strings, not keys', async () => {
+    await i18n.changeLanguage('en')
+    await openWith([
+      makeBudget({
+        items: [
+          makeBudgetItem({
+            id: 'item-live',
+            description: 'Crown',
+            status: 'SCHEDULED',
+            appointments: [holder('apt-live', LIVE_START, true)],
+          }),
+        ],
+      }),
+    ])
+
+    expect(
+      await screen.findByText('These treatments are already in another appointment (1):')
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/appointments\.budgetItems/)).not.toBeInTheDocument()
   })
 })
