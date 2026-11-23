@@ -36,6 +36,16 @@
  * set, and getTotalPaid() has no kind filter, so neither allocation input
  * changes. It runs anyway as cheap insurance and to match the #390 precedent.
  *
+ * Task #715: this half cannot reach production (the image ships neither tsx nor
+ * src/scripts/, and dental-postgres publishes no ports), so the half that runs
+ * there is the SQL twin, backfill-cancelled-appointment-payments.sql, executed
+ * with psql inside the container. The twin shares this file's population, actor
+ * and note suffix, but it runs ONE transaction for the whole pass instead of one
+ * per appointment, it does NOT run the recalculatePaidStatus pass below, and it
+ * does NOT write appointments.isPaid. This file is the spec of the pair; the
+ * row list and totals added to its result exist so the twin can be compared
+ * against it row for row.
+ *
  * Usage (dry run is the DEFAULT — a bare invocation never writes):
  *   pnpm --filter @dental/api backfill:cancelled-payments        # Preview
  *   pnpm --filter @dental/api backfill:cancelled-payments:apply  # Apply
@@ -53,6 +63,20 @@ import {
   recalculatePaidStatus,
 } from '../services/payment.service.js'
 
+/**
+ * One matched payment, identified the way the SQL twin lists it (task #715):
+ * ids and an amount only, never a patient name, so a run's output can be pasted
+ * into an issue.
+ */
+export interface BackfillRow {
+  tenantId: string
+  patientId: string
+  appointmentId: string
+  paymentId: string
+  /** Fixed two decimals, matching the twin's to_char(amount, 'FM999999990.00'). */
+  amount: string
+}
+
 export interface BackfillCancelledAppointmentPaymentsResult {
   /** Payments matching the predicate (converted when dryRun is false). */
   matchedCount: number
@@ -62,6 +86,16 @@ export interface BackfillCancelledAppointmentPaymentsResult {
   patientsRecalculated: number
   /** Appointment/labwork isPaid columns flipped by the recalc pass — expected 0. */
   paidStatusChanges: number
+  /** Task #715: the matched rows, ordered as the SQL twin orders them. */
+  rows: BackfillRow[]
+  /** Distinct appointments across the matched rows. */
+  appointmentCount: number
+  /** Distinct (tenantId, patientId) pairs across the matched rows. */
+  patientCount: number
+  /** Distinct tenants across the matched rows. */
+  tenantCount: number
+  /** Sum of the matched amounts, fixed two decimals. */
+  totalAmount: string
 }
 
 /**
@@ -100,8 +134,27 @@ export async function backfillCancelledAppointmentPayments(options: {
       kind: 'APPOINTMENT',
       appointment: { isActive: false },
     },
-    select: { id: true, tenantId: true, patientId: true, appointmentId: true },
+    select: { id: true, tenantId: true, patientId: true, appointmentId: true, amount: true },
+    // Task #715: the ordering is Postgres's, in both halves — this orderBy is
+    // the same four columns the SQL twin sorts on, executed by the same
+    // database, so the two row lists can be compared element by element without
+    // either side re-sorting in JS under a different collation.
+    orderBy: [{ tenantId: 'asc' }, { patientId: 'asc' }, { appointmentId: 'asc' }, { id: 'asc' }],
   })
+
+  // The relation filter `appointment: { isActive: false }` cannot match a
+  // payment with a null appointmentId, which is why the non-null assertion is
+  // safe here and why the twin's inner JOIN selects the same set.
+  const rows: BackfillRow[] = payments.map((payment) => ({
+    tenantId: payment.tenantId,
+    patientId: payment.patientId,
+    appointmentId: payment.appointmentId!,
+    paymentId: payment.id,
+    amount: payment.amount.toFixed(2),
+  }))
+  // Summed in integer cents, the service-wide convention: amount is
+  // Decimal(10,2) at the source, so the conversion is lossless.
+  const totalCents = rows.reduce((sum, row) => sum + Math.round(Number(row.amount) * 100), 0)
 
   const perTenantCounts = new Map<string, number>()
   const affectedPatients = new Map<string, { tenantId: string; patientId: string }>()
@@ -146,6 +199,11 @@ export async function backfillCancelledAppointmentPayments(options: {
     perTenantCounts,
     patientsRecalculated: affectedPatients.size,
     paidStatusChanges,
+    rows,
+    appointmentCount: appointmentsToConvert.size,
+    patientCount: affectedPatients.size,
+    tenantCount: perTenantCounts.size,
+    totalAmount: (totalCents / 100).toFixed(2),
   }
 }
 
