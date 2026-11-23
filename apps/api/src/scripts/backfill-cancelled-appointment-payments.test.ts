@@ -53,6 +53,12 @@ describe('backfillCancelledAppointmentPayments (#406)', () => {
   let foreignMatched: number
   let foreignPatients: number
   let foreignPaidStatusChanges: number
+  /** Task #715: the same baseline for the row list and the four new counts. */
+  let foreignRowIds: Set<string>
+  let foreignAppointmentCount: number
+  let foreignPatientCount: number
+  let foreignTenantCount: number
+  let foreignTotalCents: number
 
   const NOTE_WITH_TEXT = 'Pago en consulta'
 
@@ -193,6 +199,11 @@ describe('backfillCancelledAppointmentPayments (#406)', () => {
     foreignMatched = baseline.matchedCount
     foreignPatients = baseline.patientsRecalculated
     foreignPaidStatusChanges = baseline.paidStatusChanges
+    foreignRowIds = new Set(baseline.rows.map((r) => r.paymentId))
+    foreignAppointmentCount = baseline.appointmentCount
+    foreignPatientCount = baseline.patientCount
+    foreignTenantCount = baseline.tenantCount
+    foreignTotalCents = Math.round(Number(baseline.totalAmount) * 100)
 
     // Tenant A / patient A1: the full matrix of shapes.
     apptInactiveCancelledId = (
@@ -463,6 +474,137 @@ describe('backfillCancelledAppointmentPayments (#406)', () => {
       expect(after.totals).toEqual(before.totals)
       expect(after.appointments).toEqual(before.appointments)
       expect(after.labworks).toEqual(before.labworks)
+    })
+  })
+
+  /**
+   * Task #715: the result grew a row list and four counts so the SQL twin can
+   * be compared against this half row for row. The twin's own suite
+   * (backfill-cancelled-appointment-payments.sql.test.ts) asserts the
+   * agreement; these guards pin what this half reports, independently of psql.
+   */
+  describe('task #715: the reported rows and totals', () => {
+    /** The four matching fixture payments, as rows, in no particular order. */
+    function expectedRows() {
+      return [
+        { tenantId: tenantAId, patientId: patientA1Id, appointmentId: apptInactiveCancelledId, paymentId: pConvertWithNoteId, amount: '30.00' },
+        { tenantId: tenantAId, patientId: patientA1Id, appointmentId: apptInactiveScheduledId, paymentId: pConvertNullNoteId, amount: '20.00' },
+        { tenantId: tenantAId, patientId: patientA2Id, appointmentId: apptA2InactiveId, paymentId: pConvertA2Id, amount: '25.00' },
+        { tenantId: tenantBId, patientId: patientB1Id, appointmentId: apptB1InactiveId, paymentId: pConvertB1Id, amount: '80.00' },
+      ]
+    }
+
+    const byPaymentId = (a: { paymentId: string }, b: { paymentId: string }) =>
+      a.paymentId < b.paymentId ? -1 : a.paymentId > b.paymentId ? 1 : 0
+
+    it('lists one row per matched payment, carrying ids and a two-decimal amount and nothing else', async () => {
+      const result = await backfillCancelledAppointmentPayments({ dryRun: true })
+      const mine = result.rows.filter((r) => !foreignRowIds.has(r.paymentId))
+
+      expect([...mine].sort(byPaymentId)).toEqual(expectedRows().sort(byPaymentId))
+      // Asserted separately from the content above: the row object carries
+      // exactly five keys, so no patient name can ride along in a sixth.
+      for (const row of mine) {
+        expect(Object.keys(row).sort()).toEqual(['amount', 'appointmentId', 'patientId', 'paymentId', 'tenantId'])
+      }
+    })
+
+    it('counts the rows as matchedCount and nothing else as a row', async () => {
+      const result = await backfillCancelledAppointmentPayments({ dryRun: true })
+
+      expect(result.rows).toHaveLength(result.matchedCount)
+      expect(result.rows.filter((r) => !foreignRowIds.has(r.paymentId))).toHaveLength(4)
+    })
+
+    it('reports appointmentCount, patientCount and tenantCount as three figures that differ from each other and from the payment count', async () => {
+      // A SECOND payment on an appointment that already matches, so the four
+      // figures are four different numbers (5 / 4 / 3 / 2). Without it the
+      // fixture holds one payment per appointment and appointmentCount could
+      // be the payment count under another name — a blind guard.
+      await seedPayment(tenantAId, patientA1Id, 10, {
+        appointmentId: apptInactiveCancelledId,
+        kind: 'APPOINTMENT',
+        note: 'Segundo pago de la misma cita',
+      })
+
+      const result = await backfillCancelledAppointmentPayments({ dryRun: true })
+
+      expect(result.matchedCount - foreignMatched).toBe(5)
+      expect(result.appointmentCount - foreignAppointmentCount).toBe(4)
+      expect(result.patientCount - foreignPatientCount).toBe(3)
+      expect(result.tenantCount - foreignTenantCount).toBe(2)
+      // patientCount counts (tenantId, patientId) pairs and is the figure the
+      // recalc pass is driven by, so the two must not drift apart.
+      expect(result.patientCount).toBe(result.patientsRecalculated)
+    })
+
+    it('sums only the matched amounts into totalAmount', async () => {
+      const result = await backfillCancelledAppointmentPayments({ dryRun: true })
+      const cents = Math.round(Number(result.totalAmount) * 100)
+
+      // 30 + 20 + 25 + 80.
+      expect(((cents - foreignTotalCents) / 100).toFixed(2)).toBe('155.00')
+      // Discriminating against a sum over the whole table: the fixture's
+      // NON-matching payments add up to 284.00 (70 + 100 + 15 + 99), so an
+      // over-broad sum would read 439.00 here.
+      expect(result.totalAmount).toMatch(/^\d+\.\d{2}$/)
+      const nonMatching = await prisma.patientPayment.aggregate({
+        where: { tenantId: { in: [tenantAId, tenantBId] }, id: { notIn: [pConvertWithNoteId, pConvertNullNoteId, pConvertA2Id, pConvertB1Id] } },
+        _sum: { amount: true },
+      })
+      expect(nonMatching._sum.amount?.toFixed(2)).toBe('284.00')
+    })
+
+    it('orders the rows by tenant, then patient, then appointment', async () => {
+      const result = await backfillCancelledAppointmentPayments({ dryRun: true })
+
+      // Compared as grouping rather than as string order: Postgres sorts cuids
+      // under its own collation, which is not JS's, and the point of the
+      // orderBy is that the SQL twin can be compared without either side
+      // re-sorting.
+      const contiguous = (keys: string[]) => {
+        const seen = new Set<string>()
+        let last: string | undefined
+        for (const key of keys) {
+          if (key === last) continue
+          if (seen.has(key)) return false
+          seen.add(key)
+          last = key
+        }
+        return true
+      }
+      expect(contiguous(result.rows.map((r) => r.tenantId))).toBe(true)
+      expect(contiguous(result.rows.map((r) => `${r.tenantId}:${r.patientId}`))).toBe(true)
+      // Non-vacuous: patient A1 really does hold two of the matched rows, so
+      // there is a group to be contiguous.
+      expect(result.rows.filter((r) => r.patientId === patientA1Id)).toHaveLength(2)
+    })
+
+    it('reports an empty row list and zero counts when nothing matches', async () => {
+      const seeded = await backfillCancelledAppointmentPayments({ dryRun: true })
+      expect(seeded.rows.length).toBeGreaterThan(0)
+
+      await wipeFixtureData()
+      const empty = await backfillCancelledAppointmentPayments({ dryRun: true })
+
+      // The fixtures are gone; only whatever foreign rows the baseline measured
+      // remain, so every figure falls back to its baseline.
+      expect(empty.rows.map((r) => r.paymentId).sort()).toEqual([...foreignRowIds].sort())
+      expect(empty.appointmentCount).toBe(foreignAppointmentCount)
+      expect(empty.patientCount).toBe(foreignPatientCount)
+      expect(empty.tenantCount).toBe(foreignTenantCount)
+      expect(empty.totalAmount).toBe((foreignTotalCents / 100).toFixed(2))
+    })
+
+    it('reports the same rows on a dry run and on an apply', async () => {
+      const dry = await backfillCancelledAppointmentPayments({ dryRun: true })
+      const applied = await backfillCancelledAppointmentPayments({ dryRun: false })
+
+      // The row list is the PRE-state in both cases, which is what makes a dry
+      // run usable as the plan the apply then carries out.
+      expect(applied.rows).toEqual(dry.rows)
+      expect(applied.totalAmount).toBe(dry.totalAmount)
+      expect(dry.rows.filter((r) => !foreignRowIds.has(r.paymentId))).toHaveLength(4)
     })
   })
 
