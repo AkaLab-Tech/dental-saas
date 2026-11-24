@@ -241,6 +241,12 @@ export function AppointmentFormModal({
   const watchedPatientId = watch('patientId')
   const watchedType = watch('type')
   const watchedStartTime = watch('startTime')
+  const paidEntered = Number(watch('paidAmount')) > 0
+  const hasTypedCharge = Number(watch('cost')) > 0
+  const hasItemCharge = !!executedSummary && executedSummary.cost > 0
+  const chargeKnown = !executedLoading && !executedUnavailable
+  const showPaidWithoutChargeWarning =
+    paidEntered && chargeKnown && !hasTypedCharge && !hasItemCharge && !hasRecordedPaidAmount
 
   // Fetch doctors (and resolve patient name if needed) when modal opens
   useEffect(() => {
@@ -847,6 +853,13 @@ export function AppointmentFormModal({
                   ) : isAlreadyPaid ? (
                     <p className="mt-1 text-xs text-gray-500">
                       {t('appointments.form.coveredByBalanceHint')}
+                    </p>
+                  ) : showPaidWithoutChargeWarning ? (
+                    <p
+                      role="alert"
+                      className="mt-1 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5"
+                    >
+                      {t('appointments.form.paidWithoutChargeWarning')}
                     </p>
                   ) : (
                     <p className="mt-1 text-xs text-gray-500">
