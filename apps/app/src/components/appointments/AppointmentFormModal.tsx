@@ -293,6 +293,11 @@ export function AppointmentFormModal({
   // opened" - and a reopen is neither of task #590's triggers (associating
   // items, or confirming them executed), so it must propose nothing.
   const costPrefillArmedRef = useRef(false)
+  // True while the cost field is empty because the operator emptied it. The
+  // identity reset also writes '' into cost on every open, so emptiness alone
+  // cannot stand in for the gesture: this is set only from the input's own
+  // change event, which setValue (the prefill's own writes) never dispatches.
+  const costClearedByOperatorRef = useRef(false)
 
   useEffect(() => {
     if (!isOpen) {
@@ -307,6 +312,7 @@ export function AppointmentFormModal({
     // identity, so its memory of its own proposal has to go with it.
     prefilledCostRef.current = null
     costPrefillArmedRef.current = false
+    costClearedByOperatorRef.current = false
 
     if (appointment) {
       const startDate = new Date(appointment.startTime)
@@ -521,9 +527,11 @@ export function AppointmentFormModal({
     if (!isOpen) {
       prefilledCostRef.current = null
       costPrefillArmedRef.current = false
+      costClearedByOperatorRef.current = false
       return
     }
     if (!costPrefillArmedRef.current) return
+    if (costClearedByOperatorRef.current) return
     if (itemsChargeTotal <= 0) return
     // Trailing zeros stripped: the number input shows "2500", not "2500.00".
     const proposal = String(Number(itemsChargeTotal.toFixed(2)))
@@ -568,6 +576,8 @@ export function AppointmentFormModal({
       setIsCreatingBudget(false)
     }
   }
+
+  const costField = register('cost')
 
   if (!isOpen) return null
 
@@ -817,7 +827,12 @@ export function AppointmentFormModal({
                     type="number"
                     step="0.01"
                     min="0"
-                    {...register('cost')}
+                    {...costField}
+                    onChange={(e) => {
+                      costClearedByOperatorRef.current =
+                        e.target.value.trim() === ''
+                      return costField.onChange(e)
+                    }}
                     placeholder="0.00"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />

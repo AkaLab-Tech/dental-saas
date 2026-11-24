@@ -78,9 +78,7 @@ importa, y los cuatro pasos van seguidos, sin dejarla por la mitad.
    rompe nada, pero no sigas sola desde ahí.
 3. **Después vaciá el Costo**, que es la otra diferencia. **⋮**, **Editar**,
    borrá el importe que la lista te indica del campo **Costo ($)** hasta dejarlo
-   vacío, **Guardar Cambios**. En esa ventana tocá **sólo** ese campo: si tocás
-   una casilla de los trabajos del presupuesto, el sistema te reescribe solo un
-   importe en Costo y te deshace el paso. Y **no escribas nada en Pagado ($)**
+   vacío, **Guardar Cambios**. **No escribas nada en Pagado ($)**
    aunque te deje: en esta cita el trabajo lo cobra el presupuesto, y un número
    ahí sería un cobro de más.
 4. **⋮**, **Marcar completada**, igual que en la primera.
