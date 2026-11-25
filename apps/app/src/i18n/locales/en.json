@@ -421,6 +421,7 @@
       "paidAmount": "Amount paid",
       "paidAmountHint": "Charged on this appointment and applied to its cost first; only what exceeds that cost goes to the patient's remaining balance.",
       "paidWithoutChargeWarning": "This visit has no charge of its own, so this amount stays as credit for the patient and does not pay for this visit. If the work was done today, link it below and mark it as executed.",
+      "costInvalid": "The amount is not a valid number. Type it without thousands separators (for example 1500 or 1500.50).",
       "costFromItemsHint": "Budget items on this appointment: {{total}}. That is the charge for the visit; you can change it and whatever you type is saved.",
       "alreadyPaidHint": "To reverse the payment, delete the corresponding entry from the payments section.",
       "coveredByBalanceHint": "This appointment is covered by the patient's balance. No consultation payment is recorded, so the amount is still editable.",
