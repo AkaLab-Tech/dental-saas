@@ -278,6 +278,12 @@ export function AppointmentFormModal({
     }
   }
 
+  // True while the cost input holds text the browser could not parse as a
+  // number. Its DOM value is '' in that state (HTML value sanitization) while
+  // the operator still sees her own figure, so submitting would send a
+  // clearing `cost: null` for a figure nobody meant to erase (#713).
+  const [costBadInput, setCostBadInput] = useState(false)
+
   // Reset form once per modal-open for a given appointment identity. Must NOT
   // depend on loadingOptions: that flag flips true->false when getDoctors()
   // resolves, and re-running reset() on that transition would wipe out
@@ -313,6 +319,7 @@ export function AppointmentFormModal({
     prefilledCostRef.current = null
     costPrefillArmedRef.current = false
     costClearedByOperatorRef.current = false
+    setCostBadInput(false)
 
     if (appointment) {
       const startDate = new Date(appointment.startTime)
@@ -664,7 +671,19 @@ export function AppointmentFormModal({
           )}
 
           {/* Form */}
-          <form noValidate onSubmit={handleSubmit(handleFormSubmit)}>
+          {/* noValidate suppresses the browser's own badInput block, so the
+              cost field's one is enforced here instead (#713): the form schema
+              sees only the sanitized '' and cannot tell it from a clear. */}
+          <form
+            noValidate
+            onSubmit={(e) => {
+              if (costBadInput) {
+                e.preventDefault()
+                return
+              }
+              return handleSubmit(handleFormSubmit)(e)
+            }}
+          >
             <div className="px-6 py-4 space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto">
               {/* Patient and Doctor */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -829,13 +848,24 @@ export function AppointmentFormModal({
                     min="0"
                     {...costField}
                     onChange={(e) => {
+                      // An unparseable figure (the es-UY "1.500,00") reaches
+                      // this handler as an empty value with badInput set. It
+                      // is not the deliberate clear of #685, so it must not
+                      // arm it — and the submit below refuses it (#713).
+                      const badInput = e.target.validity?.badInput ?? false
+                      setCostBadInput(badInput)
                       costClearedByOperatorRef.current =
-                        e.target.value.trim() === ''
+                        !badInput && e.target.value.trim() === ''
                       return costField.onChange(e)
                     }}
                     placeholder="0.00"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
+                  {costBadInput && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {t('appointments.form.costInvalid')}
+                    </p>
+                  )}
                   {itemsChargeTotal > 0 && (
                     <p className="mt-1 text-xs text-gray-500">
                       {t('appointments.form.costFromItemsHint', {
