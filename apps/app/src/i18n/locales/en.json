@@ -1214,6 +1214,7 @@
       "empty": "No movements in the selected range",
       "dateFrom": "From",
       "dateTo": "To",
+      "chargeLess": "The visit had no charge of its own",
       "types": {
         "RECEIVED": "Payment received",
         "REVERSED": "Payment reversed",

@@ -1223,6 +1223,7 @@
       "empty": "No hay movimientos en el rango seleccionado",
       "dateFrom": "Desde",
       "dateTo": "Hasta",
+      "chargeLess": "La cita no tenía cobro propio",
       "types": {
         "RECEIVED": "Entrega recibida",
         "REVERSED": "Entrega revertida",

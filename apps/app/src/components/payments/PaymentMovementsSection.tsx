@@ -176,6 +176,9 @@ export function PaymentMovementsSection({ patientId, refreshKey = 0 }: PaymentMo
                   <p className="text-xs text-gray-500">{fmtMovementDate(movement)}</p>
                   {originText && <p className="text-xs text-gray-400">{originText}</p>}
                   {movement.reason && <p className="text-xs text-gray-400 truncate">{movement.reason}</p>}
+                  {movement.type === 'RECEIVED' && movement.chargeLess === true && (
+                    <p className="text-xs text-gray-400">{t('payments.movements.chargeLess')}</p>
+                  )}
                   {actorText && <p className="text-xs text-gray-400">{actorText}</p>}
                 </div>
               </div>

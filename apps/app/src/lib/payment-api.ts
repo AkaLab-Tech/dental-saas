@@ -109,6 +109,8 @@ export interface PaymentMovement {
   appointmentDate: string | null
   actor: ActorView | null
   reason: string | null
+  /** Optional so a client deployed ahead of the API renders nothing. */
+  chargeLess?: boolean
 }
 
 export interface Debtor {

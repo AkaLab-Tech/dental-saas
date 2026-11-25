@@ -1334,6 +1334,27 @@ export interface PaymentMovement {
   appointmentDate: Date | null
   actor: ActorView | null
   reason: string | null
+  /**
+   * RECEIVED rows only: an active APPOINTMENT payment whose appointment has no
+   * charge of its own (see isChargeLessAppointment). Derived, read-only — the
+   * allocation is not affected by it. Always false on non-RECEIVED rows.
+   */
+  chargeLess: boolean
+}
+
+/**
+ * True when no billable item with `cost > 0` is attributable to the
+ * appointment: neither its own typed cost nor a priced EXECUTED budget-item
+ * link billed at that visit. Derived from getBillableItems output so the
+ * charge authority stays in one place.
+ */
+export function isChargeLessAppointment(items: BillableItem[], appointmentId: string): boolean {
+  return !items.some(
+    (i) =>
+      i.cost > 0 &&
+      ((i.type === 'appointment' && i.id === appointmentId) ||
+        (i.type === 'budgetItem' && i.appointmentId === appointmentId))
+  )
 }
 
 export interface ListPaymentMovementsOptions {
@@ -1371,10 +1392,18 @@ export async function listPaymentMovements(
         }
       : undefined
 
-  const [receivedPayments, events, legacyReversals] = await Promise.all([
+  const [receivedPayments, events, legacyReversals, billableItems] = await Promise.all([
     prisma.patientPayment.findMany({
       where: { tenantId, patientId, ...(range && { date: range }) },
-      select: { id: true, amount: true, date: true, createdBy: true, appointmentId: true },
+      select: {
+        id: true,
+        amount: true,
+        date: true,
+        createdBy: true,
+        appointmentId: true,
+        kind: true,
+        isActive: true,
+      },
     }),
     // The event has no patientId of its own (see the model comment on
     // PatientPaymentEvent) — scoped to the patient through its payment.
@@ -1408,6 +1437,7 @@ export async function listPaymentMovements(
       },
       select: { id: true, amount: true, updatedAt: true, appointmentId: true },
     }),
+    getBillableItems(tenantId, patientId),
   ])
 
   const appointmentIds = [
@@ -1447,6 +1477,11 @@ export async function listPaymentMovements(
         appointmentDate: p.appointmentId ? appointmentDateOf.get(p.appointmentId) ?? null : null,
         actor: actorOf(p.createdBy),
         reason: null,
+        chargeLess:
+          p.isActive &&
+          p.kind === 'APPOINTMENT' &&
+          p.appointmentId !== null &&
+          isChargeLessAppointment(billableItems, p.appointmentId),
       })
     ),
     ...events.map(
@@ -1461,6 +1496,7 @@ export async function listPaymentMovements(
           : null,
         actor: actorOf(e.actorUserId),
         reason: e.reason,
+        chargeLess: false,
       })
     ),
     ...legacyReversals.map(
@@ -1473,6 +1509,7 @@ export async function listPaymentMovements(
         appointmentDate: p.appointmentId ? appointmentDateOf.get(p.appointmentId) ?? null : null,
         actor: null,
         reason: null,
+        chargeLess: false,
       })
     ),
   ]
