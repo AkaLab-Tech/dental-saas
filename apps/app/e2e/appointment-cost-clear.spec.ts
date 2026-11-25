@@ -17,10 +17,23 @@ const SHOTS = path.resolve(__dirname, '../../../.task-log/screenshots')
  * The mechanism: a <input type="number"> reports value === '' whenever its
  * text is not a valid floating-point number (HTML value sanitization) while
  * the typed text stays on screen and validity.badInput is true. The form is
- * noValidate and its schema accepts '', so an es-UY figure such as "1.500,00"
- * used to reach the server as `cost: null` — a clear — while the operator
- * saw her own 1,500. jsdom implements neither sanitization nor badInput, so
- * this is the only layer that measures the real browser step.
+ * noValidate and its schema accepts '', so text the browser cannot parse at
+ * all reaches the server as a clear while the operator still sees her own text
+ * on screen: visible text, value === '', validity.badInput === true, and
+ * PUT {"cost": null}. That is the confirmed half, and it is what this spec
+ * measures.
+ *
+ * What is NOT established is any particular figure that produced it. An es-UY
+ * "1.500,00" does not: measured by keystroke on 2026-11-25 it leaves DOM value
+ * "1.50000" with badInput false and parseFloat sends 1.5 ("4.500,00" sends
+ * 4.5) — the figure is silently reinterpreted, not cleared. Production
+ * measured the appointment's `cost` column empty, not 1.5, so "1.500,00"
+ * cannot be what happened on 2026-11-19, and the input that produced the empty
+ * row is still unidentified. The 1.5 reinterpretation defect carries its own
+ * measurement on issue #726.
+ *
+ * jsdom implements neither sanitization nor badInput, so this is the only
+ * layer that measures the real browser step.
  *
  * The measured values are printed BEFORE the assertions so that a run against
  * an unfixed form still reports what the browser did.
@@ -68,21 +81,24 @@ const debtText = async (page: Page) => {
 }
 
 /**
- * The text typed over the stored figure. MEASURED, not assumed: Chromium with
- * the suite's es-ES locale treats "," as the decimal separator and silently
- * drops any extra separator, so "1.500,00" (and "1.500.00", "1,500,00") all
- * sanitize to 1.5 and are NOT badInput. Only text the locale parser cannot read
- * at all reports value === '' with validity.badInput === true; a bare "," is
- * the smallest such text.
+ * The text typed over the stored figure. A lone minus sign, because the sign
+ * and the exponent are part of the floating-point grammar in every locale:
+ * Chromium accepts the keystroke and is left holding an incomplete number. A
+ * "," is a decimal separator whose acceptance depends on the locale the
+ * browser build resolved, which is why it is not portable.
+ *
+ * Measured on 2026-11-25 on <input type="number" step="0.01" min="0"> driven
+ * by pressSequentially — the same input shape as the cost field, min="0"
+ * included, so a lone "-" is badInput and not a range error: typing "-" leaves
+ * DOM value "" with validity.badInput === true; "e" likewise; "," likewise but
+ * on macOS Chromium only, which is the one that does not survive CI.
+ *
+ * The limit of that evidence: all three pass on macOS, so a local run cannot
+ * tell "-" apart from ","; the only environment that discriminates is the Linux
+ * CI runner. "-" is therefore a prediction with a break point — if CI again
+ * reports MEASURED_DISPLAYED_TEXT: "" for "-", the hypothesis is refuted.
  */
-const UNPARSEABLE = ','
-
-// The behaviour under test depends on the browser's locale: with a Spanish
-// locale Chromium accepts "," into a number input (displayed, value '' and
-// validity.badInput true); with en-US it rejects the keystroke and nothing
-// appears. Pin the clinic's real locale so the precondition is deterministic
-// instead of inherited from the host.
-test.use({ locale: 'es-UY' })
+const UNPARSEABLE = '-'
 
 test.describe('Appointment cost is not cleared by an unparseable figure (#713)', () => {
   test('an unparseable figure over a stored 1500 is refused, not saved as a clear', async ({
@@ -177,9 +193,10 @@ test.describe('Appointment cost is not cleared by an unparseable figure (#713)',
     console.log(`MEASURED_BAD_INPUT: ${measured.badInput}`)
     await page.screenshot({ path: `${SHOTS}/713-02-typed-unparseable.png`, fullPage: true })
 
-    // The browser step the whole task rests on. The "," must really be on
-    // screen: if the locale rejects it the box is empty and badInput is false,
-    // which is a different (benign) state this guard must not be judged on.
+    // The browser step the whole task rests on. The typed text must really be
+    // on screen: if the browser rejects the keystroke the box is empty and
+    // badInput is false, which is a different (benign) state this guard must
+    // not be judged on.
     expect(displayed).toBe(UNPARSEABLE)
     expect(measured.type).toBe('number')
     expect(measured.domValue).toBe('')
