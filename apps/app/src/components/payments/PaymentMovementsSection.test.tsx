@@ -381,4 +381,67 @@ describe('PaymentMovementsSection', () => {
       })
     })
   })
+
+  // ==========================================================================
+  // Task #714 (G10): the charge-less label renders only on a RECEIVED row the
+  // API flagged, and stays quiet everywhere else.
+  // ==========================================================================
+  describe('charge-less label (#714)', () => {
+    const LABEL = 'La cita no tenía cobro propio'
+
+    it('renders on a RECEIVED row with chargeLess: true', async () => {
+      getPatientPaymentMovementsMock.mockResolvedValue([
+        makeMovement({ type: 'RECEIVED', amount: 1800, chargeLess: true }),
+      ])
+      renderSection()
+
+      expect(await screen.findByText(LABEL)).toBeInTheDocument()
+      expect(screen.getAllByText(LABEL)).toHaveLength(1)
+    })
+
+    it('is absent on a RECEIVED row with chargeLess: false', async () => {
+      getPatientPaymentMovementsMock.mockResolvedValue([
+        makeMovement({ type: 'RECEIVED', amount: 4000, chargeLess: false }),
+      ])
+      renderSection()
+
+      await screen.findByText(/Entrega recibida/)
+      expect(screen.queryByText(LABEL)).not.toBeInTheDocument()
+    })
+
+    it('is absent when chargeLess is missing entirely (client deployed ahead of the API)', async () => {
+      const movement = makeMovement({ type: 'RECEIVED', amount: 4010 })
+      expect('chargeLess' in movement).toBe(false)
+      getPatientPaymentMovementsMock.mockResolvedValue([movement])
+      renderSection()
+
+      await screen.findByText(/Entrega recibida/)
+      expect(screen.queryByText(LABEL)).not.toBeInTheDocument()
+    })
+
+    it.each(['REVERSED', 'CONVERTED_TO_ADVANCE', 'RESTORED_TO_APPOINTMENT'] as const)(
+      'is absent on a %s row even if chargeLess: true is sent',
+      async (type) => {
+        getPatientPaymentMovementsMock.mockResolvedValue([
+          makeMovement({ type, amount: 4020, chargeLess: true }),
+        ])
+        renderSection()
+
+        expect(await screen.findByText(/USD 4,020\.00/)).toBeInTheDocument()
+        expect(screen.queryByText(LABEL)).not.toBeInTheDocument()
+      }
+    )
+
+    it('labels only the flagged row when a flagged and an unflagged RECEIVED row are listed together', async () => {
+      getPatientPaymentMovementsMock.mockResolvedValue([
+        makeMovement({ paymentId: 'p-flagged', amount: 1800, chargeLess: true }),
+        makeMovement({ paymentId: 'p-charged', amount: 4000, chargeLess: false }),
+      ])
+      renderSection()
+
+      await screen.findByText(LABEL)
+      expect(screen.getAllByText(/Entrega recibida/)).toHaveLength(2)
+      expect(screen.getAllByText(LABEL)).toHaveLength(1)
+    })
+  })
 })

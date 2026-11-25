@@ -3626,7 +3626,7 @@ describe('Patient Payments Routes', () => {
         expect(res.status).toBe(200)
         expect(res.body.data).toHaveLength(1)
         expect(Object.keys(res.body.data[0]).sort()).toEqual(
-          ['type', 'at', 'amount', 'paymentId', 'appointmentId', 'appointmentDate', 'actor', 'reason'].sort()
+          ['type', 'at', 'amount', 'paymentId', 'appointmentId', 'appointmentDate', 'actor', 'reason', 'chargeLess'].sort()
         )
       })
     })
