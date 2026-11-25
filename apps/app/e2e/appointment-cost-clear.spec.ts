@@ -218,4 +218,123 @@ test.describe('Appointment cost is not cleared by an unparseable figure (#713)',
     console.log(`DEBT_AFTER: ${debtAfter}`)
     expect(debtAfter).toBe(debtBefore)
   })
+
+  /**
+   * G7: the recovery route. A number input that leaves badInput by deleting its
+   * unparseable text emits NO React change event (value tracking sees '' before
+   * and after), so a guard that caches badInput from onChange latches: the error
+   * stays over an empty box, Save is refused, and the deliberate clear is never
+   * armed. Only a real browser sanitizes the value, so only this layer holds it.
+   */
+  test('deleting the unparseable text to an empty box releases the guard and saves the deliberate clear', async ({
+    authedPage: page,
+  }) => {
+    const tag = `${Date.now()}`
+    const lastName = `CostoRecupera${tag}`
+
+    // Reuse an existing doctor (plan cap of 10, nothing releases one).
+    const doctors = (await api('GET', '/doctors')) as Array<{ id: string }> | { doctors: Array<{ id: string }> }
+    const doctorList = Array.isArray(doctors) ? doctors : doctors.doctors
+    const doctor =
+      doctorList[0] ??
+      (await api('POST', '/doctors', {
+        firstName: 'E2E',
+        lastName: `Doc${tag}`,
+        workingDays: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'],
+      }))
+    const patient = await api('POST', '/patients', { firstName: 'E2E', lastName })
+    const start = new Date()
+    start.setDate(start.getDate() - 30 - (Number(tag) % 4000))
+    start.setHours(11, 0, 0, 0)
+    const appointment = await api('POST', '/appointments', {
+      patientId: patient.id,
+      doctorId: doctor.id,
+      startTime: start.toISOString(),
+      endTime: new Date(start.getTime() + 30 * 60_000).toISOString(),
+      cost: 1500,
+    })
+    await api('PUT', `/appointments/${appointment.id}/mark-done`, {})
+
+    const storedCost = async () => {
+      const rows = (await api('GET', `/appointments/by-patient/${patient.id}`)) as Array<{
+        id: string
+        cost: string | number | null
+      }>
+      const mine = rows.filter((r) => r.id === appointment.id)
+      expect(mine).toHaveLength(1)
+      return mine[0].cost === null ? null : Number(mine[0].cost)
+    }
+    expect(await storedCost()).toBe(1500)
+
+    await page.goto(`/patients/${patient.id}`)
+    await expect(page.getByRole('heading', { name: new RegExp(lastName), level: 1 })).toBeVisible()
+    const debtBefore = await debtText(page)
+    console.log(`G7_DEBT_BEFORE: ${debtBefore}`)
+    expect(debtBefore).toMatch(/1,500\.00/)
+
+    await openCitas(page)
+    await page.getByRole('button', { name: 'Opciones' }).click()
+    await page.getByRole('button', { name: /^Editar$/ }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    const cost = costField(dialog)
+    await expect(cost).toHaveCount(1)
+    await expect(cost).toHaveValue('1500')
+    const costError = dialog.getByText(/El monto no es un número válido/)
+
+    // 1. Type the unparseable text over the stored figure: the guard arms.
+    await cost.focus()
+    await page.keyboard.press('ControlOrMeta+A')
+    await page.keyboard.type(UNPARSEABLE)
+    const armed = await cost.evaluate((el) => ({
+      value: (el as HTMLInputElement).value,
+      badInput: (el as HTMLInputElement).validity.badInput,
+    }))
+    expect(armed).toEqual({ value: '', badInput: true })
+    await expect(costError).toBeVisible()
+    await page.screenshot({ path: `${SHOTS}/713-04-g7-armed.png`, fullPage: true })
+
+    // 2. Backspace once: the box is now genuinely empty.
+    await page.keyboard.press('Backspace')
+    const emptied = await cost.evaluate((el) => ({
+      value: (el as HTMLInputElement).value,
+      badInput: (el as HTMLInputElement).validity.badInput,
+    }))
+    console.log(`G7_AFTER_BACKSPACE: ${JSON.stringify(emptied)}`)
+    expect(emptied).toEqual({ value: '', badInput: false })
+
+    // 3. The error is gone and the field is empty.
+    await expect(costError).toHaveCount(0)
+    await expect(cost).toHaveValue('')
+    await page.screenshot({ path: `${SHOTS}/713-05-g7-emptied.png`, fullPage: true })
+
+    // 4. Save succeeds: exactly one PUT to THIS appointment, carrying cost null.
+    const puts: Request[] = []
+    page.on('request', (r) => {
+      if (r.method() === 'PUT' && r.url().endsWith(`/api/appointments/${appointment.id}`)) {
+        puts.push(r)
+      }
+    })
+    const save = dialog.getByRole('button', { name: /guardar cambios/i })
+    // Vacuity: Save is present and enabled before the click.
+    await expect(save).toHaveCount(1)
+    await expect(save).toBeEnabled()
+    await save.click()
+    await expect(dialog).not.toBeVisible()
+
+    const payloads = puts.map((r) => r.postDataJSON())
+    console.log(`G7_PUT_PAYLOADS: ${JSON.stringify(payloads)}`)
+    expect(puts).toHaveLength(1)
+    expect(payloads[0].cost).toBeNull()
+    expect('cost' in payloads[0]).toBe(true)
+
+    // 5. Stored cost is null and the debt dropped by 1,500.
+    expect(await storedCost()).toBeNull()
+    await page.goto(`/patients/${patient.id}`)
+    const debtAfter = await debtText(page)
+    console.log(`G7_DEBT_AFTER: ${debtAfter}`)
+    expect(debtAfter).not.toBe(debtBefore)
+    expect(debtAfter).not.toMatch(/1,500\.00/)
+    await page.screenshot({ path: `${SHOTS}/713-06-g7-debt-dropped.png`, fullPage: true })
+  })
 })

@@ -304,6 +304,18 @@ export function AppointmentFormModal({
   // cannot stand in for the gesture: this is set only from the input's own
   // change event, which setValue (the prefill's own writes) never dispatches.
   const costClearedByOperatorRef = useRef(false)
+  const costInputRef = useRef<HTMLInputElement | null>(null)
+
+  // Re-reads the input's live validity. A number input leaving badInput by
+  // deleting its unparseable text emits no React onChange (value tracking sees
+  // '' before and after), so the cached flag and the clear gesture are
+  // reconciled here from the DOM, on input events and on submit (#713).
+  const syncCostBadInput = (input: HTMLInputElement): boolean => {
+    const badInput = input.validity?.badInput ?? false
+    setCostBadInput(badInput)
+    costClearedByOperatorRef.current = !badInput && input.value.trim() === ''
+    return badInput
+  }
 
   useEffect(() => {
     if (!isOpen) {
@@ -677,7 +689,8 @@ export function AppointmentFormModal({
           <form
             noValidate
             onSubmit={(e) => {
-              if (costBadInput) {
+              const costInput = costInputRef.current
+              if (costInput && syncCostBadInput(costInput)) {
                 e.preventDefault()
                 return
               }
@@ -847,17 +860,19 @@ export function AppointmentFormModal({
                     step="0.01"
                     min="0"
                     {...costField}
+                    ref={(el) => {
+                      costInputRef.current = el
+                      costField.ref(el)
+                    }}
                     onChange={(e) => {
                       // An unparseable figure (the es-UY "1.500,00") reaches
                       // this handler as an empty value with badInput set. It
                       // is not the deliberate clear of #685, so it must not
                       // arm it — and the submit below refuses it (#713).
-                      const badInput = e.target.validity?.badInput ?? false
-                      setCostBadInput(badInput)
-                      costClearedByOperatorRef.current =
-                        !badInput && e.target.value.trim() === ''
+                      syncCostBadInput(e.target)
                       return costField.onChange(e)
                     }}
+                    onInput={(e) => syncCostBadInput(e.currentTarget)}
                     placeholder="0.00"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
