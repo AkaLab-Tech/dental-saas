@@ -514,22 +514,36 @@ export const PdfService = {
         tenantId,
         patientId,
         isActive: true,
-        // DRAFT is deliberately INCLUDED. Do not "align" this with
-        // getPatientAccountStatement's `notIn: ['DRAFT', 'CANCELLED']`: every
-        // budget in the clinic's production data is DRAFT, so excluding drafts
-        // yields an empty document for every real patient. The statement
-        // measures what is billable; this document is the planned treatment.
+        // DRAFT is deliberately INCLUDED, and the reason is what this document
+        // IS: the planned treatment handed to the patient, while
+        // getPatientAccountStatement measures what is billable. A plan the
+        // clinic has not finished editing is still the plan the patient was
+        // given, so do not "align" this filter with the statement's
+        // `notIn: ['DRAFT', 'CANCELLED']` — the two documents answer different
+        // questions, and that stays true whatever the data looks like.
+        //
+        // This comment used to argue it differently: that every budget in the
+        // clinic's production data was DRAFT, so excluding drafts emptied the
+        // document for every real patient. That was a measurement, and it has
+        // expired — #667 creates budgets APPROVED and #671 promoted the
+        // existing production drafts (2026-11-10). Do not reinstate a count as
+        // the reason; the counts move, the distinction above does not. The
+        // guard that fails if this filter is "aligned" is
+        // `pdf.service.treatment-plan.test.ts`, "the budget-level filter
+        // includes DRAFT".
         status: { not: 'CANCELLED' },
       },
       select: {
         createdAt: true,
         items: {
-          // Every item except CANCELLED. Again, NOT the statement's
-          // `notIn: ['EXECUTED', 'CANCELLED']`: the statement excludes executed
-          // items because it measures work still outstanding, while this is the
-          // whole planned treatment handed to the patient. Filtering on EXECUTED
-          // would tie the document's contents to billing state, so a treatment
-          // would vanish from the patient's copy the moment it was executed.
+          // Every item except CANCELLED. Again, NOT the statement's own
+          // item projection, which excludes executed items twice over — by
+          // status, and (since #679) by a live, non-superseded EXECUTED
+          // appointment link — because it measures work still outstanding,
+          // while this is the whole planned treatment handed to the patient.
+          // Filtering on EXECUTED would tie the document's contents to
+          // billing state, so a treatment would vanish from the patient's
+          // copy the moment it was executed.
           where: { status: { not: 'CANCELLED' } },
           select: {
             id: true,
