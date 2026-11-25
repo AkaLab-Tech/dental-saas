@@ -865,10 +865,14 @@ export function AppointmentFormModal({
                       costField.ref(el)
                     }}
                     onChange={(e) => {
-                      // An unparseable figure (the es-UY "1.500,00") reaches
-                      // this handler as an empty value with badInput set. It
-                      // is not the deliberate clear of #685, so it must not
-                      // arm it — and the submit below refuses it (#713).
+                      // Text the browser cannot parse as a number at all (a
+                      // lone "-", or a lone "," in an es-* locale) reaches this
+                      // handler as an empty value with badInput set. It is not
+                      // the deliberate clear of #685, so it must not arm it —
+                      // and the submit below refuses it (#713). An es-UY
+                      // "1.500,00" is explicitly NOT this case: it sanitizes to
+                      // 1.5 with badInput false and submits that figure, which
+                      // is the separate defect #726.
                       syncCostBadInput(e.target)
                       return costField.onChange(e)
                     }}

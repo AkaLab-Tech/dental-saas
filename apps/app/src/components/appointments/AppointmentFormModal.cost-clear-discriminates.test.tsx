@@ -13,8 +13,9 @@ import type { Appointment } from '../../lib/appointment-api'
  * `value`:
  *   G1 the field was never touched -> the stored figure is submitted;
  *   G2 the operator emptied it     -> `cost: null`, the deliberate clear (#685);
- *   G3 the browser sanitized a value it could not parse (`validity.badInput`,
- *      e.g. the es-UY "1.500,00") -> the submit is refused.
+ *   G3 the input holds text the browser cannot parse as a number at all, so it
+ *      sanitized the value away (`validity.badInput`, e.g. a lone "-", or a
+ *      lone "," in an es-* locale) -> the submit is refused.
  *
  * jsdom implements neither the number input's value-sanitization algorithm nor
  * `badInput`, so G3 stubs `validity` on the input. That is why G6
@@ -161,7 +162,12 @@ function save() {
   fireEvent.click(screen.getByRole('button', { name: 'Guardar Cambios' }))
 }
 
-/** Makes the input report what a real browser reports for "1.500,00". */
+/**
+ * Makes the input report what a real browser reports for text it cannot parse
+ * as a number at all — a lone "-", or a lone "," in an es-* locale: the value
+ * is sanitized away and `badInput` goes true. An es-UY "1.500,00" is NOT this
+ * case; it sanitizes to 1.5 with `badInput` false (the separate defect #726).
+ */
 function stubBadInput(input: HTMLInputElement) {
   Object.defineProperty(input, 'validity', {
     configurable: true,
@@ -205,8 +211,9 @@ describe('AppointmentFormModal — an empty cost field means three different thi
 
     const input = getCostInput()
     stubBadInput(input)
-    // What a real number input does with "1.500,00": the DOM value is '' while
-    // the operator still sees her own figure on screen.
+    // What a real number input does with text it cannot parse at all (a lone
+    // "-"): the DOM value is '' while the operator still sees what she typed
+    // on screen.
     fireEvent.change(input, { target: { value: '' } })
 
     save()
