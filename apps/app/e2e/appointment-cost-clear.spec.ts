@@ -77,6 +77,13 @@ const debtText = async (page: Page) => {
  */
 const UNPARSEABLE = ','
 
+// The behaviour under test depends on the browser's locale: with a Spanish
+// locale Chromium accepts "," into a number input (displayed, value '' and
+// validity.badInput true); with en-US it rejects the keystroke and nothing
+// appears. Pin the clinic's real locale so the precondition is deterministic
+// instead of inherited from the host.
+test.use({ locale: 'es-UY' })
+
 test.describe('Appointment cost is not cleared by an unparseable figure (#713)', () => {
   test('an unparseable figure over a stored 1500 is refused, not saved as a clear', async ({
     authedPage: page,
@@ -170,7 +177,10 @@ test.describe('Appointment cost is not cleared by an unparseable figure (#713)',
     console.log(`MEASURED_BAD_INPUT: ${measured.badInput}`)
     await page.screenshot({ path: `${SHOTS}/713-02-typed-unparseable.png`, fullPage: true })
 
-    // The browser step the whole task rests on.
+    // The browser step the whole task rests on. The "," must really be on
+    // screen: if the locale rejects it the box is empty and badInput is false,
+    // which is a different (benign) state this guard must not be judged on.
+    expect(displayed).toBe(UNPARSEABLE)
     expect(measured.type).toBe('number')
     expect(measured.domValue).toBe('')
     expect(measured.badInput).toBe(true)
